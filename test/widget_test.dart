@@ -67,7 +67,7 @@ void main() {
     expect(find.byType(AssistantPage), findsOneWidget);
   });
 
-  testWidgets('assistant page provides draggable sheet and local text input', (
+testWidgets('assistant page provides holographic avatar and local text input', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -75,12 +75,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(DraggableScrollableSheet), findsOneWidget);
+    expect(find.byIcon(Icons.auto_awesome_rounded), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), '今晚宿舍有点吵');
     expect(find.text('今晚宿舍有点吵'), findsOneWidget);
-    expect(find.text('说完了'), findsOneWidget);
+    expect(find.byIcon(Icons.send_rounded), findsOneWidget);
   });
 
   testWidgets('profile dream journal entry opens dream journal page', (

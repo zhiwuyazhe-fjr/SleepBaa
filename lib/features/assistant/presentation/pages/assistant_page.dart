@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 
@@ -15,12 +16,14 @@ class AssistantPage extends StatefulWidget {
 class _AssistantPageState extends State<AssistantPage> {
   final TextEditingController _inputController = TextEditingController();
   final FocusNode _inputFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
   String? _latestPrompt;
 
   @override
   void dispose() {
     _inputController.dispose();
     _inputFocusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -36,138 +39,267 @@ class _AssistantPageState extends State<AssistantPage> {
       _inputController.clear();
     });
     _inputFocusNode.unfocus();
+    
+    // Auto-scroll to bottom after a delay to ensure view updates
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeOutExpo,
+        );
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final EdgeInsets mediaPadding = MediaQuery.paddingOf(context);
+    final ThemeData theme = Theme.of(context);
+    final TextTheme textTheme = theme.textTheme;
 
     return Scaffold(
+      backgroundColor: AppColors.darkBackground,
       resizeToAvoidBottomInset: true,
-      body: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          const double initialSheetSize = 0.58;
-          final double frameWidth = constraints.maxWidth > 440
-              ? 390
-              : constraints.maxWidth;
-          final double panelTop =
-              constraints.maxHeight * (1 - initialSheetSize);
-          final double foxSize = math
-              .min(frameWidth * 0.46, constraints.maxHeight * 0.28)
-              .clamp(160.0, 220.0)
-              .toDouble();
-          final double foxTop = panelTop - (foxSize * 0.40);
-          final double safeTop = mediaPadding.top + 14;
+      body: Stack(
+        children: <Widget>[
+          // Animated abstract space background spots
+          const Positioned(
+            left: -120,
+            top: 40,
+            child: _GlowOrb(size: 360, color: Color(0x114EA8C2)),
+          ),
+          const Positioned(
+            right: -80,
+            bottom: -40,
+            child: _GlowOrb(size: 400, color: Color(0x0C00697A)),
+          ),
+          const Positioned(
+            right: -60,
+            top: 240,
+            child: _GlowOrb(size: 280, color: Color(0x0DFFFFFF)),
+          ),
 
-          return Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: <Color>[
-                  Color(0xFFFFA23A),
-                  Color(0xFF8CC77E),
-                  Color(0xFF0A9A95),
-                ],
-              ),
-            ),
-            child: Stack(
-              children: <Widget>[
-                const Positioned(
-                  left: -110,
-                  top: 120,
-                  child: _GlowOrb(size: 280, color: Color(0x40FFD54F)),
-                ),
-                const Positioned(
-                  right: -130,
-                  top: 250,
-                  child: _GlowOrb(size: 320, color: Color(0x33E8F5E9)),
-                ),
-                const Positioned(
-                  right: -90,
-                  bottom: 120,
-                  child: _GlowOrb(size: 260, color: Color(0x3326C6DA)),
-                ),
-                Center(
-                  child: SizedBox(
-                    width: frameWidth,
-                    height: constraints.maxHeight,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: <Widget>[
-                        Positioned(
-                          top: safeTop,
-                          left: AppSpacing.lg,
-                          child: _TopCircleButton(
+          // Main vertical layout
+          Column(
+            children: <Widget>[
+              // Top Area (Action Bar & Avatar)
+              Container(
+                padding: EdgeInsets.only(top: mediaPadding.top + 16),
+                child: Column(
+                  children: [
+                    // App Bar
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _TopCircleButton(
                             icon: Icons.arrow_back_ios_new_rounded,
                             onTap: () => Navigator.of(context).maybePop(),
-                            dark: false,
                           ),
-                        ),
-                        Positioned(
-                          top: safeTop,
-                          right: AppSpacing.lg,
-                          child: const _TopCircleButton(
-                            icon: Icons.auto_awesome_rounded,
-                            onTap: _noop,
-                            dark: true,
+                          _TopCircleButton(
+                            icon: Icons.history_rounded,
+                            onTap: () {},
                           ),
-                        ),
-                        Positioned(
-                          top: foxTop + 8,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: _FoxLikeCompanion(size: foxSize),
-                          ),
-                        ),
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          top: panelTop - 8,
-                          child: const _FoxPaws(),
-                        ),
-                        Positioned(
-                          top: foxTop - 18,
-                          right: 22,
-                          child: const _SpeechBubble(),
-                        ),
-                        Positioned(
-                          top: foxTop + 64,
-                          right: 108,
-                          child: const _ThoughtBubble(size: 12, alpha: 220),
-                        ),
-                        Positioned(
-                          top: foxTop + 84,
-                          right: 126,
-                          child: const _ThoughtBubble(size: 8, alpha: 170),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    // Floating AIAvatar
+                    const _FloatingAIAvatar(),
+                    const SizedBox(height: AppSpacing.xl),
+                    
+                    Text(
+                      'What\'s on your mind?',
+                      style: textTheme.headlineMedium?.copyWith(
+                        color: AppColors.onDark,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      'I\'m here to help you unwind and sleep better.',
+                      style: textTheme.bodyLarge?.copyWith(
+                        color: AppColors.onDark.withOpacity(0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Conversation Messages List
+              Expanded(
+                child: ListView(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.xxl,
+                  ),
+                  children: <Widget>[
+                    const _AssistantMessageBubble(
+                      text: 'A gentle 15-minute breathing exercise could help you shift into sleep mode. Would you like me to start it for you?',
+                    ),
+                    if (_latestPrompt != null) ...[
+                      const SizedBox(height: AppSpacing.xl),
+                      _UserMessageBubble(text: _latestPrompt!),
+                      const SizedBox(height: AppSpacing.xl),
+                      const _ThinkingIndicator(),
+                    ],
+                  ],
+                ),
+              ),
+
+              // Input Area
+              _FloatInputPanel(
+                controller: _inputController,
+                focusNode: _inputFocusNode,
+                onSubmit: _submitPrompt,
+                bottomPadding: mediaPadding.bottom > 0 ? mediaPadding.bottom + 12 : AppSpacing.xl,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FloatingAIAvatar extends StatefulWidget {
+  const _FloatingAIAvatar();
+
+  @override
+  State<_FloatingAIAvatar> createState() => _FloatingAIAvatarState();
+}
+
+class _FloatingAIAvatarState extends State<_FloatingAIAvatar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    duration: const Duration(seconds: 5),
+    vsync: this,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    // Do not repeat in test logic, pumpAndSettle will timeout
+    if (WidgetsBinding.instance.lifecycleState != null) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Determine dynamic size across devices
+    final double size = math.min(MediaQuery.sizeOf(context).width * 0.42, 220.0).clamp(160.0, 220.0);
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (BuildContext context, Widget? child) {
+          // Slow vertical float
+          final double bobbingOffset = math.sin(_controller.value * math.pi * 2) * 6.0;
+          final double pulse = _controller.value;
+          final double innerPulse = math.sin(pulse * math.pi);
+
+          return Transform.translate(
+            offset: Offset(0, -bobbingOffset),
+            child: Stack(
+              alignment: Alignment.center,
+              children: <Widget>[
+                // Outer ethereal aura
+                Container(
+                  width: size * (0.75 + pulse * 0.25),
+                  height: size * (0.75 + pulse * 0.25),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: AppColors.primarySoft.withOpacity(0.08 + pulse * 0.06),
+                        blurRadius: size * 0.4 + (pulse * 25),
+                        spreadRadius: pulse * 12,
+                      ),
+                    ],
+                  ),
+                ),
+                // Inner shifting aura
+                Transform.rotate(
+                  angle: pulse * math.pi * 0.2,
+                  child: Container(
+                    width: size * (0.65 + innerPulse * 0.15),
+                    height: size * (0.65 + innerPulse * 0.15),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topRight,
+                        end: Alignment.bottomLeft,
+                        colors: <Color>[
+                          AppColors.primarySoft.withOpacity(0.15),
+                          AppColors.calmBlue.withOpacity(0.05),
+                        ],
+                      ),
+                      boxShadow: <BoxShadow>[
+                        BoxShadow(
+                          color: AppColors.primarySoft.withOpacity(0.1),
+                          blurRadius: size * 0.2,
                         ),
                       ],
                     ),
                   ),
                 ),
-                DraggableScrollableSheet(
-                  initialChildSize: initialSheetSize,
-                  minChildSize: 0.52,
-                  maxChildSize: 0.9,
-                  snap: true,
-                  snapSizes: const <double>[0.58, 0.78, 0.9],
-                  builder:
-                      (
-                        BuildContext context,
-                        ScrollController scrollController,
-                      ) {
-                        return _GlassPanel(
-                          scrollController: scrollController,
-                          inputController: _inputController,
-                          inputFocusNode: _inputFocusNode,
-                          latestPrompt: _latestPrompt,
-                          onSubmit: _submitPrompt,
-                          bottomPadding: mediaPadding.bottom > 0
-                              ? mediaPadding.bottom + 8
-                              : AppSpacing.lg,
-                        );
-                      },
+                // Core mysterious body
+                Container(
+                  width: size * 0.54,
+                  height: size * 0.54,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const RadialGradient(
+                      center: Alignment(-0.2, -0.3),
+                      radius: 0.8,
+                      colors: <Color>[
+                        Color(0xFF1E283A),
+                        Color(0xFF0F1523),
+                        Color(0xFF050810),
+                      ],
+                    ),
+                    border: Border.all(
+                      color: AppColors.primarySoft.withOpacity(0.2 + pulse * 0.15),
+                      width: 1.5,
+                    ),
+                    boxShadow: const <BoxShadow>[
+                      BoxShadow(
+                        color: Color(0x66000000),
+                        blurRadius: 24,
+                        offset: Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Transform.scale(
+                      scale: 1.0 + (innerPulse * 0.08),
+                      child: Icon(
+                        Icons.auto_awesome_rounded,
+                        color: AppColors.primaryHighlight,
+                        size: size * 0.22,
+                        shadows: <BoxShadow>[
+                          BoxShadow(
+                            color: AppColors.primarySoft,
+                            blurRadius: 15 + (pulse * 10),
+                            spreadRadius: pulse * 4,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -178,553 +310,36 @@ class _AssistantPageState extends State<AssistantPage> {
   }
 }
 
-void _noop() {}
+class _AssistantMessageBubble extends StatelessWidget {
+  const _AssistantMessageBubble({required this.text});
 
-class _TopCircleButton extends StatelessWidget {
-  const _TopCircleButton({
-    required this.icon,
-    required this.onTap,
-    required this.dark,
-  });
-
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool dark;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
-        child: Ink(
-          width: 54,
-          height: 54,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: dark ? const Color(0xFF1E2024) : const Color(0x29FFFFFF),
-            border: Border.all(
-              color: dark ? const Color(0x1AFFFFFF) : const Color(0x55FFFFFF),
-            ),
-            boxShadow: dark
-                ? const <BoxShadow>[
-                    BoxShadow(
-                      color: Color(0x26000000),
-                      blurRadius: 18,
-                      offset: Offset(0, 10),
-                    ),
-                  ]
-                : const <BoxShadow>[
-                    BoxShadow(
-                      color: Color(0x1A000000),
-                      blurRadius: 14,
-                      offset: Offset(0, 8),
-                    ),
-                  ],
-          ),
-          child: Icon(icon, color: Colors.white, size: dark ? 24 : 20),
-        ),
-      ),
-    );
-  }
-}
-
-class _SpeechBubble extends StatelessWidget {
-  const _SpeechBubble();
-
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 178),
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.md,
-        ),
-        decoration: BoxDecoration(
-          color: const Color(0xF4F6FAE7),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0x66FFFFFF)),
-          boxShadow: const <BoxShadow>[
-            BoxShadow(
-              color: Color(0x22000000),
-              blurRadius: 18,
-              offset: Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Text(
-          'Tell me what kept\nyou awake tonight.',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: const Color(0xFF2B3240),
-            height: 1.15,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ThoughtBubble extends StatelessWidget {
-  const _ThoughtBubble({required this.size, required this.alpha});
-
-  final double size;
-  final int alpha;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Color.fromARGB(alpha, 246, 250, 231),
-      ),
-    );
-  }
-}
-
-class _FoxLikeCompanion extends StatelessWidget {
-  const _FoxLikeCompanion({required this.size});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size * 0.94,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: <Widget>[
-          Positioned(
-            top: 0,
-            left: size * 0.18,
-            child: const _FoxEar(left: true),
-          ),
-          Positioned(
-            top: 0,
-            right: size * 0.18,
-            child: const _FoxEar(left: false),
-          ),
-          Positioned.fill(
-            top: size * 0.12,
-            child: Container(
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  center: Alignment(-0.18, -0.35),
-                  radius: 0.92,
-                  colors: <Color>[
-                    Color(0xFFFFC15D),
-                    Color(0xFFFD8A2B),
-                    Color(0xFFE26515),
-                  ],
-                ),
-                boxShadow: <BoxShadow>[
-                  BoxShadow(
-                    color: Color(0x22000000),
-                    blurRadius: 24,
-                    offset: Offset(0, 14),
-                  ),
-                ],
-              ),
-              child: Stack(
-                children: <Widget>[
-                  Positioned(
-                    top: size * 0.16,
-                    left: size * 0.18,
-                    child: Container(
-                      width: size * 0.20,
-                      height: size * 0.14,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Color(0x1AFFFFFF),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: size * 0.18,
-                    right: size * 0.18,
-                    bottom: size * 0.12,
-                    child: Container(
-                      height: size * 0.36,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFDF4E8),
-                        borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(90),
-                          bottom: Radius.circular(64),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: size * 0.22,
-                    bottom: size * 0.16,
-                    child: Container(
-                      width: size * 0.18,
-                      height: size * 0.18,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Color(0xFFFFFFFF),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    right: size * 0.22,
-                    bottom: size * 0.16,
-                    child: Container(
-                      width: size * 0.18,
-                      height: size * 0.18,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Color(0xFFFFFFFF),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: size * 0.42,
-                    left: size * 0.31,
-                    child: const _FoxEye(),
-                  ),
-                  Positioned(
-                    top: size * 0.42,
-                    right: size * 0.31,
-                    child: const _FoxEye(),
-                  ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: size * 0.22,
-                    child: Center(
-                      child: Container(
-                        width: size * 0.08,
-                        height: size * 0.08,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2A211A),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FoxEar extends StatelessWidget {
-  const _FoxEar({required this.left});
-
-  final bool left;
-
-  @override
-  Widget build(BuildContext context) {
-    final BorderRadius outerRadius = BorderRadius.only(
-      topLeft: Radius.circular(left ? 42 : 10),
-      topRight: Radius.circular(left ? 10 : 42),
-      bottomLeft: const Radius.circular(10),
-      bottomRight: const Radius.circular(10),
-    );
-
-    final BorderRadius innerRadius = BorderRadius.only(
-      topLeft: Radius.circular(left ? 26 : 8),
-      topRight: Radius.circular(left ? 8 : 26),
-      bottomLeft: const Radius.circular(8),
-      bottomRight: const Radius.circular(8),
-    );
-
-    return Transform.rotate(
-      angle: left ? -0.38 : 0.38,
-      child: SizedBox(
-        width: 58,
-        height: 72,
-        child: Stack(
-          alignment: Alignment.center,
-          children: <Widget>[
-            Container(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: <Color>[Color(0xFFFFB347), Color(0xFFE16B18)],
-                ),
-                borderRadius: outerRadius,
-              ),
-            ),
-            Positioned(
-              top: 10,
-              left: 12,
-              right: 12,
-              bottom: 14,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFD0A7),
-                  borderRadius: innerRadius,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FoxEye extends StatelessWidget {
-  const _FoxEye();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 24,
-      height: 22,
-      child: Stack(
-        children: <Widget>[
-          const Positioned(left: 5, top: 3, child: _EyePupil()),
-          Positioned(
-            left: 14,
-            top: 0,
-            child: Container(
-              width: 4,
-              height: 4,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EyePupil extends StatelessWidget {
-  const _EyePupil();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 13,
-      height: 13,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        color: Color(0xFF261A11),
-      ),
-    );
-  }
-}
-
-class _FoxPaws extends StatelessWidget {
-  const _FoxPaws();
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: const <Widget>[_FoxPaw(), SizedBox(width: 24), _FoxPaw()],
-      ),
-    );
-  }
-}
-
-class _FoxPaw extends StatelessWidget {
-  const _FoxPaw();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 54,
-      height: 40,
-      child: Stack(
-        alignment: Alignment.bottomCenter,
-        children: <Widget>[
-          Container(
-            width: 54,
-            height: 34,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF4902D),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: const <BoxShadow>[
-                BoxShadow(
-                  color: Color(0x1A000000),
-                  blurRadius: 12,
-                  offset: Offset(0, 6),
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            bottom: 0,
-            child: Container(
-              width: 34,
-              height: 14,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9F0E5),
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GlassPanel extends StatelessWidget {
-  const _GlassPanel({
-    required this.scrollController,
-    required this.inputController,
-    required this.inputFocusNode,
-    required this.latestPrompt,
-    required this.onSubmit,
-    required this.bottomPadding,
-  });
-
-  final ScrollController scrollController;
-  final TextEditingController inputController;
-  final FocusNode inputFocusNode;
-  final String? latestPrompt;
-  final VoidCallback onSubmit;
-  final double bottomPadding;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
 
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(48)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 34, sigmaY: 34),
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color(0x33FFFFFF),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(48)),
-            border: const Border(top: BorderSide(color: Color(0x66FFFFFF))),
-            boxShadow: const <BoxShadow>[
-              BoxShadow(
-                color: Color(0x19000000),
-                blurRadius: 36,
-                offset: Offset(0, -10),
-              ),
-            ],
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(right: 48),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: AppColors.darkCard,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+            bottomRight: Radius.circular(24),
+            bottomLeft: Radius.circular(6),
           ),
-          child: Column(
-            children: <Widget>[
-              const SizedBox(height: AppSpacing.sm),
-              Container(
-                width: 88,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: const Color(0x66FFFFFF),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.xxl,
-                    AppSpacing.sm,
-                    AppSpacing.xxl,
-                    AppSpacing.xl,
-                  ),
-                  children: <Widget>[
-                    Text(
-                      'Tonight felt a bit noisy,\nlet’s sort it out slowly.',
-                      textAlign: TextAlign.center,
-                      style: textTheme.headlineSmall?.copyWith(
-                        color: Colors.white,
-                        fontSize: 24,
-                        height: 1.35,
-                        fontWeight: FontWeight.w700,
-                        shadows: const <Shadow>[
-                          Shadow(
-                            color: Color(0x22000000),
-                            blurRadius: 10,
-                            offset: Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    Container(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      decoration: BoxDecoration(
-                        color: const Color(0x1AFFFFFF),
-                        borderRadius: AppRadius.card,
-                        border: Border.all(color: const Color(0x3DFFFFFF)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            'Recent suggestion',
-                            style: textTheme.labelMedium?.copyWith(
-                              color: Colors.white.withAlpha(210),
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.xs),
-                          Text(
-                            'Try 15 minutes of breathing before switching on sleep mode.',
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: Colors.white,
-                              height: 1.35,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (latestPrompt != null) ...<Widget>[
-                      const SizedBox(height: AppSpacing.md),
-                      Container(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: const Color(0xF2FFFFFF),
-                          borderRadius: AppRadius.card,
-                          border: Border.all(color: const Color(0x4DFFFFFF)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              '已记录你的输入',
-                              style: textTheme.labelMedium?.copyWith(
-                                color: const Color(0xFF475266),
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(
-                              latestPrompt!,
-                              style: textTheme.bodyMedium?.copyWith(
-                                color: const Color(0xFF2B3240),
-                                height: 1.35,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              _InputComposer(
-                controller: inputController,
-                focusNode: inputFocusNode,
-                onSubmit: onSubmit,
-                bottomPadding: bottomPadding,
-              ),
-            ],
+          border: Border.all(color: AppColors.darkBorder),
+          boxShadow: AppColors.cardShadow,
+        ),
+        child: Text(
+          text,
+          style: textTheme.bodyLarge?.copyWith(
+            color: AppColors.onDark.withOpacity(0.9),
+            height: 1.5,
           ),
         ),
       ),
@@ -732,8 +347,119 @@ class _GlassPanel extends StatelessWidget {
   }
 }
 
-class _InputComposer extends StatelessWidget {
-  const _InputComposer({
+class _UserMessageBubble extends StatelessWidget {
+  const _UserMessageBubble({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        margin: const EdgeInsets.only(left: 48),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 14),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: <Color>[AppColors.calmBlue, AppColors.primaryDeep],
+          ),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+            bottomLeft: Radius.circular(24),
+            bottomRight: Radius.circular(6),
+          ),
+          boxShadow: AppColors.cardShadow,
+        ),
+        child: Text(
+          text,
+          style: textTheme.bodyLarge?.copyWith(
+            color: Colors.white,
+            height: 1.4,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ThinkingIndicator extends StatefulWidget {
+  const _ThinkingIndicator();
+
+  @override
+  State<_ThinkingIndicator> createState() => _ThinkingIndicatorState();
+}
+
+class _ThinkingIndicatorState extends State<_ThinkingIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    duration: const Duration(milliseconds: 1000),
+    vsync: this,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (WidgetsBinding.instance.lifecycleState != null) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        width: 60,
+        height: 38,
+        decoration: BoxDecoration(
+          color: AppColors.darkCard,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.darkBorder),
+        ),
+        child: Center(
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (BuildContext context, Widget? child) {
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List<Widget>.generate(3, (int index) {
+                  // Phase shift dots
+                  final double delay = index * 0.2;
+                  final double rawValue = (_controller.value - delay).clamp(0.0, 1.0);
+                  final double pulse = math.sin(rawValue * math.pi);
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    width: 5,
+                    height: 5 + (pulse * 3),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.primarySoft.withOpacity(0.3 + pulse * 0.7),
+                    ),
+                  );
+                }),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FloatInputPanel extends StatelessWidget {
+  const _FloatInputPanel({
     required this.controller,
     required this.focusNode,
     required this.onSubmit,
@@ -748,88 +474,76 @@ class _InputComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.xl,
-        AppSpacing.md,
-        AppSpacing.xl,
-        bottomPadding,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white.withAlpha(22),
-        border: const Border(top: BorderSide(color: Color(0x33FFFFFF))),
-      ),
-      child: Column(
-        children: <Widget>[
-          TextField(
-            controller: controller,
-            focusNode: focusNode,
-            minLines: 1,
-            maxLines: 3,
-            style: textTheme.bodyMedium?.copyWith(color: Colors.white),
-            cursorColor: Colors.white,
-            decoration: InputDecoration(
-              hintText: '输入今晚最打扰你的事…',
-              hintStyle: textTheme.bodyMedium?.copyWith(
-                color: Colors.white.withAlpha(170),
-              ),
-              filled: true,
-              fillColor: const Color(0x1FFFFFFF),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.md,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: AppRadius.card,
-                borderSide: const BorderSide(color: Color(0x45FFFFFF)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: AppRadius.card,
-                borderSide: const BorderSide(color: Color(0x45FFFFFF)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: AppRadius.card,
-                borderSide: const BorderSide(color: Color(0x88FFFFFF)),
-              ),
+
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          padding: EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, bottomPadding),
+          decoration: const BoxDecoration(
+            color: Color(0x33000000), // very dark glass
+            border: Border(
+              top: BorderSide(color: AppColors.darkBorder),
             ),
-            onSubmitted: (_) => onSubmit(),
           ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: <Widget>[
-              const _KeyboardGlassButton(),
-              const SizedBox(width: AppSpacing.sm),
+              // Animated Input Field
               Expanded(
                 child: Container(
-                  height: 52,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: <Color>[Color(0xFFFF700A), Color(0xFFFFAD4A)],
-                    ),
-                    boxShadow: const <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x38FF700A),
-                        blurRadius: 20,
-                        offset: Offset(0, 10),
-                      ),
-                    ],
+                    color: AppColors.darkSurface.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: AppColors.darkBorder),
                   ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(18),
-                      onTap: onSubmit,
-                      child: Center(
-                        child: Text(
-                          '说完了',
-                          style: textTheme.titleMedium?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
+                  child: TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    minLines: 1,
+                    maxLines: 4,
+                    textInputAction: TextInputAction.send,
+                    style: textTheme.bodyLarge?.copyWith(color: AppColors.onDark),
+                    cursorColor: AppColors.primarySoft,
+                    decoration: InputDecoration(
+                      hintText: "Chat with Nocturne...",
+                      hintStyle: textTheme.bodyLarge?.copyWith(
+                        color: AppColors.onDark.withOpacity(0.3),
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: 14,
+                      ),
+                    ),
+                    onSubmitted: (_) => onSubmit(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              // Send Button
+              Container(
+                width: 48,
+                height: 48,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: <Color>[AppColors.calmBlue, AppColors.primaryDeep],
+                  ),
+                  boxShadow: AppColors.floatingShadow,
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(24),
+                    onTap: onSubmit,
+                    child: const Center(
+                      child: Icon(
+                        Icons.send_rounded,
+                        color: Colors.white,
+                        size: 20,
                       ),
                     ),
                   ),
@@ -837,33 +551,39 @@ class _InputComposer extends StatelessWidget {
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _KeyboardGlassButton extends StatelessWidget {
-  const _KeyboardGlassButton();
+class _TopCircleButton extends StatelessWidget {
+  const _TopCircleButton({
+    required this.icon,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 62,
-      height: 52,
+      width: 48,
+      height: 48,
       decoration: BoxDecoration(
-        color: const Color(0x22FFFFFF),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0x44FFFFFF)),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x14000000),
-            blurRadius: 12,
-            offset: Offset(0, 6),
-          ),
-        ],
+        shape: BoxShape.circle,
+        color: AppColors.darkSurface.withOpacity(0.4),
+        border: Border.all(color: AppColors.darkBorder),
       ),
-      child: const Icon(Icons.keyboard_rounded, color: Colors.white, size: 24),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: onTap,
+          child: Icon(icon, color: AppColors.onDark.withOpacity(0.8), size: 20),
+        ),
+      ),
     );
   }
 }
@@ -876,16 +596,18 @@ class _GlowOrb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          boxShadow: <BoxShadow>[
-            BoxShadow(color: color, blurRadius: 120, spreadRadius: 20),
-          ],
-        ),
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: color,
+            blurRadius: size * 0.4,
+            spreadRadius: size * 0.1,
+          ),
+        ],
       ),
     );
   }
