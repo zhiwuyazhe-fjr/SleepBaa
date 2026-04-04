@@ -43,8 +43,8 @@ class _AssistantFabState extends State<AssistantFab>
       child: GestureDetector(
         onTap: () => context.push(AppRoutes.assistant),
         child: SizedBox(
-          width: 86,
-          height: 94,
+          width: 108,
+          height: 118,
           child: AnimatedBuilder(
             animation: _controller,
             builder: (BuildContext context, Widget? child) {
@@ -56,18 +56,18 @@ class _AssistantFabState extends State<AssistantFab>
                       Icons.auto_awesome_rounded,
                       key: const ValueKey<String>('assistant-fab-default-icon'),
                       color: palette.primaryHighlight,
-                      size: 28,
+                      size: 34,
                       shadows: <Shadow>[
                         Shadow(
                           color: palette.primarySoft,
-                          blurRadius: 8 + (pulse * 4),
+                          blurRadius: 14 + (pulse * 7),
                         ),
                       ],
                     )
                   : MoodAvatar(
                       key: const ValueKey<String>('assistant-fab-mood-avatar'),
                       mood: palette.mood!,
-                      size: 44,
+                      size: 60,
                       fillColor: palette.welcomeFaceColor,
                     );
 
@@ -77,18 +77,18 @@ class _AssistantFabState extends State<AssistantFab>
                 children: <Widget>[
                   // Glow ring
                   Container(
-                    width: 58 + (pulse * 8),
-                    height: 58 + (pulse * 8),
+                    width: 74 + (pulse * 14),
+                    height: 74 + (pulse * 14),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: palette.primarySoft.withValues(
-                        alpha: 0.1 + (pulse * 0.1),
+                        alpha: 0.18 + (pulse * 0.14),
                       ),
                       boxShadow: <BoxShadow>[
                         BoxShadow(
-                          color: palette.primarySoft.withValues(alpha: 0.2),
-                          blurRadius: 16 + (pulse * 8),
-                          spreadRadius: pulse * 4,
+                          color: palette.primarySoft.withValues(alpha: 0.34),
+                          blurRadius: 30 + (pulse * 14),
+                          spreadRadius: 4 + (pulse * 8),
                         ),
                       ],
                     ),
@@ -98,8 +98,8 @@ class _AssistantFabState extends State<AssistantFab>
                       key: const ValueKey<String>(
                         'assistant-fab-default-shell',
                       ),
-                      width: 60,
-                      height: 60,
+                      width: 72,
+                      height: 72,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: const LinearGradient(
@@ -109,13 +109,13 @@ class _AssistantFabState extends State<AssistantFab>
                         ),
                         border: Border.all(
                           color: palette.primarySoft.withValues(alpha: 0.4),
-                          width: 1.5,
+                          width: 1.6,
                         ),
                         boxShadow: const <BoxShadow>[
                           BoxShadow(
                             color: Color(0x66000000),
-                            blurRadius: 10,
-                            offset: Offset(0, 4),
+                            blurRadius: 18,
+                            offset: Offset(0, 8),
                           ),
                         ],
                       ),
@@ -129,8 +129,8 @@ class _AssistantFabState extends State<AssistantFab>
                   else
                     SizedBox(
                       key: const ValueKey<String>('assistant-fab-mood-shell'),
-                      width: 62,
-                      height: 62,
+                      width: 84,
+                      height: 84,
                       child: Center(
                         child: Transform.rotate(
                           angle: pulse * math.pi * 0.04,

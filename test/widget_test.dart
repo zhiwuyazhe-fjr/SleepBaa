@@ -279,9 +279,16 @@ void main() {
       tester.getSize(find.byKey(DormPage.heroCardKey)).height,
       lessThan(260),
     );
+    final double heroTop = tester
+        .getTopLeft(find.byKey(DormPage.heroCardKey))
+        .dy;
+    final double heroBottom = tester
+        .getBottomLeft(find.byKey(DormPage.heroCardKey))
+        .dy;
     final double drawerTopBefore = tester
         .getTopLeft(find.byKey(DormPage.drawerSheetKey))
         .dy;
+    expect(drawerTopBefore, lessThan(heroBottom - 12));
     await tester.drag(
       find.byKey(DormPage.drawerSheetKey),
       const Offset(0, -220),
@@ -291,6 +298,8 @@ void main() {
         .getTopLeft(find.byKey(DormPage.drawerSheetKey))
         .dy;
     expect(drawerTopAfter, lessThan(drawerTopBefore));
+    expect(drawerTopAfter, lessThanOrEqualTo(heroTop + 8));
+    expect(drawerTopAfter, greaterThan(70));
 
     final Container heroContainer = tester.widget<Container>(
       find.byKey(DormPage.heroGradientKey),
@@ -318,7 +327,10 @@ void main() {
           )
           .first,
     );
-    await tester.tap(find.byKey(DormPage.eventMoreKey));
+    final TextButton moreButton = tester.widget<TextButton>(
+      find.byKey(DormPage.eventMoreKey),
+    );
+    moreButton.onPressed!.call();
     await tester.pumpAndSettle();
 
     expect(find.byType(DormStatusPage), findsOneWidget);

@@ -91,9 +91,11 @@ class DormPage extends StatelessWidget {
                 final double horizontalPadding = wideLayout
                     ? AppSpacing.xxxl
                     : AppSpacing.xl;
-                final double initialSheetSize = wideLayout ? 0.44 : 0.50;
-                final double minSheetSize = wideLayout ? 0.40 : 0.46;
-                final double heroMinHeight = wideLayout ? 220 : 236;
+                final double sheetTopInset = wideLayout ? 72 : 76;
+                final double initialSheetSize = wideLayout ? 0.765 : 0.775;
+                final double minSheetSize = wideLayout ? 0.755 : 0.765;
+                final double maxSheetSize = 1.0;
+                final double heroMinHeight = wideLayout ? 188 : 196;
 
                 return Stack(
                   fit: StackFit.expand,
@@ -145,145 +147,152 @@ class DormPage extends StatelessWidget {
                         ),
                       ),
                     ),
-                    Align(
-                      alignment: Alignment.bottomCenter,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 760),
-                        child: DraggableScrollableSheet(
-                          expand: false,
-                          initialChildSize: initialSheetSize,
-                          minChildSize: minSheetSize,
-                          maxChildSize: 0.94,
-                          builder:
-                              (
-                                BuildContext context,
-                                ScrollController scrollController,
-                              ) {
-                                return Container(
-                                  key: drawerSheetKey,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.surface,
-                                    borderRadius: const BorderRadius.vertical(
-                                      top: Radius.circular(44),
+                    Positioned.fill(
+                      top: sheetTopInset,
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 760),
+                          child: DraggableScrollableSheet(
+                            expand: false,
+                            initialChildSize: initialSheetSize,
+                            minChildSize: minSheetSize,
+                            maxChildSize: maxSheetSize,
+                            builder:
+                                (
+                                  BuildContext context,
+                                  ScrollController scrollController,
+                                ) {
+                                  return Container(
+                                    key: drawerSheetKey,
+                                    clipBehavior: Clip.antiAlias,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surface,
+                                      borderRadius: const BorderRadius.vertical(
+                                        top: Radius.circular(44),
+                                      ),
+                                      boxShadow: AppColors.floatingShadow,
                                     ),
-                                    boxShadow: AppColors.floatingShadow,
-                                  ),
-                                  child: ListView(
-                                    controller: scrollController,
-                                    padding: EdgeInsets.fromLTRB(
-                                      horizontalPadding,
-                                      AppSpacing.sm,
-                                      horizontalPadding,
-                                      168,
-                                    ),
-                                    children: <Widget>[
-                                      Center(
-                                        child: Container(
-                                          width: 48,
-                                          height: 5,
-                                          decoration: BoxDecoration(
-                                            color: palette.primarySoft
-                                                .withAlpha(144),
-                                            borderRadius: BorderRadius.circular(
-                                              999,
+                                    child: ListView(
+                                      controller: scrollController,
+                                      padding: EdgeInsets.fromLTRB(
+                                        horizontalPadding,
+                                        AppSpacing.sm,
+                                        horizontalPadding,
+                                        168,
+                                      ),
+                                      children: <Widget>[
+                                        Center(
+                                          child: Container(
+                                            width: 48,
+                                            height: 5,
+                                            decoration: BoxDecoration(
+                                              color: palette.primarySoft
+                                                  .withAlpha(144),
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(height: AppSpacing.md),
-                                      SectionTitle(
-                                        title: '室友动态',
-                                        actionLabel: '宿舍公约',
-                                        onAction: () =>
-                                            context.push(AppRoutes.dormRules),
-                                      ),
-                                      const SizedBox(height: AppSpacing.md),
-                                      SizedBox(
-                                        key: roommateListKey,
-                                        height: 188,
-                                        child: ListView.separated(
-                                          scrollDirection: Axis.horizontal,
-                                          itemCount: dorm.members.length,
-                                          separatorBuilder:
-                                              (
-                                                BuildContext context,
-                                                int index,
-                                              ) => const SizedBox(
-                                                width: AppSpacing.sm,
+                                        const SizedBox(height: AppSpacing.md),
+                                        SectionTitle(
+                                          title: '室友动态',
+                                          actionLabel: '宿舍公约',
+                                          onAction: () =>
+                                              context.push(AppRoutes.dormRules),
+                                        ),
+                                        const SizedBox(height: AppSpacing.md),
+                                        SizedBox(
+                                          key: roommateListKey,
+                                          height: 188,
+                                          child: ListView.separated(
+                                            scrollDirection: Axis.horizontal,
+                                            itemCount: dorm.members.length,
+                                            separatorBuilder:
+                                                (
+                                                  BuildContext context,
+                                                  int index,
+                                                ) => const SizedBox(
+                                                  width: AppSpacing.sm,
+                                                ),
+                                            itemBuilder:
+                                                (
+                                                  BuildContext context,
+                                                  int index,
+                                                ) {
+                                                  final DormMember member =
+                                                      dorm.members[index];
+                                                  return _DormMemberCard(
+                                                    member: member,
+                                                    isCurrentUser:
+                                                        member.uid ==
+                                                        currentUserId,
+                                                  );
+                                                },
+                                          ),
+                                        ),
+                                        const SizedBox(height: AppSpacing.xl),
+                                        const SectionTitle(title: '智能寝室协同中心'),
+                                        const SizedBox(height: AppSpacing.md),
+                                        GridView.builder(
+                                          shrinkWrap: true,
+                                          physics:
+                                              const NeverScrollableScrollPhysics(),
+                                          itemCount: actions.length,
+                                          gridDelegate:
+                                              SliverGridDelegateWithFixedCrossAxisCount(
+                                                crossAxisCount: 2,
+                                                crossAxisSpacing: AppSpacing.md,
+                                                mainAxisSpacing: AppSpacing.md,
+                                                childAspectRatio: wideLayout
+                                                    ? 1.18
+                                                    : 1.04,
                                               ),
                                           itemBuilder:
                                               (
                                                 BuildContext context,
                                                 int index,
                                               ) {
-                                                final DormMember member =
-                                                    dorm.members[index];
-                                                return _DormMemberCard(
-                                                  member: member,
-                                                  isCurrentUser:
-                                                      member.uid ==
-                                                      currentUserId,
+                                                final _DormHubAction action =
+                                                    actions[index];
+                                                return _DormHubCard(
+                                                  action: action,
+                                                  palette: palette,
                                                 );
                                               },
                                         ),
-                                      ),
-                                      const SizedBox(height: AppSpacing.xl),
-                                      const SectionTitle(title: '智能寝室协同中心'),
-                                      const SizedBox(height: AppSpacing.md),
-                                      GridView.builder(
-                                        shrinkWrap: true,
-                                        physics:
-                                            const NeverScrollableScrollPhysics(),
-                                        itemCount: actions.length,
-                                        gridDelegate:
-                                            SliverGridDelegateWithFixedCrossAxisCount(
-                                              crossAxisCount: 2,
-                                              crossAxisSpacing: AppSpacing.md,
-                                              mainAxisSpacing: AppSpacing.md,
-                                              childAspectRatio: wideLayout
-                                                  ? 1.18
-                                                  : 1.04,
-                                            ),
-                                        itemBuilder:
-                                            (BuildContext context, int index) {
-                                              final _DormHubAction action =
-                                                  actions[index];
-                                              return _DormHubCard(
-                                                action: action,
-                                                palette: palette,
-                                              );
-                                            },
-                                      ),
-                                      const SizedBox(height: AppSpacing.xl),
-                                      SectionTitle(
-                                        title: '寝室事件记录',
-                                        actionLabel: '查看更多',
-                                        actionKey: eventMoreKey,
-                                        onAction: () =>
-                                            context.push(AppRoutes.dormStatus),
-                                      ),
-                                      const SizedBox(height: AppSpacing.md),
-                                      ...List<Widget>.generate(
-                                        events.length,
-                                        (int index) => Padding(
-                                          padding: const EdgeInsets.only(
-                                            bottom: AppSpacing.sm,
+                                        const SizedBox(height: AppSpacing.xl),
+                                        SectionTitle(
+                                          title: '寝室事件记录',
+                                          actionLabel: '查看更多',
+                                          actionKey: eventMoreKey,
+                                          onAction: () => context.push(
+                                            AppRoutes.dormStatus,
                                           ),
-                                          child: _DormEventTile(
-                                            key: ValueKey<String>(
-                                              'dorm-event-tile-$index',
+                                        ),
+                                        const SizedBox(height: AppSpacing.md),
+                                        ...List<Widget>.generate(
+                                          events.length,
+                                          (int index) => Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: AppSpacing.sm,
                                             ),
-                                            event: events[index],
-                                            onTap: () => context.push(
-                                              AppRoutes.dormStatus,
+                                            child: _DormEventTile(
+                                              key: ValueKey<String>(
+                                                'dorm-event-tile-$index',
+                                              ),
+                                              event: events[index],
+                                              onTap: () => context.push(
+                                                AppRoutes.dormStatus,
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
+                                      ],
+                                    ),
+                                  );
+                                },
+                          ),
                         ),
                       ),
                     ),
