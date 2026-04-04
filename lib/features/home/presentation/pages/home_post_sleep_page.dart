@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
@@ -24,6 +25,7 @@ class HomePostSleepPage extends StatelessWidget {
           services.sleepSessionRepository,
         ]),
         builder: (BuildContext context, Widget? child) {
+          final palette = context.nightMoodPalette;
           final SleepSession? session =
               services.sleepSessionRepository.activeSession;
           final Dorm dorm = services.dormRepository.currentDorm;
@@ -40,7 +42,7 @@ class HomePostSleepPage extends StatelessWidget {
                   Text(
                     'Companion Mode',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppColors.primarySoft.withAlpha(120),
+                      color: palette.primarySoft.withAlpha(120),
                       letterSpacing: 2.2,
                     ),
                   ),
@@ -55,7 +57,7 @@ class HomePostSleepPage extends StatelessWidget {
                   const SleepModeMoon(),
                   const SizedBox(height: AppSpacing.md),
                   Text(
-                    '安心休息，我会为你守候',
+                    '安心休息，我会继续帮你守着今晚的节奏。',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: AppColors.onDark.withAlpha(150),
@@ -75,7 +77,7 @@ class HomePostSleepPage extends StatelessWidget {
                         foregroundColor: AppColors.onDark,
                         borderColor: AppColors.darkBorder,
                         showDot: true,
-                        dotColor: AppColors.primarySoft,
+                        dotColor: palette.primarySoft,
                       ),
                       StatusChip(
                         label: '宿舍 ${dorm.quietLabel}',
@@ -128,7 +130,7 @@ class HomePostSleepPage extends StatelessWidget {
                     childAspectRatio: 1.08,
                     children: <Widget>[
                       SupportToolCard(
-                        title: '难以入眠',
+                        title: '难以入睡',
                         subtitle: '快速切到呼吸放松与音频支持',
                         icon: Icons.self_improvement_rounded,
                         onTap: () => context.push(AppRoutes.sleepCantSleep),
@@ -141,7 +143,7 @@ class HomePostSleepPage extends StatelessWidget {
                       ),
                       SupportToolCard(
                         title: '灵感记事',
-                        subtitle: '捕捉梦境片段与想法',
+                        subtitle: '捕捉梦境片段与想到的事',
                         icon: Icons.edit_note_rounded,
                         onTap: () => context.push(AppRoutes.dreamJournal),
                       ),

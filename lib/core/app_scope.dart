@@ -1,13 +1,25 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
+import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/state/audio_playback_controller.dart';
+import 'package:sleep_dorm_app/core/state/night_welcome_controller.dart';
 import 'package:sleep_dorm_app/core/state/sleep_experience_controller.dart';
 
 class AppScope extends StatefulWidget {
-  const AppScope({super.key, required this.child});
+  const AppScope({
+    super.key,
+    required this.child,
+    this.clock,
+    this.initialSettings,
+    this.showNightWelcomeOutsideNightInDebug,
+  });
 
   final Widget child;
+  final AppClock? clock;
+  final UserSettings? initialSettings;
+  final bool? showNightWelcomeOutsideNightInDebug;
 
   static AppServices of(BuildContext context) {
     final _AppScopeInherited? inherited = context
@@ -30,13 +42,16 @@ class _AppScopeState extends State<AppScope> {
   late final InMemoryDormRepository _dormRepository;
   late final AudioPlaybackController _audioPlaybackController;
   late final SleepExperienceController _sleepExperienceController;
+  late final NightWelcomeController _nightWelcomeController;
   late final AppServices _services;
 
   @override
   void initState() {
     super.initState();
     _authRepository = InMemoryAuthRepository();
-    _settingsRepository = InMemoryUserSettingsRepository();
+    _settingsRepository = InMemoryUserSettingsRepository(
+      initialSettings: widget.initialSettings,
+    );
     _recommendationRepository = InMemoryRecommendationRepository();
     _sleepSessionRepository = InMemorySleepSessionRepository();
     _feedbackRepository = InMemoryFeedbackRepository(
@@ -45,6 +60,11 @@ class _AppScopeState extends State<AppScope> {
     _notificationRepository = InMemoryNotificationRepository();
     _dormRepository = InMemoryDormRepository();
     _audioPlaybackController = AudioPlaybackController();
+    _nightWelcomeController = NightWelcomeController(
+      clock: widget.clock ?? DateTime.now,
+      showInDebugOutsideNight:
+          widget.showNightWelcomeOutsideNightInDebug ?? kDebugMode,
+    );
     _sleepExperienceController = SleepExperienceController(
       authRepository: _authRepository,
       settingsRepository: _settingsRepository,
@@ -66,6 +86,7 @@ class _AppScopeState extends State<AppScope> {
       dormRepository: _dormRepository,
       audioPlaybackController: _audioPlaybackController,
       sleepExperienceController: _sleepExperienceController,
+      nightWelcomeController: _nightWelcomeController,
     );
     _sleepExperienceController.bootstrap();
   }
@@ -73,6 +94,7 @@ class _AppScopeState extends State<AppScope> {
   @override
   void dispose() {
     _sleepExperienceController.dispose();
+    _nightWelcomeController.dispose();
     _audioPlaybackController.dispose();
     _dormRepository.dispose();
     _notificationRepository.dispose();
@@ -110,6 +132,7 @@ class AppServices {
     required this.dormRepository,
     required this.audioPlaybackController,
     required this.sleepExperienceController,
+    required this.nightWelcomeController,
   });
 
   final AuthRepository authRepository;
@@ -121,6 +144,7 @@ class AppServices {
   final DormRepository dormRepository;
   final AudioPlaybackController audioPlaybackController;
   final SleepExperienceController sleepExperienceController;
+  final NightWelcomeController nightWelcomeController;
 }
 
 extension AppScopeContext on BuildContext {

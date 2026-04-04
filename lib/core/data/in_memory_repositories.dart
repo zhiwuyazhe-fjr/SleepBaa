@@ -51,7 +51,10 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
 
 class InMemoryUserSettingsRepository extends ChangeNotifier
     implements UserSettingsRepository {
-  UserSettings _settings = const UserSettings(
+  InMemoryUserSettingsRepository({UserSettings? initialSettings})
+    : _settings = initialSettings ?? _defaultSettings;
+
+  static const UserSettings _defaultSettings = UserSettings(
     sleepGoalHours: 7.5,
     bedtimeReminderEnabled: true,
     morningReminderEnabled: true,
@@ -60,6 +63,8 @@ class InMemoryUserSettingsRepository extends ChangeNotifier
     preferredTrackTitle: '深海海浪',
     smartSuggestionsEnabled: true,
   );
+
+  UserSettings _settings;
 
   @override
   UserSettings get currentSettings => _settings;

@@ -3,7 +3,6 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
-import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 
 class AssistantPage extends StatefulWidget {
@@ -39,7 +38,7 @@ class _AssistantPageState extends State<AssistantPage> {
       _inputController.clear();
     });
     _inputFocusNode.unfocus();
-    
+
     // Auto-scroll to bottom after a delay to ensure view updates
     Future.delayed(const Duration(milliseconds: 150), () {
       if (_scrollController.hasClients) {
@@ -90,7 +89,9 @@ class _AssistantPageState extends State<AssistantPage> {
                   children: [
                     // App Bar
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                      ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -109,7 +110,7 @@ class _AssistantPageState extends State<AssistantPage> {
                     // Floating AIAvatar
                     const _FloatingAIAvatar(),
                     const SizedBox(height: AppSpacing.xl),
-                    
+
                     Text(
                       'What\'s on your mind?',
                       style: textTheme.headlineMedium?.copyWith(
@@ -139,7 +140,8 @@ class _AssistantPageState extends State<AssistantPage> {
                   ),
                   children: <Widget>[
                     const _AssistantMessageBubble(
-                      text: 'A gentle 15-minute breathing exercise could help you shift into sleep mode. Would you like me to start it for you?',
+                      text:
+                          'A gentle 15-minute breathing exercise could help you shift into sleep mode. Would you like me to start it for you?',
                     ),
                     if (_latestPrompt != null) ...[
                       const SizedBox(height: AppSpacing.xl),
@@ -156,7 +158,9 @@ class _AssistantPageState extends State<AssistantPage> {
                 controller: _inputController,
                 focusNode: _inputFocusNode,
                 onSubmit: _submitPrompt,
-                bottomPadding: mediaPadding.bottom > 0 ? mediaPadding.bottom + 12 : AppSpacing.xl,
+                bottomPadding: mediaPadding.bottom > 0
+                    ? mediaPadding.bottom + 12
+                    : AppSpacing.xl,
               ),
             ],
           ),
@@ -198,7 +202,9 @@ class _FloatingAIAvatarState extends State<_FloatingAIAvatar>
   @override
   Widget build(BuildContext context) {
     // Determine dynamic size across devices
-    final double size = math.min(MediaQuery.sizeOf(context).width * 0.42, 220.0).clamp(160.0, 220.0);
+    final double size = math
+        .min(MediaQuery.sizeOf(context).width * 0.42, 220.0)
+        .clamp(160.0, 220.0);
 
     return SizedBox(
       width: size,
@@ -207,7 +213,8 @@ class _FloatingAIAvatarState extends State<_FloatingAIAvatar>
         animation: _controller,
         builder: (BuildContext context, Widget? child) {
           // Slow vertical float
-          final double bobbingOffset = math.sin(_controller.value * math.pi * 2) * 6.0;
+          final double bobbingOffset =
+              math.sin(_controller.value * math.pi * 2) * 6.0;
           final double pulse = _controller.value;
           final double innerPulse = math.sin(pulse * math.pi);
 
@@ -224,7 +231,9 @@ class _FloatingAIAvatarState extends State<_FloatingAIAvatar>
                     shape: BoxShape.circle,
                     boxShadow: <BoxShadow>[
                       BoxShadow(
-                        color: AppColors.primarySoft.withOpacity(0.08 + pulse * 0.06),
+                        color: AppColors.primarySoft.withOpacity(
+                          0.08 + pulse * 0.06,
+                        ),
                         blurRadius: size * 0.4 + (pulse * 25),
                         spreadRadius: pulse * 12,
                       ),
@@ -272,7 +281,9 @@ class _FloatingAIAvatarState extends State<_FloatingAIAvatar>
                       ],
                     ),
                     border: Border.all(
-                      color: AppColors.primarySoft.withOpacity(0.2 + pulse * 0.15),
+                      color: AppColors.primarySoft.withOpacity(
+                        0.2 + pulse * 0.15,
+                      ),
                       width: 1.5,
                     ),
                     boxShadow: const <BoxShadow>[
@@ -360,7 +371,10 @@ class _UserMessageBubble extends StatelessWidget {
       alignment: Alignment.centerRight,
       child: Container(
         margin: const EdgeInsets.only(left: 48),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 14),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: 14,
+        ),
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -437,7 +451,10 @@ class _ThinkingIndicatorState extends State<_ThinkingIndicator>
                 children: List<Widget>.generate(3, (int index) {
                   // Phase shift dots
                   final double delay = index * 0.2;
-                  final double rawValue = (_controller.value - delay).clamp(0.0, 1.0);
+                  final double rawValue = (_controller.value - delay).clamp(
+                    0.0,
+                    1.0,
+                  );
                   final double pulse = math.sin(rawValue * math.pi);
                   return Container(
                     margin: const EdgeInsets.symmetric(horizontal: 2),
@@ -445,7 +462,9 @@ class _ThinkingIndicatorState extends State<_ThinkingIndicator>
                     height: 5 + (pulse * 3),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: AppColors.primarySoft.withOpacity(0.3 + pulse * 0.7),
+                      color: AppColors.primarySoft.withOpacity(
+                        0.3 + pulse * 0.7,
+                      ),
                     ),
                   );
                 }),
@@ -479,12 +498,15 @@ class _FloatInputPanel extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
         child: Container(
-          padding: EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, bottomPadding),
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.md,
+            AppSpacing.lg,
+            bottomPadding,
+          ),
           decoration: const BoxDecoration(
             color: Color(0x33000000), // very dark glass
-            border: Border(
-              top: BorderSide(color: AppColors.darkBorder),
-            ),
+            border: Border(top: BorderSide(color: AppColors.darkBorder)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -503,7 +525,9 @@ class _FloatInputPanel extends StatelessWidget {
                     minLines: 1,
                     maxLines: 4,
                     textInputAction: TextInputAction.send,
-                    style: textTheme.bodyLarge?.copyWith(color: AppColors.onDark),
+                    style: textTheme.bodyLarge?.copyWith(
+                      color: AppColors.onDark,
+                    ),
                     cursorColor: AppColors.primarySoft,
                     decoration: InputDecoration(
                       hintText: "Chat with Nocturne...",
@@ -558,10 +582,7 @@ class _FloatInputPanel extends StatelessWidget {
 }
 
 class _TopCircleButton extends StatelessWidget {
-  const _TopCircleButton({
-    required this.icon,
-    required this.onTap,
-  });
+  const _TopCircleButton({required this.icon, required this.onTap});
 
   final IconData icon;
   final VoidCallback onTap;

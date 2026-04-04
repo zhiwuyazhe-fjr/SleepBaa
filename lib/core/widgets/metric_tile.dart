@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 
 class MetricTile extends StatelessWidget {
@@ -21,6 +22,7 @@ class MetricTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.nightMoodPalette;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       padding: EdgeInsets.zero,
@@ -35,7 +37,7 @@ class MetricTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: <Widget>[
-            Icon(icon, color: AppColors.primary, size: 22),
+            Icon(icon, color: palette.primary, size: 22),
             Text(
               label,
               maxLines: 1,

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 
 class AssistantFab extends StatefulWidget {
   const AssistantFab({super.key});
@@ -46,6 +47,7 @@ class _AssistantFabState extends State<AssistantFab>
           child: AnimatedBuilder(
             animation: _controller,
             builder: (BuildContext context, Widget? child) {
+              final palette = context.nightMoodPalette;
               final double pulse = _controller.value;
               return Stack(
                 clipBehavior: Clip.none,
@@ -57,10 +59,12 @@ class _AssistantFabState extends State<AssistantFab>
                     height: 58 + (pulse * 8),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: const Color(0xFF8AF4FF).withOpacity(0.1 + (pulse * 0.1)),
+                      color: palette.primarySoft.withValues(
+                        alpha: 0.1 + (pulse * 0.1),
+                      ),
                       boxShadow: <BoxShadow>[
                         BoxShadow(
-                          color: const Color(0xFF8AF4FF).withOpacity(0.2),
+                          color: palette.primarySoft.withValues(alpha: 0.2),
                           blurRadius: 16 + (pulse * 8),
                           spreadRadius: pulse * 4,
                         ),
@@ -79,7 +83,7 @@ class _AssistantFabState extends State<AssistantFab>
                         colors: <Color>[Color(0xFF2B3240), Color(0xFF121417)],
                       ),
                       border: Border.all(
-                        color: const Color(0xFF8AF4FF).withOpacity(0.4),
+                        color: palette.primarySoft.withValues(alpha: 0.4),
                         width: 1.5,
                       ),
                       boxShadow: const <BoxShadow>[
@@ -95,11 +99,11 @@ class _AssistantFabState extends State<AssistantFab>
                         angle: pulse * math.pi * 0.05,
                         child: Icon(
                           Icons.auto_awesome_rounded,
-                          color: const Color(0xFFE0FFFF),
+                          color: palette.primaryHighlight,
                           size: 28,
                           shadows: <BoxShadow>[
                             BoxShadow(
-                              color: const Color(0xFF8AF4FF),
+                              color: palette.primarySoft,
                               blurRadius: 8 + (pulse * 4),
                             ),
                           ],

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 enum HomeMode { preSleep, postSleep }
 
+enum NightMood { happy, sad, calm }
+
 enum RecommendationType { audio, quickAction }
 
 enum RecommendationExecutionState { idle, selected, playing, completed }
@@ -73,6 +75,7 @@ class UserSettings {
     required this.bedtimeReminder,
     required this.preferredTrackTitle,
     required this.smartSuggestionsEnabled,
+    this.selectedNightMood,
   });
 
   final double sleepGoalHours;
@@ -82,6 +85,7 @@ class UserSettings {
   final TimeOfDay bedtimeReminder;
   final String preferredTrackTitle;
   final bool smartSuggestionsEnabled;
+  final NightMood? selectedNightMood;
 
   UserSettings copyWith({
     double? sleepGoalHours,
@@ -91,6 +95,8 @@ class UserSettings {
     TimeOfDay? bedtimeReminder,
     String? preferredTrackTitle,
     bool? smartSuggestionsEnabled,
+    NightMood? selectedNightMood,
+    bool clearSelectedNightMood = false,
   }) {
     return UserSettings(
       sleepGoalHours: sleepGoalHours ?? this.sleepGoalHours,
@@ -103,6 +109,9 @@ class UserSettings {
       preferredTrackTitle: preferredTrackTitle ?? this.preferredTrackTitle,
       smartSuggestionsEnabled:
           smartSuggestionsEnabled ?? this.smartSuggestionsEnabled,
+      selectedNightMood: clearSelectedNightMood
+          ? null
+          : selectedNightMood ?? this.selectedNightMood,
     );
   }
 }

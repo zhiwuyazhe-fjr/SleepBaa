@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 
 enum PrimaryButtonVariant { filled, soft, ghost }
 
@@ -23,6 +24,7 @@ class PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.nightMoodPalette;
     final ButtonStyle style = FilledButton.styleFrom(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.xl,
@@ -30,8 +32,8 @@ class PrimaryButton extends StatelessWidget {
       ),
       shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
       elevation: 0,
-      backgroundColor: _backgroundColor(),
-      foregroundColor: _foregroundColor(),
+      backgroundColor: _backgroundColor(palette),
+      foregroundColor: _foregroundColor(palette),
       side: _borderSide(),
       textStyle: Theme.of(context).textTheme.labelLarge,
     );
@@ -48,18 +50,18 @@ class PrimaryButton extends StatelessWidget {
     return expand ? SizedBox(width: double.infinity, child: button) : button;
   }
 
-  Color _backgroundColor() {
+  Color _backgroundColor(NightMoodPalette palette) {
     return switch (variant) {
-      PrimaryButtonVariant.filled => AppColors.primary,
-      PrimaryButtonVariant.soft => AppColors.primarySoft,
+      PrimaryButtonVariant.filled => palette.primary,
+      PrimaryButtonVariant.soft => palette.primarySoft,
       PrimaryButtonVariant.ghost => Colors.transparent,
     };
   }
 
-  Color _foregroundColor() {
+  Color _foregroundColor(NightMoodPalette palette) {
     return switch (variant) {
       PrimaryButtonVariant.filled => AppColors.onDark,
-      PrimaryButtonVariant.soft => AppColors.primaryDeep,
+      PrimaryButtonVariant.soft => palette.primaryDeep,
       PrimaryButtonVariant.ghost => AppColors.textPrimary,
     };
   }

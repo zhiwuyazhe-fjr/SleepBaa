@@ -12,9 +12,9 @@ import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_detail_pa
 import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_journal_page.dart';
 import 'package:sleep_dorm_app/features/feedback/presentation/pages/morning_feedback_page.dart';
 import 'package:sleep_dorm_app/features/home/presentation/pages/home_post_sleep_page.dart';
-import 'package:sleep_dorm_app/features/home/presentation/pages/home_pre_sleep_page.dart';
 import 'package:sleep_dorm_app/features/intervention/presentation/pages/micro_intervention_task_page.dart';
 import 'package:sleep_dorm_app/features/logs/presentation/pages/night_awakening_log_page.dart';
+import 'package:sleep_dorm_app/features/night_mood/presentation/pages/night_welcome_gate_page.dart';
 import 'package:sleep_dorm_app/features/notifications/presentation/pages/notifications_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/calendar_checkin_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_page.dart';
@@ -82,7 +82,7 @@ GoRouter createRouter({
                 pageBuilder: (BuildContext context, GoRouterState state) =>
                     _noTransitionPage(
                       state: state,
-                      child: const HomePreSleepPage(),
+                      child: const NightWelcomeGatePage(),
                     ),
               ),
             ],

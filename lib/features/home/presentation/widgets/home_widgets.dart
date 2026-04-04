@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -22,6 +23,7 @@ class SleepRiskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.nightMoodPalette;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       padding: EdgeInsets.zero,
@@ -30,13 +32,13 @@ class SleepRiskCard extends StatelessWidget {
         height: 120,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(34),
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: <Color>[
-              Color(0xFF204F96),
-              Color(0xFF163E7E),
-              Color(0xFF0F2D61),
+              palette.heroGradientStart,
+              palette.heroGradientMid,
+              palette.heroGradientEnd,
             ],
           ),
         ),
@@ -71,7 +73,7 @@ class SleepRiskCard extends StatelessWidget {
                 height: 42,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.primarySoft.withAlpha(16),
+                  color: palette.primarySoft.withAlpha(16),
                 ),
               ),
             ),
@@ -106,7 +108,7 @@ class SleepRiskCard extends StatelessWidget {
                     const SizedBox(width: AppSpacing.xs),
                     _CardMetaPill(
                       label: secondaryValue,
-                      backgroundColor: AppColors.primarySoft.withAlpha(16),
+                      backgroundColor: palette.primarySoft.withAlpha(16),
                       foregroundColor: AppColors.onDark.withAlpha(210),
                     ),
                   ],
@@ -132,6 +134,7 @@ class StartSleepModeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.nightMoodPalette;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       padding: EdgeInsets.zero,
@@ -151,7 +154,7 @@ class StartSleepModeCard extends StatelessWidget {
                 height: 100,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.primarySoft.withAlpha(12),
+                  color: palette.primarySoft.withAlpha(12),
                 ),
               ),
             ),
@@ -163,16 +166,16 @@ class StartSleepModeCard extends StatelessWidget {
                   height: 54,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: const RadialGradient(
+                    gradient: RadialGradient(
                       colors: <Color>[
-                        Color(0xFFC9F7FF),
-                        Color(0xFF7FD8F2),
-                        Color(0xFF1787A6),
+                        palette.primaryHighlight,
+                        palette.primarySoft,
+                        palette.primary,
                       ],
                     ),
                     boxShadow: <BoxShadow>[
                       BoxShadow(
-                        color: AppColors.primarySoft.withAlpha(150),
+                        color: palette.primarySoft.withAlpha(150),
                         blurRadius: 24,
                         spreadRadius: 2,
                       ),
@@ -199,7 +202,7 @@ class StartSleepModeCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '轻触进入',
+                  isAudioReady ? '音频已同步' : '轻触进入',
                   style: textTheme.labelMedium?.copyWith(
                     color: AppColors.textSecondary,
                     fontWeight: FontWeight.w700,
@@ -263,15 +266,16 @@ class HomeActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.nightMoodPalette;
     final bool selected =
         recommendation.executionState != RecommendationExecutionState.idle;
     final Color foreground = _isAudio
-        ? AppColors.primaryDeep
+        ? palette.primaryDeep
         : AppColors.textPrimary;
 
     return AppCard(
       padding: EdgeInsets.zero,
-      color: _isAudio ? AppColors.primaryHighlight : AppColors.surface,
+      color: _isAudio ? palette.primaryHighlight : AppColors.surface,
       border: _isAudio ? null : Border.all(color: AppColors.divider),
       child: Container(
         height: 70,
@@ -284,14 +288,14 @@ class HomeActionCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: _isAudio
                     ? Colors.white.withAlpha(188)
-                    : AppColors.primary.withAlpha(12),
+                    : palette.primary.withAlpha(12),
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
               child: Icon(
                 recommendation.icon,
                 size: 18,
-                color: _isAudio ? AppColors.primaryDeep : AppColors.primary,
+                color: _isAudio ? palette.primaryDeep : palette.primary,
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -316,7 +320,7 @@ class HomeActionCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: _isAudio
-                          ? AppColors.primaryDeep.withAlpha(180)
+                          ? palette.primaryDeep.withAlpha(180)
                           : AppColors.textSecondary,
                     ),
                   ),
@@ -336,7 +340,7 @@ class HomeActionCard extends StatelessWidget {
                   border: !_isAudio
                       ? Border.all(
                           color: selected
-                              ? AppColors.primary
+                              ? palette.primary
                               : AppColors.surfaceBorder,
                         )
                       : null,
@@ -345,7 +349,7 @@ class HomeActionCard extends StatelessWidget {
                 child: Icon(
                   _trailingIcon(selected),
                   size: 22,
-                  color: selected ? AppColors.primary : foreground,
+                  color: selected ? palette.primary : foreground,
                 ),
               ),
             ),
@@ -382,6 +386,7 @@ class SupportToolCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.nightMoodPalette;
     return AppCard(
       color: AppColors.darkGlass,
       border: Border.all(color: AppColors.darkBorder),
@@ -390,7 +395,7 @@ class SupportToolCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(icon, color: AppColors.primarySoft, size: 24),
+          Icon(icon, color: palette.primarySoft, size: 24),
           const SizedBox(height: AppSpacing.md),
           Text(
             title,
@@ -427,6 +432,7 @@ class SessionAudioCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.nightMoodPalette;
     final AudioTrack effectiveTrack =
         track ??
         const AudioTrack(
@@ -438,17 +444,17 @@ class SessionAudioCard extends StatelessWidget {
 
     return AppCard(
       padding: EdgeInsets.zero,
-      color: AppColors.primarySoft.withAlpha(10),
-      border: Border.all(color: AppColors.primarySoft.withAlpha(28)),
+      color: palette.primarySoft.withAlpha(10),
+      border: Border.all(color: palette.primarySoft.withAlpha(28)),
       boxShadow: const <BoxShadow>[],
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xl),
         child: Row(
           children: <Widget>[
-            const IconBadge(
+            IconBadge(
               icon: Icons.waves_rounded,
-              backgroundColor: Color(0x3300697A),
-              iconColor: AppColors.primarySoft,
+              backgroundColor: palette.primary.withAlpha(52),
+              iconColor: palette.primarySoft,
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
@@ -477,7 +483,7 @@ class SessionAudioCard extends StatelessWidget {
                 playbackState == PlaybackState.playing
                     ? Icons.pause_circle_filled_rounded
                     : Icons.play_circle_fill_rounded,
-                color: AppColors.primarySoft,
+                color: palette.primarySoft,
                 size: 34,
               ),
             ),
@@ -516,6 +522,7 @@ class _SleepModeMoonState extends State<SleepModeMoon>
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.nightMoodPalette;
     return AnimatedBuilder(
       animation: _controller,
       builder: (BuildContext context, Widget? child) {
@@ -538,10 +545,10 @@ class _SleepModeMoonState extends State<SleepModeMoon>
                     height: 212,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: AppColors.primary.withAlpha(34),
+                      color: palette.primary.withAlpha(34),
                       boxShadow: <BoxShadow>[
                         BoxShadow(
-                          color: AppColors.primarySoft.withAlpha(120),
+                          color: palette.primarySoft.withAlpha(120),
                           blurRadius: 70,
                           spreadRadius: 26,
                         ),
@@ -554,16 +561,16 @@ class _SleepModeMoonState extends State<SleepModeMoon>
                   height: 128,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: const RadialGradient(
+                    gradient: RadialGradient(
                       colors: <Color>[
-                        AppColors.primarySoft,
-                        AppColors.calmBlue,
-                        AppColors.primary,
+                        palette.moonGradientStart,
+                        palette.moonGradientMid,
+                        palette.moonGradientEnd,
                       ],
                     ),
                     boxShadow: <BoxShadow>[
                       BoxShadow(
-                        color: AppColors.primarySoft.withAlpha(80),
+                        color: palette.primarySoft.withAlpha(80),
                         blurRadius: 28,
                         spreadRadius: 4,
                       ),

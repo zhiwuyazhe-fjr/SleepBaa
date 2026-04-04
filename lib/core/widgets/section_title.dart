@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 
 class SectionTitle extends StatelessWidget {
   const SectionTitle({
@@ -15,6 +15,7 @@ class SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.nightMoodPalette;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -24,7 +25,7 @@ class SectionTitle extends StatelessWidget {
           TextButton.icon(
             onPressed: onAction,
             style: TextButton.styleFrom(
-              foregroundColor: AppColors.textSecondary,
+              foregroundColor: palette.primaryDeep,
               padding: EdgeInsets.zero,
               minimumSize: Size.zero,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,

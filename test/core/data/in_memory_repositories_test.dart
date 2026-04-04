@@ -85,4 +85,21 @@ void main() {
     expect(updated.summary?.sleepQuality, 4);
     expect(updated.feedback.length, 1);
   });
+
+  test('user settings repository persists selected night mood', () async {
+    final InMemoryUserSettingsRepository repository =
+        InMemoryUserSettingsRepository();
+
+    await repository.saveSettings(
+      repository.currentSettings.copyWith(selectedNightMood: NightMood.happy),
+    );
+
+    expect(repository.currentSettings.selectedNightMood, NightMood.happy);
+
+    await repository.saveSettings(
+      repository.currentSettings.copyWith(clearSelectedNightMood: true),
+    );
+
+    expect(repository.currentSettings.selectedNightMood, isNull);
+  });
 }

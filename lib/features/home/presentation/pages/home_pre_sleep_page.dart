@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/metric_tile.dart';
@@ -25,6 +26,7 @@ class HomePreSleepPage extends StatelessWidget {
           services.audioPlaybackController,
         ]),
         builder: (BuildContext context, Widget? child) {
+          final palette = context.nightMoodPalette;
           final UserProfile profile = services.authRepository.currentUser;
           final Dorm dorm = services.dormRepository.currentDorm;
           final List<NightRecommendation> recommendations =
@@ -54,7 +56,7 @@ class HomePreSleepPage extends StatelessWidget {
                             children: <Widget>[
                               Expanded(
                                 child: Text(
-                                  '$greeting，${profile.displayName} 👋',
+                                  '$greeting，${profile.displayName}',
                                   style: Theme.of(
                                     context,
                                   ).textTheme.displayMedium,
@@ -131,7 +133,9 @@ class HomePreSleepPage extends StatelessWidget {
                                       width: 46,
                                       height: 5,
                                       decoration: BoxDecoration(
-                                        color: AppColors.divider,
+                                        color: palette.primarySoft.withAlpha(
+                                          140,
+                                        ),
                                         borderRadius: BorderRadius.circular(
                                           999,
                                         ),
@@ -142,8 +146,9 @@ class HomePreSleepPage extends StatelessWidget {
                                   SectionTitle(
                                     title: '今晚行动建议',
                                     actionLabel: '查看全部',
-                                    onAction: () =>
-                                        context.push(AppRoutes.interventionTask),
+                                    onAction: () => context.push(
+                                      AppRoutes.interventionTask,
+                                    ),
                                   ),
                                   const SizedBox(height: AppSpacing.md),
                                   ...recommendations.map(
@@ -186,7 +191,7 @@ class HomePreSleepPage extends StatelessWidget {
                                         icon: Icons.volume_down_rounded,
                                         label: '宿舍噪声',
                                         value: '${dorm.noiseDb} dB',
-                                        detail: '当前状态良好',
+                                        detail: '当前状态较稳定',
                                       ),
                                       MetricTile(
                                         icon: Icons.lightbulb_rounded,
@@ -204,7 +209,7 @@ class HomePreSleepPage extends StatelessWidget {
                                         icon: Icons.favorite_rounded,
                                         label: '情绪压力',
                                         value: '低强度',
-                                        detail: '适合干预后入睡',
+                                        detail: '适合干预后再入睡',
                                       ),
                                     ],
                                   ),
@@ -243,6 +248,7 @@ class _NotificationBell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.nightMoodPalette;
     return InkWell(
       borderRadius: BorderRadius.circular(999),
       onTap: onTap,
@@ -271,7 +277,7 @@ class _NotificationBell extends StatelessWidget {
                   height: 20,
                   padding: const EdgeInsets.symmetric(horizontal: 6),
                   decoration: BoxDecoration(
-                    color: AppColors.primarySoft,
+                    color: palette.primarySoft,
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(color: AppColors.darkSurface, width: 2),
                     boxShadow: AppColors.cardShadow,
@@ -280,7 +286,7 @@ class _NotificationBell extends StatelessWidget {
                   child: Text(
                     unread > 99 ? '99+' : '$unread',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppColors.primaryDeep,
+                      color: palette.primaryDeep,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
