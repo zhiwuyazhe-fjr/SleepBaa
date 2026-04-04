@@ -23,15 +23,19 @@ class MetricTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
+      padding: EdgeInsets.zero,
       onTap: onTap,
       border: Border.all(color: AppColors.divider),
       child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: 14,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: <Widget>[
-            Icon(icon, color: AppColors.primary, size: 24),
-            const SizedBox(height: AppSpacing.md),
+            Icon(icon, color: AppColors.primary, size: 22),
             Text(
               label,
               maxLines: 1,
@@ -40,23 +44,20 @@ class MetricTile extends StatelessWidget {
                 color: AppColors.textSecondary,
               ),
             ),
-            const SizedBox(height: 6),
             Text(
               value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: textTheme.titleLarge?.copyWith(
+              style: textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary,
               ),
             ),
-            const SizedBox(height: 4),
             Text(
               detail ?? '',
-              maxLines: 2,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: textTheme.bodySmall?.copyWith(
-                height: 1.25,
+              style: textTheme.labelSmall?.copyWith(
                 color: AppColors.textSecondary,
               ),
             ),

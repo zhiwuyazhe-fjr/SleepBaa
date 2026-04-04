@@ -27,31 +27,51 @@ class SleepRiskCard extends StatelessWidget {
       padding: EdgeInsets.zero,
       boxShadow: AppColors.floatingShadow,
       child: Container(
-        height: 84,
+        height: 120,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(32),
+          borderRadius: BorderRadius.circular(34),
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: <Color>[
-              Color(0xFF1A5C9B),
-              Color(0xFF12497F),
-              Color(0xFF0A2E57),
+              Color(0xFF204F96),
+              Color(0xFF163E7E),
+              Color(0xFF0F2D61),
             ],
           ),
         ),
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
         child: Stack(
           children: <Widget>[
             Positioned(
-              right: -8,
-              top: -18,
+              right: -4,
+              top: -6,
               child: Container(
-                width: 78,
-                height: 78,
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(34),
+                  gradient: RadialGradient(
+                    center: const Alignment(0.25, -0.1),
+                    radius: 0.9,
+                    colors: <Color>[
+                      Colors.white.withAlpha(28),
+                      Colors.white.withAlpha(8),
+                      Colors.white.withAlpha(0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 34,
+              top: 26,
+              child: Container(
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withAlpha(16),
+                  color: AppColors.primarySoft.withAlpha(16),
                 ),
               ),
             ),
@@ -61,27 +81,35 @@ class SleepRiskCard extends StatelessWidget {
               children: <Widget>[
                 Text(
                   '睡眠风险',
-                  style: textTheme.labelSmall?.copyWith(
-                    color: AppColors.onDark.withAlpha(205),
+                  style: textTheme.labelMedium?.copyWith(
+                    color: AppColors.onDark.withAlpha(196),
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 Text(
                   riskLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: textTheme.titleMedium?.copyWith(
+                  style: textTheme.headlineMedium?.copyWith(
                     color: AppColors.onDark,
                     fontWeight: FontWeight.w800,
+                    height: 1,
                   ),
                 ),
-                Text(
-                  '$primaryValue · $secondaryValue',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.labelSmall?.copyWith(
-                    color: AppColors.onDark.withAlpha(155),
-                    fontWeight: FontWeight.w600,
-                  ),
+                Row(
+                  children: <Widget>[
+                    _CardMetaPill(
+                      label: primaryValue,
+                      backgroundColor: Colors.white.withAlpha(18),
+                      foregroundColor: AppColors.onDark,
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    _CardMetaPill(
+                      label: secondaryValue,
+                      backgroundColor: AppColors.primarySoft.withAlpha(16),
+                      foregroundColor: AppColors.onDark.withAlpha(210),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -108,64 +136,144 @@ class StartSleepModeCard extends StatelessWidget {
     return AppCard(
       padding: EdgeInsets.zero,
       border: Border.all(color: AppColors.divider),
+      boxShadow: AppColors.cardShadow,
       onTap: onTap,
       child: Container(
-        height: 84,
-        padding: const EdgeInsets.all(12),
-        child: Row(
+        height: 120,
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Stack(
           children: <Widget>[
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const RadialGradient(
-                  colors: <Color>[
-                    AppColors.primarySoft,
-                    AppColors.calmBlue,
-                    AppColors.primary,
+            Positioned(
+              right: -18,
+              bottom: -18,
+              child: Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primarySoft.withAlpha(12),
+                ),
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const RadialGradient(
+                          colors: <Color>[
+                            Color(0xFFC9F7FF),
+                            Color(0xFF7FD8F2),
+                            Color(0xFF1787A6),
+                          ],
+                        ),
+                        boxShadow: <BoxShadow>[
+                          BoxShadow(
+                            color: AppColors.primarySoft.withAlpha(150),
+                            blurRadius: 24,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.nightlight_round,
+                        color: AppColors.onDark,
+                        size: 23,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          '开启睡眠模式',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-                boxShadow: <BoxShadow>[
-                  BoxShadow(
-                    color: AppColors.primarySoft.withAlpha(120),
-                    blurRadius: 18,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.bedtime_rounded,
-                size: 20,
-                color: AppColors.onDark,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  Text(
-                    '开启睡眠模式',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
+                Row(
+                  children: <Widget>[
+                    _CardMetaPill(
+                      label: isAudioReady ? '音频已同步' : '准备开始',
+                      backgroundColor: AppColors.primarySoft.withAlpha(20),
+                      foregroundColor: AppColors.primaryDeep,
                     ),
-                  ),
-                  Text(
-                    isAudioReady ? '音频已同步，点击即可开始' : '点击开始今晚的助眠流程',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.labelSmall?.copyWith(
-                      color: AppColors.textSecondary,
+                    const Spacer(),
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.primarySoft,
+                        shape: BoxShape.circle,
+                        boxShadow: <BoxShadow>[
+                          BoxShadow(
+                            color: AppColors.primarySoft.withAlpha(120),
+                            blurRadius: 18,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.play_arrow_rounded,
+                        color: AppColors.primaryDeep,
+                        size: 22,
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+              ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CardMetaPill extends StatelessWidget {
+  const _CardMetaPill({
+    required this.label,
+    required this.backgroundColor,
+    required this.foregroundColor,
+  });
+
+  final String label;
+  final Color backgroundColor;
+  final Color foregroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 6,
+      ),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: foregroundColor,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
@@ -197,8 +305,8 @@ class HomeActionCard extends StatelessWidget {
       color: _isAudio ? AppColors.primaryHighlight : AppColors.surface,
       border: _isAudio ? null : Border.all(color: AppColors.divider),
       child: Container(
-        height: 72,
-        padding: const EdgeInsets.all(10),
+        height: 70,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
           children: <Widget>[
             Container(
@@ -206,7 +314,7 @@ class HomeActionCard extends StatelessWidget {
               height: 34,
               decoration: BoxDecoration(
                 color: _isAudio
-                    ? Colors.white.withAlpha(180)
+                    ? Colors.white.withAlpha(188)
                     : AppColors.primary.withAlpha(12),
                 shape: BoxShape.circle,
               ),
@@ -227,11 +335,12 @@ class HomeActionCard extends StatelessWidget {
                     recommendation.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       color: foreground,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
                     recommendation.subtitle,
                     maxLines: 1,
@@ -245,13 +354,13 @@ class HomeActionCard extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: AppSpacing.md),
+            const SizedBox(width: AppSpacing.sm),
             InkWell(
               onTap: onTap,
               borderRadius: BorderRadius.circular(999),
               child: Container(
-                width: 44,
-                height: 44,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   color: Colors.white.withAlpha(_isAudio ? 255 : 0),
                   shape: BoxShape.circle,
@@ -266,6 +375,7 @@ class HomeActionCard extends StatelessWidget {
                 alignment: Alignment.center,
                 child: Icon(
                   _trailingIcon(selected),
+                  size: 22,
                   color: selected ? AppColors.primary : foreground,
                 ),
               ),

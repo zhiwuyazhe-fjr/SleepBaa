@@ -36,6 +36,7 @@ class HomePreSleepPage extends StatelessWidget {
           return SafeArea(
             child: LayoutBuilder(
               builder: (BuildContext context, BoxConstraints constraints) {
+                final String greeting = _greetingFor(DateTime.now());
                 return Stack(
                   children: <Widget>[
                     Padding(
@@ -52,42 +53,14 @@ class HomePreSleepPage extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
                               Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    Text(
-                                      '晚上好，${profile.displayName}',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.displayMedium,
-                                    ),
-                                    const SizedBox(height: AppSpacing.xs),
-                                    Row(
-                                      children: <Widget>[
-                                        const Icon(
-                                          Icons.circle,
-                                          size: 8,
-                                          color: AppColors.primary,
-                                        ),
-                                        const SizedBox(width: AppSpacing.xs),
-                                        Expanded(
-                                          child: Text(
-                                            dorm.overview,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodyMedium
-                                                ?.copyWith(
-                                                  color:
-                                                      AppColors.textSecondary,
-                                                ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                                child: Text(
+                                  '$greeting，${profile.displayName} 👋',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.displayMedium,
                                 ),
                               ),
-                              const SizedBox(width: AppSpacing.md),
+                              const SizedBox(width: AppSpacing.sm),
                               _NotificationBell(
                                 unread: unread,
                                 onTap: () =>
@@ -95,7 +68,7 @@ class HomePreSleepPage extends StatelessWidget {
                               ),
                             ],
                           ),
-                          const SizedBox(height: AppSpacing.xl),
+                          const SizedBox(height: AppSpacing.md),
                           Row(
                             children: <Widget>[
                               Expanded(
@@ -105,7 +78,7 @@ class HomePreSleepPage extends StatelessWidget {
                                   secondaryValue: dorm.lightLabel,
                                 ),
                               ),
-                              const SizedBox(width: AppSpacing.md),
+                              const SizedBox(width: AppSpacing.sm),
                               Expanded(
                                 child: StartSleepModeCard(
                                   isAudioReady:
@@ -128,8 +101,8 @@ class HomePreSleepPage extends StatelessWidget {
                       ),
                     ),
                     DraggableScrollableSheet(
-                      initialChildSize: 0.56,
-                      minChildSize: 0.52,
+                      initialChildSize: 0.72,
+                      minChildSize: 0.68,
                       maxChildSize: 0.9,
                       builder:
                           (
@@ -148,9 +121,9 @@ class HomePreSleepPage extends StatelessWidget {
                                 controller: scrollController,
                                 padding: const EdgeInsets.fromLTRB(
                                   AppSpacing.xl,
-                                  AppSpacing.lg,
+                                  AppSpacing.sm,
                                   AppSpacing.xl,
-                                  132,
+                                  208,
                                 ),
                                 children: <Widget>[
                                   Center(
@@ -165,7 +138,7 @@ class HomePreSleepPage extends StatelessWidget {
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: AppSpacing.lg),
+                                  const SizedBox(height: AppSpacing.md),
                                   SectionTitle(
                                     title: '今晚行动建议',
                                     actionLabel: '查看全部',
@@ -177,7 +150,7 @@ class HomePreSleepPage extends StatelessWidget {
                                     (NightRecommendation recommendation) =>
                                         Padding(
                                           padding: const EdgeInsets.only(
-                                            bottom: AppSpacing.md,
+                                            bottom: AppSpacing.sm,
                                           ),
                                           child: HomeActionCard(
                                             recommendation: recommendation,
@@ -191,7 +164,7 @@ class HomePreSleepPage extends StatelessWidget {
                                           ),
                                         ),
                                   ),
-                                  const SizedBox(height: AppSpacing.lg),
+                                  const SizedBox(height: AppSpacing.xl),
                                   SectionTitle(
                                     title: '今晚影响因素',
                                     actionLabel: '查看详情',
@@ -207,31 +180,31 @@ class HomePreSleepPage extends StatelessWidget {
                                     shrinkWrap: true,
                                     physics:
                                         const NeverScrollableScrollPhysics(),
-                                    childAspectRatio: 0.98,
+                                    childAspectRatio: 1.12,
                                     children: <Widget>[
                                       MetricTile(
                                         icon: Icons.volume_down_rounded,
                                         label: '宿舍噪声',
                                         value: '${dorm.noiseDb} dB',
-                                        detail: '当前状态 ${dorm.quietLabel}',
+                                        detail: '当前状态良好',
                                       ),
                                       MetricTile(
                                         icon: Icons.lightbulb_rounded,
                                         label: '灯光环境',
                                         value: dorm.lightLabel,
-                                        detail: '更适合慢慢进入放松状态',
+                                        detail: '适合进入放松状态',
                                       ),
                                       const MetricTile(
                                         icon: Icons.phone_iphone_rounded,
                                         label: '手机使用',
                                         value: '45 分钟',
-                                        detail: '建议睡前先放下手机 15 分钟',
+                                        detail: '建议睡前先放下 15 分钟',
                                       ),
                                       const MetricTile(
                                         icon: Icons.favorite_rounded,
                                         label: '情绪压力',
                                         value: '低强度',
-                                        detail: '整体可放松，适合轻干预后入睡',
+                                        detail: '适合干预后入睡',
                                       ),
                                     ],
                                   ),
@@ -249,6 +222,17 @@ class HomePreSleepPage extends StatelessWidget {
       ),
     );
   }
+}
+
+String _greetingFor(DateTime now) {
+  final int hour = now.hour;
+  if (hour >= 5 && hour <= 10) {
+    return '早上好';
+  }
+  if (hour >= 11 && hour <= 17) {
+    return '中午好';
+  }
+  return '晚上好';
 }
 
 class _NotificationBell extends StatelessWidget {

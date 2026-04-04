@@ -19,52 +19,69 @@ class BottomNavShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true,
-      body: navigationShell,
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton: const Padding(
-        padding: EdgeInsets.only(bottom: 72),
-        child: AssistantFab(),
-      ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        minimum: const EdgeInsets.fromLTRB(
-          AppSpacing.md,
-          0,
-          AppSpacing.md,
-          8,
-        ),
-        child: Container(
-          key: navBarKey,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: 6,
+      body: Stack(
+        children: <Widget>[
+          Positioned.fill(child: navigationShell),
+          Positioned(
+            right: AppSpacing.xl,
+            bottom: 110,
+            child: const SafeArea(
+              top: false,
+              child: AssistantFab(),
+            ),
           ),
-          decoration: BoxDecoration(
-            color: AppColors.surface.withAlpha(240),
-            borderRadius: AppRadius.pill,
-            border: Border.all(color: Colors.white.withAlpha(170)),
-            boxShadow: AppColors.floatingShadow,
-          ),
-          child: Row(
-            children: List<Widget>.generate(_items.length, (int index) {
-              final _BottomNavItem item = _items[index];
-              final bool selected = index == navigationShell.currentIndex;
-              return Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: _NavPillButton(
-                    item: item,
-                    selected: selected,
-                    onTap: () => navigationShell.goBranch(
-                      index,
-                      initialLocation: index == navigationShell.currentIndex,
-                    ),
-                  ),
+          Positioned(
+            left: AppSpacing.md,
+            right: AppSpacing.md,
+            bottom: 8,
+            child: SafeArea(
+              top: false,
+              child: Container(
+                key: navBarKey,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: 6,
                 ),
-              );
-            }),
+                decoration: BoxDecoration(
+                  color: AppColors.surface.withAlpha(232),
+                  borderRadius: AppRadius.pill,
+                  boxShadow: const <BoxShadow>[
+                    BoxShadow(
+                      color: Color(0x14000000),
+                      blurRadius: 22,
+                      offset: Offset(0, 10),
+                    ),
+                    BoxShadow(
+                      color: Color(0x0F000000),
+                      blurRadius: 8,
+                      offset: Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: List<Widget>.generate(_items.length, (int index) {
+                    final _BottomNavItem item = _items[index];
+                    final bool selected = index == navigationShell.currentIndex;
+                    return Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: _NavPillButton(
+                          item: item,
+                          selected: selected,
+                          onTap: () => navigationShell.goBranch(
+                            index,
+                            initialLocation:
+                                index == navigationShell.currentIndex,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
