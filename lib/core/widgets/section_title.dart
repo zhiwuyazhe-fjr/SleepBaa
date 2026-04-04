@@ -6,11 +6,13 @@ class SectionTitle extends StatelessWidget {
     super.key,
     required this.title,
     this.actionLabel,
+    this.actionKey,
     this.onAction,
   });
 
   final String title;
   final String? actionLabel;
+  final Key? actionKey;
   final VoidCallback? onAction;
 
   @override
@@ -23,6 +25,7 @@ class SectionTitle extends StatelessWidget {
         Expanded(child: Text(title, style: textTheme.headlineSmall)),
         if (actionLabel != null)
           TextButton.icon(
+            key: actionKey,
             onPressed: onAction,
             style: TextButton.styleFrom(
               foregroundColor: palette.primaryDeep,

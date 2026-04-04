@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
@@ -23,6 +24,7 @@ class PlaceholderPageScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
+    final NightMoodPalette palette = context.nightMoodPalette;
     return Scaffold(
       appBar: AppBar(title: Text(title)),
       body: SafeArea(
@@ -35,7 +37,7 @@ class PlaceholderPageScaffold extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Icon(icon, size: 34, color: AppColors.primary),
+                    Icon(icon, size: 34, color: palette.primary),
                     const SizedBox(height: AppSpacing.lg),
                     Text(title, style: textTheme.headlineSmall),
                     const SizedBox(height: AppSpacing.sm),
@@ -60,12 +62,12 @@ class PlaceholderPageScaffold extends StatelessWidget {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          const Padding(
+                          Padding(
                             padding: EdgeInsets.only(top: 6),
                             child: Icon(
                               Icons.brightness_1_rounded,
                               size: 8,
-                              color: AppColors.primary,
+                              color: palette.primary,
                             ),
                           ),
                           const SizedBox(width: AppSpacing.sm),

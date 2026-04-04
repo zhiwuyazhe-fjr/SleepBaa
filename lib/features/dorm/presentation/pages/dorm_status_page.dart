@@ -1,68 +1,234 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:sleep_dorm_app/app/routes.dart';
+import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
+import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 
 class DormStatusPage extends StatelessWidget {
   const DormStatusPage({super.key});
+
+  static const ValueKey<String> timelineKey = ValueKey<String>(
+    'dorm-status-timeline',
+  );
 
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     return Scaffold(
-      appBar: AppBar(title: const Text('Dorm Status')),
+      appBar: AppBar(title: const Text('寝室状态记录')),
       body: SafeArea(
         child: ListenableBuilder(
-          listenable: services.dormRepository,
+          listenable: Listenable.merge(<Listenable>[
+            services.dormRepository,
+            services.notificationRepository,
+          ]),
           builder: (BuildContext context, Widget? child) {
-            final dorm = services.dormRepository.currentDorm;
+            final NightMoodPalette palette = context.nightMoodPalette;
+            final Dorm dorm = services.dormRepository.currentDorm;
+            final List<DormEventRecord> events = buildDormEventRecords(
+              dorm: dorm,
+              notifications: services.notificationRepository.notifications,
+              palette: palette,
+            );
+            final int onlineCount = dorm.members
+                .where(
+                  (DormMember member) => member.status != DormMemberStatus.away,
+                )
+                .length;
+            final int sleepingCount = dorm.members
+                .where((DormMember member) => member.sleepModeActive)
+                .length;
+
             return SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.xl),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
+                AppSpacing.lg,
+                AppSpacing.xl,
+                96,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  const SectionTitle(title: 'Roommate Status'),
+                  AppCard(
+                    padding: EdgeInsets.zero,
+                    boxShadow: AppColors.floatingShadow,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(AppSpacing.xl),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(32),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: <Color>[
+                            palette.heroGradientStart,
+                            palette.heroGradientMid,
+                            palette.heroGradientEnd,
+                          ],
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            dorm.name,
+                            style: Theme.of(context).textTheme.headlineMedium
+                                ?.copyWith(
+                                  color: AppColors.onDark,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            dorm.overview,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: AppColors.onDark.withAlpha(196),
+                                  height: 1.45,
+                                ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          Wrap(
+                            spacing: AppSpacing.sm,
+                            runSpacing: AppSpacing.sm,
+                            children: <Widget>[
+                              _SummaryChip(label: '在线 $onlineCount 人'),
+                              _SummaryChip(label: '睡眠中 $sleepingCount 人'),
+                              _SummaryChip(label: '安静 ${dorm.quietLabel}'),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  SectionTitle(
+                    title: '状态记录',
+                    actionLabel: '宿舍公约',
+                    onAction: () => context.push(AppRoutes.dormRules),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Column(
+                    key: timelineKey,
+                    children: events
+                        .map(
+                          (DormEventRecord event) => Padding(
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.sm,
+                            ),
+                            child: _StatusEventCard(event: event),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  const SectionTitle(title: '当前室友状态'),
                   const SizedBox(height: AppSpacing.md),
                   ...dorm.members.map(
-                    (roommate) => Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                    (DormMember member) => Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                       child: AppCard(
-                        child: ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: CircleAvatar(
-                            child: Text(roommate.name.characters.first),
-                          ),
-                          title: Text(roommate.name),
-                          subtitle: Text(roommate.note),
-                          trailing: Text(roommate.status.name),
+                        boxShadow: const <BoxShadow>[],
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: _memberColor(
+                                  member.status,
+                                ).withAlpha(24),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                member.name.characters.first,
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(
+                                      color: _memberColor(member.status),
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Text(
+                                    member.name,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(height: AppSpacing.xs),
+                                  Text(
+                                    member.note,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: AppColors.textSecondary,
+                                          height: 1.4,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.sm,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _memberColor(
+                                  member.status,
+                                ).withAlpha(18),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                _memberLabel(member.status),
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(
+                                      color: _memberColor(member.status),
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.lg),
-                  const SectionTitle(title: 'Noise / Light / Quiet Status'),
+                  const SizedBox(height: AppSpacing.xl),
+                  const SectionTitle(title: '环境状态'),
                   const SizedBox(height: AppSpacing.md),
                   AppCard(
                     child: Column(
                       children: <Widget>[
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.volume_down_rounded),
-                          title: const Text('Noise'),
-                          trailing: Text('${dorm.noiseDb} dB'),
+                        _EnvironmentRow(
+                          icon: Icons.volume_down_rounded,
+                          label: '噪音',
+                          value: '${dorm.noiseDb} dB',
                         ),
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.light_mode_rounded),
-                          title: const Text('Light'),
-                          trailing: Text(dorm.lightLabel),
+                        const Divider(height: AppSpacing.xl),
+                        _EnvironmentRow(
+                          icon: Icons.light_mode_rounded,
+                          label: '灯光',
+                          value: dorm.lightLabel,
                         ),
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.bedroom_parent_rounded),
-                          title: const Text('Quiet'),
-                          trailing: Text(dorm.quietLabel),
+                        const Divider(height: AppSpacing.xl),
+                        _EnvironmentRow(
+                          icon: Icons.bedroom_parent_rounded,
+                          label: '安静状态',
+                          value: dorm.quietLabel,
                         ),
                       ],
                     ),
@@ -75,4 +241,143 @@ class DormStatusPage extends StatelessWidget {
       ),
     );
   }
+}
+
+class _StatusEventCard extends StatelessWidget {
+  const _StatusEventCard({required this.event});
+
+  final DormEventRecord event;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      color: AppColors.surfaceMuted,
+      boxShadow: const <BoxShadow>[],
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: event.color.withAlpha(24),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            alignment: Alignment.center,
+            child: Icon(event.icon, color: event.color, size: 20),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        event.title,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(
+                      event.timeLabel,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  event.detail,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryChip extends StatelessWidget {
+  const _SummaryChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(230),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          color: AppColors.textPrimary,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _EnvironmentRow extends StatelessWidget {
+  const _EnvironmentRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Icon(icon, color: AppColors.textSecondary),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(label, style: Theme.of(context).textTheme.titleMedium),
+        ),
+        Text(
+          value,
+          style: Theme.of(
+            context,
+          ).textTheme.labelLarge?.copyWith(color: AppColors.textSecondary),
+        ),
+      ],
+    );
+  }
+}
+
+Color _memberColor(DormMemberStatus status) {
+  return switch (status) {
+    DormMemberStatus.sleeping => const Color(0xFF44B9D7),
+    DormMemberStatus.quiet => const Color(0xFF38C89D),
+    DormMemberStatus.away => const Color(0xFF3B3F46),
+    DormMemberStatus.active => const Color(0xFFF5A53A),
+  };
+}
+
+String _memberLabel(DormMemberStatus status) {
+  return switch (status) {
+    DormMemberStatus.sleeping => 'SLEEPING',
+    DormMemberStatus.quiet => 'QUIET',
+    DormMemberStatus.away => 'AWAY',
+    DormMemberStatus.active => 'ACTIVE',
+  };
 }

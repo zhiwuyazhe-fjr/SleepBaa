@@ -5,9 +5,11 @@ import 'package:sleep_dorm_app/app/app.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 import 'package:sleep_dorm_app/core/widgets/bottom_nav_shell.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/pages/assistant_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_page.dart';
+import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_status_page.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_journal_page.dart';
 import 'package:sleep_dorm_app/features/feedback/presentation/pages/morning_feedback_page.dart';
 import 'package:sleep_dorm_app/features/home/presentation/pages/home_post_sleep_page.dart';
@@ -167,6 +169,65 @@ void main() {
     expect(find.byType(AssistantPage), findsOneWidget);
   });
 
+  testWidgets('assistant fab keeps default icon when no mood is selected', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+    );
+
+    expect(
+      find.byKey(const ValueKey<String>('assistant-fab-default-icon')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('assistant-fab-default-shell')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('assistant-fab-mood-avatar')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('assistant surfaces mood avatars after a mood is selected', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(NightMood.calm),
+    );
+
+    expect(
+      find.byKey(const ValueKey<String>('assistant-fab-mood-avatar')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('assistant-fab-mood-shell')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('assistant-fab-default-shell')),
+      findsNothing,
+    );
+
+    await tester.tap(find.byType(AssistantFab));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('assistant-page-mood-avatar')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('assistant-page-default-avatar')),
+      findsNothing,
+    );
+  });
+
   testWidgets(
     'assistant page provides holographic avatar and local text input',
     (WidgetTester tester) async {
@@ -176,7 +237,10 @@ void main() {
         clock: _dayClock,
       );
 
-      expect(find.byIcon(Icons.auto_awesome_rounded), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('assistant-page-default-avatar')),
+        findsOneWidget,
+      );
       expect(find.byType(TextField), findsOneWidget);
 
       await tester.enterText(find.byType(TextField), '今晚宿舍有点吵');
@@ -184,6 +248,101 @@ void main() {
       expect(find.byIcon(Icons.send_rounded), findsOneWidget);
     },
   );
+
+  testWidgets('dorm page uses a full-width hero and draggable drawer', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dorm,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(NightMood.calm),
+    );
+
+    expect(find.byKey(DormPage.heroCardKey), findsOneWidget);
+    expect(find.byKey(DormPage.drawerSheetKey), findsOneWidget);
+    expect(find.byType(DraggableScrollableSheet), findsOneWidget);
+    expect(find.text('宿舍整体状态平稳，灯光已调暗，适合逐步进入睡眠模式。'), findsNothing);
+
+    final double heroWidth = tester
+        .getSize(find.byKey(DormPage.heroCardKey))
+        .width;
+    expect(heroWidth, moreOrLessEquals(342, epsilon: 1));
+    expect(
+      tester.getSize(find.byKey(DormPage.roommateListKey)).height,
+      moreOrLessEquals(188, epsilon: 1),
+    );
+    expect(
+      tester.getSize(find.byKey(DormPage.heroCardKey)).height,
+      lessThan(260),
+    );
+    final double drawerTopBefore = tester
+        .getTopLeft(find.byKey(DormPage.drawerSheetKey))
+        .dy;
+    await tester.drag(
+      find.byKey(DormPage.drawerSheetKey),
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+    final double drawerTopAfter = tester
+        .getTopLeft(find.byKey(DormPage.drawerSheetKey))
+        .dy;
+    expect(drawerTopAfter, lessThan(drawerTopBefore));
+
+    final Container heroContainer = tester.widget<Container>(
+      find.byKey(DormPage.heroGradientKey),
+    );
+    final BoxDecoration decoration = heroContainer.decoration! as BoxDecoration;
+    final LinearGradient gradient = decoration.gradient! as LinearGradient;
+    final NightMoodPalette palette = NightMoodPalette.fromMood(NightMood.calm);
+
+    expect(gradient.colors.first, palette.heroGradientStart);
+    expect(gradient.colors.last, palette.heroGradientEnd);
+  });
+
+  testWidgets('dorm event actions route to dorm status records page', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+
+    await tester.scrollUntilVisible(
+      find.byKey(DormPage.eventMoreKey),
+      240,
+      scrollable: find
+          .descendant(
+            of: find.byKey(DormPage.drawerSheetKey),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(find.byKey(DormPage.eventMoreKey));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DormStatusPage), findsOneWidget);
+    expect(find.byKey(DormStatusPage.timelineKey), findsOneWidget);
+  });
+
+  testWidgets('profile page shows a full-width month preview grid', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    expect(find.byKey(ProfilePage.monthPreviewGridKey), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(ProfilePage.monthPreviewGridKey)).width,
+      greaterThan(250),
+    );
+  });
 
   testWidgets('profile dream journal entry opens dream journal page', (
     WidgetTester tester,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/ambient_orb.dart';
@@ -66,6 +67,7 @@ class _DormRulesPageState extends State<DormRulesPage> {
   @override
   Widget build(BuildContext context) {
     final Dorm dorm = context.appServices.dormRepository.currentDorm;
+    final NightMoodPalette palette = context.nightMoodPalette;
     return Scaffold(
       extendBody: true,
       appBar: AppBar(title: const Text('宿舍公约')),
@@ -119,7 +121,7 @@ class _DormRulesPageState extends State<DormRulesPage> {
                 right: -40,
                 child: AmbientOrb(
                   size: 180,
-                  color: AppColors.primarySoft,
+                  color: palette.primarySoft,
                   animate: true,
                 ),
               ),
@@ -222,7 +224,7 @@ class _DormRulesPageState extends State<DormRulesPage> {
                                       height: 24,
                                       decoration: BoxDecoration(
                                         color: _blackoutCurtain
-                                            ? AppColors.primarySoft
+                                            ? palette.primarySoft
                                             : AppColors.surfaceMuted,
                                         borderRadius: BorderRadius.circular(10),
                                       ),
@@ -231,7 +233,7 @@ class _DormRulesPageState extends State<DormRulesPage> {
                                         Icons.check_rounded,
                                         size: 16,
                                         color: _blackoutCurtain
-                                            ? AppColors.primaryDeep
+                                            ? palette.primaryDeep
                                             : Colors.transparent,
                                       ),
                                     ),
@@ -408,10 +410,10 @@ class _DormRulesPageState extends State<DormRulesPage> {
                               ),
                               SliderTheme(
                                 data: SliderTheme.of(context).copyWith(
-                                  activeTrackColor: AppColors.primarySoft,
+                                  activeTrackColor: palette.primarySoft,
                                   inactiveTrackColor: AppColors.surfaceSoft,
-                                  thumbColor: AppColors.primary,
-                                  overlayColor: AppColors.primarySoft.withAlpha(
+                                  thumbColor: palette.primary,
+                                  overlayColor: palette.primarySoft.withAlpha(
                                     48,
                                   ),
                                 ),
@@ -599,7 +601,9 @@ class _RuleField extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(20),
-              borderSide: BorderSide(color: AppColors.primary.withAlpha(120)),
+              borderSide: BorderSide(
+                color: context.nightMoodPalette.primary.withAlpha(120),
+              ),
             ),
           ),
         ),
@@ -680,19 +684,21 @@ class _TagChip extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: active
-              ? AppColors.primarySoft.withAlpha(72)
+              ? context.nightMoodPalette.primarySoft.withAlpha(72)
               : AppColors.surfaceMuted,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: active
-                ? AppColors.primarySoft.withAlpha(120)
+                ? context.nightMoodPalette.primarySoft.withAlpha(120)
                 : Colors.transparent,
           ),
         ),
         child: Text(
           label,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: active ? AppColors.primaryDeep : AppColors.textSecondary,
+            color: active
+                ? context.nightMoodPalette.primaryDeep
+                : AppColors.textSecondary,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -716,8 +722,8 @@ class _MiniSwitch extends StatelessWidget {
         child: Switch.adaptive(
           value: value,
           onChanged: onChanged,
-          activeThumbColor: AppColors.primary,
-          activeTrackColor: AppColors.primarySoft,
+          activeThumbColor: context.nightMoodPalette.primary,
+          activeTrackColor: context.nightMoodPalette.primarySoft,
         ),
       ),
     );

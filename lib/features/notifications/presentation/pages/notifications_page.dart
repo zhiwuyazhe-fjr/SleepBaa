@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -12,6 +13,7 @@ class NotificationsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    final NightMoodPalette palette = context.nightMoodPalette;
     return Scaffold(
       appBar: AppBar(title: const Text('消息中心')),
       body: ListenableBuilder(
@@ -47,6 +49,7 @@ class NotificationsPage extends StatelessWidget {
               _NotificationSection(
                 title: '待处理',
                 items: unread,
+                palette: palette,
                 onTap: (NotificationItem item) async {
                   await services.notificationRepository.markRead(item.id);
                   if (context.mounted) {
@@ -57,11 +60,13 @@ class NotificationsPage extends StatelessWidget {
               _NotificationSection(
                 title: '今天',
                 items: today,
+                palette: palette,
                 onTap: (NotificationItem item) => context.push(item.route),
               ),
               _NotificationSection(
                 title: '更早',
                 items: earlier,
+                palette: palette,
                 onTap: (NotificationItem item) => context.push(item.route),
               ),
             ],
@@ -76,11 +81,13 @@ class _NotificationSection extends StatelessWidget {
   const _NotificationSection({
     required this.title,
     required this.items,
+    required this.palette,
     required this.onTap,
   });
 
   final String title;
   final List<NotificationItem> items;
+  final NightMoodPalette palette;
   final ValueChanged<NotificationItem> onTap;
 
   @override
@@ -103,7 +110,7 @@ class _NotificationSection extends StatelessWidget {
                 onTap: () => onTap(item),
                 color: item.isRead
                     ? AppColors.surface
-                    : AppColors.primarySoft.withAlpha(45),
+                    : palette.primarySoft.withAlpha(45),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
@@ -164,9 +171,9 @@ class _NotificationSection extends StatelessWidget {
 
   Color _colorForCategory(NotificationCategory category) {
     return switch (category) {
-      NotificationCategory.reminder => AppColors.primary,
-      NotificationCategory.session => AppColors.calmBlue,
-      NotificationCategory.dorm => AppColors.primaryDeep,
+      NotificationCategory.reminder => palette.primary,
+      NotificationCategory.session => palette.calmBlue,
+      NotificationCategory.dorm => palette.primaryDeep,
       NotificationCategory.system => AppColors.textSecondary,
     };
   }

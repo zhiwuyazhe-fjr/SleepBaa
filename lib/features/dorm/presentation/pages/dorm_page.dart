@@ -3,13 +3,31 @@ import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
+import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 
 class DormPage extends StatelessWidget {
   const DormPage({super.key});
+
+  static const ValueKey<String> heroCardKey = ValueKey<String>(
+    'dorm-hero-card',
+  );
+  static const ValueKey<String> heroGradientKey = ValueKey<String>(
+    'dorm-hero-gradient',
+  );
+  static const ValueKey<String> drawerSheetKey = ValueKey<String>(
+    'dorm-drawer-sheet',
+  );
+  static const ValueKey<String> roommateListKey = ValueKey<String>(
+    'dorm-roommate-list',
+  );
+  static const ValueKey<String> eventMoreKey = ValueKey<String>(
+    'dorm-events-more',
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -22,12 +40,13 @@ class DormPage extends StatelessWidget {
           services.notificationRepository,
         ]),
         builder: (BuildContext context, Widget? child) {
+          final NightMoodPalette palette = context.nightMoodPalette;
           final Dorm dorm = services.dormRepository.currentDorm;
           final String currentUserId = services.authRepository.currentUser.uid;
-          final List<_DormEvent> events = _buildDormEvents(
-            context,
-            dorm,
-            services.notificationRepository.notifications,
+          final List<DormEventRecord> events = buildDormEventRecords(
+            dorm: dorm,
+            notifications: services.notificationRepository.notifications,
+            palette: palette,
           );
           final int onlineCount = dorm.members
               .where(
@@ -48,7 +67,7 @@ class DormPage extends StatelessWidget {
               title: '静音模式',
               detail: '今晚执行',
               icon: Icons.volume_off_rounded,
-              onTap: () => _showDormSnackBar(context, '今晚 23:00 后的静音提醒已为你准备好。'),
+              onTap: () => _showDormSnackBar(context, '今晚 23:00 后的静音提醒已经准备好了。'),
             ),
             _DormHubAction(
               title: '安静挑战',
@@ -72,96 +91,203 @@ class DormPage extends StatelessWidget {
                 final double horizontalPadding = wideLayout
                     ? AppSpacing.xxxl
                     : AppSpacing.xl;
+                final double initialSheetSize = wideLayout ? 0.44 : 0.50;
+                final double minSheetSize = wideLayout ? 0.40 : 0.46;
+                final double heroMinHeight = wideLayout ? 220 : 236;
 
-                return Align(
-                  alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 760),
-                    child: SingleChildScrollView(
-                      padding: EdgeInsets.fromLTRB(
-                        horizontalPadding,
-                        AppSpacing.xl,
-                        horizontalPadding,
-                        160,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            dorm.name,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.displayMedium?.copyWith(height: 1.05),
-                          ),
-                          const SizedBox(height: AppSpacing.xl),
-                          _DormHeroCard(
-                            onlineCount: onlineCount,
-                            sleepingCount: sleepingCount,
-                            quietScore: _quietStarsFor(dorm.noiseDb),
-                          ),
-                          const SizedBox(height: AppSpacing.xl),
-                          SectionTitle(
-                            title: '室友动态',
-                            actionLabel: '宿舍公约',
-                            onAction: () => context.push(AppRoutes.dormRules),
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          SizedBox(
-                            height: 136,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: dorm.members.length,
-                              separatorBuilder:
-                                  (BuildContext context, int index) =>
-                                      const SizedBox(width: AppSpacing.sm),
-                              itemBuilder: (BuildContext context, int index) {
-                                final DormMember member = dorm.members[index];
-                                return _DormMemberCard(
-                                  member: member,
-                                  isCurrentUser: member.uid == currentUserId,
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.xl),
-                          const SectionTitle(title: '智能宿舍协同中心'),
-                          const SizedBox(height: AppSpacing.md),
-                          GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: actions.length,
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 2,
-                                  crossAxisSpacing: AppSpacing.md,
-                                  mainAxisSpacing: AppSpacing.md,
-                                  childAspectRatio: wideLayout ? 1.18 : 1.08,
-                                ),
-                            itemBuilder: (BuildContext context, int index) {
-                              final _DormHubAction action = actions[index];
-                              return _DormHubCard(action: action);
-                            },
-                          ),
-                          const SizedBox(height: AppSpacing.xl),
-                          SectionTitle(
-                            title: '寝室事件记录',
-                            actionLabel: '查看更多',
-                            onAction: () =>
-                                context.push(AppRoutes.notifications),
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          ...events.map(
-                            (_DormEvent event) => Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: AppSpacing.sm,
-                              ),
-                              child: _DormEventTile(event: event),
-                            ),
-                          ),
-                        ],
+                return Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: <Color>[
+                            palette.primarySoft.withAlpha(24),
+                            AppColors.background,
+                            AppColors.background,
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+                    Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 760),
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            horizontalPadding,
+                            AppSpacing.lg,
+                            horizontalPadding,
+                            0,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              Text(
+                                dorm.name,
+                                style: Theme.of(context).textTheme.displayMedium
+                                    ?.copyWith(height: 1.05),
+                              ),
+                              const SizedBox(height: AppSpacing.lg),
+                              _DormHeroCard(
+                                key: heroCardKey,
+                                palette: palette,
+                                onlineCount: onlineCount,
+                                sleepingCount: sleepingCount,
+                                quietScore: _quietStarsFor(dorm.noiseDb),
+                                minHeight: heroMinHeight,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 760),
+                        child: DraggableScrollableSheet(
+                          expand: false,
+                          initialChildSize: initialSheetSize,
+                          minChildSize: minSheetSize,
+                          maxChildSize: 0.94,
+                          builder:
+                              (
+                                BuildContext context,
+                                ScrollController scrollController,
+                              ) {
+                                return Container(
+                                  key: drawerSheetKey,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface,
+                                    borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(44),
+                                    ),
+                                    boxShadow: AppColors.floatingShadow,
+                                  ),
+                                  child: ListView(
+                                    controller: scrollController,
+                                    padding: EdgeInsets.fromLTRB(
+                                      horizontalPadding,
+                                      AppSpacing.sm,
+                                      horizontalPadding,
+                                      168,
+                                    ),
+                                    children: <Widget>[
+                                      Center(
+                                        child: Container(
+                                          width: 48,
+                                          height: 5,
+                                          decoration: BoxDecoration(
+                                            color: palette.primarySoft
+                                                .withAlpha(144),
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: AppSpacing.md),
+                                      SectionTitle(
+                                        title: '室友动态',
+                                        actionLabel: '宿舍公约',
+                                        onAction: () =>
+                                            context.push(AppRoutes.dormRules),
+                                      ),
+                                      const SizedBox(height: AppSpacing.md),
+                                      SizedBox(
+                                        key: roommateListKey,
+                                        height: 188,
+                                        child: ListView.separated(
+                                          scrollDirection: Axis.horizontal,
+                                          itemCount: dorm.members.length,
+                                          separatorBuilder:
+                                              (
+                                                BuildContext context,
+                                                int index,
+                                              ) => const SizedBox(
+                                                width: AppSpacing.sm,
+                                              ),
+                                          itemBuilder:
+                                              (
+                                                BuildContext context,
+                                                int index,
+                                              ) {
+                                                final DormMember member =
+                                                    dorm.members[index];
+                                                return _DormMemberCard(
+                                                  member: member,
+                                                  isCurrentUser:
+                                                      member.uid ==
+                                                      currentUserId,
+                                                );
+                                              },
+                                        ),
+                                      ),
+                                      const SizedBox(height: AppSpacing.xl),
+                                      const SectionTitle(title: '智能寝室协同中心'),
+                                      const SizedBox(height: AppSpacing.md),
+                                      GridView.builder(
+                                        shrinkWrap: true,
+                                        physics:
+                                            const NeverScrollableScrollPhysics(),
+                                        itemCount: actions.length,
+                                        gridDelegate:
+                                            SliverGridDelegateWithFixedCrossAxisCount(
+                                              crossAxisCount: 2,
+                                              crossAxisSpacing: AppSpacing.md,
+                                              mainAxisSpacing: AppSpacing.md,
+                                              childAspectRatio: wideLayout
+                                                  ? 1.18
+                                                  : 1.04,
+                                            ),
+                                        itemBuilder:
+                                            (BuildContext context, int index) {
+                                              final _DormHubAction action =
+                                                  actions[index];
+                                              return _DormHubCard(
+                                                action: action,
+                                                palette: palette,
+                                              );
+                                            },
+                                      ),
+                                      const SizedBox(height: AppSpacing.xl),
+                                      SectionTitle(
+                                        title: '寝室事件记录',
+                                        actionLabel: '查看更多',
+                                        actionKey: eventMoreKey,
+                                        onAction: () =>
+                                            context.push(AppRoutes.dormStatus),
+                                      ),
+                                      const SizedBox(height: AppSpacing.md),
+                                      ...List<Widget>.generate(
+                                        events.length,
+                                        (int index) => Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: AppSpacing.sm,
+                                          ),
+                                          child: _DormEventTile(
+                                            key: ValueKey<String>(
+                                              'dorm-event-tile-$index',
+                                            ),
+                                            event: events[index],
+                                            onTap: () => context.push(
+                                              AppRoutes.dormStatus,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                        ),
+                      ),
+                    ),
+                  ],
                 );
               },
             ),
@@ -174,68 +300,96 @@ class DormPage extends StatelessWidget {
 
 class _DormHeroCard extends StatelessWidget {
   const _DormHeroCard({
+    super.key,
+    required this.palette,
     required this.onlineCount,
     required this.sleepingCount,
     required this.quietScore,
+    required this.minHeight,
   });
 
+  final NightMoodPalette palette;
   final int onlineCount;
   final int sleepingCount;
   final int quietScore;
+  final double minHeight;
 
   @override
   Widget build(BuildContext context) {
     return AppCard(
       padding: EdgeInsets.zero,
-      border: Border.all(color: AppColors.primarySoft.withAlpha(60)),
       boxShadow: AppColors.floatingShadow,
       child: Container(
+        key: DormPage.heroGradientKey,
+        width: double.infinity,
+        constraints: BoxConstraints(minHeight: minHeight),
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(34),
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: <Color>[
-              AppColors.primarySoft.withAlpha(72),
-              AppColors.surface,
-              Colors.white,
+              palette.heroGradientStart,
+              palette.heroGradientMid,
+              palette.heroGradientEnd,
             ],
           ),
         ),
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
         child: Stack(
           children: <Widget>[
             Positioned(
-              right: -24,
+              right: -10,
               top: -20,
               child: Container(
                 width: 116,
                 height: 116,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.primarySoft.withAlpha(32),
+                  color: Colors.white.withAlpha(18),
                 ),
               ),
             ),
             Positioned(
-              left: 24,
-              bottom: -42,
+              left: -10,
+              bottom: -34,
               child: Container(
-                width: 88,
-                height: 88,
+                width: 82,
+                height: 82,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.primary.withAlpha(12),
+                  color: palette.primarySoft.withAlpha(36),
                 ),
               ),
             ),
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                _HeroInfoPill(label: '在线: $onlineCount 人'),
-                _HeroInfoPill(label: '睡眠中: $sleepingCount 人'),
-                _HeroRatingPill(score: quietScore),
+                Text(
+                  'Dorm Pulse',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.onDark.withAlpha(180),
+                    letterSpacing: 1.4,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '今晚宿舍整体状态平稳',
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    color: AppColors.onDark,
+                    height: 1.05,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: <Widget>[
+                    _HeroInfoPill(label: '在线 $onlineCount 人'),
+                    _HeroInfoPill(label: '睡眠中 $sleepingCount 人'),
+                    _HeroRatingPill(score: quietScore),
+                  ],
+                ),
               ],
             ),
           ],
@@ -258,9 +412,8 @@ class _HeroInfoPill extends StatelessWidget {
         vertical: AppSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: Colors.white.withAlpha(244),
+        color: Colors.white.withAlpha(246),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.primarySoft.withAlpha(70)),
       ),
       child: Text(
         label,
@@ -286,9 +439,8 @@ class _HeroRatingPill extends StatelessWidget {
         vertical: AppSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: Colors.white.withAlpha(244),
+        color: Colors.white.withAlpha(246),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.primarySoft.withAlpha(70)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -326,6 +478,7 @@ class _DormMemberCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final NightMoodPalette palette = context.nightMoodPalette;
     final Color accentColor = _memberColor(member.status);
     return AppCard(
       padding: const EdgeInsets.fromLTRB(
@@ -337,12 +490,13 @@ class _DormMemberCard extends StatelessWidget {
       border: Border.all(color: AppColors.divider),
       boxShadow: const <BoxShadow>[],
       child: SizedBox(
-        width: 108,
+        width: 136,
+        height: 160,
         child: Column(
           children: <Widget>[
             Container(
-              width: 42,
-              height: 42,
+              width: 52,
+              height: 52,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
@@ -350,7 +504,7 @@ class _DormMemberCard extends StatelessWidget {
                   end: Alignment.bottomRight,
                   colors: <Color>[
                     accentColor.withAlpha(210),
-                    AppColors.primarySoft,
+                    palette.primarySoft,
                   ],
                 ),
                 border: Border.all(color: accentColor, width: 2),
@@ -373,6 +527,19 @@ class _DormMemberCard extends StatelessWidget {
               style: Theme.of(
                 context,
               ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              height: 38,
+              child: Text(
+                member.note,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+              ),
             ),
             const Spacer(),
             Container(
@@ -402,9 +569,10 @@ class _DormMemberCard extends StatelessWidget {
 }
 
 class _DormHubCard extends StatelessWidget {
-  const _DormHubCard({required this.action});
+  const _DormHubCard({required this.action, required this.palette});
 
   final _DormHubAction action;
+  final NightMoodPalette palette;
 
   @override
   Widget build(BuildContext context) {
@@ -412,7 +580,7 @@ class _DormHubCard extends StatelessWidget {
     return AppCard(
       padding: EdgeInsets.zero,
       onTap: action.onTap,
-      border: Border.all(color: AppColors.divider),
+      border: Border.all(color: palette.primarySoft.withAlpha(60)),
       boxShadow: const <BoxShadow>[],
       child: Padding(
         padding: const EdgeInsets.symmetric(
@@ -423,7 +591,16 @@ class _DormHubCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: <Widget>[
-            Icon(action.icon, color: AppColors.primary, size: 22),
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: palette.primarySoft.withAlpha(20),
+              ),
+              alignment: Alignment.center,
+              child: Icon(action.icon, color: palette.primary, size: 22),
+            ),
             Text(
               action.title,
               maxLines: 2,
@@ -449,9 +626,10 @@ class _DormHubCard extends StatelessWidget {
 }
 
 class _DormEventTile extends StatelessWidget {
-  const _DormEventTile({required this.event});
+  const _DormEventTile({super.key, required this.event, required this.onTap});
 
-  final _DormEvent event;
+  final DormEventRecord event;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -462,18 +640,19 @@ class _DormEventTile extends StatelessWidget {
       ),
       color: AppColors.surfaceMuted,
       boxShadow: const <BoxShadow>[],
-      onTap: event.onTap,
+      onTap: onTap,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Container(
-            width: 10,
-            height: 10,
-            margin: const EdgeInsets.only(top: 6),
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: event.color,
-              shape: BoxShape.circle,
+              color: event.color.withAlpha(24),
+              borderRadius: BorderRadius.circular(16),
             ),
+            alignment: Alignment.center,
+            child: Icon(event.icon, color: event.color, size: 20),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
@@ -509,6 +688,12 @@ class _DormEventTile extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(width: AppSpacing.sm),
+          const Icon(
+            Icons.chevron_right_rounded,
+            color: AppColors.textSecondary,
+            size: 20,
+          ),
         ],
       ),
     );
@@ -527,73 +712,6 @@ class _DormHubAction {
   final String detail;
   final IconData icon;
   final VoidCallback onTap;
-}
-
-class _DormEvent {
-  const _DormEvent({
-    required this.title,
-    required this.detail,
-    required this.color,
-    required this.timeLabel,
-    required this.onTap,
-  });
-
-  final String title;
-  final String detail;
-  final Color color;
-  final String timeLabel;
-  final VoidCallback onTap;
-}
-
-List<_DormEvent> _buildDormEvents(
-  BuildContext context,
-  Dorm dorm,
-  List<NotificationItem> notifications,
-) {
-  NotificationItem? dormNotification;
-  for (final NotificationItem item in notifications) {
-    if (item.category == NotificationCategory.dorm) {
-      dormNotification = item;
-      break;
-    }
-  }
-
-  DormMember? latestMember;
-  for (final DormMember member in dorm.members) {
-    if (latestMember == null ||
-        member.lastActiveAt.isAfter(latestMember.lastActiveAt)) {
-      latestMember = member;
-    }
-  }
-
-  final List<_DormEvent> items = <_DormEvent>[
-    if (dormNotification != null)
-      _DormEvent(
-        title: dormNotification.title,
-        detail: dormNotification.body,
-        color: AppColors.primary,
-        timeLabel: _relativeTimeLabel(dormNotification.createdAt),
-        onTap: () => context.push(AppRoutes.notifications),
-      ),
-    if (latestMember != null)
-      _DormEvent(
-        title: '${latestMember.name} 刚刚更新了状态',
-        detail: latestMember.note,
-        color: const Color(0xFFF1A936),
-        timeLabel: _relativeTimeLabel(latestMember.lastActiveAt),
-        onTap: () => _showDormSnackBar(context, '今晚的最新室友动态已经同步到宿舍面板。'),
-      ),
-    if (dorm.rules.isNotEmpty)
-      _DormEvent(
-        title: '今晚默认执行安静公约',
-        detail: dorm.rules.first.title,
-        color: const Color(0xFF63D4ED),
-        timeLabel: '规则',
-        onTap: () => context.push(AppRoutes.dormRules),
-      ),
-  ];
-
-  return items;
 }
 
 Color _memberColor(DormMemberStatus status) {
@@ -628,20 +746,6 @@ int _quietStarsFor(int noiseDb) {
     return 2;
   }
   return 1;
-}
-
-String _relativeTimeLabel(DateTime dateTime) {
-  final Duration difference = DateTime.now().difference(dateTime);
-  if (difference.inMinutes < 1) {
-    return '刚刚';
-  }
-  if (difference.inHours < 1) {
-    return '${difference.inMinutes} 分钟前';
-  }
-  if (difference.inDays < 1) {
-    return '${difference.inHours} 小时前';
-  }
-  return '${difference.inDays} 天前';
 }
 
 void _showDormSnackBar(BuildContext context, String message) {

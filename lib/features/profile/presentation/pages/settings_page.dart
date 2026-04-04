@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/avatar_picker.dart';
@@ -60,6 +61,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final AppServices services = context.appServices;
     final UserProfile profile = services.authRepository.currentUser;
     final UserSettings settings = services.settingsRepository.currentSettings;
+    final NightMoodPalette palette = context.nightMoodPalette;
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
       body: SafeArea(
@@ -129,7 +131,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       Text(
                         '${_sleepGoalHours.toStringAsFixed(1)} h',
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppColors.primary,
+                          color: palette.primary,
                         ),
                       ),
                     ],
@@ -202,7 +204,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   const ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: Text('后端同步'),
-                    subtitle: Text('当前为 Firebase-ready 架构，后续可直接接入真实 Firestore。'),
+                    subtitle: Text(
+                      '当前为 Firebase-ready 架构，后续可直接接入真实 Firestore。',
+                    ),
                   ),
                 ],
               ),
@@ -231,9 +235,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 if (!mounted) {
                   return;
                 }
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('设置已保存')),
-                );
+                messenger.showSnackBar(const SnackBar(content: Text('设置已保存')));
               },
             ),
           ],

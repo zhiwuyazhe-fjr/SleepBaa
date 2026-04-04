@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -37,6 +38,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    final NightMoodPalette palette = context.nightMoodPalette;
     return Scaffold(
       appBar: AppBar(title: const Text('晨间反馈')),
       body: ListenableBuilder(
@@ -69,6 +71,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                       min: 4,
                       max: 10,
                       suffix: 'h',
+                      palette: palette,
                       onChanged: (double value) {
                         setState(() => _sleepHours = value);
                       },
@@ -80,6 +83,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                       max: 5,
                       divisions: 4,
                       suffix: '/5',
+                      palette: palette,
                       onChanged: (double value) {
                         setState(() => _sleepQuality = value.round());
                       },
@@ -91,6 +95,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                       max: 5,
                       divisions: 4,
                       suffix: '/5',
+                      palette: palette,
                       onChanged: (double value) {
                         setState(() => _restedLevel = value.round());
                       },
@@ -234,6 +239,7 @@ class _MetricSlider extends StatelessWidget {
     required this.min,
     required this.max,
     required this.suffix,
+    required this.palette,
     required this.onChanged,
     this.divisions,
   });
@@ -244,6 +250,7 @@ class _MetricSlider extends StatelessWidget {
   final double max;
   final int? divisions;
   final String suffix;
+  final NightMoodPalette palette;
   final ValueChanged<double> onChanged;
 
   @override
@@ -259,7 +266,7 @@ class _MetricSlider extends StatelessWidget {
               '${value.toStringAsFixed(divisions == null ? 1 : 0)}$suffix',
               style: Theme.of(
                 context,
-              ).textTheme.labelLarge?.copyWith(color: AppColors.primary),
+              ).textTheme.labelLarge?.copyWith(color: palette.primary),
             ),
           ],
         ),

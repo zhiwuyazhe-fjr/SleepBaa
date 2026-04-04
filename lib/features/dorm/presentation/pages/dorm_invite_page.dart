@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
@@ -10,6 +11,7 @@ class DormInvitePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
+    final NightMoodPalette palette = context.nightMoodPalette;
     return Scaffold(
       appBar: AppBar(title: const Text('Invite Dormmate')),
       body: SafeArea(
@@ -27,7 +29,7 @@ class DormInvitePage extends StatelessWidget {
                     Text(
                       'DORM-SLEEP-204',
                       style: textTheme.displayMedium?.copyWith(
-                        color: AppColors.primary,
+                        color: palette.primary,
                       ),
                     ),
                     const SizedBox(height: AppSpacing.md),

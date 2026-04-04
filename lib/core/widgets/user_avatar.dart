@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 
 class UserAvatar extends StatelessWidget {
@@ -19,18 +20,16 @@ class UserAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final NightMoodPalette palette = context.nightMoodPalette;
     final Widget avatar = Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: <Color>[
-            AppColors.primarySoft,
-            AppColors.primaryHighlight,
-          ],
+          colors: <Color>[palette.primarySoft, palette.primaryHighlight],
         ),
         border: Border.all(color: AppColors.surface, width: 4),
       ),
@@ -49,7 +48,7 @@ class UserAvatar extends StatelessWidget {
               width: size * 0.28,
               height: size * 0.28,
               decoration: BoxDecoration(
-                color: AppColors.primary,
+                color: palette.primary,
                 shape: BoxShape.circle,
                 border: Border.all(color: AppColors.surface, width: 2),
                 boxShadow: AppColors.cardShadow,
@@ -92,17 +91,18 @@ class UserAvatar extends StatelessWidget {
       );
     }
 
-    final String fallbackText = (profile.avatarFallbackSeed?.isNotEmpty ?? false)
+    final String fallbackText =
+        (profile.avatarFallbackSeed?.isNotEmpty ?? false)
         ? profile.avatarFallbackSeed!.characters.first.toUpperCase()
         : profile.displayName.characters.first.toUpperCase();
 
     return Container(
-      color: AppColors.primarySoft.withAlpha(90),
+      color: context.nightMoodPalette.primarySoft.withAlpha(90),
       alignment: Alignment.center,
       child: Text(
         fallbackText,
         style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-          color: AppColors.primaryDeep,
+          color: context.nightMoodPalette.primaryDeep,
           fontWeight: FontWeight.w700,
         ),
       ),

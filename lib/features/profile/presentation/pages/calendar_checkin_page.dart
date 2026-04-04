@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
@@ -28,6 +29,7 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    final NightMoodPalette palette = context.nightMoodPalette;
     return Scaffold(
       appBar: AppBar(title: const Text('睡眠打卡日历')),
       body: ListenableBuilder(
@@ -101,6 +103,7 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
                       month: _visibleMonth,
                       sessionMap: sessionMap,
                       selectedDay: _selectedDay,
+                      palette: palette,
                       onSelectDay: (DateTime day) {
                         setState(() => _selectedDay = day);
                       },
@@ -119,7 +122,7 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
                     Text(
                       '${_buildStreak(services.sleepSessionRepository.sessions)} 天稳定入睡',
                       style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(color: AppColors.primary),
+                          ?.copyWith(color: palette.primary),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     const Text('选中某一天即可查看当天的入睡、夜醒和执行建议摘要。'),
@@ -224,12 +227,14 @@ class _CalendarGrid extends StatelessWidget {
     required this.month,
     required this.sessionMap,
     required this.selectedDay,
+    required this.palette,
     required this.onSelectDay,
   });
 
   final DateTime month;
   final Map<DateTime, SleepSession> sessionMap;
   final DateTime? selectedDay;
+  final NightMoodPalette palette;
   final ValueChanged<DateTime> onSelectDay;
 
   @override
@@ -243,6 +248,7 @@ class _CalendarGrid extends StatelessWidget {
           date: DateTime(month.year, month.month, day),
           session: sessionMap[DateTime(month.year, month.month, day)],
           selected: selectedDay == DateTime(month.year, month.month, day),
+          palette: palette,
           onTap: onSelectDay,
         ),
     ];
@@ -263,23 +269,25 @@ class _DayCell extends StatelessWidget {
     required this.date,
     required this.session,
     required this.selected,
+    required this.palette,
     required this.onTap,
   });
 
   final DateTime date;
   final SleepSession? session;
   final bool selected;
+  final NightMoodPalette palette;
   final ValueChanged<DateTime> onTap;
 
   @override
   Widget build(BuildContext context) {
     final int quality = session?.summary?.sleepQuality ?? 0;
     final Color fill = switch (quality) {
-      5 => AppColors.primary,
-      4 => AppColors.primarySoft,
-      3 => AppColors.primarySoft.withAlpha(150),
-      2 => AppColors.primarySoft.withAlpha(90),
-      1 => AppColors.primarySoft.withAlpha(50),
+      5 => palette.primary,
+      4 => palette.primarySoft,
+      3 => palette.primarySoft.withAlpha(150),
+      2 => palette.primarySoft.withAlpha(90),
+      1 => palette.primarySoft.withAlpha(50),
       _ => AppColors.surfaceSoft,
     };
     return InkWell(
@@ -297,7 +305,7 @@ class _DayCell extends StatelessWidget {
               color: selected
                   ? AppColors.onDark
                   : quality > 3
-                  ? AppColors.primaryDeep
+                  ? palette.primaryDeep
                   : AppColors.textPrimary,
             ),
           ),

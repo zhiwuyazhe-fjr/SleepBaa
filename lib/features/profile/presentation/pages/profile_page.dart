@@ -4,16 +4,22 @@ import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/avatar_picker.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/icon_badge.dart';
+import 'package:sleep_dorm_app/core/widgets/mini_calendar_grid.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/core/widgets/user_avatar.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
+
+  static const ValueKey<String> monthPreviewGridKey = ValueKey<String>(
+    'profile-month-preview-grid',
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -25,11 +31,16 @@ class ProfilePage extends StatelessWidget {
         services.sleepSessionRepository,
       ]),
       builder: (BuildContext context, Widget? child) {
+        final NightMoodPalette palette = context.nightMoodPalette;
         final UserProfile profile = services.authRepository.currentUser;
         final UserSettings settings =
             services.settingsRepository.currentSettings;
         final List<SleepSession> weekly = services.sleepSessionRepository
             .recentSessions();
+        final DateTime now = DateTime.now();
+        final DateTime currentMonth = DateTime(now.year, now.month);
+        final List<SleepSession> monthSessions = services.sleepSessionRepository
+            .sessionsForMonth(currentMonth);
         final List<SleepSession> completed = weekly
             .where((SleepSession item) => item.summary != null)
             .toList();
@@ -84,7 +95,7 @@ class ProfilePage extends StatelessWidget {
                           Text(
                             profile.role,
                             style: Theme.of(context).textTheme.labelLarge
-                                ?.copyWith(color: AppColors.primary),
+                                ?.copyWith(color: palette.primary),
                           ),
                         ],
                       ),
@@ -118,7 +129,7 @@ class ProfilePage extends StatelessWidget {
                                 Text(
                                   '本周目标 ${settings.sleepGoalHours.toStringAsFixed(1)} h',
                                   style: Theme.of(context).textTheme.labelLarge
-                                      ?.copyWith(color: AppColors.primary),
+                                      ?.copyWith(color: palette.primary),
                                 ),
                               ],
                             ),
@@ -147,8 +158,8 @@ class ProfilePage extends StatelessWidget {
                           minHeight: 10,
                           value: score / 100,
                           backgroundColor: AppColors.surfaceSoft,
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                            AppColors.primarySoft,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            palette.primarySoft,
                           ),
                         ),
                       ),
@@ -164,7 +175,7 @@ class ProfilePage extends StatelessWidget {
                           Text(
                             '平均 ${averageSleep.toStringAsFixed(1)} 小时',
                             style: Theme.of(context).textTheme.labelLarge
-                                ?.copyWith(color: AppColors.primary),
+                                ?.copyWith(color: palette.primary),
                           ),
                         ],
                       ),
@@ -190,24 +201,23 @@ class ProfilePage extends StatelessWidget {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: AppSpacing.md),
-                      Wrap(
-                        spacing: AppSpacing.xs,
-                        runSpacing: AppSpacing.xs,
-                        children: weekly.map((SleepSession item) {
-                          final int quality = item.summary?.sleepQuality ?? 0;
-                          return Container(
-                            width: 28,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              color: quality >= 4
-                                  ? AppColors.primary
-                                  : quality == 3
-                                  ? AppColors.primarySoft
-                                  : AppColors.surfaceSoft,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          );
-                        }).toList(),
+                      MiniCalendarGrid(
+                        key: monthPreviewGridKey,
+                        weekdays: const <String>[
+                          'Mon',
+                          'Tue',
+                          'Wed',
+                          'Thu',
+                          'Fri',
+                          'Sat',
+                          'Sun',
+                        ],
+                        intensity: _buildMonthPreviewIntensity(
+                          month: currentMonth,
+                          sessions: monthSessions,
+                        ),
+                        showWeekdays: false,
+                        childAspectRatio: 1.2,
                       ),
                     ],
                   ),
@@ -223,16 +233,14 @@ class ProfilePage extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xl),
                 AppCard(
                   borderRadius: AppRadius.card,
-                  border: Border.all(
-                    color: AppColors.primarySoft.withAlpha(70),
-                  ),
+                  border: Border.all(color: palette.primarySoft.withAlpha(70)),
                   onTap: () => context.push(AppRoutes.dreamJournal),
                   child: Row(
                     children: <Widget>[
                       IconBadge(
                         icon: Icons.auto_stories_rounded,
-                        backgroundColor: AppColors.primarySoft.withAlpha(20),
-                        iconColor: AppColors.primary,
+                        backgroundColor: palette.primarySoft.withAlpha(20),
+                        iconColor: palette.primary,
                         borderRadius: BorderRadius.circular(AppRadius.xl),
                       ),
                       const SizedBox(width: AppSpacing.md),
@@ -327,7 +335,7 @@ class ProfilePage extends StatelessWidget {
         title: '咖啡因耐受测试',
         insight: '过去 7 晚里，下午 3 点前停止咖啡因摄入的夜晚更稳定。',
         status: '有效',
-        accent: AppColors.primary,
+        accent: context.nightMoodPalette.primary,
       ),
       _ExperimentCardData(
         icon: Icons.nights_stay_rounded,
@@ -384,6 +392,27 @@ class ProfilePage extends StatelessWidget {
         )
         .toList();
   }
+
+  List<int> _buildMonthPreviewIntensity({
+    required DateTime month,
+    required List<SleepSession> sessions,
+  }) {
+    final Map<DateTime, int> qualityByDay = <DateTime, int>{
+      for (final SleepSession session in sessions)
+        DateUtils.dateOnly(session.startedAt):
+            (session.summary?.sleepQuality ?? 0).clamp(0, 5),
+    };
+    final int daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
+    final int leadingEmpty = DateTime(month.year, month.month, 1).weekday - 1;
+    final int trailingEmpty = (7 - ((leadingEmpty + daysInMonth) % 7)) % 7;
+
+    return <int>[
+      ...List<int>.filled(leadingEmpty, 0),
+      for (int day = 1; day <= daysInMonth; day++)
+        qualityByDay[DateTime(month.year, month.month, day)] ?? 0,
+      ...List<int>.filled(trailingEmpty, 0),
+    ];
+  }
 }
 
 class _WeeklyTrendChart extends StatelessWidget {
@@ -419,7 +448,7 @@ class _WeeklyTrendChart extends StatelessWidget {
                         child: Container(
                           decoration: BoxDecoration(
                             color: hours >= 7.5
-                                ? AppColors.primarySoft
+                                ? context.nightMoodPalette.primarySoft
                                 : AppColors.surfaceBorder,
                             borderRadius: const BorderRadius.vertical(
                               top: Radius.circular(28),
@@ -469,16 +498,19 @@ class _BadgeTile extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: unlocked
-                  ? AppColors.primary.withAlpha(18)
+                  ? context.nightMoodPalette.primary.withAlpha(18)
                   : AppColors.surfaceSoft,
               border: unlocked
-                  ? Border.all(color: AppColors.primarySoft, width: 2)
+                  ? Border.all(
+                      color: context.nightMoodPalette.primarySoft,
+                      width: 2,
+                    )
                   : null,
             ),
             child: Icon(
               icon,
               color: unlocked
-                  ? AppColors.primary
+                  ? context.nightMoodPalette.primary
                   : AppColors.textSecondary.withAlpha(110),
             ),
           ),

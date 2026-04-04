@@ -4,6 +4,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/core/widgets/mood_avatar.dart';
 
 class AssistantPage extends StatefulWidget {
   const AssistantPage({super.key});
@@ -201,6 +203,7 @@ class _FloatingAIAvatarState extends State<_FloatingAIAvatar>
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.nightMoodPalette;
     // Determine dynamic size across devices
     final double size = math
         .min(MediaQuery.sizeOf(context).width * 0.42, 220.0)
@@ -231,7 +234,7 @@ class _FloatingAIAvatarState extends State<_FloatingAIAvatar>
                     shape: BoxShape.circle,
                     boxShadow: <BoxShadow>[
                       BoxShadow(
-                        color: AppColors.primarySoft.withOpacity(
+                        color: palette.primarySoft.withOpacity(
                           0.08 + pulse * 0.06,
                         ),
                         blurRadius: size * 0.4 + (pulse * 25),
@@ -252,13 +255,13 @@ class _FloatingAIAvatarState extends State<_FloatingAIAvatar>
                         begin: Alignment.topRight,
                         end: Alignment.bottomLeft,
                         colors: <Color>[
-                          AppColors.primarySoft.withOpacity(0.15),
-                          AppColors.calmBlue.withOpacity(0.05),
+                          palette.primarySoft.withOpacity(0.15),
+                          palette.calmBlue.withOpacity(0.05),
                         ],
                       ),
                       boxShadow: <BoxShadow>[
                         BoxShadow(
-                          color: AppColors.primarySoft.withOpacity(0.1),
+                          color: palette.primarySoft.withOpacity(0.1),
                           blurRadius: size * 0.2,
                         ),
                       ],
@@ -281,7 +284,7 @@ class _FloatingAIAvatarState extends State<_FloatingAIAvatar>
                       ],
                     ),
                     border: Border.all(
-                      color: AppColors.primarySoft.withOpacity(
+                      color: palette.primarySoft.withOpacity(
                         0.2 + pulse * 0.15,
                       ),
                       width: 1.5,
@@ -297,18 +300,30 @@ class _FloatingAIAvatarState extends State<_FloatingAIAvatar>
                   child: Center(
                     child: Transform.scale(
                       scale: 1.0 + (innerPulse * 0.08),
-                      child: Icon(
-                        Icons.auto_awesome_rounded,
-                        color: AppColors.primaryHighlight,
-                        size: size * 0.22,
-                        shadows: <BoxShadow>[
-                          BoxShadow(
-                            color: AppColors.primarySoft,
-                            blurRadius: 15 + (pulse * 10),
-                            spreadRadius: pulse * 4,
-                          ),
-                        ],
-                      ),
+                      child: palette.mood == null
+                          ? Icon(
+                              Icons.auto_awesome_rounded,
+                              key: const ValueKey<String>(
+                                'assistant-page-default-avatar',
+                              ),
+                              color: palette.primaryHighlight,
+                              size: size * 0.22,
+                              shadows: <BoxShadow>[
+                                BoxShadow(
+                                  color: palette.primarySoft,
+                                  blurRadius: 15 + (pulse * 10),
+                                  spreadRadius: pulse * 4,
+                                ),
+                              ],
+                            )
+                          : MoodAvatar(
+                              key: const ValueKey<String>(
+                                'assistant-page-mood-avatar',
+                              ),
+                              mood: palette.mood!,
+                              size: size * 0.28,
+                              fillColor: palette.welcomeFaceColor,
+                            ),
                     ),
                   ),
                 ),
