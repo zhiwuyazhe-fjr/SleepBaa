@@ -6,6 +6,7 @@ import 'package:sleep_dorm_app/features/analysis/presentation/pages/interference
 import 'package:sleep_dorm_app/features/assistant/presentation/pages/assistant_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_invite_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_page.dart';
+import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_rules_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_status_page.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_detail_page.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_journal_page.dart';
@@ -35,6 +36,7 @@ abstract final class AppRoutes {
   static const String dreamJournal = '/dream/journal';
   static const String sleepCantSleep = '/sleep/cant_sleep';
   static const String dorm = '/dorm';
+  static const String dormRules = '/dorm/rules';
   static const String dormInvite = '/dorm/invite';
   static const String dormStatus = '/dorm/status';
   static const String profile = '/profile';
@@ -144,6 +146,11 @@ GoRouter createRouter({
         path: AppRoutes.sleepCantSleep,
         builder: (BuildContext context, GoRouterState state) =>
             const CantSleepPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.dormRules,
+        builder: (BuildContext context, GoRouterState state) =>
+            const DormRulesPage(),
       ),
       GoRoute(
         path: AppRoutes.dormInvite,

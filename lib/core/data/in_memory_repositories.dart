@@ -424,7 +424,7 @@ class InMemoryNotificationRepository extends ChangeNotifier
           title: '宿舍环境保持安静',
           body: '室友已经关闭公共灯光，现在更适合进入睡眠模式。',
           createdAt: DateTime.now().subtract(const Duration(hours: 8)),
-          route: AppRoutes.dormStatus,
+          route: AppRoutes.dorm,
           readAt: null,
         ),
         NotificationItem(
@@ -495,10 +495,7 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
     quietLabel: '良好',
     rules: const <DormRule>[
       DormRule(title: '23:30 后关闭主灯', detail: '为准备休息的室友保留低刺激环境。'),
-      DormRule(
-        title: '夜间媒体内容统一佩戴耳机',
-        detail: '避免随机外放声音造成二次唤醒。',
-      ),
+      DormRule(title: '夜间媒体内容统一佩戴耳机', detail: '避免随机外放声音造成二次唤醒。'),
     ],
     members: <DormMember>[
       DormMember(
