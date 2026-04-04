@@ -40,12 +40,12 @@ class ProfilePage extends StatelessWidget {
                     (double sum, SleepSession item) =>
                         sum + item.summary!.totalSleepHours,
                   ) /
-                completed.length;
+                  completed.length;
         final int score = completed.isEmpty
             ? 0
             : ((averageSleep / settings.sleepGoalHours) * 100)
-                .clamp(0, 100)
-                .round();
+                  .clamp(0, 100)
+                  .round();
 
         return SafeArea(
           child: SingleChildScrollView(
@@ -220,6 +220,46 @@ class ProfilePage extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.md),
                 ..._buildExperimentCards(context, weekly),
+                const SizedBox(height: AppSpacing.xl),
+                AppCard(
+                  borderRadius: AppRadius.card,
+                  border: Border.all(
+                    color: AppColors.primarySoft.withAlpha(70),
+                  ),
+                  onTap: () => context.push(AppRoutes.dreamJournal),
+                  child: Row(
+                    children: <Widget>[
+                      IconBadge(
+                        icon: Icons.auto_stories_rounded,
+                        backgroundColor: AppColors.primarySoft.withAlpha(20),
+                        iconColor: AppColors.primary,
+                        borderRadius: BorderRadius.circular(AppRadius.xl),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              '梦境记录',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              '记录昨夜梦境片段、醒来后的情绪和关键词。',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      const Icon(
+                        Icons.east_rounded,
+                        color: AppColors.textSecondary,
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: AppSpacing.xl),
                 Row(
                   children: <Widget>[

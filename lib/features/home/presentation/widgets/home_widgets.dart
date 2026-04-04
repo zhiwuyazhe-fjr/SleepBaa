@@ -157,84 +157,53 @@ class StartSleepModeCard extends StatelessWidget {
             ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: <Widget>[
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Container(
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const RadialGradient(
-                          colors: <Color>[
-                            Color(0xFFC9F7FF),
-                            Color(0xFF7FD8F2),
-                            Color(0xFF1787A6),
-                          ],
-                        ),
-                        boxShadow: <BoxShadow>[
-                          BoxShadow(
-                            color: AppColors.primarySoft.withAlpha(150),
-                            blurRadius: 24,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.nightlight_round,
-                        color: AppColors.onDark,
-                        size: 23,
-                      ),
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const RadialGradient(
+                      colors: <Color>[
+                        Color(0xFFC9F7FF),
+                        Color(0xFF7FD8F2),
+                        Color(0xFF1787A6),
+                      ],
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          '开启睡眠模式',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: AppColors.primarySoft.withAlpha(150),
+                        blurRadius: 24,
+                        spreadRadius: 2,
                       ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: Transform.rotate(
+                    angle: -math.pi / 10,
+                    child: const Icon(
+                      Icons.nightlight_round,
+                      color: AppColors.onDark,
+                      size: 30,
                     ),
-                  ],
+                  ),
                 ),
-                Row(
-                  children: <Widget>[
-                    _CardMetaPill(
-                      label: isAudioReady ? '音频已同步' : '准备开始',
-                      backgroundColor: AppColors.primarySoft.withAlpha(20),
-                      foregroundColor: AppColors.primaryDeep,
-                    ),
-                    const Spacer(),
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: AppColors.primarySoft,
-                        shape: BoxShape.circle,
-                        boxShadow: <BoxShadow>[
-                          BoxShadow(
-                            color: AppColors.primarySoft.withAlpha(120),
-                            blurRadius: 18,
-                            spreadRadius: 1,
-                          ),
-                        ],
-                      ),
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.play_arrow_rounded,
-                        color: AppColors.primaryDeep,
-                        size: 22,
-                      ),
-                    ),
-                  ],
+                const Spacer(),
+                Text(
+                  '开启睡眠模式',
+                  maxLines: 2,
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    height: 1.05,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '轻触进入',
+                  style: textTheme.labelMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
             ),
@@ -388,7 +357,8 @@ class HomeActionCard extends StatelessWidget {
 
   IconData _trailingIcon(bool selected) {
     if (_isAudio) {
-      return recommendation.executionState == RecommendationExecutionState.playing
+      return recommendation.executionState ==
+              RecommendationExecutionState.playing
           ? Icons.pause_rounded
           : Icons.play_arrow_rounded;
     }

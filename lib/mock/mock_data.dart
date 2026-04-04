@@ -43,14 +43,14 @@ abstract final class MockData {
   static const List<AssistantSuggestion> assistantSuggestions =
       <AssistantSuggestion>[
         AssistantSuggestion(
-          title: '今晚先试 15 分钟深呼吸音频',
-          summary: '根据近几晚的入睡时长，你对温和的节律放松更容易起效。',
-          tag: 'Suggested',
+          title: '今晚先试 15 分钟呼吸放松',
+          summary: '根据最近几晚的入睡节奏，你对温和、低刺激的呼吸引导更容易起效。',
+          tag: '今晚建议',
         ),
         AssistantSuggestion(
           title: '把手机提醒延后到明早',
-          summary: '当前噪声不高，屏幕刺激更可能是主要干扰因子。',
-          tag: 'Focus',
+          summary: '今晚的主要干扰更像是屏幕刺激，而不是宿舍噪声。',
+          tag: '优先处理',
         ),
       ];
 
@@ -62,11 +62,11 @@ abstract final class MockData {
         ),
         ConversationPlaceholder(
           fromAssistant: false,
-          message: '今晚室友可能会晚回来，有什么更稳妥的应对建议吗？',
+          message: '今晚室友可能会晚回来，有没有更稳妥一点的方案？',
         ),
         ConversationPlaceholder(
           fromAssistant: true,
-          message: '可以先准备耳塞，并把睡眠模式切到“轻干预 + 噪声优先”。',
+          message: '可以先准备耳塞，再把睡眠模式切到“轻干预 + 噪声优先”。',
         ),
       ];
 
@@ -81,7 +81,7 @@ abstract final class MockData {
         ),
         AppRoutes.interventionTask: PlaceholderPageMeta(
           title: '微干预任务',
-          description: '任务页会承接今晚的试验策略，让用户快速执行并记录完成度。',
+          description: '任务页会承接今晚的实验策略，让用户快速执行并记录完成度。',
           icon: Icons.task_alt_rounded,
           primaryActionLabel: '任务流程待补全',
           supportingPoints: <String>['任务目标与预计时长', '执行前准备与提示', '完成后反馈入口'],
@@ -102,10 +102,10 @@ abstract final class MockData {
         ),
         AppRoutes.profileReport: PlaceholderPageMeta(
           title: '睡眠报告',
-          description: '更完整的周期报告会在这里聚合试验结果、得分变化和长期规律。',
+          description: '更完整的周期报告会在这里聚合实验结果、得分变化和长期规律。',
           icon: Icons.ssid_chart_rounded,
           primaryActionLabel: '报告页待补全',
-          supportingPoints: <String>['阶段性趋势对比', '试验有效率统计', '个体化洞察摘要'],
+          supportingPoints: <String>['阶段性趋势对比', '实验有效率统计', '个体化洞察摘要'],
         ),
       };
 }
