@@ -14,6 +14,8 @@ class PrimaryButton extends StatelessWidget {
     this.icon,
     this.variant = PrimaryButtonVariant.filled,
     this.expand = true,
+    this.foregroundColor,
+    this.borderColor,
   });
 
   final String label;
@@ -21,6 +23,8 @@ class PrimaryButton extends StatelessWidget {
   final IconData? icon;
   final PrimaryButtonVariant variant;
   final bool expand;
+  final Color? foregroundColor;
+  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +37,7 @@ class PrimaryButton extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
       elevation: 0,
       backgroundColor: _backgroundColor(palette),
-      foregroundColor: _foregroundColor(palette),
+      foregroundColor: foregroundColor ?? _foregroundColor(palette),
       side: _borderSide(),
       textStyle: Theme.of(context).textTheme.labelLarge,
     );
@@ -68,8 +72,8 @@ class PrimaryButton extends StatelessWidget {
 
   BorderSide? _borderSide() {
     return switch (variant) {
-      PrimaryButtonVariant.ghost => const BorderSide(
-        color: AppColors.surfaceBorder,
+      PrimaryButtonVariant.ghost => BorderSide(
+        color: borderColor ?? AppColors.surfaceBorder,
       ),
       _ => null,
     };

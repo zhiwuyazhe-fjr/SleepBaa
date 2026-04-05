@@ -159,6 +159,8 @@ class HomePostSleepPage extends StatelessWidget {
                   PrimaryButton(
                     label: '结束睡眠模式',
                     variant: PrimaryButtonVariant.ghost,
+                    foregroundColor: AppColors.onDark,
+                    borderColor: AppColors.darkBorder,
                     onPressed: () async {
                       await services.sleepExperienceController.exitSleepMode();
                       if (context.mounted) {
