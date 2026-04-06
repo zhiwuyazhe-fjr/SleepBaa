@@ -64,16 +64,57 @@ abstract interface class NotificationRepository implements Listenable {
   List<NotificationItem> unreadNotifications();
   Future<void> markRead(String notificationId);
   Future<void> upsertNotification(NotificationItem notification);
+  Future<void> registerDeviceToken({
+    required String token,
+    required String platform,
+  });
 }
 
 abstract interface class DormRepository implements Listenable {
   Dorm get currentDorm;
+  Stream<Dorm> watchDorm();
+  Stream<List<DormMember>> watchMembers();
+  Stream<List<DormRule>> watchRules();
+  Stream<List<DormEvent>> watchEvents();
   Future<void> updateCurrentUserStatus({
     required String uid,
     required DormMemberStatus status,
     required bool sleepModeActive,
     required String note,
   });
+  Future<void> saveRules(DormRulesSettings settings);
+  Future<DormInvite> createInvite();
+  Future<void> acceptInvite(String inviteCode);
+}
+
+abstract interface class DreamRepository implements Listenable {
+  List<DreamEntry> get entries;
+  DreamEntry? get latestEntry;
+  Future<void> saveDreamEntry(DreamEntry entry);
+  Future<void> deleteDreamEntry(String entryId);
+}
+
+abstract interface class InsightsRepository implements Listenable {
+  List<SleepInsight> get interferenceInsights;
+  SleepReport get currentReport;
+  Future<void> refresh();
+}
+
+abstract interface class AssistantRepository implements Listenable {
+  List<AssistantThread> get threads;
+  AssistantThread? get currentThread;
+  List<AssistantMessage> messagesForThread(String threadId);
+  Future<AssistantThread> ensureThread({String? title});
+  Future<void> sendUserMessage({
+    required String threadId,
+    required String content,
+  });
+  Future<void> addAssistantMessage({
+    required String threadId,
+    required String content,
+    AssistantMessageStatus status,
+  });
+  Future<void> setCurrentThread(String threadId);
 }
 
 abstract interface class PushNotificationGateway {

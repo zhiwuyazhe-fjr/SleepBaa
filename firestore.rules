@@ -1,0 +1,121 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isDormMember(dormId) {
+      return signedIn() &&
+          exists(/databases/$(database)/documents/dorms/$(dormId)/members/$(request.auth.uid));
+    }
+
+    function ownsSession(sessionId) {
+      return signedIn() &&
+          get(/databases/$(database)/documents/sleep_sessions/$(sessionId)).data.uid == request.auth.uid;
+    }
+
+    function ownsAssistantThread(threadId) {
+      return signedIn() &&
+          get(/databases/$(database)/documents/assistant_threads/$(threadId)).data.userId == request.auth.uid;
+    }
+
+    match /users/{uid} {
+      allow read, create, update: if isOwner(uid);
+      allow delete: if false;
+
+      match /notification_tokens/{tokenId} {
+        allow read, create, update: if isOwner(uid);
+        allow delete: if false;
+      }
+    }
+
+    match /user_settings/{uid} {
+      allow read, create, update: if isOwner(uid);
+      allow delete: if false;
+    }
+
+    match /notifications/{uid}/items/{notificationId} {
+      allow read, create, update: if isOwner(uid);
+      allow delete: if false;
+    }
+
+    match /dorms/{dormId} {
+      allow read: if isDormMember(dormId);
+      allow create: if signedIn();
+      allow update: if isDormMember(dormId);
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow read: if isDormMember(dormId);
+        allow create, update: if isOwner(uid) || isDormMember(dormId);
+        allow delete: if false;
+      }
+
+      match /rules/{ruleId} {
+        allow read: if isDormMember(dormId);
+        allow create, update: if isDormMember(dormId);
+        allow delete: if false;
+      }
+
+      match /events/{eventId} {
+        allow read: if isDormMember(dormId);
+        allow create: if isDormMember(dormId) || signedIn();
+        allow update, delete: if false;
+      }
+
+      match /invites/{inviteId} {
+        allow read: if signedIn();
+        allow create: if isDormMember(dormId);
+        allow update: if isDormMember(dormId) || signedIn();
+        allow delete: if false;
+      }
+    }
+
+    match /sleep_sessions/{sessionId} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if signedIn() &&
+          resource.data.uid == request.auth.uid &&
+          request.resource.data.uid == request.auth.uid;
+      allow delete: if false;
+
+      match /awakenings/{awakeningId} {
+        allow read, create, update: if ownsSession(sessionId);
+        allow delete: if false;
+      }
+
+      match /recommendation_feedback/{feedbackId} {
+        allow read, create, update: if ownsSession(sessionId);
+        allow delete: if false;
+      }
+    }
+
+    match /dream_entries/{entryId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if signedIn() &&
+          resource.data.userId == request.auth.uid &&
+          request.resource.data.userId == request.auth.uid;
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    match /assistant_threads/{threadId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if signedIn() &&
+          resource.data.userId == request.auth.uid &&
+          request.resource.data.userId == request.auth.uid;
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read, create, update: if ownsAssistantThread(threadId);
+        allow delete: if false;
+      }
+    }
+  }
+}

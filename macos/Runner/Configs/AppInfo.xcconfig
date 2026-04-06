@@ -8,7 +8,7 @@
 PRODUCT_NAME = sleep_dorm_app
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.sleepDormApp
+PRODUCT_BUNDLE_IDENTIFIER = com.dormsleep.app.macos
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.example. All rights reserved.

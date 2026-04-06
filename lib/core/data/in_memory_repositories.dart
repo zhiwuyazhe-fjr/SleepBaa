@@ -1,12 +1,14 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/utils/id_generator.dart';
 
-class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
-  UserProfile _currentUser = const UserProfile(
+UserProfile buildDefaultUserProfile() {
+  return const UserProfile(
     uid: 'anon-paul',
     displayName: 'Paul',
     tagline: 'Dorm Sleep Explorer',
@@ -14,6 +16,149 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
     dormId: 'dorm-204',
     avatarFallbackSeed: 'Paul',
   );
+}
+
+UserSettings buildDefaultUserSettings() {
+  return const UserSettings(
+    sleepGoalHours: 7.5,
+    bedtimeReminderEnabled: true,
+    morningReminderEnabled: true,
+    dormAlertsEnabled: true,
+    bedtimeReminder: TimeOfDay(hour: 23, minute: 10),
+    preferredTrackTitle: '深海海浪',
+    smartSuggestionsEnabled: true,
+  );
+}
+
+DormRulesSettings buildDefaultDormRulesSettings() {
+  return DormRulesSettings.defaults();
+}
+
+List<DormRule> buildDormSummaryRules(DormRulesSettings settings) {
+  return <DormRule>[
+    DormRule(
+      id: 'quiet-hours',
+      title: '安静时段 ${settings.quietHours}',
+      detail: settings.specialCase,
+    ),
+    DormRule(
+      id: 'lights-off',
+      title: settings.lightsOffTime,
+      detail: settings.personalLighting,
+    ),
+  ];
+}
+
+Dorm buildDefaultDorm(String currentUserId) {
+  final DormRulesSettings settings = buildDefaultDormRulesSettings();
+  return Dorm(
+    id: 'dorm-204',
+    name: '梅苑 2 栋 204',
+    overview: '宿舍整体状态平稳，灯光已调暗，适合逐步进入睡眠模式。',
+    noiseDb: 32,
+    lightLabel: '偏暗',
+    quietLabel: '良好',
+    rules: buildDormSummaryRules(settings),
+    rulesSettings: settings,
+    members: <DormMember>[
+      DormMember(
+        uid: currentUserId,
+        name: 'Paul',
+        status: DormMemberStatus.quiet,
+        sleepModeActive: false,
+        lastActiveAt: DateTime.now().subtract(const Duration(minutes: 22)),
+        note: '准备做睡前放松。',
+      ),
+      DormMember(
+        uid: 'roommate-a',
+        name: '林淯',
+        status: DormMemberStatus.sleeping,
+        sleepModeActive: true,
+        lastActiveAt: DateTime.now().subtract(const Duration(minutes: 12)),
+        note: '已开启睡眠模式。',
+      ),
+      DormMember(
+        uid: 'roommate-b',
+        name: '阿哲',
+        status: DormMemberStatus.active,
+        sleepModeActive: false,
+        lastActiveAt: DateTime.now().subtract(const Duration(minutes: 6)),
+        note: '正在收拾桌面，预计 10 分钟后安静下来。',
+      ),
+    ],
+    events: <DormEvent>[
+      DormEvent(
+        id: 'seed-event-quiet',
+        type: DormEventType.notification,
+        title: '宿舍环境保持安静',
+        detail: '公共灯已经关闭，环境噪声保持在 35 dB 以下。',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 10)),
+      ),
+      DormEvent(
+        id: 'seed-event-status',
+        type: DormEventType.memberStatus,
+        title: '林淯已切换到睡眠模式',
+        detail: '睡眠模式已开启，并已戴上耳机。',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 18)),
+        actorUid: 'roommate-a',
+      ),
+    ],
+    invites: const <DormInvite>[],
+  );
+}
+
+List<NightRecommendation> buildDefaultRecommendations() {
+  return <NightRecommendation>[
+    NightRecommendation(
+      id: 'audio-ocean',
+      title: '睡前放松音频',
+      subtitle: '先用 15 分钟让身体慢慢降速，再进入正式睡眠模式。',
+      type: RecommendationType.audio,
+      icon: Icons.dark_mode_rounded,
+      tags: const <String>['15 分钟', '深度放松'],
+      executionState: RecommendationExecutionState.idle,
+      track: const AudioTrack(
+        id: 'deep-ocean',
+        title: '深海海浪',
+        subtitle: '低刺激白噪音 · 45 分钟',
+        duration: Duration(minutes: 45),
+      ),
+    ),
+    NightRecommendation(
+      id: 'earplug',
+      title: '佩戴隔音耳塞',
+      subtitle: '先把随机噪声压下去，减少半夜被打断的概率。',
+      type: RecommendationType.quickAction,
+      icon: Icons.hearing_rounded,
+      tags: const <String>['1 分钟', '降噪'],
+      executionState: RecommendationExecutionState.idle,
+    ),
+    NightRecommendation(
+      id: 'phone-down',
+      title: '把手机放到桌面充电',
+      subtitle: '减少屏幕光和消息提醒，让入睡节奏更稳定。',
+      type: RecommendationType.quickAction,
+      icon: Icons.phone_android_rounded,
+      tags: const <String>['立刻执行'],
+      executionState: RecommendationExecutionState.idle,
+    ),
+    NightRecommendation(
+      id: 'water',
+      title: '准备一小杯温水',
+      subtitle: '避免夜里口渴醒来后还要起身找水，打断困意。',
+      type: RecommendationType.quickAction,
+      icon: Icons.water_drop_rounded,
+      tags: const <String>['30 秒'],
+      executionState: RecommendationExecutionState.idle,
+    ),
+  ];
+}
+
+class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
+  InMemoryAuthRepository({UserProfile? initialProfile})
+    : _currentUser = initialProfile ?? buildDefaultUserProfile();
+
+  UserProfile _currentUser;
 
   @override
   UserProfile get currentUser => _currentUser;
@@ -44,6 +189,7 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
     _currentUser = _currentUser.copyWith(
       avatarPath: avatarPath,
       avatarBytes: avatarBytes,
+      avatarUrl: avatarPath,
     );
     notifyListeners();
   }
@@ -52,17 +198,7 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
 class InMemoryUserSettingsRepository extends ChangeNotifier
     implements UserSettingsRepository {
   InMemoryUserSettingsRepository({UserSettings? initialSettings})
-    : _settings = initialSettings ?? _defaultSettings;
-
-  static const UserSettings _defaultSettings = UserSettings(
-    sleepGoalHours: 7.5,
-    bedtimeReminderEnabled: true,
-    morningReminderEnabled: true,
-    dormAlertsEnabled: true,
-    bedtimeReminder: TimeOfDay(hour: 23, minute: 10),
-    preferredTrackTitle: '深海海浪',
-    smartSuggestionsEnabled: true,
-  );
+    : _settings = initialSettings ?? buildDefaultUserSettings();
 
   UserSettings _settings;
 
@@ -78,51 +214,10 @@ class InMemoryUserSettingsRepository extends ChangeNotifier
 
 class InMemoryRecommendationRepository extends ChangeNotifier
     implements RecommendationRepository {
-  InMemoryRecommendationRepository()
-    : _tonightRecommendations = <NightRecommendation>[
-        NightRecommendation(
-          id: 'audio-ocean',
-          title: '睡前放松音频',
-          subtitle: '先用 15 分钟让身体慢慢降速，再进入正式睡眠模式。',
-          type: RecommendationType.audio,
-          icon: Icons.dark_mode_rounded,
-          tags: const <String>['15 分钟', '深度放松'],
-          executionState: RecommendationExecutionState.idle,
-          track: const AudioTrack(
-            id: 'deep-ocean',
-            title: '深海海浪',
-            subtitle: '低刺激白噪音 · 45 分钟',
-            duration: Duration(minutes: 45),
-          ),
-        ),
-        NightRecommendation(
-          id: 'earplug',
-          title: '佩戴隔音耳塞',
-          subtitle: '先把随机噪声压下去，减少半夜被打断的概率。',
-          type: RecommendationType.quickAction,
-          icon: Icons.hearing_rounded,
-          tags: const <String>['1 分钟', '降噪'],
-          executionState: RecommendationExecutionState.idle,
-        ),
-        NightRecommendation(
-          id: 'phone-down',
-          title: '把手机放到桌面充电',
-          subtitle: '减少屏幕光和消息提醒，让入睡节奏更稳定。',
-          type: RecommendationType.quickAction,
-          icon: Icons.phone_android_rounded,
-          tags: const <String>['立刻执行'],
-          executionState: RecommendationExecutionState.idle,
-        ),
-        NightRecommendation(
-          id: 'water',
-          title: '准备一小杯温水',
-          subtitle: '避免夜里口渴醒来后还要起身找水，打断困意。',
-          type: RecommendationType.quickAction,
-          icon: Icons.water_drop_rounded,
-          tags: const <String>['30 秒'],
-          executionState: RecommendationExecutionState.idle,
-        ),
-      ];
+  InMemoryRecommendationRepository({
+    List<NightRecommendation>? initialRecommendations,
+  }) : _tonightRecommendations =
+           initialRecommendations ?? buildDefaultRecommendations();
 
   List<NightRecommendation> _tonightRecommendations;
 
@@ -167,8 +262,13 @@ class InMemoryRecommendationRepository extends ChangeNotifier
 
 class InMemorySleepSessionRepository extends ChangeNotifier
     implements SleepSessionRepository {
-  InMemorySleepSessionRepository() : _sessions = _seedSessions();
+  InMemorySleepSessionRepository({
+    String initialUid = 'anon-paul',
+    List<SleepSession>? initialSessions,
+  }) : _uid = initialUid,
+       _sessions = initialSessions ?? _seedSessions(initialUid);
 
+  final String _uid;
   List<SleepSession> _sessions;
 
   @override
@@ -183,23 +283,22 @@ class InMemorySleepSessionRepository extends ChangeNotifier
   }
 
   @override
-  SleepSession? get latestAwaitingFeedbackSession {
-    final List<SleepSession> pending =
-        _sessions
-            .where(
-              (SleepSession session) =>
-                  session.status == SleepSessionStatus.awaitingFeedback,
-            )
-            .toList()
-          ..sort(
-            (SleepSession a, SleepSession b) =>
-                b.startedAt.compareTo(a.startedAt),
-          );
-    return pending.isEmpty ? null : pending.first;
-  }
+  List<SleepSession> get sessions => List<SleepSession>.unmodifiable(_sessions);
 
   @override
-  List<SleepSession> get sessions => List<SleepSession>.unmodifiable(_sessions);
+  SleepSession? get latestAwaitingFeedbackSession {
+    final List<SleepSession> pending = _sessions
+        .where(
+          (SleepSession session) =>
+              session.status == SleepSessionStatus.awaitingFeedback,
+        )
+        .toList()
+      ..sort(
+        (SleepSession a, SleepSession b) =>
+            b.startedAt.compareTo(a.startedAt),
+      );
+    return pending.isEmpty ? null : pending.first;
+  }
 
   @override
   Future<SleepSession> startSleepSession({
@@ -213,7 +312,8 @@ class InMemorySleepSessionRepository extends ChangeNotifier
 
     final DateTime now = DateTime.now();
     final SleepSession session = SleepSession(
-      id: 'session-${now.millisecondsSinceEpoch}',
+      id: IdGenerator.next('session'),
+      uid: _uid,
       startedAt: now,
       endedAt: null,
       status: SleepSessionStatus.active,
@@ -230,6 +330,7 @@ class InMemorySleepSessionRepository extends ChangeNotifier
       awakenings: const <NightAwakeningEntry>[],
       feedback: const <RecommendationFeedback>[],
       summary: null,
+      updatedAt: now,
     );
     _sessions = <SleepSession>[..._sessions, session];
     notifyListeners();
@@ -254,15 +355,23 @@ class InMemorySleepSessionRepository extends ChangeNotifier
         endedAt: endedAt,
         selectedRecommendationIds:
             selectedRecommendationIds ?? existing.selectedRecommendationIds,
+        updatedAt: DateTime.now(),
       ),
     );
   }
 
   @override
   Future<void> saveSession(SleepSession session) async {
-    _sessions = _sessions.map((SleepSession current) {
-      return current.id == session.id ? session : current;
-    }).toList();
+    final int index = _sessions.indexWhere(
+      (SleepSession current) => current.id == session.id,
+    );
+    if (index == -1) {
+      _sessions = <SleepSession>[..._sessions, session];
+    } else {
+      final List<SleepSession> next = List<SleepSession>.from(_sessions);
+      next[index] = session;
+      _sessions = next;
+    }
     notifyListeners();
   }
 
@@ -283,9 +392,36 @@ class InMemorySleepSessionRepository extends ChangeNotifier
     }).toList();
   }
 
-  static List<SleepSession> _seedSessions() {
+  static List<SleepSession> _seedSessions(String uid) {
     final DateTime now = DateTime.now();
     final List<SleepSession> seeded = <SleepSession>[];
+    final List<NightRecommendation> historyRecommendations =
+        <NightRecommendation>[
+          NightRecommendation(
+            id: 'audio-ocean',
+            title: '睡前放松音频',
+            subtitle: '深海海浪白噪音',
+            type: RecommendationType.audio,
+            icon: Icons.dark_mode_rounded,
+            tags: const <String>['15 分钟', '深度放松'],
+            executionState: RecommendationExecutionState.completed,
+            track: const AudioTrack(
+              id: 'deep-ocean',
+              title: '深海海浪',
+              subtitle: '低刺激白噪音 · 45 分钟',
+              duration: Duration(minutes: 45),
+            ),
+          ),
+          NightRecommendation(
+            id: 'earplug',
+            title: '佩戴隔音耳塞',
+            subtitle: '隔离随机噪声',
+            type: RecommendationType.quickAction,
+            icon: Icons.hearing_rounded,
+            tags: const <String>['1 分钟'],
+            executionState: RecommendationExecutionState.completed,
+          ),
+        ];
 
     for (int offset = 18; offset >= 2; offset--) {
       final DateTime day = now.subtract(Duration(days: offset));
@@ -293,12 +429,13 @@ class InMemorySleepSessionRepository extends ChangeNotifier
       seeded.add(
         SleepSession(
           id: 'history-$offset',
+          uid: uid,
           startedAt: DateTime(day.year, day.month, day.day, 23, 20),
           endedAt: DateTime(day.year, day.month, day.day + 1, 7, 0),
           status: SleepSessionStatus.completed,
           sleepModeActive: false,
           dormId: 'dorm-204',
-          recommendations: _historicalRecommendations,
+          recommendations: historyRecommendations,
           selectedRecommendationIds: const <String>['audio-ocean'],
           awakenings: <NightAwakeningEntry>[
             if (offset.isEven)
@@ -316,8 +453,11 @@ class InMemorySleepSessionRepository extends ChangeNotifier
             restedLevel: 3 + (offset % 2),
             totalSleepHours: durationHours,
             awakeningsCount: offset.isEven ? 1 : 0,
-            note: offset.isEven ? '睡前音频帮助明显。' : '整体比较平稳。',
+            note: offset.isEven
+                ? '睡前音频帮助明显。'
+                : '整体比较平稳。',
           ),
+          updatedAt: DateTime(day.year, day.month, day.day + 1, 7, 0),
         ),
       );
     }
@@ -326,6 +466,7 @@ class InMemorySleepSessionRepository extends ChangeNotifier
     seeded.add(
       SleepSession(
         id: 'pending-yesterday',
+        uid: uid,
         startedAt: DateTime(
           yesterday.year,
           yesterday.month,
@@ -337,7 +478,7 @@ class InMemorySleepSessionRepository extends ChangeNotifier
         status: SleepSessionStatus.awaitingFeedback,
         sleepModeActive: false,
         dormId: 'dorm-204',
-        recommendations: _historicalRecommendations,
+        recommendations: historyRecommendations,
         selectedRecommendationIds: const <String>['audio-ocean', 'earplug'],
         awakenings: <NightAwakeningEntry>[
           NightAwakeningEntry(
@@ -350,39 +491,12 @@ class InMemorySleepSessionRepository extends ChangeNotifier
         ],
         feedback: const <RecommendationFeedback>[],
         summary: null,
+        updatedAt: DateTime(now.year, now.month, now.day, 6, 58),
       ),
     );
 
     return seeded;
   }
-
-  static const List<NightRecommendation> _historicalRecommendations =
-      <NightRecommendation>[
-        NightRecommendation(
-          id: 'audio-ocean',
-          title: '睡前放松音频',
-          subtitle: '深海海浪白噪音',
-          type: RecommendationType.audio,
-          icon: Icons.dark_mode_rounded,
-          tags: <String>['15 分钟', '深度放松'],
-          executionState: RecommendationExecutionState.completed,
-          track: AudioTrack(
-            id: 'deep-ocean',
-            title: '深海海浪',
-            subtitle: '低刺激白噪音 · 45 分钟',
-            duration: Duration(minutes: 45),
-          ),
-        ),
-        NightRecommendation(
-          id: 'earplug',
-          title: '佩戴隔音耳塞',
-          subtitle: '隔离随机噪声',
-          type: RecommendationType.quickAction,
-          icon: Icons.hearing_rounded,
-          tags: <String>['1 分钟'],
-          executionState: RecommendationExecutionState.completed,
-        ),
-      ];
 }
 
 class InMemoryFeedbackRepository extends ChangeNotifier
@@ -404,6 +518,7 @@ class InMemoryFeedbackRepository extends ChangeNotifier
         status: SleepSessionStatus.completed,
         summary: summary,
         feedback: recommendationFeedback,
+        updatedAt: DateTime.now(),
       ),
     );
     notifyListeners();
@@ -412,7 +527,7 @@ class InMemoryFeedbackRepository extends ChangeNotifier
 
 class InMemoryNotificationRepository extends ChangeNotifier
     implements NotificationRepository {
-  InMemoryNotificationRepository()
+  InMemoryNotificationRepository({String ownerUid = 'anon-paul'})
     : _notifications = <NotificationItem>[
         NotificationItem(
           id: 'feedback-pending',
@@ -422,6 +537,7 @@ class InMemoryNotificationRepository extends ChangeNotifier
           createdAt: DateTime.now().subtract(const Duration(hours: 1)),
           route: AppRoutes.feedbackMorning,
           readAt: null,
+          ownerUid: ownerUid,
         ),
         NotificationItem(
           id: 'dorm-quiet',
@@ -431,6 +547,7 @@ class InMemoryNotificationRepository extends ChangeNotifier
           createdAt: DateTime.now().subtract(const Duration(hours: 8)),
           route: AppRoutes.dorm,
           readAt: null,
+          ownerUid: ownerUid,
         ),
         NotificationItem(
           id: 'session-ended',
@@ -440,18 +557,21 @@ class InMemoryNotificationRepository extends ChangeNotifier
           createdAt: DateTime.now().subtract(const Duration(days: 1)),
           route: AppRoutes.feedbackMorning,
           readAt: DateTime.now().subtract(const Duration(hours: 3)),
+          ownerUid: ownerUid,
         ),
       ];
 
   List<NotificationItem> _notifications;
+  final Set<String> _tokens = <String>{};
 
   @override
   List<NotificationItem> get notifications {
-    final List<NotificationItem> sorted =
-        List<NotificationItem>.from(_notifications)..sort(
-          (NotificationItem a, NotificationItem b) =>
-              b.createdAt.compareTo(a.createdAt),
-        );
+    final List<NotificationItem> sorted = List<NotificationItem>.from(
+      _notifications,
+    )..sort(
+      (NotificationItem a, NotificationItem b) =>
+          b.createdAt.compareTo(a.createdAt),
+    );
     return List<NotificationItem>.unmodifiable(sorted);
   }
 
@@ -488,50 +608,52 @@ class InMemoryNotificationRepository extends ChangeNotifier
     }
     notifyListeners();
   }
+
+  @override
+  Future<void> registerDeviceToken({
+    required String token,
+    required String platform,
+  }) async {
+    _tokens.add('$platform:$token');
+    notifyListeners();
+  }
 }
 
 class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
-  Dorm _currentDorm = Dorm(
-    id: 'dorm-204',
-    name: '梅苑 2 栋 204',
-    overview: '宿舍整体状态平稳，灯光已调暗，适合逐步进入睡眠模式。',
-    noiseDb: 32,
-    lightLabel: '偏暗',
-    quietLabel: '良好',
-    rules: const <DormRule>[
-      DormRule(title: '23:30 后关闭主灯', detail: '为准备休息的室友保留低刺激环境。'),
-      DormRule(title: '夜间媒体内容统一佩戴耳机', detail: '避免随机外放声音造成二次唤醒。'),
-    ],
-    members: <DormMember>[
-      DormMember(
-        uid: 'anon-paul',
-        name: 'Paul',
-        status: DormMemberStatus.quiet,
-        sleepModeActive: false,
-        lastActiveAt: DateTime(2026, 4, 4, 22, 10),
-        note: '准备做睡前放松',
-      ),
-      DormMember(
-        uid: 'roommate-a',
-        name: '林淯',
-        status: DormMemberStatus.sleeping,
-        sleepModeActive: true,
-        lastActiveAt: DateTime(2026, 4, 4, 22, 20),
-        note: '已开启睡眠模式',
-      ),
-      DormMember(
-        uid: 'roommate-b',
-        name: '阿哲',
-        status: DormMemberStatus.active,
-        sleepModeActive: false,
-        lastActiveAt: DateTime(2026, 4, 4, 22, 34),
-        note: '正在收拾桌面，预计 10 分钟后安静下来。',
-      ),
-    ],
-  );
+  InMemoryDormRepository({
+    Dorm? initialDorm,
+    String currentUserId = 'anon-paul',
+  }) : _currentUserId = currentUserId,
+       _currentDorm = initialDorm ?? buildDefaultDorm(currentUserId) {
+    _emitCurrentState();
+  }
+
+  final String _currentUserId;
+  final StreamController<Dorm> _dormController =
+      StreamController<Dorm>.broadcast();
+  final StreamController<List<DormMember>> _membersController =
+      StreamController<List<DormMember>>.broadcast();
+  final StreamController<List<DormRule>> _rulesController =
+      StreamController<List<DormRule>>.broadcast();
+  final StreamController<List<DormEvent>> _eventsController =
+      StreamController<List<DormEvent>>.broadcast();
+
+  Dorm _currentDorm;
 
   @override
   Dorm get currentDorm => _currentDorm;
+
+  @override
+  Stream<Dorm> watchDorm() => _dormController.stream;
+
+  @override
+  Stream<List<DormMember>> watchMembers() => _membersController.stream;
+
+  @override
+  Stream<List<DormRule>> watchRules() => _rulesController.stream;
+
+  @override
+  Stream<List<DormEvent>> watchEvents() => _eventsController.stream;
 
   @override
   Future<void> updateCurrentUserStatus({
@@ -552,8 +674,464 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
           note: note,
         );
       }).toList(),
+      events: <DormEvent>[
+        DormEvent(
+          id: IdGenerator.next('dorm-event'),
+          type: DormEventType.memberStatus,
+          title: uid == _currentUserId ? '你已更新状态' : '室友更新了状态',
+          detail: note,
+          createdAt: DateTime.now(),
+          actorUid: uid,
+        ),
+        ..._currentDorm.events,
+      ],
     );
+    _emitCurrentState();
     notifyListeners();
+  }
+
+  @override
+  Future<void> saveRules(DormRulesSettings settings) async {
+    _currentDorm = _currentDorm.copyWith(
+      rulesSettings: settings,
+      rules: buildDormSummaryRules(settings),
+      events: <DormEvent>[
+        DormEvent(
+          id: IdGenerator.next('dorm-event'),
+          type: DormEventType.ruleUpdate,
+          title: '宿舍规则已更新',
+          detail: '安静时段：${settings.quietHours}',
+          createdAt: DateTime.now(),
+          actorUid: _currentUserId,
+        ),
+        ..._currentDorm.events,
+      ],
+    );
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  @override
+  Future<DormInvite> createInvite() async {
+    final DormInvite invite = DormInvite(
+      id: IdGenerator.next('invite'),
+      dormId: _currentDorm.id,
+      code: 'DORM-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+      createdByUid: _currentUserId,
+      createdAt: DateTime.now(),
+      expiresAt: DateTime.now().add(const Duration(days: 3)),
+      status: DormInviteStatus.pending,
+    );
+    _currentDorm = _currentDorm.copyWith(
+      invites: <DormInvite>[invite, ..._currentDorm.invites],
+      events: <DormEvent>[
+        DormEvent(
+          id: IdGenerator.next('dorm-event'),
+          type: DormEventType.invite,
+          title: '宿舍邀请码已创建',
+          detail: '邀请码 ${invite.code} 已生成，可发送给室友。',
+          createdAt: DateTime.now(),
+          actorUid: _currentUserId,
+        ),
+        ..._currentDorm.events,
+      ],
+    );
+    _emitCurrentState();
+    notifyListeners();
+    return invite;
+  }
+
+  @override
+  Future<void> acceptInvite(String inviteCode) async {
+    final bool inviteExists = _currentDorm.invites.any(
+      (DormInvite invite) => invite.code == inviteCode,
+    );
+    if (!inviteExists) {
+      return;
+    }
+    final bool memberExists = _currentDorm.members.any(
+      (DormMember member) => member.uid == _currentUserId,
+    );
+    _currentDorm = _currentDorm.copyWith(
+      invites: _currentDorm.invites.map((DormInvite invite) {
+        if (invite.code != inviteCode) {
+          return invite;
+        }
+        return invite.copyWith(
+          status: DormInviteStatus.accepted,
+          acceptedByUid: _currentUserId,
+          acceptedAt: DateTime.now(),
+        );
+      }).toList(),
+      members: memberExists
+          ? _currentDorm.members
+          : <DormMember>[
+              DormMember(
+                uid: _currentUserId,
+                name: _currentUserId == 'anon-paul' ? 'Paul' : '新室友',
+                status: DormMemberStatus.quiet,
+                sleepModeActive: false,
+                lastActiveAt: DateTime.now(),
+                note: '通过邀请码加入宿舍。',
+              ),
+              ..._currentDorm.members,
+            ],
+      events: <DormEvent>[
+        DormEvent(
+          id: IdGenerator.next('dorm-event'),
+          type: DormEventType.invite,
+          title: '宿舍邀请码已接受',
+          detail: '邀请码 $inviteCode 已成功使用。',
+          createdAt: DateTime.now(),
+          actorUid: _currentUserId,
+        ),
+        ..._currentDorm.events,
+      ],
+    );
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  void _emitCurrentState() {
+    if (_dormController.isClosed) {
+      return;
+    }
+    _dormController.add(_currentDorm);
+    _membersController.add(List<DormMember>.unmodifiable(_currentDorm.members));
+    _rulesController.add(List<DormRule>.unmodifiable(_currentDorm.rules));
+    _eventsController.add(List<DormEvent>.unmodifiable(_currentDorm.events));
+  }
+
+  @override
+  void dispose() {
+    _dormController.close();
+    _membersController.close();
+    _rulesController.close();
+    _eventsController.close();
+    super.dispose();
+  }
+}
+
+class InMemoryDreamRepository extends ChangeNotifier implements DreamRepository {
+  InMemoryDreamRepository({String userId = 'anon-paul'})
+    : _entries = <DreamEntry>[
+        DreamEntry(
+          id: 'dream-1',
+          userId: userId,
+          title: '下雨的走廊',
+          body:
+              '我走过一条安静的长走廊，每扇门后面都透着一点暖黄的灯光。',
+          tags: const <String>['平静', '雨夜', '走廊'],
+          createdAt: DateTime.now().subtract(const Duration(hours: 10)),
+          emotionLabel: '回味',
+        ),
+      ];
+
+  List<DreamEntry> _entries;
+
+  @override
+  List<DreamEntry> get entries {
+    final List<DreamEntry> sorted = List<DreamEntry>.from(_entries)
+      ..sort((DreamEntry a, DreamEntry b) => b.createdAt.compareTo(a.createdAt));
+    return List<DreamEntry>.unmodifiable(sorted);
+  }
+
+  @override
+  DreamEntry? get latestEntry => entries.isEmpty ? null : entries.first;
+
+  @override
+  Future<void> saveDreamEntry(DreamEntry entry) async {
+    final int index = _entries.indexWhere((DreamEntry item) => item.id == entry.id);
+    if (index == -1) {
+      _entries = <DreamEntry>[entry, ..._entries];
+    } else {
+      final List<DreamEntry> next = List<DreamEntry>.from(_entries);
+      next[index] = entry;
+      _entries = next;
+    }
+    notifyListeners();
+  }
+
+  @override
+  Future<void> deleteDreamEntry(String entryId) async {
+    _entries = _entries.where((DreamEntry item) => item.id != entryId).toList();
+    notifyListeners();
+  }
+}
+
+class InMemoryInsightsRepository extends ChangeNotifier
+    implements InsightsRepository {
+  InMemoryInsightsRepository({
+    required SleepSessionRepository sleepSessionRepository,
+    required DormRepository dormRepository,
+    required DreamRepository dreamRepository,
+  }) : _sleepSessionRepository = sleepSessionRepository,
+       _dormRepository = dormRepository,
+       _dreamRepository = dreamRepository {
+    _sleepSessionRepository.addListener(_recompute);
+    _dormRepository.addListener(_recompute);
+    _dreamRepository.addListener(_recompute);
+    _recompute();
+  }
+
+  final SleepSessionRepository _sleepSessionRepository;
+  final DormRepository _dormRepository;
+  final DreamRepository _dreamRepository;
+
+  List<SleepInsight> _interferenceInsights = const <SleepInsight>[];
+  SleepReport _currentReport = SleepReport(
+    title: '本周睡眠快照',
+    averageSleepHours: 0,
+    averageSleepQuality: 0,
+    averageRestedLevel: 0,
+    calmNights: 0,
+    dreamEntriesCount: 0,
+    highlights: const <String>[],
+    generatedAt: DateTime.now(),
+  );
+
+  @override
+  List<SleepInsight> get interferenceInsights =>
+      List<SleepInsight>.unmodifiable(_interferenceInsights);
+
+  @override
+  SleepReport get currentReport => _currentReport;
+
+  @override
+  Future<void> refresh() async => _recompute();
+
+  void _recompute() {
+    final List<SleepSession> completed = _sleepSessionRepository.sessions
+        .where((SleepSession session) => session.summary != null)
+        .toList();
+    final List<SleepSession> recent = _sleepSessionRepository.recentSessions();
+
+    final double averageSleepHours = completed.isEmpty
+        ? 0
+        : completed.fold<double>(
+                0,
+                (double sum, SleepSession item) =>
+                    sum + item.summary!.totalSleepHours,
+              ) /
+              completed.length;
+    final double averageQuality = completed.isEmpty
+        ? 0
+        : completed.fold<double>(
+                0,
+                (double sum, SleepSession item) =>
+                    sum + item.summary!.sleepQuality,
+              ) /
+              completed.length;
+    final double averageRested = completed.isEmpty
+        ? 0
+        : completed.fold<double>(
+                0,
+                (double sum, SleepSession item) =>
+                    sum + item.summary!.restedLevel,
+              ) /
+              completed.length;
+    final int calmNights = recent
+        .where((SleepSession item) => item.awakenings.isEmpty)
+        .length;
+
+    _currentReport = SleepReport(
+      title: '本周睡眠快照',
+      averageSleepHours: averageSleepHours,
+      averageSleepQuality: averageQuality,
+      averageRestedLevel: averageRested,
+      calmNights: calmNights,
+      dreamEntriesCount: _dreamRepository.entries.length,
+      highlights: <String>[
+        '本周平均睡眠时长为 ${averageSleepHours.toStringAsFixed(1)} 小时。',
+        '宿舍安静状态为 ${_dormRepository.currentDorm.quietLabel}。',
+        '本周共记录了 ${_dreamRepository.entries.length} 条梦境笔记。',
+      ],
+      generatedAt: DateTime.now(),
+    );
+
+    _interferenceInsights = <SleepInsight>[
+      SleepInsight(
+        id: 'noise',
+        category: InsightCategory.interference,
+        title: '宿舍噪声影响',
+        summary:
+            '当前宿舍噪声约为 ${_dormRepository.currentDorm.noiseDb} dB，今晚整体干扰较低。',
+        metricLabel: '${_dormRepository.currentDorm.noiseDb} dB',
+        createdAt: DateTime.now(),
+      ),
+      SleepInsight(
+        id: 'awakenings',
+        category: InsightCategory.interference,
+        title: '夜间醒来次数',
+        summary:
+            '最近几次睡眠记录中共出现 ${recent.fold<int>(0, (int total, SleepSession item) => total + item.awakenings.length)} 次夜间醒来。',
+        metricLabel:
+            '${recent.fold<int>(0, (int total, SleepSession item) => total + item.awakenings.length)} 次',
+        createdAt: DateTime.now(),
+      ),
+      SleepInsight(
+        id: 'dreams',
+        category: InsightCategory.trend,
+        title: '梦境记录趋势',
+        summary:
+            '持续记录梦境，有助于把夜间情绪和恢复状态联系起来观察。',
+        metricLabel: '${_dreamRepository.entries.length} 条',
+        createdAt: DateTime.now(),
+      ),
+    ];
+
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _sleepSessionRepository.removeListener(_recompute);
+    _dormRepository.removeListener(_recompute);
+    _dreamRepository.removeListener(_recompute);
+    super.dispose();
+  }
+}
+
+class InMemoryAssistantRepository extends ChangeNotifier
+    implements AssistantRepository {
+  InMemoryAssistantRepository({String userId = 'anon-paul'})
+    : _userId = userId {
+    final AssistantThread thread = AssistantThread(
+      id: 'thread-default',
+      userId: userId,
+      title: '今晚睡前聊聊',
+      createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+      updatedAt: DateTime.now().subtract(const Duration(minutes: 10)),
+    );
+    _threads = <AssistantThread>[thread];
+    _currentThreadId = thread.id;
+    _messagesByThread[thread.id] = <AssistantMessage>[
+      AssistantMessage(
+        id: 'msg-welcome',
+        threadId: thread.id,
+        role: AssistantMessageRole.assistant,
+        content:
+            '一个轻柔的 15 分钟呼吸练习，也许能帮你慢慢切换到入睡状态。要不要我现在带你开始？',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 9)),
+      ),
+    ];
+  }
+
+  final String _userId;
+  late List<AssistantThread> _threads;
+  final Map<String, List<AssistantMessage>> _messagesByThread =
+      <String, List<AssistantMessage>>{};
+  String? _currentThreadId;
+
+  @override
+  List<AssistantThread> get threads {
+    final List<AssistantThread> sorted = List<AssistantThread>.from(_threads)
+      ..sort(
+        (AssistantThread a, AssistantThread b) =>
+            b.updatedAt.compareTo(a.updatedAt),
+      );
+    return List<AssistantThread>.unmodifiable(sorted);
+  }
+
+  @override
+  AssistantThread? get currentThread {
+    final String? threadId = _currentThreadId;
+    if (threadId == null) {
+      return null;
+    }
+    try {
+      return _threads.firstWhere((AssistantThread item) => item.id == threadId);
+    } on StateError {
+      return null;
+    }
+  }
+
+  @override
+  List<AssistantMessage> messagesForThread(String threadId) {
+    final List<AssistantMessage> sorted = List<AssistantMessage>.from(
+      _messagesByThread[threadId] ?? const <AssistantMessage>[],
+    )..sort(
+      (AssistantMessage a, AssistantMessage b) =>
+          a.createdAt.compareTo(b.createdAt),
+    );
+    return List<AssistantMessage>.unmodifiable(sorted);
+  }
+
+  @override
+  Future<AssistantThread> ensureThread({String? title}) async {
+    if (currentThread != null) {
+      return currentThread!;
+    }
+
+    final AssistantThread thread = AssistantThread(
+      id: IdGenerator.next('assistant-thread'),
+      userId: _userId,
+      title: title ?? '新的助眠对话',
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    _threads = <AssistantThread>[thread, ..._threads];
+    _currentThreadId = thread.id;
+    _messagesByThread[thread.id] = <AssistantMessage>[];
+    notifyListeners();
+    return thread;
+  }
+
+  @override
+  Future<void> sendUserMessage({
+    required String threadId,
+    required String content,
+  }) async {
+    final AssistantMessage message = AssistantMessage(
+      id: IdGenerator.next('assistant-msg'),
+      threadId: threadId,
+      role: AssistantMessageRole.user,
+      content: content,
+      createdAt: DateTime.now(),
+    );
+    final List<AssistantMessage> next = List<AssistantMessage>.from(
+      _messagesByThread[threadId] ?? const <AssistantMessage>[],
+    )..add(message);
+    _messagesByThread[threadId] = next;
+    _touchThread(threadId);
+    notifyListeners();
+  }
+
+  @override
+  Future<void> addAssistantMessage({
+    required String threadId,
+    required String content,
+    AssistantMessageStatus status = AssistantMessageStatus.complete,
+  }) async {
+    final AssistantMessage message = AssistantMessage(
+      id: IdGenerator.next('assistant-msg'),
+      threadId: threadId,
+      role: AssistantMessageRole.assistant,
+      content: content,
+      createdAt: DateTime.now(),
+      status: status,
+    );
+    final List<AssistantMessage> next = List<AssistantMessage>.from(
+      _messagesByThread[threadId] ?? const <AssistantMessage>[],
+    )..add(message);
+    _messagesByThread[threadId] = next;
+    _touchThread(threadId);
+    notifyListeners();
+  }
+
+  @override
+  Future<void> setCurrentThread(String threadId) async {
+    _currentThreadId = threadId;
+    notifyListeners();
+  }
+
+  void _touchThread(String threadId) {
+    _threads = _threads.map((AssistantThread item) {
+      if (item.id != threadId) {
+        return item;
+      }
+      return item.copyWith(updatedAt: DateTime.now());
+    }).toList();
   }
 }
 

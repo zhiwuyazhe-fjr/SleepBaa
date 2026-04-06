@@ -1,4 +1,4 @@
-package com.example.sleep_dorm_app
+package com.dormsleep.app
 
 import io.flutter.embedding.android.FlutterActivity
 
