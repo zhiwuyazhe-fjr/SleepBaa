@@ -1,0 +1,165 @@
+name: 🐛 Bug 报告
+description: 报告一个可复现的问题
+title: "[Bug] <模块> - <简短描述>"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢提交 Bug 报告！请填写以下信息帮助我们快速定位问题。
+
+  - type: input
+    id: title
+    attributes:
+      label: 标题
+      description: 格式：[Bug] 模块名 - 简短描述
+      placeholder: "[Bug] 模块：睡眠 - 点击开始睡眠无响应"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 🐛 问题描述
+      description: 请清晰描述问题是什么
+      placeholder: "例如：在首页点击开始睡眠按钮后，没有任何反应，也没有跳转"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 📋 复现步骤
+      description: 请列出详细的复现步骤
+      placeholder: |
+        1. 打开 App，进入首页
+        2. 点击「开始睡眠」按钮
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: ✅ 期望行为
+      description: 应该发生什么
+      placeholder: "点击后应该跳转到睡眠记录页面"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: ❌ 实际行为
+      description: 实际发生了什么
+      placeholder: "点击后没有任何反应，控制台无错误日志"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: 📱 设备型号
+      description: 手机型号或模拟器
+      placeholder: "iPhone 14 Pro / Pixel 7 模拟器"
+    validations:
+      required: true
+
+  - type: input
+    id: os_version
+    attributes:
+      label: 系统版本
+      description: Android 或 iOS 版本
+      placeholder: "iOS 16.4 / Android 13"
+    validations:
+      required: true
+
+  - type: input
+    id: screen_resolution
+    attributes:
+      label: 屏幕分辨率
+      description: 屏幕分辨率和 DPI（如有）
+      placeholder: "393x873 @420dpi 或 1080x2400"
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: App 版本
+      description: 版本号或 commit hash
+      placeholder: "v1.2.0 或 abc1234"
+    validations:
+      required: true
+
+  - type: input
+    id: flutter_version
+    attributes:
+      label: Flutter 版本
+      description: 运行 `flutter --version` 获取
+      placeholder: "3.19.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: 🔍 严重程度
+      description: 请选择问题的严重程度
+      options:
+        - "致命 - 崩溃、数据丢失、无法启动"
+        - "严重 - 主要功能不可用"
+        - "一般 - 部分功能受影响，有 workaround"
+        - "轻微 - UI 问题、轻微体验问题"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: modules
+    attributes:
+      label: 🏷️ 模块标签
+      description: 请选择问题涉及的模块（可多选）
+      options:
+        - label: "模块：睡眠"
+        - label: "模块：梦境"
+        - label: "模块：分析"
+        - label: "模块：助手"
+        - label: "模块：宿舍"
+        - label: "模块：反馈"
+        - label: "模块：首页"
+        - label: "模块：干预"
+        - label: "模块：日志"
+        - label: "模块：情绪"
+        - label: "模块：通知"
+        - label: "模块：我的"
+        - label: "模块：UI"
+        - label: "模块：网络"
+        - label: "模块：核心"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 📎 日志信息
+      description: 如有错误日志，请粘贴（可选）
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 📎 截图/录屏
+      description: 可在此描述截图内容，实际截图请在下方上传（可选）
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        **提交前检查**：
+        - [ ] 我已搜索现有 issue，确认没有重复
+        - [ ] 我已尝试复现，步骤清晰
+        - [ ] 我已填写所有必填字段
