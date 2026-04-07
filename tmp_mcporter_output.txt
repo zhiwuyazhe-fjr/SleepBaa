@@ -1,0 +1,137 @@
+{
+  "success": true,
+  "data": {
+    "action": "listFunctions",
+    "functions": [
+      {
+        "AddTime": "2026-04-06 20:14:14",
+        "AsyncRunEnable": "FALSE",
+        "Description": "",
+        "FunctionId": "lam-0uvaf9ev",
+        "FunctionName": "app-api",
+        "ModTime": "2026-04-06 22:55:57",
+        "Namespace": "sleep-dorm-app-9ggjkxy371d18ebe",
+        "ReservedConcurrencyMem": 0,
+        "Runtime": "Nodejs18.15",
+        "Status": "Active",
+        "StatusDesc": "",
+        "StatusReasons": null,
+        "Tags": null,
+        "TotalProvisionedConcurrencyMem": 0,
+        "TraceEnable": "FALSE",
+        "Type": "HTTP"
+      },
+      {
+        "AddTime": "2026-04-06 20:13:03",
+        "AsyncRunEnable": "FALSE",
+        "Description": "",
+        "FunctionId": "lam-ld0nbr4d",
+        "FunctionName": "on-sleep-session-write",
+        "ModTime": "2026-04-06 22:56:16",
+        "Namespace": "sleep-dorm-app-9ggjkxy371d18ebe",
+        "ReservedConcurrencyMem": 0,
+        "Runtime": "Nodejs18.15",
+        "Status": "Active",
+        "StatusDesc": "",
+        "StatusReasons": null,
+        "Tags": null,
+        "TotalProvisionedConcurrencyMem": 0,
+        "TraceEnable": "FALSE",
+        "Type": "Event"
+      },
+      {
+        "AddTime": "2026-04-06 20:13:03",
+        "AsyncRunEnable": "FALSE",
+        "Description": "",
+        "FunctionId": "lam-3l9zn44n",
+        "FunctionName": "on-dream-entry-write",
+        "ModTime": "2026-04-06 22:56:35",
+        "Namespace": "sleep-dorm-app-9ggjkxy371d18ebe",
+        "ReservedConcurrencyMem": 0,
+        "Runtime": "Nodejs18.15",
+        "Status": "Active",
+        "StatusDesc": "",
+        "StatusReasons": null,
+        "Tags": null,
+        "TotalProvisionedConcurrencyMem": 0,
+        "TraceEnable": "FALSE",
+        "Type": "Event"
+      }
+    ],
+    "totalCount": 3,
+    "requestId": "e174fb56-23f2-4f1f-95b8-ab4d2df1fcae",
+    "raw": {
+      "Functions": [
+        {
+          "AddTime": "2026-04-06 20:14:14",
+          "AsyncRunEnable": "FALSE",
+          "Description": "",
+          "FunctionId": "lam-0uvaf9ev",
+          "FunctionName": "app-api",
+          "ModTime": "2026-04-06 22:55:57",
+          "Namespace": "sleep-dorm-app-9ggjkxy371d18ebe",
+          "ReservedConcurrencyMem": 0,
+          "Runtime": "Nodejs18.15",
+          "Status": "Active",
+          "StatusDesc": "",
+          "StatusReasons": null,
+          "Tags": null,
+          "TotalProvisionedConcurrencyMem": 0,
+          "TraceEnable": "FALSE",
+          "Type": "HTTP"
+        },
+        {
+          "AddTime": "2026-04-06 20:13:03",
+          "AsyncRunEnable": "FALSE",
+          "Description": "",
+          "FunctionId": "lam-ld0nbr4d",
+          "FunctionName": "on-sleep-session-write",
+          "ModTime": "2026-04-06 22:56:16",
+          "Namespace": "sleep-dorm-app-9ggjkxy371d18ebe",
+          "ReservedConcurrencyMem": 0,
+          "Runtime": "Nodejs18.15",
+          "Status": "Active",
+          "StatusDesc": "",
+          "StatusReasons": null,
+          "Tags": null,
+          "TotalProvisionedConcurrencyMem": 0,
+          "TraceEnable": "FALSE",
+          "Type": "Event"
+        },
+        {
+          "AddTime": "2026-04-06 20:13:03",
+          "AsyncRunEnable": "FALSE",
+          "Description": "",
+          "FunctionId": "lam-3l9zn44n",
+          "FunctionName": "on-dream-entry-write",
+          "ModTime": "2026-04-06 22:56:35",
+          "Namespace": "sleep-dorm-app-9ggjkxy371d18ebe",
+          "ReservedConcurrencyMem": 0,
+          "Runtime": "Nodejs18.15",
+          "Status": "Active",
+          "StatusDesc": "",
+          "StatusReasons": null,
+          "Tags": null,
+          "TotalProvisionedConcurrencyMem": 0,
+          "TraceEnable": "FALSE",
+          "Type": "Event"
+        }
+      ],
+      "RequestId": "e174fb56-23f2-4f1f-95b8-ab4d2df1fcae",
+      "TotalCount": 3
+    }
+  },
+  "message": "已获取 3 个云函数",
+  "nextActions": [
+    {
+      "tool": "queryFunctions",
+      "action": "getFunctionDetail",
+      "reason": "查看单个函数详情"
+    },
+    {
+      "tool": "manageFunctions",
+      "action": "createFunction",
+      "reason": "创建新的云函数"
+    }
+  ]
+}

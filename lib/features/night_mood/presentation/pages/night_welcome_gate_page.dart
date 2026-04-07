@@ -12,8 +12,6 @@ class NightWelcomeGatePage extends StatefulWidget {
 }
 
 class _NightWelcomeGatePageState extends State<NightWelcomeGatePage> {
-  bool _welcomeDismissedLocally = false;
-
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
@@ -25,11 +23,8 @@ class _NightWelcomeGatePageState extends State<NightWelcomeGatePage> {
       builder: (BuildContext context, Widget? child) {
         final UserSettings settings =
             services.settingsRepository.currentSettings;
-        final bool shouldShowWelcome =
-            !_welcomeDismissedLocally &&
-            services.nightWelcomeController.shouldShowWelcome(
-              homeMode: HomeMode.preSleep,
-            );
+        final bool shouldShowWelcome = services.nightWelcomeController
+            .shouldShowWelcome(homeMode: HomeMode.preSleep);
 
         if (!shouldShowWelcome) {
           return const HomePreSleepPage();
@@ -37,34 +32,23 @@ class _NightWelcomeGatePageState extends State<NightWelcomeGatePage> {
 
         return NightMoodWelcomeFlow(
           initialMood: settings.selectedNightMood,
-          onSkip: () => _dismissAndPersist(
-            services: services,
-            settings: settings,
-            mood: null,
-          ),
-          onComplete: (NightMood mood) => _dismissAndPersist(
-            services: services,
-            settings: settings,
-            mood: mood,
-          ),
+          onSkip: _dismissLocally,
+          onComplete: (NightMood mood) =>
+              _completeWelcome(services: services, mood: mood),
         );
       },
     );
   }
 
-  Future<void> _dismissAndPersist({
+  Future<void> _dismissLocally() async {
+    context.appServices.nightWelcomeController.dismissForCurrentVisit();
+  }
+
+  Future<void> _completeWelcome({
     required AppServices services,
-    required UserSettings settings,
-    required NightMood? mood,
+    required NightMood mood,
   }) async {
-    if (mounted) {
-      setState(() => _welcomeDismissedLocally = true);
-    }
-    services.nightWelcomeController.markHandled();
-    await services.settingsRepository.saveSettings(
-      mood == null
-          ? settings.copyWith(clearSelectedNightMood: true)
-          : settings.copyWith(selectedNightMood: mood),
-    );
+    services.nightWelcomeController.markCompleted();
+    await services.profileFacade.saveNightMood(mood);
   }
 }

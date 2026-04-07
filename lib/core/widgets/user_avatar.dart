@@ -91,10 +91,28 @@ class UserAvatar extends StatelessWidget {
       );
     }
 
+    if (profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty) {
+      return Image.network(
+        profile.avatarUrl!,
+        fit: BoxFit.cover,
+        width: size,
+        height: size,
+        errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) {
+          return _buildFallback(context);
+        },
+      );
+    }
+
+    return _buildFallback(context);
+  }
+
+  Widget _buildFallback(BuildContext context) {
     final String fallbackText =
         (profile.avatarFallbackSeed?.isNotEmpty ?? false)
         ? profile.avatarFallbackSeed!.characters.first.toUpperCase()
-        : profile.displayName.characters.first.toUpperCase();
+        : (profile.displayName.isEmpty
+              ? '?'
+              : profile.displayName.characters.first.toUpperCase());
 
     return Container(
       color: context.nightMoodPalette.primarySoft.withAlpha(90),

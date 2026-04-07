@@ -22,6 +22,8 @@ enum DormEventType { memberStatus, ruleUpdate, notification, invite, system }
 
 enum DormInviteStatus { pending, accepted, expired, revoked }
 
+enum DormStatus { active, archived }
+
 enum PlaybackState { stopped, playing, paused, completed }
 
 enum InsightCategory { interference, report, recommendation, trend }
@@ -30,6 +32,18 @@ enum AssistantMessageRole { user, assistant, system }
 
 enum AssistantMessageStatus { pending, complete, error }
 
+class PhoneVerificationChallenge {
+  const PhoneVerificationChallenge({
+    required this.verificationId,
+    required this.expiresIn,
+    required this.isExistingUser,
+  });
+
+  final String verificationId;
+  final int expiresIn;
+  final bool isExistingUser;
+}
+
 class UserProfile {
   const UserProfile({
     required this.uid,
@@ -37,9 +51,12 @@ class UserProfile {
     required this.tagline,
     required this.role,
     this.dormId,
+    this.phoneNumber,
+    this.phoneLinkedAt,
     this.avatarPath,
     this.avatarBytes,
     this.avatarUrl,
+    this.avatarStoragePath,
     this.avatarFallbackSeed,
   });
 
@@ -48,9 +65,12 @@ class UserProfile {
   final String tagline;
   final String role;
   final String? dormId;
+  final String? phoneNumber;
+  final DateTime? phoneLinkedAt;
   final String? avatarPath;
   final Uint8List? avatarBytes;
   final String? avatarUrl;
+  final String? avatarStoragePath;
   final String? avatarFallbackSeed;
 
   UserProfile copyWith({
@@ -59,10 +79,16 @@ class UserProfile {
     String? tagline,
     String? role,
     String? dormId,
+    String? phoneNumber,
+    DateTime? phoneLinkedAt,
     String? avatarPath,
     Uint8List? avatarBytes,
     String? avatarUrl,
+    String? avatarStoragePath,
     bool clearAvatar = false,
+    bool clearDormId = false,
+    bool clearPhoneNumber = false,
+    bool clearPhoneLinkedAt = false,
     String? avatarFallbackSeed,
   }) {
     return UserProfile(
@@ -70,10 +96,17 @@ class UserProfile {
       displayName: displayName ?? this.displayName,
       tagline: tagline ?? this.tagline,
       role: role ?? this.role,
-      dormId: dormId ?? this.dormId,
+      dormId: clearDormId ? null : dormId ?? this.dormId,
+      phoneNumber: clearPhoneNumber ? null : phoneNumber ?? this.phoneNumber,
+      phoneLinkedAt: clearPhoneLinkedAt
+          ? null
+          : phoneLinkedAt ?? this.phoneLinkedAt,
       avatarPath: clearAvatar ? null : avatarPath ?? this.avatarPath,
       avatarBytes: clearAvatar ? null : avatarBytes ?? this.avatarBytes,
       avatarUrl: clearAvatar ? null : avatarUrl ?? this.avatarUrl,
+      avatarStoragePath: clearAvatar
+          ? null
+          : avatarStoragePath ?? this.avatarStoragePath,
       avatarFallbackSeed:
           avatarFallbackSeed ?? this.avatarFallbackSeed ?? this.displayName,
     );
@@ -657,6 +690,8 @@ class Dorm {
     required this.quietLabel,
     required this.rules,
     required this.members,
+    this.status = DormStatus.active,
+    this.archivedAt,
     this.rulesSettings = const DormRulesSettings(
       quietHours: '23:00 - 07:00',
       specialCase: '如果有临时讨论或紧急情况，请提前在宿舍群里说明。',
@@ -685,6 +720,8 @@ class Dorm {
   final String quietLabel;
   final List<DormRule> rules;
   final List<DormMember> members;
+  final DormStatus status;
+  final DateTime? archivedAt;
   final DormRulesSettings rulesSettings;
   final List<DormEvent> events;
   final List<DormInvite> invites;
@@ -698,6 +735,9 @@ class Dorm {
     String? quietLabel,
     List<DormRule>? rules,
     List<DormMember>? members,
+    DormStatus? status,
+    DateTime? archivedAt,
+    bool clearArchivedAt = false,
     DormRulesSettings? rulesSettings,
     List<DormEvent>? events,
     List<DormInvite>? invites,
@@ -711,6 +751,8 @@ class Dorm {
       quietLabel: quietLabel ?? this.quietLabel,
       rules: rules ?? this.rules,
       members: members ?? this.members,
+      status: status ?? this.status,
+      archivedAt: clearArchivedAt ? null : archivedAt ?? this.archivedAt,
       rulesSettings: rulesSettings ?? this.rulesSettings,
       events: events ?? this.events,
       invites: invites ?? this.invites,

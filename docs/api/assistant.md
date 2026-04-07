@@ -1,35 +1,65 @@
-# Assistant API
+# 助手模块接口
 
-## Owner
+## 前端入口
 
-- Extended content teammate
-
-## Facade
-
-- `AssistantFacade.currentThread`
-- `AssistantFacade.threads`
-- `AssistantFacade.currentMessages`
 - `AssistantFacade.sendPrompt(prompt)`
+- `AssistantFacade.currentThread`
+- `AssistantFacade.currentMessages`
 
-## Cloud data
+## Flutter 调用链
 
-- `assistant_threads/{threadId}`
-- `assistant_threads/{threadId}/messages/{messageId}`
+- page -> `AssistantFacade`
+- facade -> `AssistantRepository`
+- facade -> `AssistantReplyGateway`
+- gateway -> `POST /api/assistant/reply`
 
-## Callable contract
+## CloudBase 路由
 
-- Function name: `assistantReply`
-- Request:
-  - `threadId`
-  - `prompt`
-  - `dorm.id`
-  - `dorm.noiseDb`
-  - `dorm.quietLabel`
-  - `dorm.memberCount`
-- Response:
-  - `reply`
+### `POST /api/assistant/reply`
 
-## Integration notes
+请求：
 
-- The app already uses a callable adapter with local fallback
-- Pages should never talk to `FirebaseFunctions` directly
+```json
+{
+  "threadId": "thread-user-123",
+  "prompt": "今晚宿舍有点吵怎么办"
+}
+```
+
+返回：
+
+```json
+{
+  "reply": "先用耳塞和低刺激音频兜底。",
+  "runId": "run-123",
+  "intent": "noise_issue",
+  "provider": "deterministic-fallback",
+  "model": "rules-v1",
+  "recommendedActions": [],
+  "updatedSurfaces": ["assistant_context", "home_pre_sleep"]
+}
+```
+
+## 涉及集合
+
+- `assistant_threads`
+- `assistant_messages`
+- `user_state`
+- `card_snapshots`
+- `assistant_runs`
+
+## 后端职责
+
+- 确保线程存在
+- 写 user message
+- 组装 assistant context
+- 分类意图
+- 调用 AI provider
+- 必要时刷新今晚计划
+- 写 assistant message
+- 记录 `assistant_runs`
+
+## 是否依赖真实 AI
+
+- 否，fallback 可以直接跑通
+- 是，接入真实 AI 时只改 `provider_factory.ts`

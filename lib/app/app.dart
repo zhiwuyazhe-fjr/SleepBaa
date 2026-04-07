@@ -6,6 +6,7 @@ import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/app/theme/app_text_styles.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 
 class SleepDormApp extends StatelessWidget {
@@ -13,6 +14,7 @@ class SleepDormApp extends StatelessWidget {
     super.key,
     this.initialLocation = AppRoutes.home,
     this.homeMode = HomeMode.preSleep,
+    this.environment,
     this.clock,
     this.initialSettings,
     this.showNightWelcomeOutsideNightInDebug,
@@ -20,18 +22,22 @@ class SleepDormApp extends StatelessWidget {
 
   final String initialLocation;
   final HomeMode homeMode;
+  final AppEnvironment? environment;
   final DateTime Function()? clock;
   final UserSettings? initialSettings;
   final bool? showNightWelcomeOutsideNightInDebug;
 
   @override
   Widget build(BuildContext context) {
+    final AppEnvironment resolvedEnvironment =
+        environment ?? AppEnvironment.inMemory();
     final GoRouter router = createRouter(
       homeMode: homeMode,
       initialLocation: initialLocation,
     );
 
     return AppScope(
+      environment: resolvedEnvironment,
       clock: clock,
       initialSettings: initialSettings,
       showNightWelcomeOutsideNightInDebug: showNightWelcomeOutsideNightInDebug,

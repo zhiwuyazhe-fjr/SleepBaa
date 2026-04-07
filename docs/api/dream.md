@@ -1,25 +1,61 @@
-# Dream API
+# 梦境模块接口
 
-## Owner
+## 前端入口
 
-- Extended content teammate
-
-## Facade
-
+- `DreamFacade.saveDraft(...)`
 - `DreamFacade.entries`
 - `DreamFacade.latestEntry`
-- `DreamFacade.saveDraft({userId, title, body, tags, emotionLabel, sessionId})`
-- `DreamFacade.deleteEntry(entryId)`
 
-## Cloud data
+## Flutter 调用链
 
-- `dream_entries/{entryId}`
+- facade -> `DreamRepository`
+- repository -> `POST /api/dream/save`
 
-## Local-only state
+## CloudBase 路由
 
-- Draft text before save
+### `POST /api/dream/save`
 
-## Integration notes
+请求：
 
-- Dream detail pages should receive a `DreamEntry` via router `extra` when available
-- Dream entries are user-owned documents, not dorm-owned documents
+```json
+{
+  "entry": {
+    "id": "dream-123",
+    "title": "考试教室",
+    "body": "我一直找不到教室门，心里越来越急。",
+    "tags": ["考试"],
+    "emotionLabel": "不安",
+    "sessionId": "session-123"
+  }
+}
+```
+
+返回：
+
+```json
+{
+  "entryId": "dream-123",
+  "analysis": {
+    "summary": "这条梦境更像是在投射紧张和迟到压力。",
+    "dominantEmotion": "不安",
+    "suggestedFocus": "routine",
+    "sourceRefs": ["dream_entries.body"]
+  },
+  "updatedSurfaces": ["profile_report", "assistant_context"]
+}
+```
+
+## 涉及集合
+
+- `dream_entries`
+- `user_state`
+- `card_snapshots`
+
+## 触发器
+
+- `on-dream-entry-write`
+
+## 是否依赖真实 AI
+
+- 否，fallback 可以先生成结构化梦境摘要
+- 是，后续可在 `cloudbase_ai` / `external_http` 模式下增强质量

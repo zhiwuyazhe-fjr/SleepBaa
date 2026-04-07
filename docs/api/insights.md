@@ -1,27 +1,51 @@
-# Insights API
+# 洞察与报告接口
 
-## Owner
+## 前端入口
 
-- Extended content teammate
-
-## Facade
-
+- `InsightsFacade.refresh()`
 - `InsightsFacade.interferenceInsights`
 - `InsightsFacade.currentReport`
-- `InsightsFacade.refresh()`
 
-## Derived inputs
+## Flutter 调用链
 
-- Sleep sessions
-- Dorm events and dorm state
-- Dream entries
+- facade -> `InsightsRepository`
+- repository -> `POST /api/cards/refresh`
+- repository -> `CloudBaseSnapshotStore.refresh()`
 
-## Cloud data
+## CloudBase 路由
 
-- No dedicated source-of-truth collection in v1
-- Optional future materialization: `report_snapshots/{snapshotId}`
+### `POST /api/cards/refresh`
 
-## Integration notes
+请求：
 
-- Keep reports and interference rankings derived until query cost becomes a real problem
-- UI should treat these outputs as read models, not mutable documents
+```json
+{
+  "surfaces": ["home_pre_sleep", "profile_report"]
+}
+```
+
+返回：
+
+```json
+{
+  "version": "v-1712400000000",
+  "updatedSurfaces": ["home_pre_sleep", "profile_report"]
+}
+```
+
+## 主要数据来源
+
+- `card_snapshots/home_pre_sleep`
+- `card_snapshots/profile_report`
+- `user_state.tonightPlan`
+
+## repository 策略
+
+- 优先读 `card_snapshots`
+- 无快照时 fallback 到本地推导逻辑
+
+## 与 AI 的关系
+
+- 洞察页本身不直接调 AI
+- AI 先写 `card_snapshots`
+- 洞察页只消费结构化结果

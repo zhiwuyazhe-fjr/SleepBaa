@@ -8,6 +8,7 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
+import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_invite_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 
 class DormPage extends StatelessWidget {
@@ -42,6 +43,9 @@ class DormPage extends StatelessWidget {
         builder: (BuildContext context, Widget? child) {
           final NightMoodPalette palette = context.nightMoodPalette;
           final Dorm dorm = services.dormRepository.currentDorm;
+          if (dorm.id.isEmpty) {
+            return const DormInvitePage();
+          }
           final String currentUserId = services.authRepository.currentUser.uid;
           final List<DormEventRecord> events = buildDormEventRecords(
             dorm: dorm,
@@ -197,9 +201,10 @@ class DormPage extends StatelessWidget {
                                         const SizedBox(height: AppSpacing.md),
                                         SectionTitle(
                                           title: '室友动态',
-                                          actionLabel: '宿舍公约',
-                                          onAction: () =>
-                                              context.push(AppRoutes.dormRules),
+                                          actionLabel: '邀请舍友',
+                                          onAction: () => context.push(
+                                            AppRoutes.dormInvite,
+                                          ),
                                         ),
                                         const SizedBox(height: AppSpacing.md),
                                         SizedBox(
@@ -375,7 +380,7 @@ class _DormHeroCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  'Dorm Pulse',
+                  '宿舍脉搏',
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: AppColors.onDark.withAlpha(180),
                     letterSpacing: 1.4,
@@ -734,10 +739,10 @@ Color _memberColor(DormMemberStatus status) {
 
 String _memberLabel(DormMemberStatus status) {
   return switch (status) {
-    DormMemberStatus.sleeping => 'SLEEPING',
-    DormMemberStatus.quiet => 'QUIET',
-    DormMemberStatus.away => 'AWAY',
-    DormMemberStatus.active => 'ACTIVE',
+    DormMemberStatus.sleeping => '睡眠中',
+    DormMemberStatus.quiet => '安静中',
+    DormMemberStatus.away => '暂时离开',
+    DormMemberStatus.active => '活动中',
   };
 }
 

@@ -1,8 +1,27 @@
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:sleep_dorm_app/core/backend/cloudbase_app_api_client.dart';
+import 'package:sleep_dorm_app/core/backend/cloudbase_snapshot_store.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 
+class AssistantReplyResult {
+  const AssistantReplyResult({
+    required this.reply,
+    this.runId,
+    this.intent,
+    this.provider,
+    this.model,
+    this.updatedSurfaces = const <String>[],
+  });
+
+  final String reply;
+  final String? runId;
+  final String? intent;
+  final String? provider;
+  final String? model;
+  final List<String> updatedSurfaces;
+}
+
 abstract interface class AssistantReplyGateway {
-  Future<String> generateReply({
+  Future<AssistantReplyResult> generateReply({
     required String prompt,
     required String threadId,
     required Dorm dorm,
@@ -13,73 +32,91 @@ class StubAssistantReplyGateway implements AssistantReplyGateway {
   const StubAssistantReplyGateway();
 
   @override
-  Future<String> generateReply({
+  Future<AssistantReplyResult> generateReply({
     required String prompt,
     required String threadId,
     required Dorm dorm,
   }) async {
     final String normalized = prompt.toLowerCase();
-    final bool asksAboutNoise =
-        normalized.contains('noise') ||
-        normalized.contains('loud') ||
-        prompt.contains('吵') ||
-        prompt.contains('噪') ||
-        prompt.contains('声音');
-    if (asksAboutNoise) {
-      return '宿舍当前大约是 ${dorm.noiseDb} dB。今晚最快的稳定组合还是耳塞加低音量助眠音频，先把环境刺激降下来。';
+    if (normalized.contains('noise') || normalized.contains('loud')) {
+      return AssistantReplyResult(
+        reply: '现在宿舍环境大约 ${dorm.noiseDb} dB，先戴上耳塞，再配合一段低刺激的助眠音频，不要急着强迫自己马上睡着。',
+        intent: 'noise_issue',
+        provider: 'stub',
+        model: 'rules-local',
+      );
     }
-    final bool asksAboutSleep =
-        normalized.contains('sleep') ||
+    if (normalized.contains('sleep') ||
         normalized.contains('can\'t') ||
-        normalized.contains('awake') ||
-        prompt.contains('睡') ||
-        prompt.contains('失眠') ||
-        prompt.contains('醒');
-    if (asksAboutSleep) {
-      return '先把注意力带回呼吸，不要反复看时间。如果大约 20 分钟后还是睡不着，就换成一个短暂的重置仪式，不要硬逼自己入睡。';
+        normalized.contains('awake')) {
+      return const AssistantReplyResult(
+        reply: '先别逼自己立刻睡着，尽量远离时间压力，把刺激降下来，再从今晚建议里挑一个最小动作重新收束节奏。',
+        intent: 'sleep_difficulty',
+        provider: 'stub',
+        model: 'rules-local',
+      );
     }
-    return '我已经把这条记录保存到你的助眠对话里了。结合今晚宿舍状态，下一步最重要的是继续降低刺激，慢慢回到稳定的睡前节奏。';
+    return const AssistantReplyResult(
+      reply: '我已经记下你的情况，今晚会继续围绕低刺激、可重复执行的小步骤来陪你推进。',
+      intent: 'general_support',
+      provider: 'stub',
+      model: 'rules-local',
+    );
   }
 }
 
-class FirebaseCallableAssistantReplyGateway implements AssistantReplyGateway {
-  FirebaseCallableAssistantReplyGateway({
-    required FirebaseFunctions functions,
+class CloudBaseAssistantReplyGateway implements AssistantReplyGateway {
+  CloudBaseAssistantReplyGateway({
+    required CloudBaseAppApiClient appApiClient,
+    required CloudBaseSnapshotStore snapshotStore,
     required AssistantReplyGateway fallback,
-  }) : _functions = functions,
+  }) : _appApiClient = appApiClient,
+       _snapshotStore = snapshotStore,
        _fallback = fallback;
 
-  final FirebaseFunctions _functions;
+  final CloudBaseAppApiClient _appApiClient;
+  final CloudBaseSnapshotStore _snapshotStore;
   final AssistantReplyGateway _fallback;
 
   @override
-  Future<String> generateReply({
+  Future<AssistantReplyResult> generateReply({
     required String prompt,
     required String threadId,
     required Dorm dorm,
   }) async {
     try {
-      final HttpsCallableResult<dynamic> result = await _functions
-          .httpsCallable('assistantReply')
-          .call(<String, dynamic>{
-            'threadId': threadId,
-            'prompt': prompt,
-            'dorm': <String, dynamic>{
-              'id': dorm.id,
-              'noiseDb': dorm.noiseDb,
-              'quietLabel': dorm.quietLabel,
-              'memberCount': dorm.members.length,
-            },
-          });
-      final dynamic data = result.data;
-      if (data is Map && data['reply'] is String) {
+      final Map<String, dynamic> data = await _appApiClient.post(
+        '/api/assistant/reply',
+        body: <String, dynamic>{
+          'threadId': threadId,
+          'prompt': prompt,
+          'dorm': <String, dynamic>{
+            'id': dorm.id,
+            'noiseDb': dorm.noiseDb,
+            'quietLabel': dorm.quietLabel,
+            'memberCount': dorm.members.length,
+          },
+        },
+      );
+      if (data['reply'] is String) {
         final String reply = data['reply'] as String;
         if (reply.trim().isNotEmpty) {
-          return reply;
+          await _snapshotStore.refresh();
+          return AssistantReplyResult(
+            reply: reply,
+            runId: data['runId'] as String?,
+            intent: data['intent'] as String?,
+            provider: data['provider'] as String?,
+            model: data['model'] as String?,
+            updatedSurfaces:
+                (data['updatedSurfaces'] as List<dynamic>? ?? const <dynamic>[])
+                    .map((dynamic item) => item.toString())
+                    .toList(growable: false),
+          );
         }
       }
     } catch (_) {
-      // Callable integration is optional during local development.
+      // CloudBase assistant integration is optional during local development.
     }
     return _fallback.generateReply(
       prompt: prompt,

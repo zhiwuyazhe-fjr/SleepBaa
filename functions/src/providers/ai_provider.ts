@@ -1,0 +1,308 @@
+import {
+  AssistantContext,
+  AssistantIntent,
+  DreamAnalysis,
+  MorningReviewResult,
+  ProfileSummary,
+  RecommendedAction,
+  StructuredAssistantReply,
+  TonightPlan,
+} from "../shared/types";
+import { rankInterferenceFactors } from "../services/rank_interference_factors";
+
+const ACTION_CATALOG: RecommendedAction[] = [
+  {
+    id: "audio-ocean",
+    title: "播放睡前放松音频",
+    subtitle: "先用一段低刺激海浪白噪音，让身体慢慢降速。",
+    type: "audio",
+    priority: 1,
+    reason: "稳定背景音可以降低宿舍随机噪声带来的打断感。",
+    route: "/intervention/task",
+    trackId: "deep-ocean",
+    tags: ["15 分钟", "放松"],
+  },
+  {
+    id: "earplug",
+    title: "提前准备耳塞",
+    subtitle: "先把容易打断入睡的宿舍噪声压下来。",
+    type: "quickAction",
+    priority: 2,
+    reason: "噪声控制通常是今晚最直接的风险缓解手段。",
+    route: "/intervention/task",
+    trackId: null,
+    tags: ["1 分钟", "降噪"],
+  },
+  {
+    id: "phone-down",
+    title: "把手机放远一点",
+    subtitle: "减少屏幕光和临睡前消息刺激，保持收束节奏。",
+    type: "quickAction",
+    priority: 3,
+    reason: "稳定的睡前流程更有助于判断真实干扰因子。",
+    route: "/intervention/task",
+    trackId: null,
+    tags: ["立刻执行", "作息"],
+  },
+  {
+    id: "water",
+    title: "床边准备一杯温水",
+    subtitle: "避免半夜口渴起身，打断已经形成的困意。",
+    type: "quickAction",
+    priority: 4,
+    reason: "提前去掉容易发生的小中断，能让整晚数据更稳定。",
+    route: "/intervention/task",
+    trackId: null,
+    tags: ["30 秒", "准备"],
+  },
+];
+
+function summarizeSleepPattern(context: AssistantContext): string {
+  const completed = context.recentSessions.filter(
+    (item) => typeof item.totalSleepHours === "number",
+  );
+  const averageSleep =
+    completed.length === 0
+      ? 0
+      : completed.reduce((sum, item) => sum + (item.totalSleepHours ?? 0), 0) /
+        completed.length;
+  if (completed.length === 0) {
+    return "AI 助手还在积累你的睡眠反馈，完成几次夜间记录后，画像会更稳定。";
+  }
+  return `最近几晚平均睡眠 ${averageSleep.toFixed(1)} 小时，今晚更适合优先稳住节奏，而不是一次塞进太多动作。`;
+}
+
+function summarizeDreamTrend(context: AssistantContext): string {
+  if (context.recentDreams.length === 0) {
+    return "梦境记录还比较少，起床后尽量用一句话记下最强烈的画面和情绪。";
+  }
+  const lastEmotion = context.recentDreams[0].emotionLabel || "混合";
+  return `最近的梦境情绪偏向 ${lastEmotion}，建议继续结合晨间恢复感一起观察。`;
+}
+
+function summarizeEmotionTrend(context: AssistantContext): string {
+  const mood = context.settings.selectedNightMood || "未设置";
+  return `今晚心情是 ${mood}，建议保持低压力、低刺激、容易完成的建议风格。`;
+}
+
+function pickRecommendedActions(
+  context: AssistantContext,
+): RecommendedAction[] {
+  const factors = rankInterferenceFactors(context);
+  const [topFactor] = factors;
+  const prioritized = [...ACTION_CATALOG];
+  if (topFactor?.key === "noise") {
+    prioritized.sort((a, b) => {
+      const aScore = a.id === "earplug" ? -2 : a.id === "audio-ocean" ? -1 : 0;
+      const bScore = b.id === "earplug" ? -2 : b.id === "audio-ocean" ? -1 : 0;
+      return aScore - bScore;
+    });
+  }
+  if (topFactor?.key === "routine") {
+    prioritized.sort((a, b) => {
+      const aScore =
+        a.id === "phone-down" ? -2 : a.id === "audio-ocean" ? -1 : 0;
+      const bScore =
+        b.id === "phone-down" ? -2 : b.id === "audio-ocean" ? -1 : 0;
+      return aScore - bScore;
+    });
+  }
+  return prioritized.slice(0, 4).map((action, index) => ({
+    ...action,
+    priority: index + 1,
+  }));
+}
+
+function buildProfileSummary(context: AssistantContext): ProfileSummary {
+  const factors = rankInterferenceFactors(context);
+  return {
+    sleepPatternSummary: summarizeSleepPattern(context),
+    highRiskFactors: factors.slice(0, 3).map((item) => item.label),
+    effectiveActions: pickRecommendedActions(context)
+      .slice(0, 2)
+      .map((item) => item.title),
+    dreamTrendSummary: summarizeDreamTrend(context),
+    emotionTrendSummary: summarizeEmotionTrend(context),
+    lastUpdatedAt: new Date().toISOString(),
+  };
+}
+
+export interface AIProvider {
+  readonly providerName: string;
+  readonly modelName: string;
+
+  generateStructuredReply(
+    context: AssistantContext,
+    intent: AssistantIntent,
+    prompt: string,
+  ): Promise<StructuredAssistantReply>;
+
+  generateTonightPlan(
+    context: AssistantContext,
+    runId: string,
+  ): Promise<TonightPlan>;
+
+  summarizeDream(
+    body: string,
+    context: AssistantContext,
+  ): Promise<DreamAnalysis>;
+
+  analyzeFeedback(
+    context: AssistantContext,
+    sessionId: string,
+  ): Promise<MorningReviewResult>;
+}
+
+export class DeterministicAIProvider implements AIProvider {
+  readonly providerName = "deterministic-fallback";
+  readonly modelName = "rules-v1";
+
+  async generateStructuredReply(
+    context: AssistantContext,
+    intent: AssistantIntent,
+    prompt: string,
+  ): Promise<StructuredAssistantReply> {
+    const plan = await this.generateTonightPlan(context, `reply-${Date.now()}`);
+    let reply =
+      "我已经更新了你的上下文，今晚会继续用温和、可执行的小步骤陪你推进。";
+    if (intent === "noise_issue") {
+      reply = `现在宿舍噪声大约 ${context.dorm.noiseDb} dB，先做降噪，再配合低刺激音频，不要急着强迫自己立刻睡着。`;
+    } else if (intent === "sleep_difficulty") {
+      reply =
+        "先别和失眠对抗，把刺激降下来，别盯时间，从今晚建议里选一个最小动作重新收束节奏。";
+    } else if (intent === "dream_reflection") {
+      reply =
+        "这条梦境我会当作恢复信号来处理。你先记下最强烈的画面和情绪，我会把它并进画像总结。";
+    } else if (intent === "plan_review") {
+      reply = `今晚的建议会优先围绕 ${plan.topFactors[0]?.label || "状态稳定"} 展开，再用 2 到 3 个低负担动作收尾。`;
+    } else if (prompt.trim().length > 0) {
+      reply = `我已经记下“${prompt.trim()}”，也结合了你最近的睡眠、宿舍和梦境记录。今晚先把节奏稳住，比额外加码更重要。`;
+    }
+    return {
+      reply,
+      intent,
+      recommendedActions: plan.recommendedActions,
+      updateTonightPlan: intent !== "general_support",
+      updatedSurfaces: ["assistant_context", "home_pre_sleep"],
+    };
+  }
+
+  async generateTonightPlan(
+    context: AssistantContext,
+    runId: string,
+  ): Promise<TonightPlan> {
+    const topFactors = rankInterferenceFactors(context).slice(0, 3);
+    const topScore = topFactors[0]?.score ?? 0;
+    const riskLevel =
+      topScore >= 70 ? "high" : topScore >= 40 ? "medium" : "low";
+    return {
+      dateKey: new Date().toISOString().slice(0, 10),
+      coachSummary: `今晚先处理${topFactors[0]?.label || "节奏稳定"}，其余动作尽量保持安静、简单、可重复。`,
+      riskLevel,
+      topFactors,
+      recommendedActions: pickRecommendedActions(context),
+      generatedAt: new Date().toISOString(),
+      sourceRunId: runId,
+    };
+  }
+
+  async summarizeDream(
+    body: string,
+    context: AssistantContext,
+  ): Promise<DreamAnalysis> {
+    const normalized = body.toLowerCase();
+    const dominantEmotion =
+      normalized.includes("run") ||
+      normalized.includes("chase") ||
+      normalized.includes("考试") ||
+      normalized.includes("迟到") ||
+      normalized.includes("追赶") ||
+      normalized.includes("逃") ||
+      normalized.includes("panic")
+        ? "不安"
+        : normalized.includes("water") ||
+            normalized.includes("light") ||
+            normalized.includes("海") ||
+            normalized.includes("水") ||
+            normalized.includes("光")
+          ? "平静"
+          : normalized.includes("home") ||
+              normalized.includes("family") ||
+              normalized.includes("朋友") ||
+              normalized.includes("家")
+            ? "温暖"
+            : "混合";
+    return {
+      summary: `这条梦境更像是一次“${dominantEmotion}”情绪投射，建议和今晚心情、明早恢复感放在一起看。`,
+      dominantEmotion,
+      suggestedFocus: context.dorm.noiseDb > 35 ? "noise" : "routine",
+      sourceRefs: ["dream_entries.body", "user_settings.selectedNightMood"],
+    };
+  }
+
+  async analyzeFeedback(
+    context: AssistantContext,
+    sessionId: string,
+  ): Promise<MorningReviewResult> {
+    const lastPlan = context.userState?.tonightPlan;
+    const effectiveActions = lastPlan?.recommendedActions
+      .slice(0, 2)
+      .map((item) => item.title) ?? ["播放睡前放松音频"];
+    const ineffectiveActions = lastPlan?.recommendedActions
+      .slice(2)
+      .map((item) => item.title) ?? ["把手机放远一点"];
+    return {
+      reviewSummary:
+        "这次晨间反馈已经并入画像，下一轮建议会优先保留有效动作，减少低信号建议。",
+      effectiveActions,
+      ineffectiveActions,
+      profileSummary: buildProfileSummary(context),
+    };
+  }
+}
+
+export function classifyIntent(prompt: string): AssistantIntent {
+  const normalized = prompt.toLowerCase();
+  if (
+    normalized.includes("noise") ||
+    normalized.includes("loud") ||
+    normalized.includes("roommate") ||
+    normalized.includes("舍友") ||
+    normalized.includes("宿舍") ||
+    normalized.includes("吵") ||
+    normalized.includes("噪音")
+  ) {
+    return "noise_issue";
+  }
+  if (
+    normalized.includes("can't sleep") ||
+    normalized.includes("awake") ||
+    normalized.includes("fall asleep") ||
+    normalized.includes("sleep mode") ||
+    normalized.includes("睡不着") ||
+    normalized.includes("失眠") ||
+    normalized.includes("醒了")
+  ) {
+    return "sleep_difficulty";
+  }
+  if (normalized.includes("dream") || normalized.includes("梦")) {
+    return "dream_reflection";
+  }
+  if (
+    normalized.includes("plan") ||
+    normalized.includes("tonight") ||
+    normalized.includes("suggest") ||
+    normalized.includes("建议") ||
+    normalized.includes("今晚") ||
+    normalized.includes("计划")
+  ) {
+    return "plan_review";
+  }
+  return "general_support";
+}
+
+export function buildDeterministicProfileSummary(
+  context: AssistantContext,
+): ProfileSummary {
+  return buildProfileSummary(context);
+}

@@ -4,6 +4,7 @@ import 'package:sleep_dorm_app/core/widgets/bottom_nav_shell.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/features/analysis/presentation/pages/interference_factor_page.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/pages/assistant_page.dart';
+import 'package:sleep_dorm_app/features/assistant/presentation/pages/assistant_history_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_invite_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_rules_page.dart';
@@ -17,6 +18,7 @@ import 'package:sleep_dorm_app/features/logs/presentation/pages/night_awakening_
 import 'package:sleep_dorm_app/features/night_mood/presentation/pages/night_welcome_gate_page.dart';
 import 'package:sleep_dorm_app/features/notifications/presentation/pages/notifications_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/calendar_checkin_page.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_edit_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/settings_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/sleep_report_page.dart';
@@ -43,8 +45,10 @@ abstract final class AppRoutes {
   static const String profileReport = '/profile/report';
   static const String profileCalendar = '/profile/calendar';
   static const String profileSettings = '/profile/settings';
+  static const String profileEdit = '/profile/settings/edit';
   static const String notifications = '/notifications';
   static const String assistant = '/assistant';
+  static const String assistantHistory = '/assistant/history';
 }
 
 GoRouter createRouter({
@@ -178,9 +182,19 @@ GoRouter createRouter({
             const SettingsPage(),
       ),
       GoRoute(
+        path: AppRoutes.profileEdit,
+        builder: (BuildContext context, GoRouterState state) =>
+            const ProfileEditPage(),
+      ),
+      GoRoute(
         path: AppRoutes.assistant,
         builder: (BuildContext context, GoRouterState state) =>
             const AssistantPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.assistantHistory,
+        builder: (BuildContext context, GoRouterState state) =>
+            const AssistantHistoryPage(),
       ),
       GoRoute(
         path: AppRoutes.notifications,

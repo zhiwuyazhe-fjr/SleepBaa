@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
@@ -34,6 +35,9 @@ class _NightMoodWelcomeFlowState extends State<NightMoodWelcomeFlow> {
     super.initState();
     _selectedMood = widget.initialMood ?? NightMood.calm;
     _selectedReasons = <String>{_selectedMood.reasons.first};
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _triggerHaptic(HapticFeedback.mediumImpact);
+    });
   }
 
   @override
@@ -740,5 +744,22 @@ typedef AsyncVoidCallback = FutureOr<void> Function();
 typedef AsyncValueCallback<T> = FutureOr<void> Function(T value);
 
 void _triggerHaptic(Future<void> Function() action) {
-  unawaited(action().catchError((Object _) {}));
+  if (kIsWeb) {
+    return;
+  }
+  unawaited(
+    (() async {
+      try {
+        if (defaultTargetPlatform == TargetPlatform.android) {
+          await HapticFeedback.vibrate();
+          return;
+        }
+        await action();
+      } catch (_) {
+        try {
+          await HapticFeedback.vibrate();
+        } catch (_) {}
+      }
+    })(),
+  );
 }

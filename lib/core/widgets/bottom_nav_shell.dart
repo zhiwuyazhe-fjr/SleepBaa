@@ -9,7 +9,7 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 
-class BottomNavShell extends StatelessWidget {
+class BottomNavShell extends StatefulWidget {
   const BottomNavShell({super.key, required this.navigationShell});
 
   static const ValueKey<String> navBarKey = ValueKey<String>(
@@ -19,14 +19,50 @@ class BottomNavShell extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
 
   @override
+  State<BottomNavShell> createState() => _BottomNavShellState();
+}
+
+class _BottomNavShellState extends State<BottomNavShell> {
+  int? _lastSyncedIndex;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleVisibilitySync();
+  }
+
+  @override
+  void didUpdateWidget(covariant BottomNavShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _scheduleVisibilitySync();
+  }
+
+  void _scheduleVisibilitySync() {
+    final int currentIndex = widget.navigationShell.currentIndex;
+    if (_lastSyncedIndex == currentIndex) {
+      return;
+    }
+    _lastSyncedIndex = currentIndex;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      context.appServices.nightWelcomeController.syncHomeVisibility(
+        currentIndex == 0,
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    _scheduleVisibilitySync();
     final AppServices services = context.appServices;
 
     return ListenableBuilder(
       listenable: services.nightWelcomeController,
       builder: (BuildContext context, Widget? child) {
         final bool hideShellChrome =
-            navigationShell.currentIndex == 0 &&
+            widget.navigationShell.currentIndex == 0 &&
             services.nightWelcomeController.shouldShowWelcome(
               homeMode: HomeMode.preSleep,
             );
@@ -35,7 +71,7 @@ class BottomNavShell extends StatelessWidget {
           extendBody: true,
           body: Stack(
             children: <Widget>[
-              Positioned.fill(child: navigationShell),
+              Positioned.fill(child: widget.navigationShell),
               if (!hideShellChrome)
                 Positioned(
                   right: AppSpacing.xl,
@@ -50,7 +86,7 @@ class BottomNavShell extends StatelessWidget {
                   child: SafeArea(
                     top: false,
                     child: Container(
-                      key: navBarKey,
+                      key: BottomNavShell.navBarKey,
                       padding: const EdgeInsets.symmetric(
                         horizontal: AppSpacing.sm,
                         vertical: 6,
@@ -77,7 +113,7 @@ class BottomNavShell extends StatelessWidget {
                         ) {
                           final _BottomNavItem item = _items[index];
                           final bool selected =
-                              index == navigationShell.currentIndex;
+                              index == widget.navigationShell.currentIndex;
                           return Expanded(
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
@@ -86,10 +122,11 @@ class BottomNavShell extends StatelessWidget {
                               child: _NavPillButton(
                                 item: item,
                                 selected: selected,
-                                onTap: () => navigationShell.goBranch(
+                                onTap: () => widget.navigationShell.goBranch(
                                   index,
                                   initialLocation:
-                                      index == navigationShell.currentIndex,
+                                      index ==
+                                      widget.navigationShell.currentIndex,
                                 ),
                               ),
                             ),

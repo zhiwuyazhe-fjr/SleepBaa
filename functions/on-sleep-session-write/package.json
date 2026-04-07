@@ -1,0 +1,11 @@
+{
+  "name": "sleep-dorm-on-sleep-session-write",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": "18"
+  },
+  "dependencies": {
+    "@cloudbase/node-sdk": "^3.17.0"
+  }
+}

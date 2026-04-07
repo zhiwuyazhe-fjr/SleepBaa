@@ -117,7 +117,27 @@ void main() {
     );
   });
 
-  testWidgets('welcome flow is not shown again after it is handled once', (
+  testWidgets('legacy welcome skip behavior', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Skip'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HomePreSleepPage), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.night_shelter_rounded));
+    await tester.pumpAndSettle();
+    expect(find.byType(DormPage), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.home_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HomePreSleepPage), findsOneWidget);
+    expect(find.text('今晚你更接近哪一种心情？'), findsNothing);
+  }, skip: true);
+
+  testWidgets('welcome flow can show again after skip until completion', (
     WidgetTester tester,
   ) async {
     await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
@@ -132,8 +152,8 @@ void main() {
     await tester.tap(find.byIcon(Icons.home_rounded));
     await tester.pumpAndSettle();
 
-    expect(find.byType(HomePreSleepPage), findsOneWidget);
-    expect(find.text('今晚你更接近哪一种心情？'), findsNothing);
+    expect(find.byType(HomePreSleepPage), findsNothing);
+    expect(find.widgetWithText(TextButton, 'Skip'), findsOneWidget);
   });
 
   testWidgets('bottom navigation switches between shell tabs', (

@@ -32,6 +32,21 @@ service cloud.firestore {
         allow read, create, update: if isOwner(uid);
         allow delete: if false;
       }
+
+      match /card_snapshots/{surfaceId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+
+      match /assistant_runs/{runId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+    }
+
+    match /user_state/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
     }
 
     match /user_settings/{uid} {

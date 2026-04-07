@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:sleep_dorm_app/core/backend/assistant_reply_gateway.dart';
+import 'package:sleep_dorm_app/core/data/cloudbase_repositories.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/state/audio_playback_controller.dart';
@@ -10,14 +11,17 @@ class ProfileFacade extends ChangeNotifier {
   ProfileFacade({
     required AuthRepository authRepository,
     required UserSettingsRepository settingsRepository,
+    RecommendationRepository? recommendationRepository,
   }) : _authRepository = authRepository,
-       _settingsRepository = settingsRepository {
+       _settingsRepository = settingsRepository,
+       _recommendationRepository = recommendationRepository {
     _authRepository.addListener(notifyListeners);
     _settingsRepository.addListener(notifyListeners);
   }
 
   final AuthRepository _authRepository;
   final UserSettingsRepository _settingsRepository;
+  final RecommendationRepository? _recommendationRepository;
 
   UserProfile get currentUser => _authRepository.currentUser;
   UserSettings get currentSettings => _settingsRepository.currentSettings;
@@ -28,12 +32,33 @@ class ProfileFacade extends ChangeNotifier {
     required String role,
     required UserSettings settings,
   }) async {
-    await _authRepository.updateProfile(
+    final UserSettings previousSettings = currentSettings;
+    final UserProfile nextProfile = currentUser.copyWith(
       displayName: displayName,
       tagline: tagline,
       role: role,
+      avatarFallbackSeed: displayName,
     );
-    await _settingsRepository.saveSettings(settings);
+    if (_authRepository case final CloudBaseAuthRepository cloudAuth) {
+      if (_settingsRepository
+          case final CloudBaseUserSettingsRepository cloudSettings) {
+        cloudSettings.replaceLocalSettings(settings);
+      }
+      await cloudAuth.saveProfileBundle(
+        profile: nextProfile,
+        settings: settings,
+      );
+    } else {
+      await _authRepository.updateProfile(
+        displayName: displayName,
+        tagline: tagline,
+        role: role,
+      );
+      await _settingsRepository.saveSettings(settings);
+    }
+    if (_shouldRefreshRecommendations(previousSettings, settings)) {
+      await _recommendationRepository?.resetForTonight();
+    }
   }
 
   Future<void> saveNightMood(NightMood? mood) async {
@@ -42,6 +67,7 @@ class ProfileFacade extends ChangeNotifier {
           ? currentSettings.copyWith(clearSelectedNightMood: true)
           : currentSettings.copyWith(selectedNightMood: mood),
     );
+    await _recommendationRepository?.resetForTonight();
   }
 
   Future<void> updateAvatar({
@@ -52,6 +78,37 @@ class ProfileFacade extends ChangeNotifier {
       avatarPath: avatarPath,
       avatarBytes: avatarBytes,
     );
+  }
+
+  Future<PhoneVerificationChallenge> sendPhoneVerificationCode(
+    String phoneNumber,
+  ) {
+    return _authRepository.sendPhoneVerificationCode(phoneNumber);
+  }
+
+  Future<void> recoverWithPhone({
+    required String phoneNumber,
+    required String verificationId,
+    required String code,
+  }) {
+    return _authRepository.recoverWithPhone(
+      phoneNumber: phoneNumber,
+      verificationId: verificationId,
+      code: code,
+    );
+  }
+
+  bool _shouldRefreshRecommendations(
+    UserSettings previous,
+    UserSettings next,
+  ) {
+    if (!next.smartSuggestionsEnabled) {
+      return false;
+    }
+    return previous.sleepGoalHours != next.sleepGoalHours ||
+        previous.preferredTrackTitle != next.preferredTrackTitle ||
+        previous.selectedNightMood != next.selectedNightMood ||
+        previous.smartSuggestionsEnabled != next.smartSuggestionsEnabled;
   }
 
   @override
@@ -154,6 +211,18 @@ class DormFacade extends ChangeNotifier {
   Dorm get currentDorm => _dormRepository.currentDorm;
   String get currentUserId => _authRepository.currentUser.uid;
 
+  Future<void> createDorm({
+    required String name,
+    String? overview,
+    DormRulesSettings? rulesSettings,
+  }) {
+    return _dormRepository.createDorm(
+      name: name,
+      overview: overview,
+      rulesSettings: rulesSettings,
+    );
+  }
+
   Future<void> updateCurrentUserStatus({
     required DormMemberStatus status,
     required bool sleepModeActive,
@@ -177,6 +246,10 @@ class DormFacade extends ChangeNotifier {
     return _dormRepository.acceptInvite(inviteCode);
   }
 
+  Future<void> renameDorm(String name) => _dormRepository.renameDorm(name);
+
+  Future<void> leaveDorm() => _dormRepository.leaveDorm();
+
   @override
   void dispose() {
     _authRepository.removeListener(notifyListeners);
@@ -193,7 +266,8 @@ class NotificationFacade extends ChangeNotifier {
 
   final NotificationRepository _notificationRepository;
 
-  List<NotificationItem> get notifications => _notificationRepository.notifications;
+  List<NotificationItem> get notifications =>
+      _notificationRepository.notifications;
   int get unreadCount => _notificationRepository.unreadNotifications().length;
 
   Future<void> markRead(String notificationId) {
@@ -218,11 +292,15 @@ class NotificationFacade extends ChangeNotifier {
 }
 
 class DreamFacade extends ChangeNotifier {
-  DreamFacade({required DreamRepository dreamRepository})
-    : _dreamRepository = dreamRepository {
+  DreamFacade({
+    required AuthRepository authRepository,
+    required DreamRepository dreamRepository,
+  }) : _authRepository = authRepository,
+       _dreamRepository = dreamRepository {
     _dreamRepository.addListener(notifyListeners);
   }
 
+  final AuthRepository _authRepository;
   final DreamRepository _dreamRepository;
 
   List<DreamEntry> get entries => _dreamRepository.entries;
@@ -235,11 +313,12 @@ class DreamFacade extends ChangeNotifier {
     required List<String> tags,
     String? emotionLabel,
     String? sessionId,
-  }) {
+  }) async {
+    final UserProfile profile = await _authRepository.ensureAuthenticated();
     return _dreamRepository.saveDreamEntry(
       DreamEntry(
         id: IdGenerator.next('dream'),
-        userId: userId,
+        userId: userId.isEmpty ? profile.uid : userId,
         title: title,
         body: body,
         tags: tags,
@@ -284,15 +363,18 @@ class InsightsFacade extends ChangeNotifier {
 
 class AssistantFacade extends ChangeNotifier {
   AssistantFacade({
+    required AuthRepository authRepository,
     required AssistantRepository assistantRepository,
     required DormRepository dormRepository,
     required AssistantReplyGateway assistantReplyGateway,
-  }) : _assistantRepository = assistantRepository,
+  }) : _authRepository = authRepository,
+       _assistantRepository = assistantRepository,
        _dormRepository = dormRepository,
        _assistantReplyGateway = assistantReplyGateway {
     _assistantRepository.addListener(notifyListeners);
   }
 
+  final AuthRepository _authRepository;
   final AssistantRepository _assistantRepository;
   final DormRepository _dormRepository;
   final AssistantReplyGateway _assistantReplyGateway;
@@ -307,24 +389,65 @@ class AssistantFacade extends ChangeNotifier {
     return _assistantRepository.messagesForThread(thread.id);
   }
 
+  Future<AssistantThread> createThread({String? title}) {
+    return _assistantRepository.createThread(title: title);
+  }
+
+  Future<void> renameThread({
+    required String threadId,
+    required String title,
+  }) {
+    return _assistantRepository.renameThread(threadId: threadId, title: title);
+  }
+
+  Future<void> deleteThread(String threadId) {
+    return _assistantRepository.deleteThread(threadId);
+  }
+
+  Future<void> selectMostRecentThread() {
+    return _assistantRepository.selectMostRecentThread();
+  }
+
   Future<void> sendPrompt(String prompt) async {
+    final String normalizedPrompt = prompt.trim();
+    if (normalizedPrompt.isEmpty) {
+      return;
+    }
+    await _authRepository.ensureAuthenticated();
     final AssistantThread thread = await _assistantRepository.ensureThread(
       title: '今晚睡前聊聊',
     );
     await _assistantRepository.setCurrentThread(thread.id);
     await _assistantRepository.sendUserMessage(
       threadId: thread.id,
-      content: prompt,
+      content: normalizedPrompt,
     );
-    final String reply = await _assistantReplyGateway.generateReply(
-      prompt: prompt,
-      threadId: thread.id,
-      dorm: _dormRepository.currentDorm,
-    );
-    await _assistantRepository.addAssistantMessage(
-      threadId: thread.id,
-      content: reply,
-    );
+    try {
+      final AssistantReplyResult reply = await _assistantReplyGateway
+          .generateReply(
+            prompt: normalizedPrompt,
+            threadId: thread.id,
+            dorm: _dormRepository.currentDorm,
+          );
+      final List<AssistantMessage> existingMessages = _assistantRepository
+          .messagesForThread(thread.id);
+      final bool alreadySynced =
+          existingMessages.isNotEmpty &&
+          existingMessages.last.role == AssistantMessageRole.assistant &&
+          existingMessages.last.content == reply.reply;
+      if (!alreadySynced) {
+        await _assistantRepository.addAssistantMessage(
+          threadId: thread.id,
+          content: reply.reply,
+        );
+      }
+    } catch (_) {
+      await _assistantRepository.addAssistantMessage(
+        threadId: thread.id,
+        content: '暂时没有收到回复，请稍后再试。',
+        status: AssistantMessageStatus.error,
+      );
+    }
   }
 
   @override

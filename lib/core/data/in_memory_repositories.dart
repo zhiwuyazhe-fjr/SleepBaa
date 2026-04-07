@@ -14,6 +14,8 @@ UserProfile buildDefaultUserProfile() {
     tagline: 'Dorm Sleep Explorer',
     role: '宿舍睡眠优化实验成员',
     dormId: 'dorm-204',
+    phoneNumber: null,
+    phoneLinkedAt: null,
     avatarFallbackSeed: 'Paul',
   );
 }
@@ -59,6 +61,7 @@ Dorm buildDefaultDorm(String currentUserId) {
     lightLabel: '偏暗',
     quietLabel: '良好',
     rules: buildDormSummaryRules(settings),
+    status: DormStatus.active,
     rulesSettings: settings,
     members: <DormMember>[
       DormMember(
@@ -164,7 +167,22 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
   UserProfile get currentUser => _currentUser;
 
   @override
+  bool get isAuthenticated => _currentUser.uid.isNotEmpty;
+
+  @override
+  bool get isAuthenticating => false;
+
+  @override
+  String? get lastAuthError => null;
+
+  @override
   Future<UserProfile> signInAnonymously() async => _currentUser;
+
+  @override
+  Future<UserProfile> ensureAuthenticated() async => _currentUser;
+
+  @override
+  Future<UserProfile> retryAuthentication() async => _currentUser;
 
   @override
   Future<void> updateProfile({
@@ -190,6 +208,31 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
       avatarPath: avatarPath,
       avatarBytes: avatarBytes,
       avatarUrl: avatarPath,
+      avatarStoragePath: avatarPath,
+    );
+    notifyListeners();
+  }
+
+  @override
+  Future<PhoneVerificationChallenge> sendPhoneVerificationCode(
+    String phoneNumber,
+  ) async {
+    return const PhoneVerificationChallenge(
+      verificationId: 'local-verification-id',
+      expiresIn: 600,
+      isExistingUser: false,
+    );
+  }
+
+  @override
+  Future<void> recoverWithPhone({
+    required String phoneNumber,
+    required String verificationId,
+    required String code,
+  }) async {
+    _currentUser = _currentUser.copyWith(
+      phoneNumber: phoneNumber,
+      phoneLinkedAt: DateTime.now(),
     );
     notifyListeners();
   }
@@ -287,16 +330,17 @@ class InMemorySleepSessionRepository extends ChangeNotifier
 
   @override
   SleepSession? get latestAwaitingFeedbackSession {
-    final List<SleepSession> pending = _sessions
-        .where(
-          (SleepSession session) =>
-              session.status == SleepSessionStatus.awaitingFeedback,
-        )
-        .toList()
-      ..sort(
-        (SleepSession a, SleepSession b) =>
-            b.startedAt.compareTo(a.startedAt),
-      );
+    final List<SleepSession> pending =
+        _sessions
+            .where(
+              (SleepSession session) =>
+                  session.status == SleepSessionStatus.awaitingFeedback,
+            )
+            .toList()
+          ..sort(
+            (SleepSession a, SleepSession b) =>
+                b.startedAt.compareTo(a.startedAt),
+          );
     return pending.isEmpty ? null : pending.first;
   }
 
@@ -453,9 +497,7 @@ class InMemorySleepSessionRepository extends ChangeNotifier
             restedLevel: 3 + (offset % 2),
             totalSleepHours: durationHours,
             awakeningsCount: offset.isEven ? 1 : 0,
-            note: offset.isEven
-                ? '睡前音频帮助明显。'
-                : '整体比较平稳。',
+            note: offset.isEven ? '睡前音频帮助明显。' : '整体比较平稳。',
           ),
           updatedAt: DateTime(day.year, day.month, day.day + 1, 7, 0),
         ),
@@ -566,12 +608,11 @@ class InMemoryNotificationRepository extends ChangeNotifier
 
   @override
   List<NotificationItem> get notifications {
-    final List<NotificationItem> sorted = List<NotificationItem>.from(
-      _notifications,
-    )..sort(
-      (NotificationItem a, NotificationItem b) =>
-          b.createdAt.compareTo(a.createdAt),
-    );
+    final List<NotificationItem> sorted =
+        List<NotificationItem>.from(_notifications)..sort(
+          (NotificationItem a, NotificationItem b) =>
+              b.createdAt.compareTo(a.createdAt),
+        );
     return List<NotificationItem>.unmodifiable(sorted);
   }
 
@@ -656,6 +697,51 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
   Stream<List<DormEvent>> watchEvents() => _eventsController.stream;
 
   @override
+  Future<void> createDorm({
+    required String name,
+    String? overview,
+    DormRulesSettings? rulesSettings,
+  }) async {
+    final DormRulesSettings nextRules =
+        rulesSettings ?? buildDefaultDormRulesSettings();
+    final DateTime now = DateTime.now();
+    _currentDorm = Dorm(
+      id: IdGenerator.next('dorm'),
+      name: name,
+      overview: overview ?? '新宿舍已经创建，接下来可以邀请舍友加入。',
+      noiseDb: 28,
+      lightLabel: '适中',
+      quietLabel: '可优化',
+      rules: buildDormSummaryRules(nextRules),
+      status: DormStatus.active,
+      members: <DormMember>[
+        DormMember(
+          uid: _currentUserId,
+          name: _currentUserId == 'anon-paul' ? 'Paul' : '我',
+          status: DormMemberStatus.quiet,
+          sleepModeActive: false,
+          lastActiveAt: now,
+          note: '已创建宿舍，等待邀请舍友加入。',
+        ),
+      ],
+      rulesSettings: nextRules,
+      events: <DormEvent>[
+        DormEvent(
+          id: IdGenerator.next('dorm-event'),
+          type: DormEventType.system,
+          title: '宿舍已创建',
+          detail: '你现在可以生成邀请码并邀请舍友加入。',
+          createdAt: now,
+          actorUid: _currentUserId,
+        ),
+      ],
+      invites: const <DormInvite>[],
+    );
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  @override
   Future<void> updateCurrentUserStatus({
     required String uid,
     required DormMemberStatus status,
@@ -716,7 +802,8 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
     final DormInvite invite = DormInvite(
       id: IdGenerator.next('invite'),
       dormId: _currentDorm.id,
-      code: 'DORM-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+      code:
+          'DORM-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
       createdByUid: _currentUserId,
       createdAt: DateTime.now(),
       expiresAt: DateTime.now().add(const Duration(days: 3)),
@@ -792,6 +879,36 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
     notifyListeners();
   }
 
+  @override
+  Future<void> renameDorm(String name) async {
+    _currentDorm = _currentDorm.copyWith(name: name);
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  @override
+  Future<void> leaveDorm() async {
+    final List<DormMember> remainingMembers = _currentDorm.members
+        .where((DormMember member) => member.uid != _currentUserId)
+        .toList(growable: false);
+    _currentDorm = remainingMembers.isEmpty
+        ? _currentDorm.copyWith(
+            members: const <DormMember>[],
+            status: DormStatus.archived,
+            archivedAt: DateTime.now(),
+            invites: _currentDorm.invites
+                .map(
+                  (DormInvite invite) => invite.copyWith(
+                    status: DormInviteStatus.revoked,
+                  ),
+                )
+                .toList(growable: false),
+          )
+        : _currentDorm.copyWith(members: remainingMembers);
+    _emitCurrentState();
+    notifyListeners();
+  }
+
   void _emitCurrentState() {
     if (_dormController.isClosed) {
       return;
@@ -812,15 +929,15 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
   }
 }
 
-class InMemoryDreamRepository extends ChangeNotifier implements DreamRepository {
+class InMemoryDreamRepository extends ChangeNotifier
+    implements DreamRepository {
   InMemoryDreamRepository({String userId = 'anon-paul'})
     : _entries = <DreamEntry>[
         DreamEntry(
           id: 'dream-1',
           userId: userId,
           title: '下雨的走廊',
-          body:
-              '我走过一条安静的长走廊，每扇门后面都透着一点暖黄的灯光。',
+          body: '我走过一条安静的长走廊，每扇门后面都透着一点暖黄的灯光。',
           tags: const <String>['平静', '雨夜', '走廊'],
           createdAt: DateTime.now().subtract(const Duration(hours: 10)),
           emotionLabel: '回味',
@@ -831,8 +948,9 @@ class InMemoryDreamRepository extends ChangeNotifier implements DreamRepository 
 
   @override
   List<DreamEntry> get entries {
-    final List<DreamEntry> sorted = List<DreamEntry>.from(_entries)
-      ..sort((DreamEntry a, DreamEntry b) => b.createdAt.compareTo(a.createdAt));
+    final List<DreamEntry> sorted = List<DreamEntry>.from(
+      _entries,
+    )..sort((DreamEntry a, DreamEntry b) => b.createdAt.compareTo(a.createdAt));
     return List<DreamEntry>.unmodifiable(sorted);
   }
 
@@ -841,7 +959,9 @@ class InMemoryDreamRepository extends ChangeNotifier implements DreamRepository 
 
   @override
   Future<void> saveDreamEntry(DreamEntry entry) async {
-    final int index = _entries.indexWhere((DreamEntry item) => item.id == entry.id);
+    final int index = _entries.indexWhere(
+      (DreamEntry item) => item.id == entry.id,
+    );
     if (index == -1) {
       _entries = <DreamEntry>[entry, ..._entries];
     } else {
@@ -954,8 +1074,7 @@ class InMemoryInsightsRepository extends ChangeNotifier
         id: 'noise',
         category: InsightCategory.interference,
         title: '宿舍噪声影响',
-        summary:
-            '当前宿舍噪声约为 ${_dormRepository.currentDorm.noiseDb} dB，今晚整体干扰较低。',
+        summary: '当前宿舍噪声约为 ${_dormRepository.currentDorm.noiseDb} dB，今晚整体干扰较低。',
         metricLabel: '${_dormRepository.currentDorm.noiseDb} dB',
         createdAt: DateTime.now(),
       ),
@@ -973,8 +1092,7 @@ class InMemoryInsightsRepository extends ChangeNotifier
         id: 'dreams',
         category: InsightCategory.trend,
         title: '梦境记录趋势',
-        summary:
-            '持续记录梦境，有助于把夜间情绪和恢复状态联系起来观察。',
+        summary: '持续记录梦境，有助于把夜间情绪和恢复状态联系起来观察。',
         metricLabel: '${_dreamRepository.entries.length} 条',
         createdAt: DateTime.now(),
       ),
@@ -1010,8 +1128,7 @@ class InMemoryAssistantRepository extends ChangeNotifier
         id: 'msg-welcome',
         threadId: thread.id,
         role: AssistantMessageRole.assistant,
-        content:
-            '一个轻柔的 15 分钟呼吸练习，也许能帮你慢慢切换到入睡状态。要不要我现在带你开始？',
+        content: '一个轻柔的 15 分钟呼吸练习，也许能帮你慢慢切换到入睡状态。要不要我现在带你开始？',
         createdAt: DateTime.now().subtract(const Duration(minutes: 9)),
       ),
     ];
@@ -1048,13 +1165,63 @@ class InMemoryAssistantRepository extends ChangeNotifier
 
   @override
   List<AssistantMessage> messagesForThread(String threadId) {
-    final List<AssistantMessage> sorted = List<AssistantMessage>.from(
-      _messagesByThread[threadId] ?? const <AssistantMessage>[],
-    )..sort(
-      (AssistantMessage a, AssistantMessage b) =>
-          a.createdAt.compareTo(b.createdAt),
-    );
+    final List<AssistantMessage> sorted =
+        List<AssistantMessage>.from(
+          _messagesByThread[threadId] ?? const <AssistantMessage>[],
+        )..sort(
+          (AssistantMessage a, AssistantMessage b) =>
+              a.createdAt.compareTo(b.createdAt),
+        );
     return List<AssistantMessage>.unmodifiable(sorted);
+  }
+
+  @override
+  Future<AssistantThread> createThread({String? title}) async {
+    final AssistantThread thread = AssistantThread(
+      id: IdGenerator.next('assistant-thread'),
+      userId: _userId,
+      title: title ?? '鏂扮殑鍔╃湢瀵硅瘽',
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    _threads = <AssistantThread>[thread, ..._threads];
+    _currentThreadId = thread.id;
+    _messagesByThread[thread.id] = <AssistantMessage>[];
+    notifyListeners();
+    return thread;
+  }
+
+  @override
+  Future<void> renameThread({
+    required String threadId,
+    required String title,
+  }) async {
+    _threads = _threads
+        .map(
+          (AssistantThread item) => item.id == threadId
+              ? item.copyWith(title: title, updatedAt: DateTime.now())
+              : item,
+        )
+        .toList(growable: false);
+    notifyListeners();
+  }
+
+  @override
+  Future<void> deleteThread(String threadId) async {
+    _threads = _threads
+        .where((AssistantThread item) => item.id != threadId)
+        .toList(growable: false);
+    _messagesByThread.remove(threadId);
+    if (_currentThreadId == threadId) {
+      _currentThreadId = _threads.isEmpty ? null : _threads.first.id;
+    }
+    notifyListeners();
+  }
+
+  @override
+  Future<void> selectMostRecentThread() async {
+    _currentThreadId = threads.isEmpty ? null : threads.first.id;
+    notifyListeners();
   }
 
   @override

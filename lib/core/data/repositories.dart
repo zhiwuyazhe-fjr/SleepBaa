@@ -3,7 +3,12 @@ import 'package:sleep_dorm_app/core/models/app_models.dart';
 
 abstract interface class AuthRepository implements Listenable {
   UserProfile get currentUser;
+  bool get isAuthenticated;
+  bool get isAuthenticating;
+  String? get lastAuthError;
   Future<UserProfile> signInAnonymously();
+  Future<UserProfile> ensureAuthenticated();
+  Future<UserProfile> retryAuthentication();
   Future<void> updateProfile({
     required String displayName,
     required String tagline,
@@ -12,6 +17,14 @@ abstract interface class AuthRepository implements Listenable {
   Future<void> updateAvatar({
     required String? avatarPath,
     required Uint8List? avatarBytes,
+  });
+  Future<PhoneVerificationChallenge> sendPhoneVerificationCode(
+    String phoneNumber,
+  );
+  Future<void> recoverWithPhone({
+    required String phoneNumber,
+    required String verificationId,
+    required String code,
   });
 }
 
@@ -76,6 +89,11 @@ abstract interface class DormRepository implements Listenable {
   Stream<List<DormMember>> watchMembers();
   Stream<List<DormRule>> watchRules();
   Stream<List<DormEvent>> watchEvents();
+  Future<void> createDorm({
+    required String name,
+    String? overview,
+    DormRulesSettings? rulesSettings,
+  });
   Future<void> updateCurrentUserStatus({
     required String uid,
     required DormMemberStatus status,
@@ -85,6 +103,8 @@ abstract interface class DormRepository implements Listenable {
   Future<void> saveRules(DormRulesSettings settings);
   Future<DormInvite> createInvite();
   Future<void> acceptInvite(String inviteCode);
+  Future<void> renameDorm(String name);
+  Future<void> leaveDorm();
 }
 
 abstract interface class DreamRepository implements Listenable {
@@ -104,6 +124,13 @@ abstract interface class AssistantRepository implements Listenable {
   List<AssistantThread> get threads;
   AssistantThread? get currentThread;
   List<AssistantMessage> messagesForThread(String threadId);
+  Future<AssistantThread> createThread({String? title});
+  Future<void> renameThread({
+    required String threadId,
+    required String title,
+  });
+  Future<void> deleteThread(String threadId);
+  Future<void> selectMostRecentThread();
   Future<AssistantThread> ensureThread({String? title});
   Future<void> sendUserMessage({
     required String threadId,

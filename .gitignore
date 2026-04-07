@@ -26,11 +26,12 @@ migrate_working_dir/
 # VS Code which you may wish to be included in version control, so this line
 # is commented out by default.
 .vscode/
-
+.agents/
 # Local environment / secrets
 .env
 .env.*
 !.env.example
+.cloudbase.local.json
 .fvm/
 .fleet/
 pubspec_overrides.yaml
@@ -47,6 +48,8 @@ key.properties
 .pub/
 /build/
 /coverage/
+/functions/lib/
+/functions/node_modules/
 
 # Symbolication related
 app.*.symbols
@@ -60,3 +63,5 @@ app.*.map.json
 /android/app/release
 
 /Page
+
+skills

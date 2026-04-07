@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
@@ -47,8 +49,10 @@ class SleepExperienceController extends ChangeNotifier {
       _audioPlaybackController;
 
   Future<void> bootstrap() async {
-    await _authRepository.signInAnonymously();
-    await _recommendationRepository.resetForTonight();
+    await _authRepository.ensureAuthenticated();
+    if (_settingsRepository.currentSettings.selectedNightMood != null) {
+      await _recommendationRepository.resetForTonight();
+    }
   }
 
   Future<void> handleRecommendationTap(
@@ -78,6 +82,7 @@ class SleepExperienceController extends ChangeNotifier {
   }
 
   Future<void> enterSleepMode() async {
+    await _authRepository.ensureAuthenticated();
     final List<NightRecommendation> snapshot = _recommendationRepository
         .tonightRecommendations
         .map(
@@ -103,6 +108,7 @@ class SleepExperienceController extends ChangeNotifier {
   }
 
   Future<void> exitSleepMode() async {
+    await _authRepository.ensureAuthenticated();
     final SleepSession? activeSession = _sleepSessionRepository.activeSession;
     if (activeSession == null) {
       return;
@@ -113,27 +119,7 @@ class SleepExperienceController extends ChangeNotifier {
       status: SleepSessionStatus.awaitingFeedback,
       endedAt: DateTime.now(),
     );
-    await _dormRepository.updateCurrentUserStatus(
-      uid: _authRepository.currentUser.uid,
-      status: DormMemberStatus.quiet,
-      sleepModeActive: false,
-      note: '等待晨间反馈',
-    );
-    await _notificationRepository.upsertNotification(
-      NotificationItem(
-        id: 'feedback-${activeSession.id}',
-        category: NotificationCategory.reminder,
-        title: '晨间反馈待完成',
-        body: '昨晚的行动建议还没记录效果，花 1 分钟帮我继续优化今晚方案。',
-        createdAt: DateTime.now(),
-        route: AppRoutes.feedbackMorning,
-        readAt: null,
-      ),
-    );
-    await _pushNotificationGateway.scheduleFeedbackReminder(
-      sessionId: activeSession.id,
-      when: DateTime.now().add(const Duration(hours: 8)),
-    );
+    unawaited(_completeSleepExitSideEffects(activeSession));
   }
 
   Future<void> addNightAwakening({
@@ -142,6 +128,7 @@ class SleepExperienceController extends ChangeNotifier {
     required int minutesToSleep,
     required String note,
   }) async {
+    await _authRepository.ensureAuthenticated();
     SleepSession? session = _sleepSessionRepository.activeSession;
     session ??= await _sleepSessionRepository.startSleepSession(
       recommendationSnapshot: _recommendationRepository.tonightRecommendations,
@@ -169,6 +156,7 @@ class SleepExperienceController extends ChangeNotifier {
     required MorningSummary summary,
     required List<RecommendationFeedback> feedback,
   }) async {
+    await _authRepository.ensureAuthenticated();
     await _feedbackRepository.submitFeedback(
       session: session,
       summary: summary,
@@ -183,6 +171,44 @@ class SleepExperienceController extends ChangeNotifier {
         .toList();
     for (final NotificationItem item in notifications) {
       await _notificationRepository.markRead(item.id);
+    }
+  }
+
+  Future<void> _completeSleepExitSideEffects(SleepSession activeSession) async {
+    try {
+      await _dormRepository.updateCurrentUserStatus(
+        uid: _authRepository.currentUser.uid,
+        status: DormMemberStatus.quiet,
+        sleepModeActive: false,
+        note: '等待晨间反馈',
+      );
+    } catch (_) {
+      // Dorm sync is best-effort and should not block leaving sleep mode.
+    }
+
+    try {
+      await _notificationRepository.upsertNotification(
+        NotificationItem(
+          id: 'feedback-${activeSession.id}',
+          category: NotificationCategory.reminder,
+          title: '晨间反馈待完成',
+          body: '昨晚的行动建议还没记录效果，花 1 分钟帮我继续优化今晚方案。',
+          createdAt: DateTime.now(),
+          route: AppRoutes.feedbackMorning,
+          readAt: null,
+        ),
+      );
+    } catch (_) {
+      // Notification creation is not on the critical path for page navigation.
+    }
+
+    try {
+      await _pushNotificationGateway.scheduleFeedbackReminder(
+        sessionId: activeSession.id,
+        when: DateTime.now().add(const Duration(hours: 8)),
+      );
+    } catch (_) {
+      // Keep reminder scheduling as a background best-effort task.
     }
   }
 }

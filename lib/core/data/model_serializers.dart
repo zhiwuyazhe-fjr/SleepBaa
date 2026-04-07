@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 
@@ -10,8 +9,11 @@ abstract final class ModelSerializers {
       'tagline': profile.tagline,
       'role': profile.role,
       'dormId': profile.dormId,
+      'phoneNumber': profile.phoneNumber,
+      'phoneLinkedAt': profile.phoneLinkedAt?.toIso8601String(),
       'avatarPath': profile.avatarPath,
       'avatarUrl': profile.avatarUrl,
+      'avatarStoragePath': profile.avatarStoragePath,
       'avatarFallbackSeed': profile.avatarFallbackSeed,
     };
   }
@@ -23,8 +25,11 @@ abstract final class ModelSerializers {
       tagline: map['tagline'] as String? ?? '',
       role: map['role'] as String? ?? '',
       dormId: map['dormId'] as String?,
+      phoneNumber: map['phoneNumber'] as String?,
+      phoneLinkedAt: _dateValue(map['phoneLinkedAt']),
       avatarPath: map['avatarPath'] as String?,
       avatarUrl: map['avatarUrl'] as String?,
+      avatarStoragePath: map['avatarStoragePath'] as String?,
       avatarFallbackSeed: map['avatarFallbackSeed'] as String?,
     );
   }
@@ -386,11 +391,22 @@ abstract final class ModelSerializers {
     if (value == null) {
       return null;
     }
-    if (value is Timestamp) {
-      return value.toDate();
-    }
     if (value is DateTime) {
       return value;
+    }
+    if (value is Map) {
+      final dynamic seconds = value['_seconds'] ?? value['seconds'];
+      final dynamic nanoseconds = value['_nanoseconds'] ?? value['nanoseconds'];
+      if (seconds is num) {
+        final int millis = (seconds.toDouble() * 1000).round();
+        final int extraMicros = nanoseconds is num
+            ? (nanoseconds.toDouble() / 1000).round()
+            : 0;
+        return DateTime.fromMillisecondsSinceEpoch(
+          millis,
+          isUtc: true,
+        ).add(Duration(microseconds: extraMicros));
+      }
     }
     if (value is String) {
       return DateTime.tryParse(value);

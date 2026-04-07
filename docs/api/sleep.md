@@ -1,36 +1,88 @@
-# Sleep API
+# 睡眠模块接口
 
-## Owner
+## 前端入口
 
-- Sleep core teammate
-
-## Facade
-
-- `SleepFacade.tonightRecommendations`
-- `SleepFacade.activeSession`
-- `SleepFacade.latestAwaitingFeedbackSession`
-- `SleepFacade.sessions`
-- `SleepFacade.recentSessions({count})`
-- `SleepFacade.sessionsForMonth(month)`
-- `SleepFacade.handleRecommendationTap(recommendation)`
 - `SleepFacade.enterSleepMode()`
 - `SleepFacade.exitSleepMode()`
-- `SleepFacade.addNightAwakening({occurredAt, trigger, minutesToSleep, note})`
-- `SleepFacade.submitMorningFeedback({session, summary, feedback})`
+- `SleepFacade.addNightAwakening(...)`
+- `SleepFacade.submitMorningFeedback(...)`
 
-## Cloud data
+## Flutter 调用链
 
-- `sleep_sessions/{sessionId}`
-- `sleep_sessions/{sessionId}/awakenings/{awakeningId}`
-- `sleep_sessions/{sessionId}/recommendation_feedback/{feedbackId}`
-- `notifications/{uid}/items/{notificationId}`
+- facade -> `SleepExperienceController`
+- controller -> `SleepSessionRepository`
+- repository -> `POST /api/sleep/enter`
+- repository -> `POST /api/sleep/exit`
+- repository -> `POST /api/feedback/morning`
 
-## Local-only state
+## CloudBase 路由
 
-- Recommendation templates
-- Audio playback position and playback state
+### `POST /api/sleep/enter`
 
-## Integration notes
+请求：
 
-- All ids should come from repository or centralized id generation
-- Notification creation currently happens client-side and should move to backend later if rules are tightened
+```json
+{
+  "dormId": "dorm-user123",
+  "recommendationSnapshot": [],
+  "selectedRecommendationIds": []
+}
+```
+
+返回：
+
+```json
+{
+  "sessionId": "session-123",
+  "status": "active",
+  "updatedSurfaces": ["sleep_mode"]
+}
+```
+
+### `POST /api/sleep/exit`
+
+请求：
+
+```json
+{
+  "sessionId": "session-123",
+  "status": "awaitingFeedback",
+  "endedAt": "2026-04-06T23:00:00.000Z",
+  "awakenings": []
+}
+```
+
+### `POST /api/feedback/morning`
+
+请求：
+
+```json
+{
+  "sessionId": "session-123",
+  "summary": {
+    "sleepQuality": 72,
+    "restedLevel": 68,
+    "totalSleepHours": 6.9,
+    "awakeningsCount": 1,
+    "note": "Noise after 1am"
+  },
+  "feedback": []
+}
+```
+
+## 涉及集合
+
+- `sleep_sessions`
+- `user_state`
+- `card_snapshots`
+- `notifications`
+
+## 触发器
+
+- `on-sleep-session-write`
+
+## 当前实现重点
+
+- 进入睡眠前会先 `ensureAuthenticated()`
+- BFF 落库后统一复用 `handleSleepSessionChange`
+- `completed` 分支会更新 `feedbackLoop` 和 `profile_report`
