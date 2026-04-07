@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -407,6 +408,178 @@ class InMemoryFeedbackRepository extends ChangeNotifier
       ),
     );
     notifyListeners();
+  }
+}
+
+class InMemorySleepCaptureRepository extends ChangeNotifier
+    implements SleepCaptureRepository {
+  List<SleepCaptureRecord> _records = const <SleepCaptureRecord>[];
+  PendingSleepMemoBanner? _pendingSleepMemoBanner;
+  Timer? _bannerTimer;
+
+  @override
+  PendingSleepMemoBanner? get pendingSleepMemoBanner => _pendingSleepMemoBanner;
+
+  @override
+  List<SleepCaptureRecord> recordsByType(SleepCaptureType type) {
+    final List<SleepCaptureRecord> matches = _records
+        .where((SleepCaptureRecord item) => item.type == type)
+        .toList()
+      ..sort(
+        (SleepCaptureRecord a, SleepCaptureRecord b) =>
+            b.createdAt.compareTo(a.createdAt),
+      );
+    return List<SleepCaptureRecord>.unmodifiable(matches);
+  }
+
+  @override
+  List<SleepCaptureRecord> recordsForSession(String sessionId) {
+    final List<SleepCaptureRecord> matches = _records
+        .where((SleepCaptureRecord item) => item.sessionId == sessionId)
+        .toList()
+      ..sort(
+        (SleepCaptureRecord a, SleepCaptureRecord b) =>
+            b.createdAt.compareTo(a.createdAt),
+      );
+    return List<SleepCaptureRecord>.unmodifiable(matches);
+  }
+
+  @override
+  Future<SleepCaptureRecord> addRecord({
+    required SleepCaptureType type,
+    required String sessionId,
+    required String content,
+  }) async {
+    final DateTime now = DateTime.now();
+    final SleepCaptureRecord record = SleepCaptureRecord(
+      id: 'capture-${now.microsecondsSinceEpoch}',
+      type: type,
+      sessionId: sessionId,
+      createdAt: now,
+      title: _buildTitle(type: type, now: now, content: content),
+      outline: _buildOutline(type: type, content: content),
+      content: content.trim(),
+    );
+    _records = <SleepCaptureRecord>[record, ..._records];
+    notifyListeners();
+    return record;
+  }
+
+  @override
+  Future<void> showPendingBannerForSession(String sessionId) async {
+    final List<SleepCaptureRecord> memoRecords = recordsForSession(sessionId)
+        .where((SleepCaptureRecord item) => item.type == SleepCaptureType.memo)
+        .toList();
+    final List<PendingSleepMemoGroup> carryoverGroups =
+        (_pendingSleepMemoBanner?.groups ?? const <PendingSleepMemoGroup>[])
+            .map(
+              (PendingSleepMemoGroup group) => PendingSleepMemoGroup(
+                sessionId: group.sessionId,
+                label: '上次睡眠模式（未查收）',
+                items: group.items,
+                isCarryover: true,
+              ),
+            )
+            .toList();
+
+    final List<PendingSleepMemoGroup> nextGroups = <PendingSleepMemoGroup>[
+      ...carryoverGroups,
+      if (memoRecords.isNotEmpty)
+        PendingSleepMemoGroup(
+          sessionId: sessionId,
+          label: carryoverGroups.isEmpty ? '本次睡眠模式' : '本次睡眠模式（新）',
+          items: memoRecords.map(_buildBannerLine).toList(),
+          isCarryover: false,
+        ),
+    ];
+
+    if (nextGroups.isEmpty) {
+      await clearPendingBanner();
+      return;
+    }
+    _pendingSleepMemoBanner = PendingSleepMemoBanner(
+      title: '事记内容查收',
+      subtitle: '点击查看或30min后自动消除。',
+      groups: nextGroups,
+      createdAt: DateTime.now(),
+    );
+    _bannerTimer?.cancel();
+    _bannerTimer = Timer(const Duration(minutes: 30), () {
+      _pendingSleepMemoBanner = null;
+      notifyListeners();
+    });
+    notifyListeners();
+  }
+
+  @override
+  Future<void> clearPendingBanner() async {
+    _bannerTimer?.cancel();
+    _pendingSleepMemoBanner = null;
+    notifyListeners();
+  }
+
+  String _buildTitle({
+    required SleepCaptureType type,
+    required DateTime now,
+    required String content,
+  }) {
+    final String hh = now.hour.toString().padLeft(2, '0');
+    final String mm = now.minute.toString().padLeft(2, '0');
+    final String prefix = type == SleepCaptureType.dream ? '梦记' : '事记';
+    final String seed = _firstMeaningfulFragment(content);
+    return '$prefix $hh:$mm · ${seed.isEmpty ? '新的记录' : seed}';
+  }
+
+  String _buildOutline({
+    required SleepCaptureType type,
+    required String content,
+  }) {
+    final List<String> fragments = content
+        .split(RegExp(r'[。！？\n]'))
+        .map((String item) => item.trim())
+        .where((String item) => item.isNotEmpty)
+        .toList();
+    if (fragments.isEmpty) {
+      return type == SleepCaptureType.dream ? '记录了一段尚待补充的梦境片段。' : '记录了一段待整理的夜间事记。';
+    }
+    final String lead = fragments.first;
+    if (type == SleepCaptureType.dream) {
+      return 'AI整理：梦里重点出现了“${_truncate(lead, 22)}”，适合稍后回看情绪和场景。';
+    }
+    return 'AI整理：这段事记主要围绕“${_truncate(lead, 24)}”，可在清醒后继续展开。';
+  }
+
+  String _buildBannerLine(SleepCaptureRecord record) {
+    final String cleanedContent = record.content
+        .replaceAll('\n', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (cleanedContent.isEmpty) {
+      return '有一条新的事记等你稍后回看。';
+    }
+    return cleanedContent;
+  }
+
+  String _firstMeaningfulFragment(String content) {
+    final List<String> fragments = content
+        .split(RegExp(r'[，。！？\n]'))
+        .map((String item) => item.trim())
+        .where((String item) => item.isNotEmpty)
+        .toList();
+    return fragments.isEmpty ? '' : _truncate(fragments.first, 10);
+  }
+
+  String _truncate(String text, int maxLength) {
+    if (text.length <= maxLength) {
+      return text;
+    }
+    return '${text.substring(0, maxLength)}...';
+  }
+
+  @override
+  void dispose() {
+    _bannerTimer?.cancel();
+    super.dispose();
   }
 }
 

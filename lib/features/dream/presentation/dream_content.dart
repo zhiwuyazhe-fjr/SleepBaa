@@ -33,12 +33,14 @@ class DreamPatternData {
 class DreamInsightData {
   const DreamInsightData({
     required this.title,
-    required this.description,
+    required this.summary,
+    required this.points,
     required this.icon,
   });
 
   final String title;
-  final String description;
+  final String summary;
+  final List<String> points;
   final IconData icon;
 }
 
@@ -98,24 +100,36 @@ abstract final class DreamContent {
   static const List<DreamInsightData> insights = <DreamInsightData>[
     DreamInsightData(
       title: '高频意象',
-      description: '最近梦里反复出现“飞行”和“找路”，适合继续记录地点和方向感。',
+      summary:
+          '近 3 条梦境里，出现频率最高的是“寻找 / 任务感”与“流动环境意象”。其中“寻找目标、物品或答案”出现在 2 条记录中，约占 67%；“风、水、漂浮等流动场景”出现在 3 条记录中，约占 100%；明确出现“飞行 / 飘浮”意象的有 1 条，约占 33%。整体来看，最近的梦更偏向带有方向感、探索感和环境感受的内容。',
+      points: <String>[
+        '“水下图书馆”里有“找一本会发光的书”，对应寻找意象。',
+        '“会说话的风”里有“去找一把银色钥匙”，同样带有任务导向。',
+        '“漂浮柑橘岛”“水下图书馆”“会说话的风”分别对应漂浮、水域、风声，说明流动环境在近期梦里非常稳定地出现。',
+      ],
       icon: Icons.explore_rounded,
     ),
     DreamInsightData(
       title: '情绪映射',
-      description: '平静梦境通常出现在睡前放下手机后的夜晚，颜色和情绪都更柔和。',
+      summary:
+          '梦境整体情绪以平静、好奇为主，夹杂少量紧张和催促感。当前记录里没有明显的恐惧、惊吓或失控内容，更像是在放松背景中，偶尔出现“需要完成某件事”的轻度心理负担。综合判断，最近压力水平更接近轻中度，主要来自待完成事项，而不是强烈压迫感。',
+      points: <String>[
+        '平静线索来自“飘着”“柠檬和薰衣草的味道”“很安静的水声”等描述，说明梦里仍有安全感和舒缓感官体验。',
+        '好奇感来自“会发光的书”“银色钥匙”这类带探索意味的对象，说明注意力更多放在寻找和理解，而不是逃避。',
+        '紧张感主要集中在“提醒我去找”“还记得那种急切感”这类句子，说明最近可能存在未完成任务或需要回应的现实压力。',
+      ],
       icon: Icons.favorite_rounded,
     ),
     DreamInsightData(
-      title: '入睡线索',
-      description: '入睡前听轻音乐的夜晚，更容易记住完整片段，醒来后的表述也更具体。',
-      icon: Icons.music_note_rounded,
+      title: '调节建议',
+      summary:
+          '目前状态不算高压，更像是轻微累积的任务紧绷感。建议重点放在“白天减压 + 睡前降速”两件事上，帮助大脑把未完成事项和睡眠时间分开，让平静型梦境继续占主导。',
+      points: <String>[
+        '如果这几天觉得事情多、脑子停不下来，晚饭后做 20 到 30 分钟慢跑、快走或拉伸，比高强度运动更适合当前状态。',
+        '睡前把第二天要做的 3 件事写下来，尤其是还没完成的小任务，能减少梦里反复出现“寻找”“赶着完成”的内容。',
+        '继续保持你现在比较稳定的睡眠氛围，比如轻音乐、柔和灯光和醒来立刻记录梦境；如果最近本身就很轻松，这些习惯只需要继续保持即可。',
+      ],
+      icon: Icons.self_improvement_rounded,
     ),
-  ];
-
-  static const List<String> suggestions = <String>[
-    '先记三个关键词，再补完整句子，醒来后更容易保留细节。',
-    '映射先看“场景 + 情绪”，不用一次做太多解释。',
-    '如果只记得一句话，也可以先收下，后面再补。',
   ];
 }
