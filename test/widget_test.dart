@@ -362,7 +362,7 @@ void main() {
     expect(find.text('今晚 23:00 后的静音提醒已经准备好了。'), findsOneWidget);
     expect(find.text('已记录本周安静挑战，明早可以回看完成情况。'), findsNothing);
 
-    await tester.pump(const Duration(milliseconds: 2500));
+    await tester.pump(const Duration(milliseconds: 520));
     expect(find.text('已记录本周安静挑战，明早可以回看完成情况。'), findsOneWidget);
     expect(find.text('今晚 23:00 后的静音提醒已经准备好了。'), findsNothing);
   });
@@ -391,11 +391,41 @@ void main() {
     await tester.pump(const Duration(milliseconds: 160));
     expect(find.text('今晚 23:00 后的静音提醒已经准备好了。'), findsOneWidget);
 
-    await tester.pump(const Duration(milliseconds: 2500));
+    await tester.pump(const Duration(milliseconds: 520));
     expect(find.text('已记录本周安静挑战，明早可以回看完成情况。'), findsOneWidget);
 
-    await tester.pump(const Duration(milliseconds: 2500));
+    await tester.pump(const Duration(milliseconds: 520));
     expect(find.text('已生成一条温和提醒文案，后续可以直接接入消息发送。'), findsOneWidget);
+  });
+
+  testWidgets('dorm notice ignores tap while enter animation is playing', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+    await tester.scrollUntilVisible(
+      find.text('静音模式'),
+      160,
+      scrollable: find
+          .descendant(
+            of: find.byKey(DormPage.drawerSheetKey),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+
+    await tester.tap(find.text('静音模式'));
+    await tester.pump(const Duration(milliseconds: 80));
+    final Offset toastCenter = tester.getCenter(
+      find.byKey(const ValueKey<String>('dorm-passive-toast')),
+    );
+    await tester.tapAt(toastCenter);
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(find.text('今晚 23:00 后的静音提醒已经准备好了。'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 2600));
   });
 
   testWidgets('dorm notice can be dismissed by tapping itself', (
@@ -417,7 +447,8 @@ void main() {
     );
 
     await tester.tap(find.text('静音模式'));
-    await tester.pump(const Duration(milliseconds: 120));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 420));
     expect(
       find.byKey(const ValueKey<String>('dorm-passive-toast')),
       findsOneWidget,
@@ -427,7 +458,7 @@ void main() {
       find.byKey(const ValueKey<String>('dorm-passive-toast')),
     );
     await tester.tapAt(toastCenter);
-    await tester.pump(const Duration(milliseconds: 320));
+    await tester.pump(const Duration(milliseconds: 380));
     expect(
       find.byKey(const ValueKey<String>('dorm-passive-toast')),
       findsNothing,

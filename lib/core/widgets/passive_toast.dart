@@ -69,6 +69,10 @@ class PassiveToastController {
       );
       _activeSession = session;
       session.show();
+      await session.entered;
+      if (_pending.isNotEmpty) {
+        await session.dismiss(immediate: true);
+      }
       await session.closed;
       request.complete();
     }
@@ -144,12 +148,16 @@ class _PassiveToastSession {
   final ValueNotifier<bool> _isVisible = ValueNotifier<bool>(false);
   final GlobalKey _toastLayoutKey = GlobalKey();
   final Completer<void> _closedCompleter = Completer<void>();
+  final Completer<void> _enteredCompleter = Completer<void>();
   OverlayEntry? _entry;
+  Timer? _enterTimer;
   Timer? _autoDismissTimer;
   Completer<void>? _dismissCompleter;
   bool _isDisposed = false;
+  bool _canTapDismiss = false;
 
   Future<void> get closed => _closedCompleter.future;
+  Future<void> get entered => _enteredCompleter.future;
 
   void show() {
     _entry = OverlayEntry(
@@ -225,7 +233,19 @@ class _PassiveToastSession {
         return;
       }
       _isVisible.value = true;
+      _enterTimer = Timer(_enterDuration, _onEnterCompleted);
     });
+  }
+
+  void _onEnterCompleted() {
+    if (_isDisposed) {
+      return;
+    }
+    _enterTimer = null;
+    _canTapDismiss = true;
+    if (!_enteredCompleter.isCompleted) {
+      _enteredCompleter.complete();
+    }
     _autoDismissTimer = Timer(duration, () {
       unawaited(dismiss());
     });
@@ -239,6 +259,7 @@ class _PassiveToastSession {
 
     final Completer<void> completer = Completer<void>();
     _dismissCompleter = completer;
+    _canTapDismiss = false;
     _autoDismissTimer?.cancel();
     _autoDismissTimer = null;
 
@@ -268,16 +289,23 @@ class _PassiveToastSession {
       return;
     }
     _isDisposed = true;
+    _enterTimer?.cancel();
+    _enterTimer = null;
+    _autoDismissTimer?.cancel();
+    _autoDismissTimer = null;
     GestureBinding.instance.pointerRouter.removeGlobalRoute(
       _handlePointerEvent,
     );
     _entry?.remove();
     _entry = null;
     _isVisible.dispose();
+    if (!_enteredCompleter.isCompleted) {
+      _enteredCompleter.complete();
+    }
   }
 
   void _handlePointerEvent(PointerEvent event) {
-    if (event is! PointerDownEvent || _isDisposed) {
+    if (event is! PointerDownEvent || _isDisposed || !_canTapDismiss) {
       return;
     }
     final Rect? toastRect = _getToastRect();
