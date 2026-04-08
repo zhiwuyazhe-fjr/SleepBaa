@@ -337,6 +337,133 @@ void main() {
     expect(find.byKey(DormStatusPage.timelineKey), findsOneWidget);
   });
 
+  testWidgets('dorm notice replaces active message immediately', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+    await tester.scrollUntilVisible(
+      find.text('静音模式'),
+      160,
+      scrollable: find
+          .descendant(
+            of: find.byKey(DormPage.drawerSheetKey),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+
+    await tester.tap(find.text('静音模式'));
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(find.text('今晚 23:00 后的静音提醒已经准备好了。'), findsOneWidget);
+
+    await tester.tap(find.text('安静挑战'));
+    await tester.pump(const Duration(milliseconds: 320));
+    expect(find.text('已记录本周安静挑战，明早可以回看完成情况。'), findsOneWidget);
+    expect(find.text('今晚 23:00 后的静音提醒已经准备好了。'), findsNothing);
+  });
+
+  testWidgets('dorm notice can be dismissed by tapping itself', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+    await tester.scrollUntilVisible(
+      find.text('静音模式'),
+      160,
+      scrollable: find
+          .descendant(
+            of: find.byKey(DormPage.drawerSheetKey),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+
+    await tester.tap(find.text('静音模式'));
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(
+      find.byKey(const ValueKey<String>('dorm-passive-toast')),
+      findsOneWidget,
+    );
+
+    final Offset toastCenter = tester.getCenter(
+      find.byKey(const ValueKey<String>('dorm-passive-toast')),
+    );
+    await tester.tapAt(toastCenter);
+    await tester.pump(const Duration(milliseconds: 320));
+    expect(
+      find.byKey(const ValueKey<String>('dorm-passive-toast')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('dorm notice starts from bottom before entering', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+    await tester.scrollUntilVisible(
+      find.text('静音模式'),
+      160,
+      scrollable: find
+          .descendant(
+            of: find.byKey(DormPage.drawerSheetKey),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+
+    await tester.tap(find.text('静音模式'));
+    await tester.pump();
+
+    final AnimatedSlide slide = tester.widget<AnimatedSlide>(
+      find.byType(AnimatedSlide).first,
+    );
+    expect(slide.offset.dy, greaterThan(0));
+  });
+
+  testWidgets('dorm notice does not block bottom tab interactions', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+    );
+
+    await tester.tap(find.byIcon(Icons.night_shelter_rounded));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('静音模式'),
+      160,
+      scrollable: find
+          .descendant(
+            of: find.byKey(DormPage.drawerSheetKey),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(find.text('静音模式'));
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(
+      find.byKey(const ValueKey<String>('dorm-passive-toast')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byIcon(Icons.person_rounded).last);
+    await tester.pumpAndSettle();
+    expect(find.byType(ProfilePage), findsOneWidget);
+  });
+
   testWidgets('profile page shows a full-width month preview grid', (
     WidgetTester tester,
   ) async {

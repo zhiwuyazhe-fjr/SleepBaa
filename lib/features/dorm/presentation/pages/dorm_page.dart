@@ -7,10 +7,11 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/passive_toast.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 
-class DormPage extends StatelessWidget {
+class DormPage extends StatefulWidget {
   const DormPage({super.key});
 
   static const ValueKey<String> heroCardKey = ValueKey<String>(
@@ -28,6 +29,23 @@ class DormPage extends StatelessWidget {
   static const ValueKey<String> eventMoreKey = ValueKey<String>(
     'dorm-events-more',
   );
+
+  static const ValueKey<String> passiveToastKey = ValueKey<String>(
+    'dorm-passive-toast',
+  );
+
+  @override
+  State<DormPage> createState() => _DormPageState();
+}
+
+class _DormPageState extends State<DormPage> {
+  final PassiveToastController _toastController = PassiveToastController();
+
+  @override
+  void dispose() {
+    _toastController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -67,20 +85,19 @@ class DormPage extends StatelessWidget {
               title: '静音模式',
               detail: '今晚执行',
               icon: Icons.volume_off_rounded,
-              onTap: () => _showDormSnackBar(context, '今晚 23:00 后的静音提醒已经准备好了。'),
+              onTap: () => _showDormToast('今晚 23:00 后的静音提醒已经准备好了。'),
             ),
             _DormHubAction(
               title: '安静挑战',
               detail: '参与挑战',
               icon: Icons.emoji_events_rounded,
-              onTap: () => _showDormSnackBar(context, '已记录本周安静挑战，明早可以回看完成情况。'),
+              onTap: () => _showDormToast('已记录本周安静挑战，明早可以回看完成情况。'),
             ),
             _DormHubAction(
               title: '委婉提醒',
               detail: '发送提醒',
               icon: Icons.notifications_active_rounded,
-              onTap: () =>
-                  _showDormSnackBar(context, '已生成一条温和提醒文案，后续可以直接接入消息发送。'),
+              onTap: () => _showDormToast('已生成一条温和提醒文案，后续可以直接接入消息发送。'),
             ),
           ];
 
@@ -135,7 +152,7 @@ class DormPage extends StatelessWidget {
                               ),
                               const SizedBox(height: AppSpacing.lg),
                               _DormHeroCard(
-                                key: heroCardKey,
+                                key: DormPage.heroCardKey,
                                 palette: palette,
                                 onlineCount: onlineCount,
                                 sleepingCount: sleepingCount,
@@ -164,7 +181,7 @@ class DormPage extends StatelessWidget {
                                   ScrollController scrollController,
                                 ) {
                                   return Container(
-                                    key: drawerSheetKey,
+                                    key: DormPage.drawerSheetKey,
                                     clipBehavior: Clip.antiAlias,
                                     decoration: BoxDecoration(
                                       color: AppColors.surface,
@@ -203,7 +220,7 @@ class DormPage extends StatelessWidget {
                                         ),
                                         const SizedBox(height: AppSpacing.md),
                                         SizedBox(
-                                          key: roommateListKey,
+                                          key: DormPage.roommateListKey,
                                           height: 188,
                                           child: ListView.separated(
                                             scrollDirection: Axis.horizontal,
@@ -265,7 +282,7 @@ class DormPage extends StatelessWidget {
                                         SectionTitle(
                                           title: '寝室事件记录',
                                           actionLabel: '查看更多',
-                                          actionKey: eventMoreKey,
+                                          actionKey: DormPage.eventMoreKey,
                                           onAction: () => context.push(
                                             AppRoutes.dormStatus,
                                           ),
@@ -303,6 +320,14 @@ class DormPage extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+
+  void _showDormToast(String message) {
+    _toastController.show(
+      context,
+      message: message,
+      toastKey: DormPage.passiveToastKey,
     );
   }
 }
@@ -755,8 +780,4 @@ int _quietStarsFor(int noiseDb) {
     return 2;
   }
   return 1;
-}
-
-void _showDormSnackBar(BuildContext context, String message) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
