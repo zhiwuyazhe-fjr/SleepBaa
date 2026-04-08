@@ -101,6 +101,9 @@ class _NightMoodWelcomeFlowState extends State<NightMoodWelcomeFlow> {
             },
             onToggleReason: _toggleReason,
             onNext: () {
+              if (_selectedReasons.isEmpty) {
+                return;
+              }
               setState(() {
                 _isForward = true;
                 _step = NightMoodFlowStep.welcome;
@@ -153,7 +156,7 @@ class _NightMoodWelcomeFlowState extends State<NightMoodWelcomeFlow> {
       return;
     }
     setState(() {
-      if (_selectedReasons.contains(reason) && _selectedReasons.length > 1) {
+      if (_selectedReasons.contains(reason)) {
         _selectedReasons.remove(reason);
       } else {
         _selectedReasons.add(reason);
@@ -405,6 +408,7 @@ class _ReasonsStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<String> reasons = selectedMood.reasons;
+    final bool canContinue = selectedReasons.isNotEmpty;
 
     return SafeArea(
       child: Padding(
@@ -495,7 +499,9 @@ class _ReasonsStep extends StatelessWidget {
               primaryLabel: '继续',
               primaryBackgroundColor: palette.welcomeAccentColor,
               primaryTextColor: palette.welcomeTextOnAccent,
-              onPrimaryPressed: isSubmitting ? null : () => onNext(),
+              onPrimaryPressed: isSubmitting || !canContinue
+                  ? null
+                  : () => onNext(),
               padding: metrics.bottomActionPadding,
               secondaryLabel: '返回',
               onSecondaryPressed: isSubmitting ? null : () => onBack(),

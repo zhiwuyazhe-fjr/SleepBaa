@@ -248,6 +248,51 @@ void main() {
     expect(find.text('准备就绪'), findsOneWidget);
   });
 
+  testWidgets('reasons step allows clearing the last selected reason', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
+
+    await tester.tap(find.widgetWithText(FilledButton, '下一步'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('呼吸很顺'));
+    await tester.pumpAndSettle();
+
+    final FilledButton continueButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, '继续'),
+    );
+    expect(continueButton.onPressed, isNull);
+
+    await tester.tap(find.widgetWithText(FilledButton, '继续'));
+    await tester.pumpAndSettle();
+    expect(find.text('什么在支撑你此刻的平静？'), findsOneWidget);
+    expect(find.text('准备就绪'), findsNothing);
+  });
+
+  testWidgets('reselecting a reason enables continue and enters welcome step', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
+
+    await tester.tap(find.widgetWithText(FilledButton, '下一步'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('呼吸很顺'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('脑子清楚了'));
+    await tester.pumpAndSettle();
+
+    final FilledButton continueButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, '继续'),
+    );
+    expect(continueButton.onPressed, isNotNull);
+
+    await tester.tap(find.widgetWithText(FilledButton, '继续'));
+    await tester.pumpAndSettle();
+    expect(find.text('准备就绪'), findsOneWidget);
+  });
+
   testWidgets('bottom navigation switches between shell tabs', (
     WidgetTester tester,
   ) async {
