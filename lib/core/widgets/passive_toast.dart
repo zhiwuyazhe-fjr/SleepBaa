@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 class PassiveToastController {
+  final Queue<_PassiveToastRequest> _pending = Queue<_PassiveToastRequest>();
   _PassiveToastSession? _activeSession;
-  int _requestVersion = 0;
+  bool _isProcessingQueue = false;
+  bool _isDisposed = false;
 
   Future<void> show(
     BuildContext context, {
@@ -13,39 +16,66 @@ class PassiveToastController {
     Duration duration = const Duration(seconds: 2),
     Key? toastKey,
   }) async {
-    final OverlayState? overlay =
-        Overlay.maybeOf(context, rootOverlay: true) ?? Overlay.maybeOf(context);
-    if (overlay == null || !overlay.mounted) {
+    if (_isDisposed) {
       return;
     }
-
-    _requestVersion += 1;
-    final int currentVersion = _requestVersion;
-    final _PassiveToastSession? previousSession = _activeSession;
-    if (previousSession != null) {
-      await previousSession.dismiss();
-      if (identical(_activeSession, previousSession)) {
-        _activeSession = null;
-      }
-    }
-    if (currentVersion != _requestVersion) {
-      return;
-    }
-
-    late final _PassiveToastSession session;
-    session = _PassiveToastSession(
-      overlay: overlay,
-      message: message,
-      duration: duration,
-      toastKey: toastKey,
-      onDismissed: () {
-        if (identical(_activeSession, session)) {
-          _activeSession = null;
-        }
-      },
+    final Completer<void> completer = Completer<void>();
+    _pending.add(
+      _PassiveToastRequest(
+        context: context,
+        message: message,
+        duration: duration,
+        toastKey: toastKey,
+        completer: completer,
+      ),
     );
-    _activeSession = session;
-    session.show();
+    _startQueueConsumerIfNeeded();
+    await completer.future;
+  }
+
+  void _startQueueConsumerIfNeeded() {
+    if (_isDisposed || _isProcessingQueue) {
+      return;
+    }
+    _isProcessingQueue = true;
+    unawaited(_consumeQueue());
+  }
+
+  Future<void> _consumeQueue() async {
+    while (!_isDisposed && _pending.isNotEmpty) {
+      final _PassiveToastRequest request = _pending.removeFirst();
+      if (!request.context.mounted) {
+        request.complete();
+        continue;
+      }
+      final OverlayState? overlay =
+          Overlay.maybeOf(request.context, rootOverlay: true) ??
+          Overlay.maybeOf(request.context);
+      if (overlay == null || !overlay.mounted) {
+        request.complete();
+        continue;
+      }
+      late final _PassiveToastSession session;
+      session = _PassiveToastSession(
+        overlay: overlay,
+        message: request.message,
+        duration: request.duration,
+        toastKey: request.toastKey,
+        onDismissed: () {
+          if (identical(_activeSession, session)) {
+            _activeSession = null;
+          }
+        },
+      );
+      _activeSession = session;
+      session.show();
+      await session.closed;
+      request.complete();
+    }
+    _isProcessingQueue = false;
+    if (!_isDisposed && _pending.isNotEmpty) {
+      _startQueueConsumerIfNeeded();
+    }
   }
 
   Future<void> dismiss() async {
@@ -60,10 +90,36 @@ class PassiveToastController {
   }
 
   void dispose() {
-    _requestVersion += 1;
+    _isDisposed = true;
+    while (_pending.isNotEmpty) {
+      _pending.removeFirst().complete();
+    }
     final _PassiveToastSession? activeSession = _activeSession;
     _activeSession = null;
     activeSession?.dismiss(immediate: true);
+  }
+}
+
+class _PassiveToastRequest {
+  _PassiveToastRequest({
+    required this.context,
+    required this.message,
+    required this.duration,
+    required this.toastKey,
+    required this.completer,
+  });
+
+  final BuildContext context;
+  final String message;
+  final Duration duration;
+  final Key? toastKey;
+  final Completer<void> completer;
+
+  void complete() {
+    if (completer.isCompleted) {
+      return;
+    }
+    completer.complete();
   }
 }
 
@@ -87,10 +143,13 @@ class _PassiveToastSession {
 
   final ValueNotifier<bool> _isVisible = ValueNotifier<bool>(false);
   final GlobalKey _toastLayoutKey = GlobalKey();
+  final Completer<void> _closedCompleter = Completer<void>();
   OverlayEntry? _entry;
   Timer? _autoDismissTimer;
   Completer<void>? _dismissCompleter;
   bool _isDisposed = false;
+
+  Future<void> get closed => _closedCompleter.future;
 
   void show() {
     _entry = OverlayEntry(
@@ -194,6 +253,9 @@ class _PassiveToastSession {
       }
       _disposeEntry();
       onDismissed();
+      if (!_closedCompleter.isCompleted) {
+        _closedCompleter.complete();
+      }
       completer.complete();
     }
 
@@ -206,7 +268,9 @@ class _PassiveToastSession {
       return;
     }
     _isDisposed = true;
-    GestureBinding.instance.pointerRouter.removeGlobalRoute(_handlePointerEvent);
+    GestureBinding.instance.pointerRouter.removeGlobalRoute(
+      _handlePointerEvent,
+    );
     _entry?.remove();
     _entry = null;
     _isVisible.dispose();

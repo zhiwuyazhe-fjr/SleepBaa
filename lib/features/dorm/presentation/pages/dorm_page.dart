@@ -6,8 +6,8 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
-import 'package:sleep_dorm_app/core/widgets/passive_toast.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 
@@ -39,14 +39,6 @@ class DormPage extends StatefulWidget {
 }
 
 class _DormPageState extends State<DormPage> {
-  final PassiveToastController _toastController = PassiveToastController();
-
-  @override
-  void dispose() {
-    _toastController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
@@ -324,7 +316,7 @@ class _DormPageState extends State<DormPage> {
   }
 
   void _showDormToast(String message) {
-    _toastController.show(
+    notifyPassiveToast(
       context,
       message: message,
       toastKey: DormPage.passiveToastKey,

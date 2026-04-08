@@ -4,6 +4,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/utils/avatar_picker.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -215,9 +216,6 @@ class _SettingsPageState extends State<SettingsPage> {
             PrimaryButton(
               label: '保存设置',
               onPressed: () async {
-                final ScaffoldMessengerState messenger = ScaffoldMessenger.of(
-                  context,
-                );
                 await services.authRepository.updateProfile(
                   displayName: _nameController.text.trim(),
                   tagline: _taglineController.text.trim(),
@@ -232,10 +230,10 @@ class _SettingsPageState extends State<SettingsPage> {
                     smartSuggestionsEnabled: _smartSuggestionsEnabled,
                   ),
                 );
-                if (!mounted) {
+                if (!context.mounted) {
                   return;
                 }
-                messenger.showSnackBar(const SnackBar(content: Text('设置已保存')));
+                notifyPassiveToast(context, message: '设置已保存');
               },
             ),
           ],

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
+import 'package:sleep_dorm_app/core/notifications/unified_notification.dart';
 import 'package:sleep_dorm_app/core/state/audio_playback_controller.dart';
 import 'package:sleep_dorm_app/core/state/night_welcome_controller.dart';
 import 'package:sleep_dorm_app/core/state/sleep_experience_controller.dart';
@@ -40,6 +42,8 @@ class _AppScopeState extends State<AppScope> {
   late final InMemoryFeedbackRepository _feedbackRepository;
   late final InMemoryNotificationRepository _notificationRepository;
   late final InMemoryDormRepository _dormRepository;
+  late final UnifiedNotificationDispatcher _unifiedNotificationDispatcher;
+  late final PassiveToastNotificationChannel _passiveToastNotificationChannel;
   late final AudioPlaybackController _audioPlaybackController;
   late final SleepExperienceController _sleepExperienceController;
   late final NightWelcomeController _nightWelcomeController;
@@ -59,6 +63,9 @@ class _AppScopeState extends State<AppScope> {
     );
     _notificationRepository = InMemoryNotificationRepository();
     _dormRepository = InMemoryDormRepository();
+    _passiveToastNotificationChannel = PassiveToastNotificationChannel();
+    _unifiedNotificationDispatcher = UnifiedNotificationDispatcher();
+    _unifiedNotificationDispatcher.register(_passiveToastNotificationChannel);
     _audioPlaybackController = AudioPlaybackController();
     _nightWelcomeController = NightWelcomeController(
       clock: widget.clock ?? DateTime.now,
@@ -84,6 +91,7 @@ class _AppScopeState extends State<AppScope> {
       feedbackRepository: _feedbackRepository,
       notificationRepository: _notificationRepository,
       dormRepository: _dormRepository,
+      notificationApi: _unifiedNotificationDispatcher,
       audioPlaybackController: _audioPlaybackController,
       sleepExperienceController: _sleepExperienceController,
       nightWelcomeController: _nightWelcomeController,
@@ -93,6 +101,7 @@ class _AppScopeState extends State<AppScope> {
 
   @override
   void dispose() {
+    _passiveToastNotificationChannel.dispose();
     _sleepExperienceController.dispose();
     _nightWelcomeController.dispose();
     _audioPlaybackController.dispose();
@@ -130,6 +139,7 @@ class AppServices {
     required this.feedbackRepository,
     required this.notificationRepository,
     required this.dormRepository,
+    required this.notificationApi,
     required this.audioPlaybackController,
     required this.sleepExperienceController,
     required this.nightWelcomeController,
@@ -142,6 +152,7 @@ class AppServices {
   final FeedbackRepository feedbackRepository;
   final NotificationRepository notificationRepository;
   final DormRepository dormRepository;
+  final UnifiedNotificationApi notificationApi;
   final AudioPlaybackController audioPlaybackController;
   final SleepExperienceController sleepExperienceController;
   final NightWelcomeController nightWelcomeController;

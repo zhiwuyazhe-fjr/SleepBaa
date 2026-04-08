@@ -6,6 +6,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
@@ -177,9 +178,6 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
               PrimaryButton(
                 label: '提交反馈',
                 onPressed: () async {
-                  final ScaffoldMessengerState messenger = ScaffoldMessenger.of(
-                    context,
-                  );
                   final GoRouter router = GoRouter.of(context);
                   final List<RecommendationFeedback> feedback = session
                       .recommendations
@@ -206,12 +204,10 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                         ),
                         feedback: feedback,
                       );
-                  if (!mounted) {
+                  if (!context.mounted) {
                     return;
                   }
-                  messenger.showSnackBar(
-                    const SnackBar(content: Text('已记录晨间反馈')),
-                  );
+                  notifyPassiveToast(context, message: '已记录晨间反馈');
                   router.go(AppRoutes.homePreSleep);
                 },
               ),

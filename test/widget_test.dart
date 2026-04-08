@@ -337,7 +337,7 @@ void main() {
     expect(find.byKey(DormStatusPage.timelineKey), findsOneWidget);
   });
 
-  testWidgets('dorm notice replaces active message immediately', (
+  testWidgets('dorm notice keeps current enter animation before switching', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -356,13 +356,46 @@ void main() {
     );
 
     await tester.tap(find.text('静音模式'));
-    await tester.pump(const Duration(milliseconds: 120));
-    expect(find.text('今晚 23:00 后的静音提醒已经准备好了。'), findsOneWidget);
-
+    await tester.pump(const Duration(milliseconds: 40));
     await tester.tap(find.text('安静挑战'));
-    await tester.pump(const Duration(milliseconds: 320));
+    await tester.pump(const Duration(milliseconds: 140));
+    expect(find.text('今晚 23:00 后的静音提醒已经准备好了。'), findsOneWidget);
+    expect(find.text('已记录本周安静挑战，明早可以回看完成情况。'), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 2500));
     expect(find.text('已记录本周安静挑战，明早可以回看完成情况。'), findsOneWidget);
     expect(find.text('今晚 23:00 后的静音提醒已经准备好了。'), findsNothing);
+  });
+
+  testWidgets('dorm notice consumes burst taps in queued order', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+    await tester.scrollUntilVisible(
+      find.text('静音模式'),
+      160,
+      scrollable: find
+          .descendant(
+            of: find.byKey(DormPage.drawerSheetKey),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+
+    await tester.tap(find.text('静音模式'));
+    await tester.tap(find.text('安静挑战'));
+    await tester.tap(find.text('委婉提醒'));
+    await tester.pump(const Duration(milliseconds: 160));
+    expect(find.text('今晚 23:00 后的静音提醒已经准备好了。'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 2500));
+    expect(find.text('已记录本周安静挑战，明早可以回看完成情况。'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 2500));
+    expect(find.text('已生成一条温和提醒文案，后续可以直接接入消息发送。'), findsOneWidget);
   });
 
   testWidgets('dorm notice can be dismissed by tapping itself', (

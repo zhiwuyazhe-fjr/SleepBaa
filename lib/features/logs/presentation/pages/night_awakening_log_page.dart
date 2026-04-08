@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
@@ -111,9 +112,6 @@ class _NightAwakeningLogPageState extends State<NightAwakeningLogPage> {
             PrimaryButton(
               label: '保存夜醒记录',
               onPressed: () async {
-                final ScaffoldMessengerState messenger = ScaffoldMessenger.of(
-                  context,
-                );
                 final NavigatorState navigator = Navigator.of(context);
                 final DateTime now = DateTime.now();
                 final DateTime occurredAt = DateTime(
@@ -130,12 +128,10 @@ class _NightAwakeningLogPageState extends State<NightAwakeningLogPage> {
                       minutesToSleep: _minutesToSleep,
                       note: _noteController.text.trim(),
                     );
-                if (!mounted) {
+                if (!context.mounted) {
                   return;
                 }
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('夜醒记录已保存')),
-                );
+                notifyPassiveToast(context, message: '夜醒记录已保存');
                 navigator.pop();
               },
             ),
