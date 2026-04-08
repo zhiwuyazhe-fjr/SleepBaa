@@ -5,6 +5,7 @@ import 'package:sleep_dorm_app/app/app.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 import 'package:sleep_dorm_app/core/widgets/bottom_nav_shell.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/pages/assistant_page.dart';
@@ -362,6 +363,25 @@ void main() {
     expect(find.text('今晚 23:00 后的静音提醒已经准备好了。'), findsOneWidget);
     expect(find.text('已记录本周安静挑战，明早可以回看完成情况。'), findsNothing);
 
+    await tester.pump(const Duration(milliseconds: 520));
+    expect(find.text('已记录本周安静挑战，明早可以回看完成情况。'), findsOneWidget);
+    expect(find.text('今晚 23:00 后的静音提醒已经准备好了。'), findsNothing);
+  });
+
+  testWidgets('dorm notice switches quickly when new message arrives in visible phase', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+    final BuildContext context = tester.element(find.byType(DormPage));
+    notifyPassiveToast(context, message: '今晚 23:00 后的静音提醒已经准备好了。');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 450));
+    expect(find.text('今晚 23:00 后的静音提醒已经准备好了。'), findsOneWidget);
+
+    notifyPassiveToast(context, message: '已记录本周安静挑战，明早可以回看完成情况。');
     await tester.pump(const Duration(milliseconds: 520));
     expect(find.text('已记录本周安静挑战，明早可以回看完成情况。'), findsOneWidget);
     expect(find.text('今晚 23:00 后的静音提醒已经准备好了。'), findsNothing);

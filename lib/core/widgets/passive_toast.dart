@@ -29,6 +29,7 @@ class PassiveToastController {
         completer: completer,
       ),
     );
+    _activeSession?.dismissForQueuedRequest();
     _startQueueConsumerIfNeeded();
     await completer.future;
   }
@@ -282,6 +283,16 @@ class _PassiveToastSession {
 
     unawaited(runDismiss());
     return completer.future;
+  }
+
+  void dismissForQueuedRequest() {
+    if (_isDisposed || !_enteredCompleter.isCompleted) {
+      return;
+    }
+    if (_dismissCompleter != null) {
+      return;
+    }
+    unawaited(dismiss(immediate: true));
   }
 
   void _disposeEntry() {
