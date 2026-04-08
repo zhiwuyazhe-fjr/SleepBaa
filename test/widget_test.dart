@@ -137,7 +137,7 @@ void main() {
     expect(find.text('今晚你更接近哪一种心情？'), findsNothing);
   });
 
-  testWidgets('welcome top card keeps about 55% viewport height', (
+  testWidgets('welcome top card keeps about 52.5% viewport height', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -157,8 +157,53 @@ void main() {
     );
     expect(
       topCardSize.height,
-      moreOrLessEquals(availableHeight * 0.55, epsilon: 4),
+      moreOrLessEquals(availableHeight * 0.525, epsilon: 4),
     );
+  });
+
+  testWidgets('welcome title uses predefined line break on narrow width', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
+    expect(find.text('今晚你更接近哪一种心情？'), findsOneWidget);
+
+    await tester.binding.setSurfaceSize(const Size(360, 844));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('今晚你更接近\n哪一种心情？'), findsOneWidget);
+    expect(find.text('今晚你更接近哪一种心情？'), findsNothing);
+  });
+
+  testWidgets('welcome action bar stays aligned across all three steps', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
+
+    final double step1Top = tester
+        .getTopLeft(find.widgetWithText(FilledButton, '下一步'))
+        .dy;
+
+    await tester.tap(find.widgetWithText(FilledButton, '下一步'));
+    await tester.pumpAndSettle();
+    final double step2Top = tester
+        .getTopLeft(find.widgetWithText(FilledButton, '继续'))
+        .dy;
+
+    await tester.tap(find.widgetWithText(FilledButton, '继续'));
+    await tester.pumpAndSettle();
+    final double step3Top = tester
+        .getTopLeft(find.widgetWithText(FilledButton, '进入今晚首页'))
+        .dy;
+
+    expect(step2Top, moreOrLessEquals(step1Top, epsilon: 2));
+    expect(step3Top, moreOrLessEquals(step1Top, epsilon: 2));
   });
 
   testWidgets('welcome flow uses slide transition between steps', (

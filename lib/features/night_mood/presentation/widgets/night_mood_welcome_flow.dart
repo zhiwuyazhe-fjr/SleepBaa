@@ -272,9 +272,9 @@ class _SelectionStep extends StatelessWidget {
         final double mediaTop = MediaQuery.paddingOf(context).top;
         final double topCardHeight = math.max(
           metrics.topCardMinHeight,
-          constraints.maxHeight * 0.55,
+          constraints.maxHeight * 0.525,
         );
-        final bool useTwoLineTitle = constraints.maxWidth < 395;
+        final bool useTwoLineTitle = constraints.maxWidth < 370;
         final String title = useTwoLineTitle
             ? '今晚你更接近\n哪一种心情？'
             : '今晚你更接近哪一种心情？';
@@ -408,7 +408,7 @@ class _ReasonsStep extends StatelessWidget {
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -491,7 +491,6 @@ class _ReasonsStep extends StatelessWidget {
                     .toList(growable: false),
               ),
             ),
-            const SizedBox(height: 20),
             _BottomActionBar(
               primaryLabel: '继续',
               primaryBackgroundColor: palette.welcomeAccentColor,
@@ -534,7 +533,7 @@ class _WelcomeStep extends StatelessWidget {
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
         child: Column(
           children: <Widget>[
             const _FlowProgressIndicator(activeStep: 3),
@@ -822,7 +821,7 @@ class _WelcomeLayoutMetrics {
 _WelcomeLayoutMetrics _metricsForHeight(double height) {
   if (height < 700) {
     return const _WelcomeLayoutMetrics(
-      topCardMinHeight: 340,
+      topCardMinHeight: 300,
       avatarSize: 170,
       avatarBottomSpacing: 14,
       titleTopSpacing: 20,
@@ -835,7 +834,7 @@ _WelcomeLayoutMetrics _metricsForHeight(double height) {
   }
   if (height < 820) {
     return const _WelcomeLayoutMetrics(
-      topCardMinHeight: 380,
+      topCardMinHeight: 350,
       avatarSize: 220,
       avatarBottomSpacing: 18,
       titleTopSpacing: 24,
@@ -847,7 +846,7 @@ _WelcomeLayoutMetrics _metricsForHeight(double height) {
     );
   }
   return const _WelcomeLayoutMetrics(
-    topCardMinHeight: 420,
+    topCardMinHeight: 410,
     avatarSize: 280,
     avatarBottomSpacing: 24,
     titleTopSpacing: 32,
