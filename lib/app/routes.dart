@@ -23,6 +23,8 @@ import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_edit_
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/settings_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/sleep_report_page.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/thought_note_detail_page.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/thought_vault_page.dart';
 import 'package:sleep_dorm_app/features/sleep/presentation/pages/cant_sleep_page.dart';
 
 abstract final class AppRoutes {
@@ -47,6 +49,8 @@ abstract final class AppRoutes {
   static const String profileCalendar = '/profile/calendar';
   static const String profileSettings = '/profile/settings';
   static const String profileEdit = '/profile/settings/edit';
+  static const String profileThoughtVault = '/profile/thought_vault';
+  static const String profileThoughtDetail = '/profile/thought_detail';
   static const String notifications = '/notifications';
   static const String assistant = '/assistant';
   static const String assistantHistory = '/assistant/history';
@@ -189,9 +193,31 @@ GoRouter createRouter({
             const ProfileEditPage(),
       ),
       GoRoute(
-        path: AppRoutes.assistant,
+        path: AppRoutes.profileThoughtVault,
         builder: (BuildContext context, GoRouterState state) =>
-            const AssistantPage(),
+            const ThoughtVaultPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.profileThoughtDetail,
+        builder: (BuildContext context, GoRouterState state) {
+          final SleepCaptureRecord record = state.extra! as SleepCaptureRecord;
+          return ThoughtNoteDetailPage(record: record);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.assistant,
+        builder: (BuildContext context, GoRouterState state) {
+          final bool captureModeEnabled =
+              state.uri.queryParameters['flow'] == 'sleep_capture';
+          final AssistantCaptureTab initialTab =
+              state.uri.queryParameters['mode'] == 'memo'
+              ? AssistantCaptureTab.memo
+              : AssistantCaptureTab.dream;
+          return AssistantPage(
+            captureModeEnabled: captureModeEnabled,
+            initialCaptureTab: initialTab,
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.assistantHistory,

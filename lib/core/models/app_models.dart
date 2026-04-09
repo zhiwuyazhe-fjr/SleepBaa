@@ -26,6 +26,8 @@ enum DormStatus { active, archived }
 
 enum PlaybackState { stopped, playing, paused, completed }
 
+enum SleepCaptureType { dream, memo }
+
 enum InsightCategory { interference, report, recommendation, trend }
 
 enum AssistantMessageRole { user, assistant, system }
@@ -806,6 +808,54 @@ class DreamEntry {
       sessionId: sessionId ?? this.sessionId,
     );
   }
+}
+
+class SleepCaptureRecord {
+  const SleepCaptureRecord({
+    required this.id,
+    required this.type,
+    required this.sessionId,
+    required this.createdAt,
+    required this.title,
+    required this.outline,
+    required this.content,
+  });
+
+  final String id;
+  final SleepCaptureType type;
+  final String sessionId;
+  final DateTime createdAt;
+  final String title;
+  final String outline;
+  final String content;
+}
+
+class PendingSleepMemoBanner {
+  const PendingSleepMemoBanner({
+    required this.title,
+    required this.subtitle,
+    required this.groups,
+    required this.createdAt,
+  });
+
+  final String title;
+  final String subtitle;
+  final List<PendingSleepMemoGroup> groups;
+  final DateTime createdAt;
+}
+
+class PendingSleepMemoGroup {
+  const PendingSleepMemoGroup({
+    required this.sessionId,
+    required this.label,
+    required this.items,
+    required this.isCarryover,
+  });
+
+  final String sessionId;
+  final String label;
+  final List<String> items;
+  final bool isCarryover;
 }
 
 class SleepInsight {

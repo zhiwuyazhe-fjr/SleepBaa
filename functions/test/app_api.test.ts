@@ -308,3 +308,142 @@ test(
     });
   },
 );
+
+test(
+  "assistant capture persists structured sleep capture records in bootstrap payload",
+  { concurrency: false },
+  async () => {
+    await withLocalAppApiServer(async ({ baseUrl, uid }) => {
+      const threadId = `${uid}-capture-thread`;
+      const clientUserMessageId = `${uid}-capture-user`;
+      const clientAssistantMessageId = `${uid}-capture-assistant`;
+      const captureResponse = await fetch(`${baseUrl}/api/assistant/capture`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-debug-uid": uid,
+        },
+        body: JSON.stringify({
+          threadId,
+          sessionId: `${uid}-session-1`,
+          captureType: "dream",
+          prompt: "我梦见自己在很高的桥上往下看。",
+          clientUserMessageId,
+          clientAssistantMessageId,
+        }),
+      });
+
+      assert.equal(captureResponse.status, 200);
+      const capturePayload = await captureResponse.json();
+      assert.equal(capturePayload.assistantMessageId, clientAssistantMessageId);
+      assert.equal(capturePayload.provider, "deterministic");
+      assert.equal(capturePayload.model, "rules-v1");
+      assert.equal(capturePayload.record.type, "dream");
+      assert.equal(capturePayload.record.sessionId, `${uid}-session-1`);
+      assert.match(capturePayload.record.title, /梦记|姊﹁/i);
+
+      const bootstrapResponse = await fetch(`${baseUrl}/api/app/bootstrap`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-debug-uid": uid,
+        },
+        body: JSON.stringify({}),
+      });
+
+      assert.equal(bootstrapResponse.status, 200);
+      const bootstrapPayload = await bootstrapResponse.json();
+      const records = bootstrapPayload.data.sleepCaptureRecords ?? [];
+      assert.ok(
+        records.some(
+          (item: Record<string, unknown>) =>
+            item.sessionId === `${uid}-session-1` && item.type === "dream",
+        ),
+      );
+    });
+  },
+);
+
+test(
+  "sleep capture banner show and clear update bootstrap user state",
+  { concurrency: false },
+  async () => {
+    await withLocalAppApiServer(async ({ baseUrl, uid }) => {
+      const saveResponse = await fetch(`${baseUrl}/api/sleep-capture/save`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-debug-uid": uid,
+        },
+        body: JSON.stringify({
+          record: {
+            id: `${uid}-memo-1`,
+            type: "memo",
+            sessionId: `${uid}-session-2`,
+            createdAt: "2026-04-09T12:00:00.000Z",
+            title: "事记 12:00",
+            outline: "AI整理后的事记",
+            content: "记得明早给导师发材料",
+          },
+        }),
+      });
+      assert.equal(saveResponse.status, 200);
+
+      const showResponse = await fetch(
+        `${baseUrl}/api/sleep-capture/banner/show`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-debug-uid": uid,
+          },
+          body: JSON.stringify({ sessionId: `${uid}-session-2` }),
+        },
+      );
+      assert.equal(showResponse.status, 200);
+      const showPayload = await showResponse.json();
+      assert.equal(showPayload.pendingMemoBanner.groups[0].sessionId, `${uid}-session-2`);
+
+      const bootstrapWithBanner = await fetch(`${baseUrl}/api/app/bootstrap`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-debug-uid": uid,
+        },
+        body: JSON.stringify({}),
+      });
+      const bootstrapWithBannerPayload = await bootstrapWithBanner.json();
+      assert.equal(
+        bootstrapWithBannerPayload.data.userState.sleepCapture.pendingMemoBanner.groups[0].sessionId,
+        `${uid}-session-2`,
+      );
+
+      const clearResponse = await fetch(
+        `${baseUrl}/api/sleep-capture/banner/clear`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-debug-uid": uid,
+          },
+          body: JSON.stringify({}),
+        },
+      );
+      assert.equal(clearResponse.status, 200);
+
+      const bootstrapAfterClear = await fetch(`${baseUrl}/api/app/bootstrap`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-debug-uid": uid,
+        },
+        body: JSON.stringify({}),
+      });
+      const bootstrapAfterClearPayload = await bootstrapAfterClear.json();
+      assert.equal(
+        bootstrapAfterClearPayload.data.userState.sleepCapture.pendingMemoBanner,
+        null,
+      );
+    });
+  },
+);

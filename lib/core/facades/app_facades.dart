@@ -443,10 +443,12 @@ class AssistantFacade extends ChangeNotifier {
   AssistantFacade({
     required AuthRepository authRepository,
     required AssistantRepository assistantRepository,
+    required SleepCaptureRepository sleepCaptureRepository,
     required DormRepository dormRepository,
     required AssistantReplyGateway assistantReplyGateway,
   }) : _authRepository = authRepository,
        _assistantRepository = assistantRepository,
+       _sleepCaptureRepository = sleepCaptureRepository,
        _dormRepository = dormRepository,
        _assistantReplyGateway = assistantReplyGateway {
     _assistantRepository.addListener(notifyListeners);
@@ -454,6 +456,7 @@ class AssistantFacade extends ChangeNotifier {
 
   final AuthRepository _authRepository;
   final AssistantRepository _assistantRepository;
+  final SleepCaptureRepository _sleepCaptureRepository;
   final DormRepository _dormRepository;
   final AssistantReplyGateway _assistantReplyGateway;
 
@@ -577,8 +580,161 @@ class AssistantFacade extends ChangeNotifier {
           status: AssistantMessageStatus.error,
           sourceMode: AssistantReplySourceMode.error,
           errorMessage: error.toString(),
-        );
+          );
       }
+    }
+  }
+
+  Future<AssistantCaptureResult?> sendCapturePrompt({
+    required String prompt,
+    required SleepCaptureType captureType,
+    required String sessionId,
+  }) async {
+    final String normalizedPrompt = prompt.trim();
+    if (normalizedPrompt.isEmpty) {
+      return null;
+    }
+    await _authRepository.ensureAuthenticated();
+    final AssistantThread thread = await _assistantRepository.ensureThread(
+      title: captureType == SleepCaptureType.dream ? '梦记收纳' : '事记收纳',
+    );
+    await _assistantRepository.setCurrentThread(thread.id);
+    final String clientUserMessageId = IdGenerator.next('assistant-msg-user');
+    final String clientAssistantMessageId = IdGenerator.next(
+      'assistant-msg-assistant',
+    );
+    await _assistantRepository.sendUserMessage(
+      threadId: thread.id,
+      content: normalizedPrompt,
+      messageId: clientUserMessageId,
+    );
+    await _assistantRepository.addAssistantMessage(
+      threadId: thread.id,
+      content: '小眠正在整理这段记录...',
+      messageId: clientAssistantMessageId,
+      status: AssistantMessageStatus.pending,
+    );
+    try {
+      final AssistantCaptureResult result = await _assistantReplyGateway
+          .generateCapture(
+            prompt: normalizedPrompt,
+            threadId: thread.id,
+            sessionId: sessionId,
+            captureType: captureType,
+            clientUserMessageId: clientUserMessageId,
+            clientAssistantMessageId: clientAssistantMessageId,
+            dorm: _dormRepository.currentDorm,
+          );
+      final SleepCaptureRecord record = result.recordPersistedRemotely
+          ? result.record
+          : await _sleepCaptureRepository.addRecord(
+              type: captureType,
+              sessionId: sessionId,
+              content: result.record.content,
+              recordId: result.record.id.isEmpty ? null : result.record.id,
+              title: result.record.title,
+              outline: result.record.outline,
+              createdAt: result.record.createdAt,
+            );
+      await _upsertAssistantReply(
+        threadId: thread.id,
+        defaultMessageId: clientAssistantMessageId,
+        reply: result.reply,
+        sourceMode: result.sourceMode,
+        provider: result.provider,
+        model: result.model,
+        errorMessage: result.errorMessage,
+        assistantMessageId: result.assistantMessageId,
+      );
+      return AssistantCaptureResult(
+        reply: result.reply,
+        sourceMode: result.sourceMode,
+        record: record,
+        recordPersistedRemotely: result.recordPersistedRemotely,
+        runId: result.runId,
+        intent: result.intent,
+        provider: result.provider,
+        model: result.model,
+        assistantMessageId: result.assistantMessageId,
+        errorMessage: result.errorMessage,
+        updatedSurfaces: result.updatedSurfaces,
+      );
+    } catch (error) {
+      await _setAssistantError(
+        threadId: thread.id,
+        messageId: clientAssistantMessageId,
+        error: error,
+      );
+      return null;
+    }
+  }
+
+  Future<void> _upsertAssistantReply({
+    required String threadId,
+    required String defaultMessageId,
+    required String reply,
+    required AssistantReplySourceMode sourceMode,
+    required String? provider,
+    required String? model,
+    required String? errorMessage,
+    String? assistantMessageId,
+  }) async {
+    final List<AssistantMessage> existingMessages = _assistantRepository
+        .messagesForThread(threadId);
+    final String nextMessageId = assistantMessageId ?? defaultMessageId;
+    if (existingMessages.any((AssistantMessage item) => item.id == nextMessageId)) {
+      await _assistantRepository.updateAssistantMessage(
+        threadId: threadId,
+        messageId: nextMessageId,
+        content: reply,
+        status: sourceMode == AssistantReplySourceMode.error
+            ? AssistantMessageStatus.error
+            : AssistantMessageStatus.complete,
+        sourceMode: sourceMode,
+        provider: provider,
+        model: model,
+        errorMessage: errorMessage,
+      );
+    } else {
+      await _assistantRepository.addAssistantMessage(
+        threadId: threadId,
+        content: reply,
+        messageId: nextMessageId,
+        status: sourceMode == AssistantReplySourceMode.error
+            ? AssistantMessageStatus.error
+            : AssistantMessageStatus.complete,
+        sourceMode: sourceMode,
+        provider: provider,
+        model: model,
+        errorMessage: errorMessage,
+      );
+    }
+  }
+
+  Future<void> _setAssistantError({
+    required String threadId,
+    required String messageId,
+    required Object error,
+  }) async {
+    if (_assistantRepository
+        .messagesForThread(threadId)
+        .any((AssistantMessage item) => item.id == messageId)) {
+      await _assistantRepository.updateAssistantMessage(
+        threadId: threadId,
+        messageId: messageId,
+        content: '暂时没有收到回复，请稍后再试。',
+        status: AssistantMessageStatus.error,
+        sourceMode: AssistantReplySourceMode.error,
+        errorMessage: error.toString(),
+      );
+    } else {
+      await _assistantRepository.addAssistantMessage(
+        threadId: threadId,
+        content: '暂时没有收到回复，请稍后再试。',
+        status: AssistantMessageStatus.error,
+        sourceMode: AssistantReplySourceMode.error,
+        errorMessage: error.toString(),
+      );
     }
   }
 

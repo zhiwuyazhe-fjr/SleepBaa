@@ -11,6 +11,8 @@ import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/facades/app_facades.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
+import 'package:sleep_dorm_app/core/notifications/unified_notification.dart';
 import 'package:sleep_dorm_app/core/state/audio_playback_controller.dart';
 import 'package:sleep_dorm_app/core/state/night_welcome_controller.dart';
 import 'package:sleep_dorm_app/core/state/sleep_experience_controller.dart';
@@ -48,11 +50,14 @@ class _AppScopeState extends State<AppScope> {
   late final RecommendationRepository _recommendationRepository;
   late final SleepSessionRepository _sleepSessionRepository;
   late final FeedbackRepository _feedbackRepository;
+  late final SleepCaptureRepository _sleepCaptureRepository;
   late final NotificationRepository _notificationRepository;
   late final DormRepository _dormRepository;
   late final DreamRepository _dreamRepository;
   late final InsightsRepository _insightsRepository;
   late final AssistantRepository _assistantRepository;
+  late final UnifiedNotificationDispatcher _unifiedNotificationDispatcher;
+  late final PassiveToastNotificationChannel _passiveToastNotificationChannel;
   late final AudioPlaybackController _audioPlaybackController;
   late final SleepExperienceController _sleepExperienceController;
   late final NightWelcomeController _nightWelcomeController;
@@ -71,6 +76,9 @@ class _AppScopeState extends State<AppScope> {
   void initState() {
     super.initState();
     _buildRepositories();
+    _passiveToastNotificationChannel = PassiveToastNotificationChannel();
+    _unifiedNotificationDispatcher = UnifiedNotificationDispatcher();
+    _unifiedNotificationDispatcher.register(_passiveToastNotificationChannel);
     _audioPlaybackController = AudioPlaybackController();
     _nightWelcomeController = NightWelcomeController(
       clock: widget.clock ?? DateTime.now,
@@ -83,6 +91,7 @@ class _AppScopeState extends State<AppScope> {
       recommendationRepository: _recommendationRepository,
       sleepSessionRepository: _sleepSessionRepository,
       feedbackRepository: _feedbackRepository,
+      sleepCaptureRepository: _sleepCaptureRepository,
       notificationRepository: _notificationRepository,
       dormRepository: _dormRepository,
       audioPlaybackController: _audioPlaybackController,
@@ -114,6 +123,7 @@ class _AppScopeState extends State<AppScope> {
     _assistantFacade = AssistantFacade(
       authRepository: _authRepository,
       assistantRepository: _assistantRepository,
+      sleepCaptureRepository: _sleepCaptureRepository,
       dormRepository: _dormRepository,
       assistantReplyGateway: _assistantReplyGateway,
     );
@@ -124,11 +134,13 @@ class _AppScopeState extends State<AppScope> {
       recommendationRepository: _recommendationRepository,
       sleepSessionRepository: _sleepSessionRepository,
       feedbackRepository: _feedbackRepository,
+      sleepCaptureRepository: _sleepCaptureRepository,
       notificationRepository: _notificationRepository,
       dormRepository: _dormRepository,
       dreamRepository: _dreamRepository,
       insightsRepository: _insightsRepository,
       assistantRepository: _assistantRepository,
+      notificationApi: _unifiedNotificationDispatcher,
       audioPlaybackController: _audioPlaybackController,
       sleepExperienceController: _sleepExperienceController,
       nightWelcomeController: _nightWelcomeController,
@@ -196,6 +208,11 @@ class _AppScopeState extends State<AppScope> {
         appApiClient: appApiClient,
         snapshotStore: snapshotStore,
       );
+      _sleepCaptureRepository = CloudBaseSleepCaptureRepository(
+        authRepository: _authRepository,
+        snapshotStore: snapshotStore,
+        appApiClient: appApiClient,
+      );
       _notificationRepository = CloudBaseNotificationRepository(
         authRepository: _authRepository,
         snapshotStore: snapshotStore,
@@ -241,6 +258,7 @@ class _AppScopeState extends State<AppScope> {
     _feedbackRepository = InMemoryFeedbackRepository(
       sleepSessionRepository: _sleepSessionRepository,
     );
+    _sleepCaptureRepository = InMemorySleepCaptureRepository();
     _notificationRepository = InMemoryNotificationRepository(
       ownerUid: _authRepository.currentUser.uid,
     );
@@ -263,6 +281,7 @@ class _AppScopeState extends State<AppScope> {
 
   @override
   void dispose() {
+    _passiveToastNotificationChannel.dispose();
     _assistantFacade.dispose();
     _insightsFacade.dispose();
     _dreamFacade.dispose();
@@ -278,6 +297,7 @@ class _AppScopeState extends State<AppScope> {
     _disposeListenable(_dreamRepository);
     _disposeListenable(_dormRepository);
     _disposeListenable(_notificationRepository);
+    _disposeListenable(_sleepCaptureRepository);
     _disposeListenable(_feedbackRepository);
     _disposeListenable(_sleepSessionRepository);
     _disposeListenable(_recommendationRepository);
@@ -319,11 +339,13 @@ class AppServices {
     required this.recommendationRepository,
     required this.sleepSessionRepository,
     required this.feedbackRepository,
+    required this.sleepCaptureRepository,
     required this.notificationRepository,
     required this.dormRepository,
     required this.dreamRepository,
     required this.insightsRepository,
     required this.assistantRepository,
+    required this.notificationApi,
     required this.audioPlaybackController,
     required this.sleepExperienceController,
     required this.nightWelcomeController,
@@ -342,11 +364,13 @@ class AppServices {
   final RecommendationRepository recommendationRepository;
   final SleepSessionRepository sleepSessionRepository;
   final FeedbackRepository feedbackRepository;
+  final SleepCaptureRepository sleepCaptureRepository;
   final NotificationRepository notificationRepository;
   final DormRepository dormRepository;
   final DreamRepository dreamRepository;
   final InsightsRepository insightsRepository;
   final AssistantRepository assistantRepository;
+  final UnifiedNotificationApi notificationApi;
   final AudioPlaybackController audioPlaybackController;
   final SleepExperienceController sleepExperienceController;
   final NightWelcomeController nightWelcomeController;

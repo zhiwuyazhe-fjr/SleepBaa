@@ -5,6 +5,7 @@ import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/utils/avatar_picker.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -57,16 +58,12 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('设置已保存')));
+      await notifyPassiveToast(context, message: '设置已保存');
     } catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('保存失败：$error')));
+      await notifyPassiveToast(context, message: '保存失败：$error');
     } finally {
       if (mounted) {
         setState(() => _isSavingSettings = false);
@@ -91,7 +88,7 @@ class _SettingsPageState extends State<SettingsPage> {
     );
     final String? nextName = await showDialog<String>(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('编辑宿舍名称'),
           content: TextField(
@@ -101,18 +98,19 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           actions: <Widget>[
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('取消'),
             ),
             FilledButton(
               onPressed: () =>
-                  Navigator.of(context).pop(controller.text.trim()),
+                  Navigator.of(dialogContext).pop(controller.text.trim()),
               child: const Text('保存'),
             ),
           ],
         );
       },
     );
+    controller.dispose();
     if (nextName == null || nextName.isEmpty) {
       return;
     }
@@ -120,25 +118,23 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('宿舍名称已更新')));
+    await notifyPassiveToast(context, message: '宿舍名称已更新');
   }
 
   Future<void> _leaveDorm(AppServices services) async {
     final bool? confirmed = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('退出宿舍'),
           content: const Text('退出后将离开当前宿舍空间，最后一位成员退出时宿舍会自动归档。'),
           actions: <Widget>[
             TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('取消'),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('确认退出'),
             ),
           ],
@@ -152,25 +148,23 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('已退出当前宿舍')));
+    await notifyPassiveToast(context, message: '已退出当前宿舍');
   }
 
   Future<void> _signOut(AppServices services) async {
     final bool? confirmed = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('退出登录'),
           content: const Text('退出后会清除当前登录状态，需要重新通过手机号验证码登录或注册。'),
           actions: <Widget>[
             TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('取消'),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('确认退出'),
             ),
           ],
@@ -185,9 +179,7 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
     context.go(AppRoutes.authPhone);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('已退出登录')));
+    await notifyPassiveToast(context, message: '已退出登录');
   }
 
   @override
@@ -204,10 +196,9 @@ class _SettingsPageState extends State<SettingsPage> {
           ]),
           builder: (BuildContext context, Widget? child) {
             final UserProfile profile = services.profileFacade.currentUser;
-            final UserSettings settings =
-                services.profileFacade.currentSettings;
+            final UserSettings settings = services.profileFacade.currentSettings;
             final Dorm dorm = services.dormFacade.currentDorm;
-            final String displayedPhone = [
+            final String displayedPhone = <String?>[
               profile.phoneNumber,
               services.authRepository.currentUser.phoneNumber,
             ].whereType<String>().map((String item) => item.trim()).firstWhere(
@@ -250,9 +241,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             const SizedBox(height: AppSpacing.sm),
                             _ProfileLine(
                               label: '角色',
-                              value: profile.role.isEmpty
-                                  ? '未设置'
-                                  : profile.role,
+                              value: profile.role.isEmpty ? '未设置' : profile.role,
                             ),
                           ],
                         ),
@@ -368,14 +357,37 @@ class _SettingsPageState extends State<SettingsPage> {
                             : '当前手机号：$displayedPhone',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        services.environment.usesCloudBase
+                            ? '可以从这里重新进入手机号登录 / 验证流程，或安全退出当前账号。'
+                            : '当前为本地演示环境。',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                          height: 1.5,
+                        ),
+                      ),
                       if (services.environment.usesCloudBase) ...<Widget>[
                         const SizedBox(height: AppSpacing.lg),
-                        PrimaryButton(
-                          label: '退出登录',
-                          expand: false,
-                          variant: PrimaryButtonVariant.ghost,
-                          icon: Icons.logout_rounded,
-                          onPressed: () => _signOut(services),
+                        Wrap(
+                          spacing: AppSpacing.sm,
+                          runSpacing: AppSpacing.sm,
+                          children: <Widget>[
+                            PrimaryButton(
+                              label: '手机号登录与验证',
+                              expand: false,
+                              variant: PrimaryButtonVariant.soft,
+                              icon: Icons.verified_user_rounded,
+                              onPressed: () => context.push(AppRoutes.authPhone),
+                            ),
+                            PrimaryButton(
+                              label: '退出登录',
+                              expand: false,
+                              variant: PrimaryButtonVariant.ghost,
+                              icon: Icons.logout_rounded,
+                              onPressed: () => _signOut(services),
+                            ),
+                          ],
                         ),
                       ],
                     ],

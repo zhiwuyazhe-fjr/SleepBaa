@@ -51,7 +51,37 @@ class _FakeAssistantGateway implements AssistantReplyGateway {
       provider: 'xai_responses',
       model: 'grok-4-1-fast-reasoning',
       assistantMessageId: clientAssistantMessageId,
-      updatedSurfaces: <String>['assistant_context'],
+      updatedSurfaces: const <String>['assistant_context'],
+    );
+  }
+
+  @override
+  Future<AssistantCaptureResult> generateCapture({
+    required String prompt,
+    required String threadId,
+    required String sessionId,
+    required SleepCaptureType captureType,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  }) async {
+    return AssistantCaptureResult(
+      reply: 'Capture reply',
+      sourceMode: AssistantReplySourceMode.remoteSuccess,
+      record: SleepCaptureRecord(
+        id: 'capture-1',
+        type: captureType,
+        sessionId: sessionId,
+        createdAt: DateTime(2026, 1, 1),
+        title: 'Capture title',
+        outline: 'Capture outline',
+        content: prompt,
+      ),
+      recordPersistedRemotely: true,
+      provider: 'xai_responses',
+      model: 'grok-4-1-fast-reasoning',
+      assistantMessageId: clientAssistantMessageId,
+      updatedSurfaces: const <String>['assistant_context'],
     );
   }
 }
@@ -69,6 +99,33 @@ class _ErrorAssistantGateway implements AssistantReplyGateway {
       reply: '暂时没有收到回复，请稍后再试。',
       sourceMode: AssistantReplySourceMode.error,
       errorMessage: 'gateway failure',
+    );
+  }
+
+  @override
+  Future<AssistantCaptureResult> generateCapture({
+    required String prompt,
+    required String threadId,
+    required String sessionId,
+    required SleepCaptureType captureType,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  }) async {
+    return AssistantCaptureResult(
+      reply: '暂时没有收到整理结果，请稍后再试。',
+      sourceMode: AssistantReplySourceMode.error,
+      errorMessage: 'gateway failure',
+      record: SleepCaptureRecord(
+        id: '',
+        type: captureType,
+        sessionId: sessionId,
+        createdAt: DateTime(2026, 1, 1),
+        title: '',
+        outline: '',
+        content: prompt,
+      ),
+      recordPersistedRemotely: false,
     );
   }
 }
@@ -114,9 +171,12 @@ void main() {
       final InMemoryDormRepository dormRepository = InMemoryDormRepository(
         currentUserId: 'assistant-user',
       );
+      final InMemorySleepCaptureRepository sleepCaptureRepository =
+          InMemorySleepCaptureRepository();
       final AssistantFacade facade = AssistantFacade(
         authRepository: authRepository,
         assistantRepository: assistantRepository,
+        sleepCaptureRepository: sleepCaptureRepository,
         dormRepository: dormRepository,
         assistantReplyGateway: _FakeAssistantGateway(),
       );
@@ -136,6 +196,7 @@ void main() {
       facade.dispose();
       authRepository.dispose();
       assistantRepository.dispose();
+      sleepCaptureRepository.dispose();
       dormRepository.dispose();
     },
   );
@@ -153,9 +214,12 @@ void main() {
       final InMemoryDormRepository dormRepository = InMemoryDormRepository(
         currentUserId: 'assistant-user',
       );
+      final InMemorySleepCaptureRepository sleepCaptureRepository =
+          InMemorySleepCaptureRepository();
       final AssistantFacade facade = AssistantFacade(
         authRepository: authRepository,
         assistantRepository: assistantRepository,
+        sleepCaptureRepository: sleepCaptureRepository,
         dormRepository: dormRepository,
         assistantReplyGateway: _ErrorAssistantGateway(),
       );
@@ -174,6 +238,7 @@ void main() {
       facade.dispose();
       authRepository.dispose();
       assistantRepository.dispose();
+      sleepCaptureRepository.dispose();
       dormRepository.dispose();
     },
   );

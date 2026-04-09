@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import cors from "cors";
 import express, { Request, Response } from "express";
 import { acceptDormInviteCallable } from "../callables/accept_dorm_invite";
+import { assistantCaptureCallable } from "../callables/assistant_capture";
 import { assistantReplyCallable } from "../callables/assistant_reply";
 import { createDormInviteCallable } from "../callables/create_dorm_invite";
 import { prepareTonightPlanCallable } from "../callables/prepare_tonight_plan";
@@ -55,6 +56,10 @@ function asStringArray(value: unknown): string[] {
 
 function asList(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+function asSleepCaptureKind(value: unknown): "dream" | "memo" {
+  return asString(value) === "dream" ? "dream" : "memo";
 }
 
 export function normalizeCloudBasePhoneNumber(value: string): string {
@@ -628,6 +633,58 @@ export function createAppApiServer() {
   );
 
   app.post(
+    "/api/sleep-capture/save",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      const body = asMap(request.body);
+      const record = asMap(body.record);
+      response.json({
+        record: await repo.saveSleepCaptureRecord(request.authContext!.uid, {
+          ...record,
+          type: asSleepCaptureKind(record.type),
+        }),
+        updatedSurfaces: ["assistant_context"],
+      });
+    }),
+  );
+
+  app.post(
+    "/api/sleep-capture/banner/show",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      const sessionId = asString(asMap(request.body).sessionId);
+      if (!sessionId.trim()) {
+        throw new Error("sessionId is required.");
+      }
+      const pendingMemoBanner = await repo.buildPendingSleepMemoBanner(
+        request.authContext!.uid,
+        sessionId,
+      );
+      await repo.writeUserState(request.authContext!.uid, {
+        sleepCapture: {
+          pendingMemoBanner:
+            pendingMemoBanner === null
+              ? null
+              : (pendingMemoBanner as any),
+        },
+      });
+      response.json({
+        pendingMemoBanner,
+        updatedSurfaces: ["home_pre_sleep"],
+      });
+    }),
+  );
+
+  app.post(
+    "/api/sleep-capture/banner/clear",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      await repo.clearPendingSleepMemoBanner(request.authContext!.uid);
+      response.json({ ok: true, updatedSurfaces: ["home_pre_sleep"] });
+    }),
+  );
+
+  app.post(
     "/api/feedback/morning",
     asyncRoute(async (request, response) => {
       const repo = createRepositoryFromEnv();
@@ -870,6 +927,83 @@ export function createAppApiServer() {
       });
       response.json({
         ...reply,
+        assistantMessageId: clientAssistantMessageId,
+      });
+    }),
+  );
+
+  app.post(
+    "/api/assistant/capture",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      const provider = createAIProviderFromEnv();
+      const body = asMap(request.body);
+      const threadId = asString(
+        body.threadId,
+        `thread-${request.authContext!.uid}`,
+      );
+      const prompt = asString(body.prompt);
+      const sessionId = asString(body.sessionId);
+      if (!prompt.trim()) {
+        throw new Error("prompt is required.");
+      }
+      if (!sessionId.trim()) {
+        throw new Error("sessionId is required.");
+      }
+      const captureType = asSleepCaptureKind(body.captureType);
+      logHttp(
+        `assistant capture start uid=${request.authContext!.uid} threadId=${threadId} sessionId=${sessionId} captureType=${captureType} provider=${provider.providerName} model=${provider.modelName}`,
+      );
+      const clientUserMessageId = asString(
+        body.clientUserMessageId,
+        randomUUID(),
+      );
+      const clientAssistantMessageId = asString(
+        body.clientAssistantMessageId,
+        randomUUID(),
+      );
+      await repo.ensureAssistantThread(
+        request.authContext!.uid,
+        threadId,
+        asString(
+          body.title,
+          captureType === "dream" ? "梦记收纳" : "事记收纳",
+        ),
+      );
+      await repo.appendAssistantMessage({
+        id: clientUserMessageId,
+        threadId,
+        role: "user",
+        content: prompt,
+        createdAt: nowIso(),
+        status: "complete",
+      });
+      const result = await assistantCaptureCallable({
+        uid: request.authContext!.uid,
+        threadId,
+        prompt,
+        captureType,
+        sessionId,
+        repo,
+        provider,
+      });
+      logHttp(
+        `assistant capture done uid=${request.authContext!.uid} threadId=${threadId} sessionId=${sessionId} provider=${asString(result.provider)} model=${asString(result.model)} sourceMode=${asString(result.sourceMode)} error=${asString(result.errorMessage)}`,
+      );
+      await repo.appendAssistantMessage({
+        id: clientAssistantMessageId,
+        threadId,
+        role: "assistant",
+        content: asString(result.reply),
+        createdAt: nowIso(),
+        status: asString(result.sourceMode) === "error" ? "error" : "complete",
+        sourceMode: asString(result.sourceMode, "fallbackSuccess"),
+        provider: asString(result.provider) || undefined,
+        model: asString(result.model) || undefined,
+        errorMessage: asString(result.errorMessage) || undefined,
+      });
+      response.json({
+        ...result,
         assistantMessageId: clientAssistantMessageId,
       });
     }),

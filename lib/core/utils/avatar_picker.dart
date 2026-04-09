@@ -3,9 +3,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 
 Future<void> pickAndSaveAvatar(BuildContext context) async {
-  final messenger = ScaffoldMessenger.of(context);
   final authRepository = context.appServices.authRepository;
   final ImagePicker picker = ImagePicker();
   final XFile? image = await picker.pickImage(
@@ -23,8 +23,14 @@ Future<void> pickAndSaveAvatar(BuildContext context) async {
       avatarPath: image.path,
       avatarBytes: bytes,
     );
-    messenger.showSnackBar(const SnackBar(content: Text('头像已更新')));
+    if (!context.mounted) {
+      return;
+    }
+    await notifyPassiveToast(context, message: '头像已更新');
   } catch (_) {
-    messenger.showSnackBar(const SnackBar(content: Text('头像读取失败，请重试')));
+    if (!context.mounted) {
+      return;
+    }
+    await notifyPassiveToast(context, message: '头像读取失败，请重试');
   }
 }

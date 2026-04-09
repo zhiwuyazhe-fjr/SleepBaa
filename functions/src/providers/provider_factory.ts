@@ -10,6 +10,8 @@ import {
   InterferenceFactor,
   MorningReviewResult,
   RecommendedAction,
+  SleepCaptureDraft,
+  SleepCaptureKind,
   StructuredAssistantReply,
   SurfaceId,
   TonightPlan,
@@ -243,6 +245,21 @@ function normalizeMorningReview(
   };
 }
 
+function normalizeSleepCaptureDraft(
+  value: unknown,
+  fallback: SleepCaptureDraft,
+): SleepCaptureDraft {
+  const data = asMap(value);
+  const type = asString(data.type, fallback.type);
+  return {
+    type: type === "dream" || type === "memo" ? type : fallback.type,
+    title: asString(data.title, fallback.title),
+    outline: asString(data.outline, fallback.outline),
+    content: asString(data.content, fallback.content),
+    reply: asString(data.reply, fallback.reply),
+  };
+}
+
 const ASSISTANT_INTENTS: AssistantIntent[] = [
   "general_support",
   "sleep_difficulty",
@@ -362,6 +379,27 @@ function missingMorningReviewFields(data: JsonMap): string[] {
   return missing;
 }
 
+function missingSleepCaptureDraftFields(data: JsonMap): string[] {
+  const missing: string[] = [];
+  const type = asString(data.type);
+  if (type !== "dream" && type !== "memo") {
+    missing.push("type");
+  }
+  if (!nonEmptyString(data.title)) {
+    missing.push("title");
+  }
+  if (!nonEmptyString(data.outline)) {
+    missing.push("outline");
+  }
+  if (!nonEmptyString(data.content)) {
+    missing.push("content");
+  }
+  if (!nonEmptyString(data.reply)) {
+    missing.push("reply");
+  }
+  return missing;
+}
+
 function ensureStructuredReplyCandidate(value: unknown): JsonMap {
   const data = asMap(value);
   const missing = missingStructuredReplyFields(data);
@@ -401,6 +439,17 @@ function ensureMorningReviewCandidate(value: unknown): JsonMap {
   if (missing.length > 0) {
     throw new Error(
       `Remote morning review missing required fields: ${missing.join(", ")}`,
+    );
+  }
+  return data;
+}
+
+function ensureSleepCaptureCandidate(value: unknown): JsonMap {
+  const data = asMap(value);
+  const missing = missingSleepCaptureDraftFields(data);
+  if (missing.length > 0) {
+    throw new Error(
+      `Remote sleep capture draft missing required fields: ${missing.join(", ")}`,
     );
   }
   return data;
@@ -684,6 +733,22 @@ const MORNING_REVIEW_SCHEMA: JsonMap = {
   },
 };
 
+const SLEEP_CAPTURE_SCHEMA: JsonMap = {
+  type: "object",
+  additionalProperties: false,
+  required: ["type", "title", "outline", "content", "reply"],
+  properties: {
+    type: {
+      type: "string",
+      enum: ["dream", "memo"],
+    },
+    title: { type: "string" },
+    outline: { type: "string" },
+    content: { type: "string" },
+    reply: { type: "string" },
+  },
+};
+
 const STRUCTURED_REPLY_EXAMPLE: JsonMap = {
   reply: "先把注意力放回今晚最小、最容易完成的一步。",
   intent: "general_support",
@@ -721,6 +786,14 @@ const MORNING_REVIEW_EXAMPLE: JsonMap = {
     emotionTrendSummary: "临睡前情绪需要继续观察。",
     lastUpdatedAt: "2026-04-08T12:00:00.000Z",
   },
+};
+
+const SLEEP_CAPTURE_EXAMPLE: JsonMap = {
+  type: "dream",
+  title: "梦记 02:13 · 桥上的风",
+  outline: "AI整理：梦里重点出现了“高桥、冷风与不害怕的感觉”，适合稍后回看情绪和场景。",
+  content: "我梦见自己站在很高的桥上，风很冷，但并不害怕。",
+  reply: "我轻轻帮你收好了这段梦境，等你清醒些时可以再回来补充。",
 };
 
 abstract class BaseRemoteProvider implements AIProvider {
@@ -771,6 +844,15 @@ abstract class BaseRemoteProvider implements AIProvider {
     body: string,
     context: AssistantContext,
   ): Promise<AIProviderResult<DreamAnalysis>>;
+
+  abstract generateSleepCapture(
+    context: AssistantContext,
+    params: {
+      prompt: string;
+      captureType: SleepCaptureKind;
+      sessionId: string;
+    },
+  ): Promise<AIProviderResult<SleepCaptureDraft>>;
 
   abstract analyzeFeedback(
     context: AssistantContext,
@@ -886,6 +968,34 @@ class XAIResponsesProvider extends BaseRemoteProvider {
         return normalizeDreamAnalysis(
           ensureDreamAnalysisCandidate(value),
           (await this.fallback.summarizeDream(body, context)).value,
+        );
+      },
+    });
+  }
+
+  async generateSleepCapture(
+    context: AssistantContext,
+    params: {
+      prompt: string;
+      captureType: SleepCaptureKind;
+      sessionId: string;
+    },
+  ): Promise<AIProviderResult<SleepCaptureDraft>> {
+    return this.withFallback({
+      fallback: this.fallback.generateSleepCapture(context, params),
+      remoteCall: async () => {
+        const value = await this.requestJson({
+          schemaName: "sleep_capture",
+          schema: SLEEP_CAPTURE_SCHEMA,
+          systemPrompt: buildSystemPrompt(context),
+          userPrompt: buildUserPayloadPrompt(
+            "Return sleep capture JSON that matches the schema. Keep title concise, outline useful, content faithful to the user's input, and reply warm and brief.",
+            params,
+          ),
+        });
+        return normalizeSleepCaptureDraft(
+          ensureSleepCaptureCandidate(value),
+          (await this.fallback.generateSleepCapture(context, params)).value,
         );
       },
     });
@@ -1218,6 +1328,33 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
         return normalizeDreamAnalysis(
           ensureDreamAnalysisCandidate(value),
           (await this.fallback.summarizeDream(body, context)).value,
+        );
+      },
+    });
+  }
+
+  async generateSleepCapture(
+    context: AssistantContext,
+    params: {
+      prompt: string;
+      captureType: SleepCaptureKind;
+      sessionId: string;
+    },
+  ): Promise<AIProviderResult<SleepCaptureDraft>> {
+    return this.withFallback({
+      fallback: this.fallback.generateSleepCapture(context, params),
+      remoteCall: async () => {
+        const value = await this.generateJson(
+          context,
+          "Return sleep capture JSON that matches the schema. Keep title concise, outline useful, content faithful to the user's input, and reply warm and brief.",
+          params,
+          "sleep_capture",
+          SLEEP_CAPTURE_SCHEMA,
+          SLEEP_CAPTURE_EXAMPLE,
+        );
+        return normalizeSleepCaptureDraft(
+          ensureSleepCaptureCandidate(value),
+          (await this.fallback.generateSleepCapture(context, params)).value,
         );
       },
     });

@@ -26,6 +26,7 @@ class NightMoodWelcomeFlow extends StatefulWidget {
 
 class _NightMoodWelcomeFlowState extends State<NightMoodWelcomeFlow> {
   NightMoodFlowStep _step = NightMoodFlowStep.select;
+  bool _isForward = true;
   late NightMood _selectedMood;
   late Set<String> _selectedReasons;
   bool _isSubmitting = false;
@@ -43,6 +44,9 @@ class _NightMoodWelcomeFlowState extends State<NightMoodWelcomeFlow> {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = NightMoodPalette.fromMood(_selectedMood);
+    final _WelcomeLayoutMetrics metrics = _metricsForHeight(
+      MediaQuery.sizeOf(context).height,
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFF050505),
@@ -50,33 +54,79 @@ class _NightMoodWelcomeFlowState extends State<NightMoodWelcomeFlow> {
         duration: const Duration(milliseconds: 320),
         switchInCurve: Curves.easeOutCubic,
         switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (Widget child, Animation<double> animation) {
+          final bool isCurrent =
+              child.key == ValueKey<NightMoodFlowStep>(_step);
+          final double incomingStartX = _isForward ? 0.16 : -0.16;
+          final double outgoingEndX = _isForward ? -0.1 : 0.1;
+          final Animation<Offset> offsetAnimation = isCurrent
+              ? Tween<Offset>(
+                  begin: Offset(incomingStartX, 0),
+                  end: Offset.zero,
+                ).animate(animation)
+              : Tween<Offset>(
+                  begin: Offset(outgoingEndX, 0),
+                  end: Offset.zero,
+                ).animate(animation);
+
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(position: offsetAnimation, child: child),
+          );
+        },
         child: switch (_step) {
           NightMoodFlowStep.select => _SelectionStep(
-            key: const ValueKey<String>('night-mood-select-step'),
+            key: const ValueKey<NightMoodFlowStep>(NightMoodFlowStep.select),
             selectedMood: _selectedMood,
             palette: palette,
+            metrics: metrics,
             isSubmitting: _isSubmitting,
             onMoodChanged: _handleMoodChanged,
-            onNext: () => setState(() => _step = NightMoodFlowStep.reasons),
+            onNext: () {
+              setState(() {
+                _isForward = true;
+                _step = NightMoodFlowStep.reasons;
+              });
+            },
             onSkip: _handleSkip,
           ),
           NightMoodFlowStep.reasons => _ReasonsStep(
-            key: const ValueKey<String>('night-mood-reasons-step'),
+            key: const ValueKey<NightMoodFlowStep>(NightMoodFlowStep.reasons),
             selectedMood: _selectedMood,
             palette: palette,
+            metrics: metrics,
             selectedReasons: _selectedReasons,
             isSubmitting: _isSubmitting,
-            onBack: () => setState(() => _step = NightMoodFlowStep.select),
+            onBack: () {
+              setState(() {
+                _isForward = false;
+                _step = NightMoodFlowStep.select;
+              });
+            },
             onToggleReason: _toggleReason,
-            onNext: () => setState(() => _step = NightMoodFlowStep.welcome),
+            onNext: () {
+              if (_selectedReasons.isEmpty) {
+                return;
+              }
+              setState(() {
+                _isForward = true;
+                _step = NightMoodFlowStep.welcome;
+              });
+            },
           ),
           NightMoodFlowStep.welcome => _WelcomeStep(
-            key: const ValueKey<String>('night-mood-welcome-step'),
+            key: const ValueKey<NightMoodFlowStep>(NightMoodFlowStep.welcome),
             selectedMood: _selectedMood,
             palette: palette,
+            metrics: metrics,
             selectedReasons: _selectedReasons.toList(growable: false),
             isSubmitting: _isSubmitting,
-            onBack: () => setState(() => _step = NightMoodFlowStep.reasons),
+            onBack: () {
+              setState(() {
+                _isForward = false;
+                _step = NightMoodFlowStep.reasons;
+              });
+            },
             onEnter: _handleComplete,
           ),
         },
@@ -110,7 +160,7 @@ class _NightMoodWelcomeFlowState extends State<NightMoodWelcomeFlow> {
       return;
     }
     setState(() {
-      if (_selectedReasons.contains(reason) && _selectedReasons.length > 1) {
+      if (_selectedReasons.contains(reason)) {
         _selectedReasons.remove(reason);
       } else {
         _selectedReasons.add(reason);
@@ -207,6 +257,7 @@ class _SelectionStep extends StatelessWidget {
     super.key,
     required this.selectedMood,
     required this.palette,
+    required this.metrics,
     required this.isSubmitting,
     required this.onMoodChanged,
     required this.onNext,
@@ -215,6 +266,7 @@ class _SelectionStep extends StatelessWidget {
 
   final NightMood selectedMood;
   final NightMoodPalette palette;
+  final _WelcomeLayoutMetrics metrics;
   final bool isSubmitting;
   final AsyncValueCallback<NightMood> onMoodChanged;
   final VoidCallback onNext;
@@ -225,17 +277,21 @@ class _SelectionStep extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double mediaTop = MediaQuery.paddingOf(context).top;
-        final bool compact = constraints.maxHeight < 720;
-        final double topCardHeight = math.min(
-          compact ? 430 : 460,
-          constraints.maxHeight * (compact ? 0.43 : 0.46),
+        final double topCardHeight = math.max(
+          metrics.topCardMinHeight,
+          constraints.maxHeight * 0.525,
         );
+        final bool useTwoLineTitle = constraints.maxWidth < 370;
+        final String title = useTwoLineTitle
+            ? '今晚你更接近\n哪一种心情？'
+            : '今晚你更接近哪一种心情？';
 
         return SafeArea(
           top: false,
           child: Column(
             children: <Widget>[
               AnimatedContainer(
+                key: const ValueKey<String>('night-mood-top-card'),
                 duration: const Duration(milliseconds: 380),
                 curve: Curves.easeOutCubic,
                 width: double.infinity,
@@ -268,11 +324,11 @@ class _SelectionStep extends StatelessWidget {
                       child: MoodAvatar(
                         key: ValueKey<NightMood>(selectedMood),
                         mood: selectedMood,
-                        size: compact ? 190 : 280,
+                        size: metrics.avatarSize,
                         fillColor: palette.welcomeFaceColor,
                       ),
                     ),
-                    SizedBox(height: compact ? 18 : 24),
+                    SizedBox(height: metrics.avatarBottomSpacing),
                   ],
                 ),
               ),
@@ -285,17 +341,18 @@ class _SelectionStep extends StatelessWidget {
                         selected: selectedMood,
                         onChanged: onMoodChanged,
                       ),
-                      SizedBox(height: compact ? 24 : 32),
+                      SizedBox(height: metrics.titleTopSpacing),
                       Text(
-                        '今晚你更接近哪一种心情？',
+                        title,
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: compact ? 28 : 30,
+                          fontSize: metrics.titleFontSize,
+                          height: 1.12,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
                         ),
                       ),
-                      SizedBox(height: compact ? 8 : 12),
+                      SizedBox(height: metrics.titleBottomSpacing),
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 260),
                         child: Text(
@@ -314,12 +371,7 @@ class _SelectionStep extends StatelessWidget {
                         primaryBackgroundColor: Colors.white,
                         primaryTextColor: Colors.black,
                         onPrimaryPressed: isSubmitting ? null : () => onNext(),
-                        padding: EdgeInsets.fromLTRB(
-                          24,
-                          compact ? 16 : 24,
-                          24,
-                          compact ? 22 : 30,
-                        ),
+                        padding: metrics.bottomActionPadding,
                         secondaryLabel: 'Skip',
                         onSecondaryPressed: isSubmitting ? null : onSkip,
                       ),
@@ -340,6 +392,7 @@ class _ReasonsStep extends StatelessWidget {
     super.key,
     required this.selectedMood,
     required this.palette,
+    required this.metrics,
     required this.selectedReasons,
     required this.isSubmitting,
     required this.onBack,
@@ -349,6 +402,7 @@ class _ReasonsStep extends StatelessWidget {
 
   final NightMood selectedMood;
   final NightMoodPalette palette;
+  final _WelcomeLayoutMetrics metrics;
   final Set<String> selectedReasons;
   final bool isSubmitting;
   final VoidCallback onBack;
@@ -358,10 +412,11 @@ class _ReasonsStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<String> reasons = selectedMood.reasons;
+    final bool canContinue = selectedReasons.isNotEmpty;
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -370,8 +425,8 @@ class _ReasonsStep extends StatelessWidget {
             Text(
               selectedMood.reasonPrompt,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 32,
+              style: TextStyle(
+                fontSize: metrics.reasonTitleFontSize,
                 height: 1.2,
                 fontWeight: FontWeight.w700,
                 color: Colors.white,
@@ -444,12 +499,14 @@ class _ReasonsStep extends StatelessWidget {
                     .toList(growable: false),
               ),
             ),
-            const SizedBox(height: 20),
             _BottomActionBar(
               primaryLabel: '继续',
               primaryBackgroundColor: palette.welcomeAccentColor,
               primaryTextColor: palette.welcomeTextOnAccent,
-              onPrimaryPressed: isSubmitting ? null : () => onNext(),
+              onPrimaryPressed: isSubmitting || !canContinue
+                  ? null
+                  : () => onNext(),
+              padding: metrics.bottomActionPadding,
               secondaryLabel: '返回',
               onSecondaryPressed: isSubmitting ? null : () => onBack(),
             ),
@@ -465,6 +522,7 @@ class _WelcomeStep extends StatelessWidget {
     super.key,
     required this.selectedMood,
     required this.palette,
+    required this.metrics,
     required this.selectedReasons,
     required this.isSubmitting,
     required this.onBack,
@@ -473,6 +531,7 @@ class _WelcomeStep extends StatelessWidget {
 
   final NightMood selectedMood;
   final NightMoodPalette palette;
+  final _WelcomeLayoutMetrics metrics;
   final List<String> selectedReasons;
   final bool isSubmitting;
   final VoidCallback onBack;
@@ -484,7 +543,7 @@ class _WelcomeStep extends StatelessWidget {
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
         child: Column(
           children: <Widget>[
             const _FlowProgressIndicator(activeStep: 3),
@@ -515,10 +574,11 @@ class _WelcomeStep extends StatelessWidget {
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      '今晚模式已准备好',
+                      '准备就绪',
                       style: TextStyle(
                         color: palette.welcomeTextOnAccent,
-                        fontSize: 34,
+                        fontSize: metrics.welcomeTitleFontSize,
+                        height: 1.1,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -552,6 +612,7 @@ class _WelcomeStep extends StatelessWidget {
               primaryBackgroundColor: Colors.white,
               primaryTextColor: Colors.black,
               onPrimaryPressed: isSubmitting ? null : () => onEnter(),
+              padding: metrics.bottomActionPadding,
               secondaryLabel: '返回',
               onSecondaryPressed: isSubmitting ? null : () => onBack(),
             ),
@@ -577,7 +638,7 @@ class _FlowProgressIndicator extends StatelessWidget {
             height: 4,
             margin: EdgeInsets.only(right: index == 2 ? 0 : 8),
             decoration: BoxDecoration(
-              color: isActive ? Colors.white : Colors.white.withAlpha(46),
+              color: isActive ? Colors.white : Colors.white.withAlpha(92),
               borderRadius: BorderRadius.circular(999),
             ),
           ),
@@ -742,6 +803,70 @@ class _BottomActionBar extends StatelessWidget {
 
 typedef AsyncVoidCallback = FutureOr<void> Function();
 typedef AsyncValueCallback<T> = FutureOr<void> Function(T value);
+
+class _WelcomeLayoutMetrics {
+  const _WelcomeLayoutMetrics({
+    required this.topCardMinHeight,
+    required this.avatarSize,
+    required this.avatarBottomSpacing,
+    required this.titleTopSpacing,
+    required this.titleBottomSpacing,
+    required this.titleFontSize,
+    required this.reasonTitleFontSize,
+    required this.welcomeTitleFontSize,
+    required this.bottomActionPadding,
+  });
+
+  final double topCardMinHeight;
+  final double avatarSize;
+  final double avatarBottomSpacing;
+  final double titleTopSpacing;
+  final double titleBottomSpacing;
+  final double titleFontSize;
+  final double reasonTitleFontSize;
+  final double welcomeTitleFontSize;
+  final EdgeInsets bottomActionPadding;
+}
+
+_WelcomeLayoutMetrics _metricsForHeight(double height) {
+  if (height < 700) {
+    return const _WelcomeLayoutMetrics(
+      topCardMinHeight: 300,
+      avatarSize: 170,
+      avatarBottomSpacing: 14,
+      titleTopSpacing: 20,
+      titleBottomSpacing: 8,
+      titleFontSize: 26,
+      reasonTitleFontSize: 28,
+      welcomeTitleFontSize: 30,
+      bottomActionPadding: EdgeInsets.fromLTRB(24, 16, 24, 22),
+    );
+  }
+  if (height < 820) {
+    return const _WelcomeLayoutMetrics(
+      topCardMinHeight: 350,
+      avatarSize: 220,
+      avatarBottomSpacing: 18,
+      titleTopSpacing: 24,
+      titleBottomSpacing: 10,
+      titleFontSize: 28,
+      reasonTitleFontSize: 30,
+      welcomeTitleFontSize: 32,
+      bottomActionPadding: EdgeInsets.fromLTRB(24, 20, 24, 26),
+    );
+  }
+  return const _WelcomeLayoutMetrics(
+    topCardMinHeight: 410,
+    avatarSize: 280,
+    avatarBottomSpacing: 24,
+    titleTopSpacing: 32,
+    titleBottomSpacing: 12,
+    titleFontSize: 30,
+    reasonTitleFontSize: 32,
+    welcomeTitleFontSize: 34,
+    bottomActionPadding: EdgeInsets.fromLTRB(24, 24, 24, 30),
+  );
+}
 
 void _triggerHaptic(Future<void> Function() action) {
   if (kIsWeb) {

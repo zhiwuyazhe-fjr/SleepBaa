@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_app_api_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_auth_client.dart';
@@ -340,6 +339,17 @@ Map<String, List<AssistantMessage>> _assistantMessagesFromPayload(
   return grouped;
 }
 
+PendingSleepMemoBanner? _pendingSleepMemoBannerFromUserState(
+  Map<String, dynamic> userState,
+) {
+  final Map<String, dynamic> sleepCapture = _mapOf(userState['sleepCapture']);
+  final Map<String, dynamic> pending = _mapOf(sleepCapture['pendingMemoBanner']);
+  if (pending.isEmpty) {
+    return null;
+  }
+  return ModelSerializers.pendingSleepMemoBannerFromMap(pending);
+}
+
 class _SnapshotData {
   const _SnapshotData({
     required this.user,
@@ -347,6 +357,8 @@ class _SnapshotData {
     required this.dorm,
     required this.sessions,
     required this.dreams,
+    required this.sleepCaptureRecords,
+    required this.pendingSleepMemoBanner,
     required this.notifications,
     required this.threads,
     required this.messagesByThread,
@@ -359,6 +371,8 @@ class _SnapshotData {
   final Dorm dorm;
   final List<SleepSession> sessions;
   final List<DreamEntry> dreams;
+  final List<SleepCaptureRecord> sleepCaptureRecords;
+  final PendingSleepMemoBanner? pendingSleepMemoBanner;
   final List<NotificationItem> notifications;
   final List<AssistantThread> threads;
   final Map<String, List<AssistantMessage>> messagesByThread;
@@ -386,6 +400,7 @@ class _SnapshotData {
     );
     return _SnapshotData(
       user: user,
+      userState: _mapOf(root['userState']),
       settings: ModelSerializers.userSettingsFromMap(
         _mapOf(root['settings']).isEmpty
             ? ModelSerializers.userSettingsToMap(buildDefaultUserSettings())
@@ -398,6 +413,12 @@ class _SnapshotData {
       dreams: _mapListOf(
         root['dreamEntries'],
       ).map(ModelSerializers.dreamEntryFromMap).toList(growable: false),
+      sleepCaptureRecords: _mapListOf(root['sleepCaptureRecords'])
+          .map(ModelSerializers.sleepCaptureRecordFromMap)
+          .toList(growable: false),
+      pendingSleepMemoBanner: _pendingSleepMemoBannerFromUserState(
+        _mapOf(root['userState']),
+      ),
       notifications: _mapListOf(
         root['notifications'],
       ).map(_notificationFromMap).toList(growable: false),
@@ -408,7 +429,6 @@ class _SnapshotData {
         root['assistantMessages'],
       ),
       cardSnapshots: _cardSnapshotsFromPayload(root['cardSnapshots']),
-      userState: _mapOf(root['userState']),
     );
   }
 }
@@ -1715,6 +1735,280 @@ class CloudBaseFeedbackRepository extends ChangeNotifier
       }
     }
     notifyListeners();
+  }
+}
+
+class CloudBaseSleepCaptureRepository extends ChangeNotifier
+    implements SleepCaptureRepository {
+  CloudBaseSleepCaptureRepository({
+    required AuthRepository authRepository,
+    required CloudBaseSnapshotStore snapshotStore,
+    required CloudBaseAppApiClient appApiClient,
+  }) : _authRepository = authRepository,
+       _snapshotStore = snapshotStore,
+       _appApiClient = appApiClient {
+    _snapshotStore.addListener(_applySnapshot);
+  }
+
+  final AuthRepository _authRepository;
+  final CloudBaseSnapshotStore _snapshotStore;
+  final CloudBaseAppApiClient _appApiClient;
+
+  List<SleepCaptureRecord> _records = const <SleepCaptureRecord>[];
+  PendingSleepMemoBanner? _pendingSleepMemoBanner;
+
+  @override
+  PendingSleepMemoBanner? get pendingSleepMemoBanner => _pendingSleepMemoBanner;
+
+  @override
+  List<SleepCaptureRecord> recordsByType(SleepCaptureType type) {
+    final List<SleepCaptureRecord> matches = _records
+        .where((SleepCaptureRecord item) => item.type == type)
+        .toList()
+      ..sort(
+        (SleepCaptureRecord a, SleepCaptureRecord b) =>
+            b.createdAt.compareTo(a.createdAt),
+      );
+    return List<SleepCaptureRecord>.unmodifiable(matches);
+  }
+
+  @override
+  List<SleepCaptureRecord> recordsForSession(String sessionId) {
+    final List<SleepCaptureRecord> matches = _records
+        .where((SleepCaptureRecord item) => item.sessionId == sessionId)
+        .toList()
+      ..sort(
+        (SleepCaptureRecord a, SleepCaptureRecord b) =>
+            b.createdAt.compareTo(a.createdAt),
+      );
+    return List<SleepCaptureRecord>.unmodifiable(matches);
+  }
+
+  @override
+  Future<SleepCaptureRecord> addRecord({
+    required SleepCaptureType type,
+    required String sessionId,
+    required String content,
+    String? recordId,
+    String? title,
+    String? outline,
+    DateTime? createdAt,
+  }) async {
+    final DateTime now = createdAt ?? DateTime.now();
+    final String normalizedContent = content.trim();
+    final SleepCaptureRecord localRecord = SleepCaptureRecord(
+      id: recordId ?? IdGenerator.next('sleep-capture'),
+      type: type,
+      sessionId: sessionId,
+      createdAt: now,
+      title: title ?? _buildTitle(type: type, now: now, content: normalizedContent),
+      outline:
+          outline ?? _buildOutline(type: type, content: normalizedContent),
+      content: normalizedContent,
+    );
+    _upsertLocalRecord(localRecord);
+    if (!_appApiClient.isConfigured) {
+      return localRecord;
+    }
+    try {
+      await _authRepository.ensureAuthenticated();
+      final Map<String, dynamic> response = await _appApiClient.post(
+        '/api/sleep-capture/save',
+        body: <String, dynamic>{
+          'record': ModelSerializers.sleepCaptureRecordToMap(localRecord),
+        },
+      );
+      final Map<String, dynamic> recordMap = _mapOf(response['record']).isEmpty
+          ? response
+          : _mapOf(response['record']);
+      final SleepCaptureRecord remoteRecord =
+          ModelSerializers.sleepCaptureRecordFromMap(recordMap);
+      _upsertLocalRecord(remoteRecord);
+      await _snapshotStore.refresh();
+      return remoteRecord;
+    } catch (_) {
+      return localRecord;
+    }
+  }
+
+  @override
+  Future<void> showPendingBannerForSession(String sessionId) async {
+    final PendingSleepMemoBanner? localBanner = _buildPendingBannerForSession(
+      sessionId,
+    );
+    _pendingSleepMemoBanner = localBanner;
+    notifyListeners();
+    if (!_appApiClient.isConfigured) {
+      return;
+    }
+    try {
+      await _authRepository.ensureAuthenticated();
+      final Map<String, dynamic> response = await _appApiClient.post(
+        '/api/sleep-capture/banner/show',
+        body: <String, dynamic>{'sessionId': sessionId},
+      );
+      final Map<String, dynamic> bannerMap = _mapOf(
+        response['pendingMemoBanner'] ?? response['banner'],
+      );
+      _pendingSleepMemoBanner = bannerMap.isEmpty
+          ? null
+          : ModelSerializers.pendingSleepMemoBannerFromMap(bannerMap);
+      notifyListeners();
+      await _snapshotStore.refresh();
+    } catch (_) {
+      // Keep local banner state if remote sync fails.
+    }
+  }
+
+  @override
+  Future<void> clearPendingBanner() async {
+    _pendingSleepMemoBanner = null;
+    notifyListeners();
+    if (!_appApiClient.isConfigured) {
+      return;
+    }
+    try {
+      await _authRepository.ensureAuthenticated();
+      await _appApiClient.post(
+        '/api/sleep-capture/banner/clear',
+        body: const <String, dynamic>{},
+      );
+      await _snapshotStore.refresh();
+    } catch (_) {
+      // Keep local clear state even if remote sync fails.
+    }
+  }
+
+  void _upsertLocalRecord(SleepCaptureRecord record) {
+    final int index = _records.indexWhere(
+      (SleepCaptureRecord item) => item.id == record.id,
+    );
+    if (index == -1) {
+      _records = <SleepCaptureRecord>[record, ..._records];
+    } else {
+      final List<SleepCaptureRecord> next = List<SleepCaptureRecord>.from(
+        _records,
+      );
+      next[index] = record;
+      _records = next;
+    }
+    notifyListeners();
+  }
+
+  PendingSleepMemoBanner? _buildPendingBannerForSession(String sessionId) {
+    final List<SleepCaptureRecord> memoRecords = recordsForSession(sessionId)
+        .where((SleepCaptureRecord item) => item.type == SleepCaptureType.memo)
+        .toList(growable: false);
+    final List<PendingSleepMemoGroup> carryoverGroups =
+        (_pendingSleepMemoBanner?.groups ?? const <PendingSleepMemoGroup>[])
+            .map(
+              (PendingSleepMemoGroup group) => PendingSleepMemoGroup(
+                sessionId: group.sessionId,
+                label: '上次睡眠模式（未查收）',
+                items: group.items,
+                isCarryover: true,
+              ),
+            )
+            .toList(growable: false);
+    final List<PendingSleepMemoGroup> nextGroups = <PendingSleepMemoGroup>[
+      ...carryoverGroups,
+      if (memoRecords.isNotEmpty)
+        PendingSleepMemoGroup(
+          sessionId: sessionId,
+          label: carryoverGroups.isEmpty ? '本次睡眠模式' : '本次睡眠模式（新）',
+          items: memoRecords.map(_buildBannerLine).toList(growable: false),
+          isCarryover: false,
+        ),
+    ];
+    if (nextGroups.isEmpty) {
+      return null;
+    }
+    return PendingSleepMemoBanner(
+      title: '事记内容查收',
+      subtitle: '点击查看或 30min 后自动消除。',
+      groups: nextGroups,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  String _buildTitle({
+    required SleepCaptureType type,
+    required DateTime now,
+    required String content,
+  }) {
+    final String hh = now.hour.toString().padLeft(2, '0');
+    final String mm = now.minute.toString().padLeft(2, '0');
+    final String prefix = type == SleepCaptureType.dream ? '梦记' : '事记';
+    final String seed = _firstMeaningfulFragment(content);
+    return '$prefix $hh:$mm · ${seed.isEmpty ? '新的记录' : seed}';
+  }
+
+  String _buildOutline({
+    required SleepCaptureType type,
+    required String content,
+  }) {
+    final List<String> fragments = content
+        .split(RegExp(r'[。！？\n]'))
+        .map((String item) => item.trim())
+        .where((String item) => item.isNotEmpty)
+        .toList(growable: false);
+    if (fragments.isEmpty) {
+      return type == SleepCaptureType.dream
+          ? '记录了一段尚待补充的梦境片段。'
+          : '记录了一段待整理的夜间事记。';
+    }
+    final String lead = fragments.first;
+    if (type == SleepCaptureType.dream) {
+      return 'AI整理：梦里重点出现了“${_truncate(lead, 22)}”，适合稍后回看情绪和场景。';
+    }
+    return 'AI整理：这段事记主要围绕“${_truncate(lead, 24)}”，可在清醒后继续展开。';
+  }
+
+  String _buildBannerLine(SleepCaptureRecord record) {
+    final String cleanedContent = record.content
+        .replaceAll('\n', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (cleanedContent.isEmpty) {
+      return '有一条新的事记等你稍后回看。';
+    }
+    return cleanedContent;
+  }
+
+  String _firstMeaningfulFragment(String content) {
+    final List<String> fragments = content
+        .split(RegExp(r'[，。！？\n]'))
+        .map((String item) => item.trim())
+        .where((String item) => item.isNotEmpty)
+        .toList(growable: false);
+    return fragments.isEmpty ? '' : _truncate(fragments.first, 10);
+  }
+
+  String _truncate(String text, int maxLength) {
+    if (text.length <= maxLength) {
+      return text;
+    }
+    return '${text.substring(0, maxLength)}...';
+  }
+
+  void _applySnapshot() {
+    final _SnapshotData snapshot = _SnapshotData.fromPayload(
+      _snapshotStore.payload,
+      _authRepository.currentUser.uid,
+    );
+    _records = List<SleepCaptureRecord>.from(snapshot.sleepCaptureRecords)
+      ..sort(
+        (SleepCaptureRecord a, SleepCaptureRecord b) =>
+            b.createdAt.compareTo(a.createdAt),
+      );
+    _pendingSleepMemoBanner = snapshot.pendingSleepMemoBanner;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _snapshotStore.removeListener(_applySnapshot);
+    super.dispose();
   }
 }
 

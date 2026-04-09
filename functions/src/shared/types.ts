@@ -189,6 +189,26 @@ export interface FeedbackLoopSummary {
   updatedAt: string;
 }
 
+export type SleepCaptureKind = "dream" | "memo";
+
+export interface PendingSleepMemoGroupDoc {
+  sessionId: string;
+  label: string;
+  items: string[];
+  isCarryover: boolean;
+}
+
+export interface PendingSleepMemoBannerDoc {
+  title: string;
+  subtitle: string;
+  groups: PendingSleepMemoGroupDoc[];
+  createdAt: string;
+}
+
+export interface SleepCaptureStateDoc {
+  pendingMemoBanner?: PendingSleepMemoBannerDoc | null;
+}
+
 export interface UserStateDoc {
   currentPhase: SleepPhase;
   activeSessionId?: string | null;
@@ -197,6 +217,7 @@ export interface UserStateDoc {
   profileSummary: ProfileSummary;
   tonightPlan?: TonightPlan | null;
   feedbackLoop?: FeedbackLoopSummary | null;
+  sleepCapture?: SleepCaptureStateDoc | null;
   updatedAt: string;
 }
 
@@ -260,6 +281,25 @@ export interface DreamAnalysis {
   dominantEmotion: string;
   suggestedFocus: string;
   sourceRefs: string[];
+}
+
+export interface SleepCaptureRecordDoc {
+  id: string;
+  userId: string;
+  type: SleepCaptureKind;
+  sessionId: string;
+  createdAt: string;
+  title: string;
+  outline: string;
+  content: string;
+}
+
+export interface SleepCaptureDraft {
+  type: SleepCaptureKind;
+  title: string;
+  outline: string;
+  content: string;
+  reply: string;
 }
 
 export interface MorningReviewResult {

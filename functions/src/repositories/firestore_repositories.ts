@@ -56,6 +56,7 @@ interface AppBootstrapPayload {
     dorm: JsonMap;
     sleepSessions: JsonMap[];
     dreamEntries: JsonMap[];
+    sleepCaptureRecords: JsonMap[];
     notifications: JsonMap[];
     assistantThreads: JsonMap[];
     assistantMessages: Record<string, JsonMap[]>;
@@ -76,6 +77,7 @@ const Collections = {
   assistantMemoryItems: "assistant_memory_items",
   sleepSessions: "sleep_sessions",
   dreamEntries: "dream_entries",
+  sleepCaptureRecords: "sleep_capture_records",
   assistantThreads: "assistant_threads",
   assistantMessages: "assistant_messages",
   notifications: "notifications",
@@ -661,6 +663,7 @@ export interface AssistantDataRepository {
   patchSleepSession(sessionId: string, patch: JsonMap): Promise<void>;
   saveDreamEntry(entry: JsonMap): Promise<JsonMap>;
   patchDreamEntry(entryId: string, patch: JsonMap): Promise<void>;
+  saveSleepCaptureRecord(uid: string, record: JsonMap): Promise<JsonMap>;
   createAssistantThread(
     uid: string,
     title?: string,
@@ -726,6 +729,11 @@ export interface AssistantDataRepository {
   renameDorm(uid: string, name: string): Promise<JsonMap>;
   leaveDorm(uid: string): Promise<JsonMap>;
   saveDormRules(uid: string, settings: JsonMap): Promise<JsonMap>;
+  buildPendingSleepMemoBanner(
+    uid: string,
+    sessionId: string,
+  ): Promise<JsonMap | null>;
+  clearPendingSleepMemoBanner(uid: string): Promise<void>;
   sendGentleDormReminder(
     uid: string,
     targetUid: string,
@@ -973,6 +981,7 @@ export class FirestoreRepository implements AssistantDataRepository {
     const [
       sleepSessions,
       dreamEntries,
+      sleepCaptureRecords,
       notifications,
       assistantThreads,
       cardSnapshots,
@@ -986,6 +995,11 @@ export class FirestoreRepository implements AssistantDataRepository {
         filters: { userId: uid },
         orderBy: { field: "createdAt", direction: "desc" },
         limit: 30,
+      }),
+      this.store.query(Collections.sleepCaptureRecords, {
+        filters: { userId: uid },
+        orderBy: { field: "createdAt", direction: "desc" },
+        limit: 60,
       }),
       this.store.query(Collections.notifications, {
         filters: { ownerUid: uid },
@@ -1035,6 +1049,7 @@ export class FirestoreRepository implements AssistantDataRepository {
         dorm: dorm as unknown as JsonMap,
         sleepSessions: sleepSessions.map((doc) => withoutMeta(doc)),
         dreamEntries: dreamEntries.map((doc) => withoutMeta(doc)),
+        sleepCaptureRecords: sleepCaptureRecords.map((doc) => withoutMeta(doc)),
         notifications: notifications.map((doc) => withoutMeta(doc)),
         assistantThreads: assistantThreads.map((doc) => withoutMeta(doc)),
         assistantMessages: messageMap,
@@ -1204,6 +1219,21 @@ export class FirestoreRepository implements AssistantDataRepository {
 
   async patchDreamEntry(entryId: string, patch: JsonMap): Promise<void> {
     await this.store.merge(Collections.dreamEntries, entryId, patch);
+  }
+
+  async saveSleepCaptureRecord(uid: string, record: JsonMap): Promise<JsonMap> {
+    const recordId = asString(record.id, randomUUID());
+    await this.ensureUserBootstrap(uid);
+    await this.store.set(Collections.sleepCaptureRecords, recordId, {
+      ...record,
+      id: recordId,
+      userId: uid,
+      createdAt: asString(record.createdAt, nowIso()),
+      updatedAt: nowIso(),
+    });
+    return withoutMeta(
+      (await this.store.get(Collections.sleepCaptureRecords, recordId)) ?? {},
+    );
   }
 
   async createAssistantThread(
@@ -1487,6 +1517,75 @@ export class FirestoreRepository implements AssistantDataRepository {
       ...(patch as unknown as JsonMap),
       updatedAt: nowIso(),
     });
+  }
+
+  async buildPendingSleepMemoBanner(
+    uid: string,
+    sessionId: string,
+  ): Promise<JsonMap | null> {
+    await this.ensureUserBootstrap(uid);
+    const records = await this.store.query(Collections.sleepCaptureRecords, {
+      filters: { userId: uid, sessionId, type: "memo" },
+      orderBy: { field: "createdAt", direction: "desc" },
+      limit: 30,
+    });
+    const currentItems = records
+      .map((doc) => asString(withoutMeta(doc).content).replace(/\s+/g, " ").trim())
+      .filter((item) => item.length > 0);
+    const currentState =
+      ((await this.getUserState(uid)) as unknown as JsonMap) ?? {};
+    const sleepCaptureState = asMap(currentState.sleepCapture);
+    const pendingBanner = asMap(sleepCaptureState.pendingMemoBanner);
+    const carryoverGroups = Array.isArray(pendingBanner.groups)
+      ? pendingBanner.groups
+          .map((item) => asMap(item))
+          .filter((group) => Object.keys(group).length > 0)
+          .map((group) => ({
+            sessionId: asString(group.sessionId),
+            label: "上次睡眠模式（未查收）",
+            items: Array.isArray(group.items)
+              ? group.items.map((item) => asString(item)).filter(Boolean)
+              : [],
+            isCarryover: true,
+          }))
+          .filter((group) => group.items.length > 0)
+      : [];
+
+    const nextGroups = [
+      ...carryoverGroups,
+      ...(currentItems.length > 0
+        ? [
+            {
+              sessionId,
+              label:
+                carryoverGroups.length === 0
+                  ? "本次睡眠模式"
+                  : "本次睡眠模式（新）",
+              items: currentItems,
+              isCarryover: false,
+            },
+          ]
+        : []),
+    ];
+
+    if (nextGroups.length === 0) {
+      return null;
+    }
+
+    return {
+      title: "事记内容查收",
+      subtitle: "点击查看或 30min 后自动消除。",
+      groups: nextGroups,
+      createdAt: nowIso(),
+    };
+  }
+
+  async clearPendingSleepMemoBanner(uid: string): Promise<void> {
+    await this.writeUserState(uid, {
+      sleepCapture: {
+        pendingMemoBanner: null,
+      },
+    } as Partial<UserStateDoc>);
   }
 
   async writeCardSnapshot(

@@ -314,6 +314,89 @@ abstract final class ModelSerializers {
     );
   }
 
+  static Map<String, dynamic> sleepCaptureRecordToMap(
+    SleepCaptureRecord record,
+  ) {
+    return <String, dynamic>{
+      'id': record.id,
+      'type': record.type.name,
+      'sessionId': record.sessionId,
+      'createdAt': record.createdAt,
+      'title': record.title,
+      'outline': record.outline,
+      'content': record.content,
+    };
+  }
+
+  static SleepCaptureRecord sleepCaptureRecordFromMap(
+    Map<String, dynamic> map,
+  ) {
+    return SleepCaptureRecord(
+      id: map['id'] as String? ?? '',
+      type: _sleepCaptureTypeFromName(map['type'] as String?) ??
+          SleepCaptureType.memo,
+      sessionId: map['sessionId'] as String? ?? '',
+      createdAt: _dateValue(map['createdAt']) ?? DateTime.now(),
+      title: map['title'] as String? ?? '',
+      outline: map['outline'] as String? ?? '',
+      content: map['content'] as String? ?? '',
+    );
+  }
+
+  static Map<String, dynamic> pendingSleepMemoBannerToMap(
+    PendingSleepMemoBanner banner,
+  ) {
+    return <String, dynamic>{
+      'title': banner.title,
+      'subtitle': banner.subtitle,
+      'groups': banner.groups
+          .map(pendingSleepMemoGroupToMap)
+          .toList(growable: false),
+      'createdAt': banner.createdAt,
+    };
+  }
+
+  static PendingSleepMemoBanner pendingSleepMemoBannerFromMap(
+    Map<String, dynamic> map,
+  ) {
+    return PendingSleepMemoBanner(
+      title: map['title'] as String? ?? '',
+      subtitle: map['subtitle'] as String? ?? '',
+      groups: (map['groups'] as List<dynamic>? ?? const <dynamic>[])
+          .map(
+            (dynamic item) => pendingSleepMemoGroupFromMap(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(growable: false),
+      createdAt: _dateValue(map['createdAt']) ?? DateTime.now(),
+    );
+  }
+
+  static Map<String, dynamic> pendingSleepMemoGroupToMap(
+    PendingSleepMemoGroup group,
+  ) {
+    return <String, dynamic>{
+      'sessionId': group.sessionId,
+      'label': group.label,
+      'items': group.items,
+      'isCarryover': group.isCarryover,
+    };
+  }
+
+  static PendingSleepMemoGroup pendingSleepMemoGroupFromMap(
+    Map<String, dynamic> map,
+  ) {
+    return PendingSleepMemoGroup(
+      sessionId: map['sessionId'] as String? ?? '',
+      label: map['label'] as String? ?? '',
+      items: (map['items'] as List<dynamic>? ?? const <dynamic>[])
+          .map((dynamic item) => item.toString())
+          .toList(growable: false),
+      isCarryover: map['isCarryover'] as bool? ?? false,
+    );
+  }
+
   static Map<String, dynamic> assistantThreadToMap(AssistantThread thread) {
     return <String, dynamic>{
       'id': thread.id,
@@ -487,6 +570,13 @@ abstract final class ModelSerializers {
     return _firstWhereOrNull(
       RecommendationFeedbackStatus.values,
       (RecommendationFeedbackStatus item) => item.name == value,
+    );
+  }
+
+  static SleepCaptureType? _sleepCaptureTypeFromName(String? value) {
+    return _firstWhereOrNull(
+      SleepCaptureType.values,
+      (SleepCaptureType item) => item.name == value,
     );
   }
 

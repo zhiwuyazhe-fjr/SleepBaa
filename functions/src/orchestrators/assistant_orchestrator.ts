@@ -17,6 +17,7 @@ import {
   AssistantThreadSummaryDoc,
   DreamAnalysis,
   MorningReviewResult,
+  SleepCaptureKind,
   SurfaceId,
   UserStateDoc,
 } from "../shared/types";
@@ -364,6 +365,87 @@ export async function handleAssistantReply(
     model: replyResult.modelName,
     sourceMode: replyResult.sourceMode,
     errorMessage: replyResult.errorMessage ?? null,
+  };
+}
+
+export async function handleAssistantCapture(
+  repo: AssistantDataRepository,
+  provider: AIProvider,
+  uid: string,
+  prompt: string,
+  threadId: string,
+  captureType: SleepCaptureKind,
+  sessionId: string,
+): Promise<{
+  runId: string;
+  reply: string;
+  updatedSurfaces: SurfaceId[];
+  userState: UserStateDoc;
+  provider: string;
+  model: string;
+  sourceMode: AIProviderSourceMode;
+  errorMessage: string | null;
+  record: Record<string, unknown>;
+}> {
+  const runId = randomUUID();
+  const context = await repo.buildAssistantContext(uid, threadId);
+  const previous = context.userState ?? buildEmptyUserState();
+  const captureResult = await provider.generateSleepCapture(context, {
+    prompt,
+    captureType,
+    sessionId,
+  });
+  const draft = captureResult.value;
+  const record = await repo.saveSleepCaptureRecord(uid, {
+    type: draft.type,
+    sessionId,
+    createdAt: nowIso(),
+    title: draft.title,
+    outline: draft.outline,
+    content: draft.content,
+  });
+  const nextState: UserStateDoc = {
+    ...previous,
+    latestThreadId: threadId,
+    updatedAt: nowIso(),
+  };
+
+  await repo.writeUserState(uid, nextState);
+  await persistRun(repo, uid, runId, {
+    eventType: "assistant_capture",
+    threadId,
+    provider: captureResult.providerName,
+    model: captureResult.modelName,
+    status: runStatusFromSourceMode(captureResult.sourceMode),
+    sourceMode: captureResult.sourceMode,
+    inputRefs: ["assistant_threads.messages", "sleep_sessions"],
+    outputRefs: ["sleep_capture_records", "assistant_context"],
+    error: captureResult.errorMessage ?? null,
+    createdAt: nowIso(),
+  });
+
+  const threadSummary = buildThreadSummaryDoc(
+    context,
+    threadId,
+    prompt,
+    draft.reply,
+  );
+  await repo.writeAssistantThreadSummary(uid, threadSummary);
+  const longTermMemory = extractLongTermMemory(uid, threadId, prompt);
+  if (longTermMemory.length > 0) {
+    await repo.upsertAssistantMemoryItems(uid, longTermMemory);
+  }
+
+  return {
+    runId,
+    reply: draft.reply,
+    updatedSurfaces: ["assistant_context"],
+    userState: nextState,
+    provider: captureResult.providerName,
+    model: captureResult.modelName,
+    sourceMode: captureResult.sourceMode,
+    errorMessage: captureResult.errorMessage ?? null,
+    record,
   };
 }
 

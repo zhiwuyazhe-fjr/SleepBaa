@@ -5,6 +5,8 @@ import {
   MorningReviewResult,
   ProfileSummary,
   RecommendedAction,
+  SleepCaptureDraft,
+  SleepCaptureKind,
   StructuredAssistantReply,
   TonightPlan,
 } from "../shared/types";
@@ -162,6 +164,15 @@ export interface AIProvider {
     context: AssistantContext,
   ): Promise<AIProviderResult<DreamAnalysis>>;
 
+  generateSleepCapture(
+    context: AssistantContext,
+    params: {
+      prompt: string;
+      captureType: SleepCaptureKind;
+      sessionId: string;
+    },
+  ): Promise<AIProviderResult<SleepCaptureDraft>>;
+
   analyzeFeedback(
     context: AssistantContext,
     sessionId: string,
@@ -299,6 +310,41 @@ export class DeterministicAIProvider implements AIProvider {
       dominantEmotion,
       suggestedFocus: context.dorm.noiseDb > 35 ? "noise" : "routine",
       sourceRefs: ["dream_entries.body", "user_settings.selectedNightMood"],
+    });
+  }
+
+  async generateSleepCapture(
+    _context: AssistantContext,
+    params: {
+      prompt: string;
+      captureType: SleepCaptureKind;
+      sessionId: string;
+    },
+  ): Promise<AIProviderResult<SleepCaptureDraft>> {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    const fragments = params.prompt
+      .split(/[，。！？\n]/)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+    const seed = fragments[0] ?? "";
+    const shortSeed = seed.length <= 10 ? seed : `${seed.slice(0, 10)}...`;
+    const lead = seed.length <= 22 ? seed : `${seed.slice(0, 22)}...`;
+    return deterministicResult<SleepCaptureDraft>({
+      type: params.captureType,
+      title: `${params.captureType === "dream" ? "梦记" : "事记"} ${hh}:${mm} · ${
+        shortSeed || "新的记录"
+      }`,
+      outline:
+        params.captureType === "dream"
+          ? `AI整理：梦里重点出现了“${lead || "一段待补充的画面"}”，适合稍后回看情绪和场景。`
+          : `AI整理：这段事记主要围绕“${lead || "一段待整理的念头"}”，可在清醒后继续展开。`,
+      content: params.prompt.trim(),
+      reply:
+        params.captureType === "dream"
+          ? "我轻轻帮你收好了这段梦境，等你清醒些时可以再回来补充。"
+          : "这段事记我先替你稳稳放好了，之后可以去事记仓库继续整理。",
     });
   }
 
