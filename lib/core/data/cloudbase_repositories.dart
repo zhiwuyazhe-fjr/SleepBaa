@@ -2444,6 +2444,7 @@ class CloudBaseAssistantRepository extends ChangeNotifier
   List<AssistantThread> _threads = const <AssistantThread>[];
   final Map<String, List<AssistantMessage>> _messagesByThread =
       <String, List<AssistantMessage>>{};
+  final Set<String> _optimisticThreadIds = <String>{};
   String? _currentThreadId;
 
   String get _userId => _authRepository.currentUser.uid;
@@ -2486,6 +2487,28 @@ class CloudBaseAssistantRepository extends ChangeNotifier
     return List<AssistantMessage>.unmodifiable(sorted);
   }
 
+  void _upsertLocalThread(AssistantThread thread) {
+    final int index = _threads.indexWhere(
+      (AssistantThread item) => item.id == thread.id,
+    );
+    if (index == -1) {
+      _threads = <AssistantThread>[thread, ..._threads];
+    } else {
+      final List<AssistantThread> next = List<AssistantThread>.from(_threads);
+      next[index] = thread;
+      _threads = next;
+    }
+    _messagesByThread.putIfAbsent(thread.id, () => <AssistantMessage>[]);
+  }
+
+  Map<String, List<AssistantMessage>> _copyMessagesByThread() {
+    return <String, List<AssistantMessage>>{
+      for (final MapEntry<String, List<AssistantMessage>> entry
+          in _messagesByThread.entries)
+        entry.key: List<AssistantMessage>.from(entry.value),
+    };
+  }
+
   @override
   Future<AssistantThread> createThread({String? title}) async {
     final AssistantThread localThread = AssistantThread(
@@ -2505,9 +2528,28 @@ class CloudBaseAssistantRepository extends ChangeNotifier
           },
         );
         await _snapshotStore.refresh();
-        _currentThreadId = _stringOf(data['id'], localThread.id);
+        final AssistantThread remoteThread = localThread.copyWith(
+          id: _stringOf(data['id'], localThread.id),
+          userId: _stringOf(data['userId'], localThread.userId),
+          title: _stringOf(data['title'], localThread.title),
+          createdAt: data['createdAt'] == null
+              ? localThread.createdAt
+              : _dateOf(data['createdAt']),
+          updatedAt: data['updatedAt'] == null
+              ? localThread.updatedAt
+              : _dateOf(data['updatedAt']),
+        );
+        if (!_threads.any(
+          (AssistantThread item) => item.id == remoteThread.id,
+        )) {
+          _optimisticThreadIds.add(remoteThread.id);
+          _upsertLocalThread(remoteThread);
+        } else {
+          _optimisticThreadIds.remove(remoteThread.id);
+        }
+        _currentThreadId = remoteThread.id;
         notifyListeners();
-        return currentThread ?? localThread;
+        return currentThread ?? remoteThread;
       } catch (_) {
         // Fall back to local state.
       }
@@ -2713,6 +2755,12 @@ class CloudBaseAssistantRepository extends ChangeNotifier
   }
 
   void _applySnapshot() {
+    final List<AssistantThread> previousThreads = List<AssistantThread>.from(
+      _threads,
+    );
+    final Map<String, List<AssistantMessage>> previousMessagesByThread =
+        _copyMessagesByThread();
+    final String? previousCurrentThreadId = _currentThreadId;
     final _SnapshotData snapshot = _SnapshotData.fromPayload(
       _snapshotStore.payload,
       _userId,
@@ -2721,10 +2769,38 @@ class CloudBaseAssistantRepository extends ChangeNotifier
     _messagesByThread
       ..clear()
       ..addAll(snapshot.messagesByThread);
+    _optimisticThreadIds.removeWhere(
+      (String threadId) =>
+          _threads.any((AssistantThread item) => item.id == threadId),
+    );
     final String latestThreadId = _stringOf(
       snapshot.userState['latestThreadId'],
     );
-    if (latestThreadId.isNotEmpty &&
+    if (previousCurrentThreadId != null &&
+        _threads.any(
+          (AssistantThread item) => item.id == previousCurrentThreadId,
+        )) {
+      _currentThreadId = previousCurrentThreadId;
+    } else if (previousCurrentThreadId != null &&
+        _optimisticThreadIds.contains(previousCurrentThreadId)) {
+      final AssistantThread? optimisticThread = _firstWhereOrNull(
+        previousThreads,
+        (AssistantThread item) => item.id == previousCurrentThreadId,
+      );
+      if (optimisticThread != null) {
+        _upsertLocalThread(optimisticThread);
+        _messagesByThread[optimisticThread.id] = List<AssistantMessage>.from(
+          previousMessagesByThread[optimisticThread.id] ??
+              const <AssistantMessage>[],
+        );
+        _currentThreadId = optimisticThread.id;
+      } else if (latestThreadId.isNotEmpty &&
+          _threads.any((AssistantThread item) => item.id == latestThreadId)) {
+        _currentThreadId = latestThreadId;
+      } else {
+        _currentThreadId = _threads.isEmpty ? null : _threads.first.id;
+      }
+    } else if (latestThreadId.isNotEmpty &&
         _threads.any((AssistantThread item) => item.id == latestThreadId)) {
       _currentThreadId = latestThreadId;
     } else if (_currentThreadId == null ||

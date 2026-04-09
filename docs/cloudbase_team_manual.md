@@ -306,7 +306,7 @@ npx mcporter call cloudbase.queryGateway action=getAccess targetType=function ta
 
 如果日志有触发记录，说明配置成功。
 
-## 8. 日常开发最短命令
+## 8. 日常开发最短命令 ！！！
 
 平时最常用就两条：
 

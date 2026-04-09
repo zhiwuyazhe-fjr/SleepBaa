@@ -1,6 +1,8 @@
 param(
   [string]$ConfigPath = ".cloudbase.local.json",
   [string]$AIProviderMode = "cloudbase_ai",
+  [string]$AIProviderName = "",
+  [string]$AIProviderGroup = "",
   [string]$AIProviderTimeoutMs = "60000",
   [string]$AIProviderBaseUrl = "",
   [string]$AIProviderApiKey = "",
@@ -177,12 +179,26 @@ function Format-EnvLiteral($Map) {
   return $parts -join ", "
 }
 
+function Resolve-ProviderName([string]$Mode, [string]$ExplicitName) {
+  if (-not [string]::IsNullOrWhiteSpace($ExplicitName)) {
+    return $ExplicitName
+  }
+
+  switch ($Mode) {
+    "cloudbase_ai" { return "cloudbase_ai" }
+    "xai_responses" { return "xai_responses" }
+    "deterministic" { return "deterministic" }
+    default { return "" }
+  }
+}
+
 $repoRoot = Get-RepoRoot
 $config = Read-Config -RepoRoot $repoRoot -RelativePath $ConfigPath
 $envId = [string]$config.CLOUDBASE_ENV_ID
 if ([string]::IsNullOrWhiteSpace($envId)) {
   throw "Missing CLOUDBASE_ENV_ID in local config."
 }
+$resolvedProviderName = Resolve-ProviderName -Mode $AIProviderMode -ExplicitName $AIProviderName
 
 $functionRoot = ($repoRoot.Replace("\", "/") + "/functions")
 $functions = @(
@@ -225,6 +241,8 @@ try {
 
     $nextEnv["CLOUDBASE_ENV_ID"] = $envId
     $nextEnv["AI_PROVIDER_MODE"] = $AIProviderMode
+    $nextEnv["AI_PROVIDER_NAME"] = $resolvedProviderName
+    $nextEnv["AI_PROVIDER_GROUP"] = $AIProviderGroup
     $nextEnv["AI_PROVIDER_TIMEOUT_MS"] = $AIProviderTimeoutMs
     $nextEnv["AI_PROVIDER_BASE_URL"] = $AIProviderBaseUrl
     $nextEnv["AI_PROVIDER_API_KEY"] = $AIProviderApiKey
@@ -235,18 +253,24 @@ try {
 
     $verifiedEnv = Get-FunctionEnvVariables $name
     $verifiedMode = [string](Get-MapValue $verifiedEnv "AI_PROVIDER_MODE")
+    $verifiedName = [string](Get-MapValue $verifiedEnv "AI_PROVIDER_NAME")
+    $verifiedGroup = [string](Get-MapValue $verifiedEnv "AI_PROVIDER_GROUP")
     $verifiedModel = [string](Get-MapValue $verifiedEnv "AI_PROVIDER_MODEL")
     $verifiedBaseUrl = [string](Get-MapValue $verifiedEnv "AI_PROVIDER_BASE_URL")
     $verifiedTimeout = [string](Get-MapValue $verifiedEnv "AI_PROVIDER_TIMEOUT_MS")
     if (
       $verifiedMode -ne $AIProviderMode -or
+      $verifiedName -ne $resolvedProviderName -or
+      $verifiedGroup -ne $AIProviderGroup -or
       $verifiedModel -ne $AIProviderModel -or
       $verifiedBaseUrl -ne $AIProviderBaseUrl -or
       $verifiedTimeout -ne $AIProviderTimeoutMs
     ) {
-      throw "Function '$name' config verification failed. Expected mode=$AIProviderMode model=$AIProviderModel baseUrl=$AIProviderBaseUrl timeout=$AIProviderTimeoutMs but got mode=$verifiedMode model=$verifiedModel baseUrl=$verifiedBaseUrl timeout=$verifiedTimeout"
+      throw "Function '$name' config verification failed. Expected mode=$AIProviderMode name=$resolvedProviderName group=$AIProviderGroup model=$AIProviderModel baseUrl=$AIProviderBaseUrl timeout=$AIProviderTimeoutMs but got mode=$verifiedMode name=$verifiedName group=$verifiedGroup model=$verifiedModel baseUrl=$verifiedBaseUrl timeout=$verifiedTimeout"
     }
     Write-Host "[$name] AI_PROVIDER_MODE=$verifiedMode"
+    Write-Host "[$name] AI_PROVIDER_NAME=$verifiedName"
+    Write-Host "[$name] AI_PROVIDER_GROUP=$verifiedGroup"
     Write-Host "[$name] AI_PROVIDER_MODEL=$verifiedModel"
     Write-Host "[$name] AI_PROVIDER_BASE_URL=$verifiedBaseUrl"
     Write-Host "[$name] AI_PROVIDER_TIMEOUT_MS=$verifiedTimeout"

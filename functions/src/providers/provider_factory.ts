@@ -1036,9 +1036,19 @@ interface CloudBaseAIProviderConfig {
   envId: string;
   providerName: string;
   modelName: string;
+  providerGroup?: string;
+  apiKey?: string;
+  baseUrl?: string;
+  timeoutMs: number;
 }
 
-function cloudbaseProviderSlug(modelName: string): string {
+function cloudbaseProviderGroup(
+  modelName: string,
+  explicitGroup?: string,
+): string {
+  if (explicitGroup?.trim()) {
+    return explicitGroup.trim();
+  }
   const normalized = modelName.trim().toLowerCase();
   if (normalized.startsWith("deepseek")) {
     return "deepseek";
@@ -1046,28 +1056,63 @@ function cloudbaseProviderSlug(modelName: string): string {
   return "hunyuan-exp";
 }
 
+function isBuiltInCloudBaseProviderGroup(providerGroup: string): boolean {
+  return providerGroup === "hunyuan-exp" || providerGroup === "deepseek";
+}
+
+function cloudbaseGatewayProviderPath(providerGroup: string): string {
+  if (providerGroup === "hunyuan-exp") {
+    return "hunyuan";
+  }
+  return providerGroup;
+}
+
 class CloudBaseAIProvider extends BaseRemoteProvider {
   readonly model: any;
+  readonly providerGroup: string;
+  readonly gatewayBaseUrl: string | null;
+  readonly apiKey: string;
 
   constructor(private readonly config: CloudBaseAIProviderConfig) {
     super(config.providerName, config.modelName);
-    const cloudbase = require("@cloudbase/node-sdk") as any;
-    const secretId = process.env.TENCENTCLOUD_SECRETID?.trim() || "";
-    const secretKey = process.env.TENCENTCLOUD_SECRETKEY?.trim() || "";
-    const sessionToken =
-      process.env.TENCENTCLOUD_SESSIONTOKEN?.trim() ||
-      process.env.TCB_SESSIONTOKEN?.trim() ||
-      "";
-    const app =
-      secretId && secretKey
-        ? cloudbase.init({
-            env: config.envId,
-            secretId,
-            secretKey,
-            ...(sessionToken ? { sessionToken } : {}),
-          })
-        : cloudbase.init({ env: config.envId });
-    this.model = app.ai().createModel(cloudbaseProviderSlug(config.modelName));
+    this.providerGroup = cloudbaseProviderGroup(
+      config.modelName,
+      config.providerGroup,
+    );
+    this.apiKey = config.apiKey?.trim() || "";
+
+    if (
+      isBuiltInCloudBaseProviderGroup(this.providerGroup) &&
+      !this.apiKey &&
+      !config.baseUrl?.trim()
+    ) {
+      const cloudbase = require("@cloudbase/node-sdk") as any;
+      const secretId = process.env.TENCENTCLOUD_SECRETID?.trim() || "";
+      const secretKey = process.env.TENCENTCLOUD_SECRETKEY?.trim() || "";
+      const sessionToken =
+        process.env.TENCENTCLOUD_SESSIONTOKEN?.trim() ||
+        process.env.TCB_SESSIONTOKEN?.trim() ||
+        "";
+      const app =
+        secretId && secretKey
+          ? cloudbase.init({
+              env: config.envId,
+              secretId,
+              secretKey,
+              ...(sessionToken ? { sessionToken } : {}),
+            })
+          : cloudbase.init({ env: config.envId });
+      this.model = app.ai().createModel(this.providerGroup);
+      this.gatewayBaseUrl = null;
+      return;
+    }
+
+    this.model = null;
+    this.gatewayBaseUrl =
+      config.baseUrl?.trim() ||
+      `https://${config.envId}.api.tcloudbasegateway.com/v1/ai/${cloudbaseGatewayProviderPath(
+        this.providerGroup,
+      )}/v1`;
   }
 
   async generateStructuredReply(
@@ -1229,7 +1274,47 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
     schema: JsonMap,
     example: JsonMap,
   ): Promise<string> {
-    const result = await this.model.generateText({
+    if (this.model) {
+      const result = await this.model.generateText({
+        model: this.config.modelName,
+        temperature: 0.1,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: buildSystemPrompt(context),
+          },
+          {
+            role: "user",
+            content: buildSchemaAwareUserPayloadPrompt({
+              instruction,
+              payload,
+              schemaName,
+              schema,
+              example,
+            }),
+          },
+        ],
+      });
+
+      return asString(result?.text);
+    }
+
+    if (!this.gatewayBaseUrl) {
+      throw new Error("CloudBase AI gateway base URL is missing.");
+    }
+    if (!this.apiKey) {
+      throw new Error(
+        `CloudBase API key is missing for provider group "${this.providerGroup}". Custom provider groups must use the OpenAI-compatible CloudBase gateway with API key auth.`,
+      );
+    }
+
+    const fetchFn = globalThis.fetch;
+    if (typeof fetchFn !== "function") {
+      throw new Error("Global fetch is not available in this runtime.");
+    }
+
+    const requestBody = JSON.stringify({
       model: this.config.modelName,
       temperature: 0.1,
       response_format: { type: "json_object" },
@@ -1251,7 +1336,64 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
       ],
     });
 
-    return asString(result?.text);
+    let response: Response;
+    try {
+      response = await fetchFn(`${this.gatewayBaseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${this.apiKey}`,
+        },
+        body: requestBody,
+        signal: AbortSignal.timeout(this.config.timeoutMs),
+      });
+    } catch (error) {
+      const message = errorMessageOf(error);
+      if (
+        message.includes("TimeoutError") ||
+        message.includes("The operation was aborted") ||
+        message.toLowerCase().includes("timeout")
+      ) {
+        throw new Error(
+          `CloudBase OpenAI-compatible request timeout after ${this.config.timeoutMs}ms.`,
+        );
+      }
+      throw error;
+    }
+
+    const responseText = await response.text();
+    if (!response.ok) {
+      throw new Error(
+        `CloudBase OpenAI-compatible request failed with status ${
+          response.status
+        }: ${responseText.slice(0, 240)}`,
+      );
+    }
+
+    const payloadMap = asMap(responseText ? JSON.parse(responseText) : {});
+    const choices = Array.isArray(payloadMap.choices) ? payloadMap.choices : [];
+    const message = asMap(asMap(choices[0]).message);
+    const content = message.content;
+
+    if (typeof content === "string" && content.trim()) {
+      return content;
+    }
+    if (Array.isArray(content)) {
+      const joined = content
+        .map((item) => {
+          const itemMap = asMap(item);
+          return asString(itemMap.text);
+        })
+        .join("")
+        .trim();
+      if (joined) {
+        return joined;
+      }
+    }
+
+    throw new Error(
+      "CloudBase OpenAI-compatible payload did not contain choices[0].message.content.",
+    );
   }
 }
 
@@ -1287,9 +1429,13 @@ export function createAIProviderFromEnv(
         return new CloudBaseAIProvider({
           envId,
           providerName: env.AI_PROVIDER_NAME?.trim() || "cloudbase_ai",
+          providerGroup: env.AI_PROVIDER_GROUP?.trim() || undefined,
+          apiKey: env.AI_PROVIDER_API_KEY?.trim(),
+          baseUrl: env.AI_PROVIDER_BASE_URL?.trim(),
           modelName:
             env.AI_PROVIDER_MODEL?.trim() ||
             "hunyuan-2.0-instruct-20251111",
+          timeoutMs: timeoutMsOf(env),
         });
       }
       console.warn(

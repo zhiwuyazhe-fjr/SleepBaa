@@ -284,3 +284,77 @@ test("cloudbase_ai preserves remote reply text when structured metadata is incom
     require.cache[modulePath]!.exports = originalExports;
   }
 });
+
+test("cloudbase_ai uses CloudBase OpenAI-compatible gateway for custom provider groups", async () => {
+  const originalFetch = globalThis.fetch;
+  let capturedUrl = "";
+  let capturedAuth = "";
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    capturedUrl = String(input);
+    capturedAuth = String(init?.headers && (init.headers as Record<string, string>).authorization);
+    return {
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  reviewSummary: "ok",
+                  effectiveActions: [],
+                  ineffectiveActions: [],
+                  profileSummary: {
+                    sleepPatternSummary: "stable",
+                    highRiskFactors: [],
+                    effectiveActions: [],
+                    dreamTrendSummary: "stable",
+                    emotionTrendSummary: "stable",
+                    lastUpdatedAt: "2026-04-08T12:00:00.000Z",
+                  },
+                }),
+              },
+            },
+          ],
+        }),
+    } as Response;
+  }) as typeof fetch;
+
+  try {
+    const provider = createAIProviderFromEnv({
+      AI_PROVIDER_MODE: "cloudbase_ai",
+      AI_PROVIDER_GROUP: "openai-compatible-custom",
+      AI_PROVIDER_MODEL: "gpt-4.1-mini",
+      AI_PROVIDER_API_KEY: "cloudbase-api-key",
+      CLOUDBASE_ENV_ID: "demo-env",
+    } as NodeJS.ProcessEnv);
+
+    await provider.analyzeFeedback(buildContext(), "session-1");
+
+    assert.equal(
+      capturedUrl,
+      "https://demo-env.api.tcloudbasegateway.com/v1/ai/openai-compatible-custom/v1/chat/completions",
+    );
+    assert.equal(capturedAuth, "Bearer cloudbase-api-key");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("cloudbase_ai returns a clear error when custom provider group has no CloudBase API key", async () => {
+  const provider = createAIProviderFromEnv({
+    AI_PROVIDER_MODE: "cloudbase_ai",
+    AI_PROVIDER_GROUP: "openai-compatible-custom",
+    AI_PROVIDER_MODEL: "gpt-4.1-mini",
+    CLOUDBASE_ENV_ID: "demo-env",
+  } as NodeJS.ProcessEnv);
+
+  const result = await provider.generateStructuredReply(
+    buildContext(),
+    "general_support",
+    "hi",
+  );
+
+  assert.equal(result.sourceMode, "fallbackSuccess");
+  assert.ok(result.errorMessage?.includes("CloudBase API key is missing"));
+});
