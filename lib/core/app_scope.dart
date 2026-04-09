@@ -218,7 +218,6 @@ class _AppScopeState extends State<AppScope> {
       _assistantReplyGateway = CloudBaseAssistantReplyGateway(
         appApiClient: appApiClient,
         snapshotStore: snapshotStore,
-        fallback: const StubAssistantReplyGateway(),
       );
       _insightsRepository = CloudBaseInsightsRepository(
         authRepository: _authRepository,

@@ -1,14 +1,33 @@
 import 'package:flutter/foundation.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 
+class AuthFlowException implements Exception {
+  const AuthFlowException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+class AuthCaptchaRequiredException extends AuthFlowException {
+  const AuthCaptchaRequiredException([super.message = '需要先完成图片验证码验证。']);
+}
+
+class AuthPhoneTargetMismatchException extends AuthFlowException {
+  const AuthPhoneTargetMismatchException(super.message);
+}
+
 abstract interface class AuthRepository implements Listenable {
   UserProfile get currentUser;
   bool get isAuthenticated;
+  bool get hasVerifiedPhoneIdentity;
   bool get isAuthenticating;
   String? get lastAuthError;
   Future<UserProfile> signInAnonymously();
   Future<UserProfile> ensureAuthenticated();
   Future<UserProfile> retryAuthentication();
+  Future<void> signOut();
   Future<void> updateProfile({
     required String displayName,
     required String tagline,
@@ -19,12 +38,43 @@ abstract interface class AuthRepository implements Listenable {
     required Uint8List? avatarBytes,
   });
   Future<PhoneVerificationChallenge> sendPhoneVerificationCode(
-    String phoneNumber,
-  );
-  Future<void> recoverWithPhone({
+    String phoneNumber, {
+    PhoneVerificationTarget target = PhoneVerificationTarget.any,
+    String? captchaToken,
+  });
+  Future<AuthCaptchaChallenge> createCaptchaChallenge();
+  Future<String> verifyCaptchaChallenge({
+    required String token,
+    required String code,
+  });
+  Future<void> signInWithPassword({
+    required String phoneNumber,
+    required String password,
+    String? captchaToken,
+  });
+  Future<void> signInWithPhoneCode({
     required String phoneNumber,
     required String verificationId,
     required String code,
+    String? captchaToken,
+  });
+  Future<void> registerWithPhone({
+    required String phoneNumber,
+    required String verificationId,
+    required String code,
+    required String password,
+  });
+  Future<void> resetPasswordWithPhone({
+    required String phoneNumber,
+    required String verificationId,
+    required String code,
+    required String newPassword,
+  });
+  Future<void> authenticateWithPhone({
+    required String phoneNumber,
+    required String verificationId,
+    required String code,
+    required bool isExistingUser,
   });
 }
 
@@ -105,6 +155,7 @@ abstract interface class DormRepository implements Listenable {
   Future<void> acceptInvite(String inviteCode);
   Future<void> renameDorm(String name);
   Future<void> leaveDorm();
+  Future<void> sendGentleReminder({required String targetUid});
 }
 
 abstract interface class DreamRepository implements Listenable {
@@ -123,25 +174,40 @@ abstract interface class InsightsRepository implements Listenable {
 abstract interface class AssistantRepository implements Listenable {
   List<AssistantThread> get threads;
   AssistantThread? get currentThread;
+  AssistantProfile get assistantProfile;
   List<AssistantMessage> messagesForThread(String threadId);
   Future<AssistantThread> createThread({String? title});
-  Future<void> renameThread({
-    required String threadId,
-    required String title,
-  });
+  Future<void> renameThread({required String threadId, required String title});
   Future<void> deleteThread(String threadId);
   Future<void> selectMostRecentThread();
   Future<AssistantThread> ensureThread({String? title});
   Future<void> sendUserMessage({
     required String threadId,
     required String content,
+    String? messageId,
   });
   Future<void> addAssistantMessage({
     required String threadId,
     required String content,
+    String? messageId,
     AssistantMessageStatus status,
+    AssistantReplySourceMode? sourceMode,
+    String? provider,
+    String? model,
+    String? errorMessage,
+  });
+  Future<void> updateAssistantMessage({
+    required String threadId,
+    required String messageId,
+    String? content,
+    AssistantMessageStatus? status,
+    AssistantReplySourceMode? sourceMode,
+    String? provider,
+    String? model,
+    String? errorMessage,
   });
   Future<void> setCurrentThread(String threadId);
+  Future<void> updateAssistantProfileName(String assistantName);
 }
 
 abstract interface class PushNotificationGateway {

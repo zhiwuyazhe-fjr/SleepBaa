@@ -5,7 +5,8 @@
 - `ProfileFacade.saveProfile(...)`
 - `ProfileFacade.saveNightMood(...)`
 - `ProfileFacade.sendPhoneVerificationCode(...)`
-- `ProfileFacade.bindPhoneNumber(...)`
+- `ProfileFacade.authenticateWithPhone(...)`
+- `ProfileFacade.signOut()`
 
 ## 2. 当前后端路由
 
@@ -70,6 +71,8 @@
 ```
 
 ### 2.4 `POST /api/auth/link-phone`
+
+> 该接口已停用，仅为后向兼容保留。当前 App 首次进入必须直接走手机号验证码登录或注册，不再支持把旧匿名账号“绑定”到当前会话。
 
 用途：
 
@@ -145,4 +148,5 @@
 - 页面不要直接依赖后端返回原始字段结构
 - 一律通过 `ProfileFacade` 和 repository 更新
 - 设置页已经去掉 Firebase 调试信息，不要再加回去
-- 手机号绑定当前只做“绑定到资料”，不做账号升级
+- CloudBase 模式下首次进入必须先手机号验证码登录或注册
+- 设置页只保留手机号展示、首登说明和退出登录入口

@@ -1,55 +1,85 @@
 # AI 编排说明
 
-## 核心原则
+## 总体原则
 
-- AI 助手是后端统一调度器，不是附属聊天框。
-- 所有 AI 输出都必须先结构化，再写入数据库，再回填给前端。
-- 客户端永远不直接接触原始模型输出。
-- 没有真实模型时必须 fallback，不能阻塞 MVP。
+- AI 助手是后端统一编排器，不只是一个聊天框。
+- 业务层只依赖统一领域结构，不直接依赖某家模型厂商的返回格式。
+- 所有模型输出都必须先转换为固定契约，再写入数据库和前端快照。
+- 远端失败时允许 fallback，但不能再伪装成“联网成功”。
 
-## 输入来源
+## 统一 Provider 契约
 
-AI 每次编排固定拼这些上下文：
+当前后端统一通过 `AIProvider` 输出以下业务结构：
 
-- `users`
-- `user_settings`
-- `user_state`
-- `dorms`
-- `dorm_members`
-- `dorm_events`
-- 最近 7 条 `sleep_sessions`
-- 最近若干 `dream_entries`
-- 当前线程 `assistant_messages`
-- 当前触发事件类型
+- `StructuredAssistantReply`
+- `TonightPlan`
+- `DreamAnalysis`
+- `MorningReviewResult`
 
-## 四条主链路
+每次调用都会返回 `AIProviderResult<T>`：
+
+- `value`
+- `providerName`
+- `modelName`
+- `sourceMode`
+- `errorMessage`
+
+其中：
+
+- `sourceMode=remoteSuccess` 表示远端模型真正成功。
+- `sourceMode=fallbackSuccess` 表示远端失败，结果来自 deterministic fallback。
+
+## Provider Mode
+
+`AI_PROVIDER_MODE` 是唯一入口，不再允许通过 `AI_PROVIDER_BASE_URL` 隐式抢占模式。
+
+当前支持：
+
+- `xai_responses`
+- `cloudbase_ai`
+- `deterministic`
+
+默认部署参数：
+
+- `AI_PROVIDER_MODE=cloudbase_ai`
+- `AI_PROVIDER_BASE_URL=`
+- `AI_PROVIDER_MODEL=hunyuan-2.0-instruct-20251111`
+- `AI_PROVIDER_API_KEY=`
+- `AI_PROVIDER_TIMEOUT_MS=60000`
+
+## 多供应商扩展方式
+
+后续新增供应商时，遵循下面的边界：
+
+1. 在 `functions/src/providers/` 新增一个 adapter。
+2. adapter 只负责请求拼装、响应提取、JSON 解析和错误归一。
+3. 在 `provider_factory.ts` 增加一个显式 `mode` 分支。
+4. 不修改 `assistant_orchestrator.ts`。
+5. 不修改 Flutter 助手页面和 facade。
+
+也就是说：
+
+- 换模型：改部署参数。
+- 换同一家供应商的路由地址：改部署参数。
+- 换新供应商：加 adapter + 改部署参数。
+
+## 四条 AI 主链路
 
 ### 1. `prepareTonightPlan`
 
 触发时机：
 
 - 保存夜间心情
-- 首次进入首页但没有今晚建议
-- 手动刷新今晚建议
+- 手动刷新卡片
+- 首次需要生成今晚建议时
 
-步骤：
+流程：
 
-1. 拉取用户、宿舍、睡眠、梦境、历史线程
-2. 排序干扰因子
-3. 生成 `TonightPlan`
-4. 更新 `user_state`
-5. 物化：
-   - `home_pre_sleep`
-   - `assistant_context`
-6. 写 `assistant_runs`
-
-输出：
-
-- `coachSummary`
-- `riskLevel`
-- `topFactors[]`
-- `recommendedActions[]`
-- `updatedSurfaces[]`
+1. 构建 assistant context。
+2. 调用 provider 生成 `TonightPlan`。
+3. 更新 `user_state.tonightPlan`。
+4. 刷新 `home_pre_sleep` 和 `assistant_context` 快照。
+5. 写入 `assistant_runs`。
 
 ### 2. `assistantReply`
 
@@ -57,149 +87,103 @@ AI 每次编排固定拼这些上下文：
 
 - 用户在助手页发送 prompt
 
-步骤：
+流程：
 
-1. 保证线程存在
-2. 先写 user message
-3. 读取完整 assistant context
-4. `classifyIntent`
-5. `generateStructuredReply`
-6. 如有必要，刷新 `TonightPlan`
-7. 写 `assistant_runs`
-8. 写 assistant message
-9. 刷新相关 snapshot
-
-输出：
-
-- `reply`
-- `intent`
-- `runId`
-- `recommendedActions[]`
-- `updatedSurfaces[]`
+1. 先写入 user message。
+2. 构建完整 assistant context。
+3. `classifyIntent(prompt)`。
+4. 调用 provider 生成 `StructuredAssistantReply`。
+5. 必要时继续生成 `TonightPlan`。
+6. 更新 `user_state`。
+7. 刷新相关 surface。
+8. 写入 `assistant_runs`。
+9. 写入 assistant message。
 
 ### 3. `onSleepSessionWrite`
 
-触发时机：
+用于驱动：
 
-- `sleep_sessions` 被创建或更新
-
-关键分支：
-
-- `active`
-  - 进入 `sleep_mode`
-  - 刷新 `sleep_mode`
-- `awaitingFeedback`
-  - 进入 `morning_feedback`
-  - 写反馈提醒通知
-  - 刷新 `morning_feedback`
-- `completed`
-  - 分析晨间反馈
-  - 更新 `feedbackLoop`
-  - 更新 `profileSummary`
-  - 刷新：
-    - `morning_feedback`
-    - `profile_report`
-    - `assistant_context`
+- `sleep_mode`
+- `morning_feedback`
+- `profile_report`
+- `assistant_context`
 
 ### 4. `onDreamEntryWrite`
 
-触发时机：
+用于驱动：
 
-- 新增或覆盖 `dream_entries`
+- 梦境分析写回 dream entry
+- `profile_report`
+- `assistant_context`
 
-步骤：
+## Assistant Run 语义
 
-1. 调 `summarizeDream`
-2. 把结果写回 dream 文档的 `ai.*`
-3. 更新 `profileSummary.dreamTrendSummary`
-4. 刷新：
-   - `profile_report`
-   - `assistant_context`
+`assistant_runs` 现在同时保留两层语义：
 
-## Provider 模式
+- `success`
+- `fallback`
+- `error`
 
-### `deterministic`
+以及主语义字段：
 
-- 默认模式
-- 不依赖外部网络模型
-- 适合 MVP 冒烟、联调、测试环境
+- `sourceMode=remoteSuccess`
+- `sourceMode=fallbackSuccess`
+- `sourceMode=error`
 
-### `external_http`
+建议前端和运维排查时优先看：
 
-- 通过自定义 HTTP 接口接入第三方模型
-- 配置：
-  - `AI_PROVIDER_BASE_URL`
-  - `AI_PROVIDER_API_KEY`
-  - `AI_PROVIDER_MODEL`
+- `provider`
+- `model`
+- `sourceMode`
+- `status`
+- `error`
+- `createdAt`
 
-### `cloudbase_ai`
+## 前后端联动约定
 
-- 使用 `@cloudbase/node-sdk` 的 CloudBase AI 能力
-- 当前已预留模式切换和 JSON 结果归一化
-- 建议模型：
-  - `hunyuan-2.0-instruct-20251111`
-  - 或按环境切换其他模型
+### CloudBase 客户端兜底
 
-## 当前已做的 AI 增强
+- CloudBase 正式链路不再在 Flutter 端执行 stub fallback。
+- `/api/assistant/reply` 如果返回 `fallbackSuccess`，说明后端远端调用失败，但 deterministic fallback 已成功。
+- `/api/assistant/reply` 如果返回 `error`，说明客户端没有拿到有效服务端结果，本次需要提示重试。
 
-- `classifyIntent` 统一收口
-- 梦境分析结果固定结构化：
-  - `summary`
-  - `dominantEmotion`
-  - `suggestedFocus`
-  - `sourceRefs`
-- 晨间反馈分析结果固定结构化：
-  - `reviewSummary`
-  - `effectiveActions`
-  - `ineffectiveActions`
-  - `profileSummary`
-- `provider_factory.ts` 已支持：
-  - fallback
-  - 外部 HTTP provider
-  - CloudBase AI provider
+### 消息去重
 
-## 结构化输出校验
+前端先生成：
 
-不管接哪个模型，最终都必须被 normalize：
+- `clientUserMessageId`
+- `clientAssistantMessageId`
 
-- `StructuredAssistantReply`
-- `TonightPlan`
-- `DreamAnalysis`
-- `MorningReviewResult`
+后端写库时直接复用，保证：
 
-如果模型输出不合规：
+- 本地乐观消息
+- 远端落库消息
+- 快照回流消息
 
-1. 先尝试抽取 JSON
-2. 再按 schema 归一化
-3. 不合法则回退 deterministic fallback
+最终都指向同一条记录。
 
-## 环境变量
+### 时间显示
 
-### CloudBase 运行时
+Flutter 反序列化层统一把：
 
-- `CLOUDBASE_ENV_ID`
-- `CLOUDBASE_AUTH_BASE_URL`
+- ISO UTC 时间
+- Firestore `_seconds/_nanoseconds`
 
-### AI 相关
+转换为本地时区，避免中国时区看到 UTC 聊天时间。
 
-- `AI_PROVIDER_MODE=deterministic | external_http | cloudbase_ai`
-- `AI_PROVIDER_NAME`
-- `AI_PROVIDER_MODEL`
-- `AI_PROVIDER_BASE_URL`
-- `AI_PROVIDER_API_KEY`
-- `AI_PROVIDER_TIMEOUT_MS`
+## 手机号首登
 
-## 给队员 C 的扩展入口
+CloudBase 环境下不再匿名自动登录。
 
-优先扩展：
+当前规则：
 
-- `functions/src/providers/provider_factory.ts`
-- `functions/src/providers/ai_provider.ts`
-- `functions/src/orchestrators/assistant_orchestrator.ts`
+- 没有有效 session：进入手机号验证码登录页。
+- 有 refresh token：尝试恢复 session。
+- 恢复失败：清理旧 session，并要求重新手机号登录。
 
-推荐继续做：
+旧接口：
 
-- 情绪趋势摘要
-- 梦境标签更细粒度抽取
-- 反馈总结更像真实陪伴式助手
-- 推荐动作排序引入更多历史效果数据
+- `/api/auth/recover-phone-account`
+- `/api/auth/link-phone`
+
+现在只保留为 `legacy-disabled`，不再承担正常业务路径。

@@ -202,7 +202,9 @@ Flutter 客户端当前不直接写 CloudBase 业务集合，只调用 `app-api`
 {
   "threadId": "thread-xxx",
   "prompt": "我今晚有点睡不着",
-  "title": "今晚睡前聊聊"
+  "title": "今晚睡前聊聊",
+  "clientUserMessageId": "assistant-msg-user-1",
+  "clientAssistantMessageId": "assistant-msg-assistant-1"
 }
 ```
 
@@ -213,12 +215,22 @@ Flutter 客户端当前不直接写 CloudBase 业务集合，只调用 `app-api`
   "reply": "中文回复",
   "runId": "run-xxx",
   "intent": "sleep_difficulty",
-  "provider": "deterministic-fallback",
-  "model": "rules-v1",
+  "provider": "xai_responses",
+  "model": "grok-4-1-fast-reasoning",
+  "sourceMode": "remoteSuccess",
+  "errorMessage": null,
+  "assistantMessageId": "assistant-msg-assistant-1",
   "recommendedActions": [],
   "updatedSurfaces": ["assistant_context", "home_pre_sleep"]
 }
 ```
+
+说明：
+
+- `clientUserMessageId` 与 `clientAssistantMessageId` 由前端先生成，后端会直接复用。
+- 成功响应里的 `sourceMode` 真实反映本次是远端成功还是后端 fallback。
+- 如果请求本身失败，接口会返回非 2xx，由 Flutter gateway 本地映射成 `error`。
+- assistant message 落库时会同时保存 `sourceMode / provider / model / errorMessage`。
 
 ### 2.12 `POST /api/cards/refresh`
 
@@ -235,6 +247,8 @@ Flutter 客户端当前不直接写 CloudBase 业务集合，只调用 `app-api`
 ```
 
 ### 2.13 `POST /api/auth/link-phone`
+
+> 该接口已停用，仅为后向兼容保留。当前 App 的有效主流程已经改为手机号验证码登录/注册，不再通过此接口绑定旧匿名账号。
 
 用途：
 

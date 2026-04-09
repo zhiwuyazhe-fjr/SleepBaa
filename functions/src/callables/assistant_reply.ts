@@ -23,8 +23,10 @@ export async function assistantReplyCallable(params: {
     reply: result.reply,
     runId: result.runId,
     intent: result.intent,
-    provider: params.provider.providerName,
-    model: params.provider.modelName,
+    provider: result.provider,
+    model: result.model,
+    sourceMode: result.sourceMode,
+    errorMessage: result.errorMessage,
     recommendedActions: result.userState.tonightPlan?.recommendedActions ?? [],
     updatedSurfaces: result.updatedSurfaces,
   };

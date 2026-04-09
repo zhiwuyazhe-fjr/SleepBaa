@@ -83,8 +83,12 @@ class DormPage extends StatelessWidget {
               title: '委婉提醒',
               detail: '发送提醒',
               icon: Icons.notifications_active_rounded,
-              onTap: () =>
-                  _showDormSnackBar(context, '已生成一条温和提醒文案，后续可以直接接入消息发送。'),
+              onTap: () => _showGentleReminderPicker(
+                context: context,
+                services: services,
+                dorm: dorm,
+                currentUserId: currentUserId,
+              ),
             ),
           ];
 
@@ -762,6 +766,140 @@ int _quietStarsFor(int noiseDb) {
   return 1;
 }
 
+Future<void> _showGentleReminderPicker({
+  required BuildContext context,
+  required AppServices services,
+  required Dorm dorm,
+  required String currentUserId,
+}) async {
+  final List<DormMember> selectableMembers = dorm.members
+      .where((DormMember member) => member.uid != currentUserId)
+      .toList(growable: false);
+  if (selectableMembers.isEmpty) {
+    _showDormSnackBar(context, '当前还没有可提醒的舍友。');
+    return;
+  }
+
+  final String? targetUid = await showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (BuildContext sheetContext) {
+      return _GentleReminderSheet(members: selectableMembers);
+    },
+  );
+
+  if (targetUid == null || targetUid.trim().isEmpty || !context.mounted) {
+    return;
+  }
+
+  try {
+    await services.dormFacade.sendGentleReminder(targetUid: targetUid);
+    if (context.mounted) {
+      _showDormSnackBar(context, '委婉提醒已发送。');
+    }
+  } catch (error) {
+    if (context.mounted) {
+      _showDormSnackBar(context, '发送失败：$error');
+    }
+  }
+}
+
 void _showDormSnackBar(BuildContext context, String message) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+}
+
+class _GentleReminderSheet extends StatefulWidget {
+  const _GentleReminderSheet({required this.members});
+
+  final List<DormMember> members;
+
+  @override
+  State<_GentleReminderSheet> createState() => _GentleReminderSheetState();
+}
+
+class _GentleReminderSheetState extends State<_GentleReminderSheet> {
+  String? _selectedUid;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xl,
+        AppSpacing.lg,
+        AppSpacing.xl,
+        AppSpacing.xl,
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Container(
+              width: 44,
+              height: 5,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '选择要提醒的舍友',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '提醒会以站内消息的形式发出，语气会保持温和。',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            ...widget.members.map(
+              (DormMember member) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                onTap: () => setState(() => _selectedUid = member.uid),
+                leading: Icon(
+                  _selectedUid == member.uid
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_off_rounded,
+                  color: _selectedUid == member.uid
+                      ? context.nightMoodPalette.primary
+                      : AppColors.textSecondary,
+                ),
+                title: Text(member.name),
+                subtitle: Text(
+                  member.note,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _selectedUid == null
+                    ? null
+                    : () => Navigator.of(context).pop(_selectedUid),
+                child: const Text('发送委婉提醒'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

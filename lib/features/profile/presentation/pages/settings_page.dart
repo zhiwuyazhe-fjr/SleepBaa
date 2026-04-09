@@ -19,27 +19,14 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _codeController = TextEditingController();
-
   String? _boundUid;
-  PhoneVerificationChallenge? _phoneChallenge;
   bool _isSavingSettings = false;
-  bool _isSendingCode = false;
-  bool _isRecoveringPhone = false;
   double _sleepGoalHours = 7.5;
   bool _bedtimeReminderEnabled = true;
   bool _morningReminderEnabled = true;
   bool _dormAlertsEnabled = true;
   bool _smartSuggestionsEnabled = true;
   TimeOfDay _bedtimeReminder = const TimeOfDay(hour: 23, minute: 10);
-
-  @override
-  void dispose() {
-    _phoneController.dispose();
-    _codeController.dispose();
-    super.dispose();
-  }
 
   void _syncState(UserProfile profile, UserSettings settings) {
     if (_boundUid == profile.uid) {
@@ -52,7 +39,6 @@ class _SettingsPageState extends State<SettingsPage> {
     _dormAlertsEnabled = settings.dormAlertsEnabled;
     _smartSuggestionsEnabled = settings.smartSuggestionsEnabled;
     _bedtimeReminder = settings.bedtimeReminder;
-    _phoneController.text = profile.phoneNumber ?? '';
   }
 
   Future<void> _saveSleepSettings(AppServices services) async {
@@ -68,17 +54,19 @@ class _SettingsPageState extends State<SettingsPage> {
             bedtimeReminder: _bedtimeReminder,
           );
       await services.settingsRepository.saveSettings(nextSettings);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('设置已保存')));
+      if (!mounted) {
+        return;
       }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('设置已保存')));
     } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存失败：$error')),
-        );
+      if (!mounted) {
+        return;
       }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('保存失败：$error')));
     } finally {
       if (mounted) {
         setState(() => _isSavingSettings = false);
@@ -97,79 +85,10 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _bedtimeReminder = result);
   }
 
-  Future<void> _sendPhoneCode(AppServices services) async {
-    final String phoneNumber = _phoneController.text.trim();
-    if (phoneNumber.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请先输入手机号')));
-      return;
-    }
-    setState(() => _isSendingCode = true);
-    try {
-      final PhoneVerificationChallenge challenge =
-          await services.profileFacade.sendPhoneVerificationCode(phoneNumber);
-      if (!mounted) {
-        return;
-      }
-      setState(() => _phoneChallenge = challenge);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('验证码已发送')),
-      );
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('发送失败：$error')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSendingCode = false);
-      }
-    }
-  }
-
-  Future<void> _recoverPhoneAccount(AppServices services) async {
-    final String phoneNumber = _phoneController.text.trim();
-    final String code = _codeController.text.trim();
-    if (phoneNumber.isEmpty || code.isEmpty || _phoneChallenge == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先输入手机号、发送验证码并填写验证码')),
-      );
-      return;
-    }
-    setState(() => _isRecoveringPhone = true);
-    try {
-      await services.profileFacade.recoverWithPhone(
-        phoneNumber: phoneNumber,
-        verificationId: _phoneChallenge!.verificationId,
-        code: code,
-      );
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _phoneChallenge = null;
-        _codeController.clear();
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('手机号主账号已恢复')),
-      );
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('恢复失败：$error')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isRecoveringPhone = false);
-      }
-    }
-  }
-
   Future<void> _renameDorm(AppServices services, Dorm dorm) async {
-    final TextEditingController controller = TextEditingController(text: dorm.name);
+    final TextEditingController controller = TextEditingController(
+      text: dorm.name,
+    );
     final String? nextName = await showDialog<String>(
       context: context,
       builder: (BuildContext context) {
@@ -186,7 +105,8 @@ class _SettingsPageState extends State<SettingsPage> {
               child: const Text('取消'),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+              onPressed: () =>
+                  Navigator.of(context).pop(controller.text.trim()),
               child: const Text('保存'),
             ),
           ],
@@ -197,11 +117,12 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
     await services.dormFacade.renameDorm(nextName);
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('宿舍名称已更新')));
+    if (!mounted) {
+      return;
     }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('宿舍名称已更新')));
   }
 
   Future<void> _leaveDorm(AppServices services) async {
@@ -228,11 +149,45 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
     await services.dormFacade.leaveDorm();
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('已退出当前宿舍')));
+    if (!mounted) {
+      return;
     }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已退出当前宿舍')));
+  }
+
+  Future<void> _signOut(AppServices services) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('退出登录'),
+          content: const Text('退出后会清除当前登录状态，需要重新通过手机号验证码登录或注册。'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('确认退出'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) {
+      return;
+    }
+    await services.profileFacade.signOut();
+    if (!mounted) {
+      return;
+    }
+    context.go(AppRoutes.authPhone);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已退出登录')));
   }
 
   @override
@@ -249,9 +204,18 @@ class _SettingsPageState extends State<SettingsPage> {
           ]),
           builder: (BuildContext context, Widget? child) {
             final UserProfile profile = services.profileFacade.currentUser;
-            final UserSettings settings = services.profileFacade.currentSettings;
+            final UserSettings settings =
+                services.profileFacade.currentSettings;
             final Dorm dorm = services.dormFacade.currentDorm;
+            final String displayedPhone = [
+              profile.phoneNumber,
+              services.authRepository.currentUser.phoneNumber,
+            ].whereType<String>().map((String item) => item.trim()).firstWhere(
+              (String item) => item.isNotEmpty,
+              orElse: () => '',
+            );
             _syncState(profile, settings);
+
             return ListView(
               padding: const EdgeInsets.all(AppSpacing.xl),
               children: <Widget>[
@@ -286,7 +250,9 @@ class _SettingsPageState extends State<SettingsPage> {
                             const SizedBox(height: AppSpacing.sm),
                             _ProfileLine(
                               label: '角色',
-                              value: profile.role.isEmpty ? '未设置' : profile.role,
+                              value: profile.role.isEmpty
+                                  ? '未设置'
+                                  : profile.role,
                             ),
                           ],
                         ),
@@ -397,73 +363,21 @@ class _SettingsPageState extends State<SettingsPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        profile.phoneNumber == null || profile.phoneNumber!.isEmpty
-                            ? '绑定手机号并恢复原账号数据'
-                            : '当前手机号：${profile.phoneNumber}',
+                        displayedPhone.isEmpty
+                            ? '当前尚未显示手机号'
+                            : '当前手机号：$displayedPhone',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        '验证码登录完成后，会把当前匿名账号数据迁移到手机号主账号。',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                          height: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      TextField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(
-                          labelText: '手机号',
-                          hintText: '请输入手机号',
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      TextField(
-                        controller: _codeController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: '验证码',
-                          hintText: '请输入验证码',
-                        ),
-                      ),
-                      if (_phoneChallenge != null) ...<Widget>[
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          _phoneChallenge!.isExistingUser
-                              ? '该手机号已有主账号，验证后会恢复原账号数据。'
-                              : '该手机号还没有主账号，验证后会创建并迁移当前数据。',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
+                      if (services.environment.usesCloudBase) ...<Widget>[
+                        const SizedBox(height: AppSpacing.lg),
+                        PrimaryButton(
+                          label: '退出登录',
+                          expand: false,
+                          variant: PrimaryButtonVariant.ghost,
+                          icon: Icons.logout_rounded,
+                          onPressed: () => _signOut(services),
                         ),
                       ],
-                      const SizedBox(height: AppSpacing.lg),
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: PrimaryButton(
-                              label: _isSendingCode ? '发送中...' : '发送验证码',
-                              expand: false,
-                              variant: PrimaryButtonVariant.soft,
-                              onPressed: _isSendingCode
-                                  ? null
-                                  : () => _sendPhoneCode(services),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child: PrimaryButton(
-                              label: _isRecoveringPhone ? '恢复中...' : '确认绑定',
-                              expand: false,
-                              onPressed: _isRecoveringPhone
-                                  ? null
-                                  : () => _recoverPhoneAccount(services),
-                            ),
-                          ),
-                        ],
-                      ),
                     ],
                   ),
                 ),
@@ -512,7 +426,8 @@ class _SettingsPageState extends State<SettingsPage> {
                               expand: false,
                               variant: PrimaryButtonVariant.soft,
                               icon: Icons.group_add_rounded,
-                              onPressed: () => context.push(AppRoutes.dormInvite),
+                              onPressed: () =>
+                                  context.push(AppRoutes.dormInvite),
                             ),
                             PrimaryButton(
                               label: '退出宿舍',
@@ -548,9 +463,9 @@ class _ProfileLine extends StatelessWidget {
       children: <Widget>[
         Text(
           label,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: AppColors.textSecondary,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary),
         ),
         const SizedBox(height: 4),
         Text(

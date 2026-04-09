@@ -24,9 +24,6 @@ class DormInvitePage extends StatefulWidget {
 class _DormInvitePageState extends State<DormInvitePage> {
   late final TextEditingController _nameController;
   late final TextEditingController _overviewController;
-  late final TextEditingController _quietHoursController;
-  late final TextEditingController _lightsOffController;
-  late final TextEditingController _routineNoteController;
   late final TextEditingController _inviteCodeController;
 
   _DormInviteMode? _preferredMode;
@@ -36,12 +33,8 @@ class _DormInvitePageState extends State<DormInvitePage> {
   @override
   void initState() {
     super.initState();
-    final DormRulesSettings defaults = DormRulesSettings.defaults();
     _nameController = TextEditingController();
     _overviewController = TextEditingController();
-    _quietHoursController = TextEditingController(text: defaults.quietHours);
-    _lightsOffController = TextEditingController(text: defaults.lightsOffTime);
-    _routineNoteController = TextEditingController(text: defaults.routineNote);
     _inviteCodeController = TextEditingController();
   }
 
@@ -49,9 +42,6 @@ class _DormInvitePageState extends State<DormInvitePage> {
   void dispose() {
     _nameController.dispose();
     _overviewController.dispose();
-    _quietHoursController.dispose();
-    _lightsOffController.dispose();
-    _routineNoteController.dispose();
     _inviteCodeController.dispose();
     super.dispose();
   }
@@ -74,17 +64,7 @@ class _DormInvitePageState extends State<DormInvitePage> {
         overview: _overviewController.text.trim().isEmpty
             ? null
             : _overviewController.text.trim(),
-        rulesSettings: defaults.copyWith(
-          quietHours: _quietHoursController.text.trim().isEmpty
-              ? defaults.quietHours
-              : _quietHoursController.text.trim(),
-          lightsOffTime: _lightsOffController.text.trim().isEmpty
-              ? defaults.lightsOffTime
-              : _lightsOffController.text.trim(),
-          routineNote: _routineNoteController.text.trim().isEmpty
-              ? defaults.routineNote
-              : _routineNoteController.text.trim(),
-        ),
+        rulesSettings: defaults,
       );
       final DormInvite invite = await services.dormFacade.createInvite();
       if (!mounted) {
@@ -258,7 +238,7 @@ class _DormInvitePageState extends State<DormInvitePage> {
               ),
             ),
             const SizedBox(height: AppSpacing.md),
-            const Text('会设置：宿舍名称、简介、安静时段、熄灯时间、作息备注'),
+            const Text('会设置：宿舍名称、简介，并在创建后直接生成邀请模块'),
           ],
         ),
       ),
@@ -304,25 +284,6 @@ class _DormInvitePageState extends State<DormInvitePage> {
               controller: _overviewController,
               maxLines: 2,
               hintText: '简单描述宿舍氛围或协作目标',
-            ),
-            const SizedBox(height: AppSpacing.md),
-            _LabeledField(
-              label: '安静时段',
-              controller: _quietHoursController,
-              hintText: '例如 23:00 - 07:00',
-            ),
-            const SizedBox(height: AppSpacing.md),
-            _LabeledField(
-              label: '熄灯时间',
-              controller: _lightsOffController,
-              hintText: '例如 23:30 后关闭主灯',
-            ),
-            const SizedBox(height: AppSpacing.md),
-            _LabeledField(
-              label: '作息备注',
-              controller: _routineNoteController,
-              maxLines: 3,
-              hintText: '例如 工作日 8:00 起床，考试周会更早',
             ),
             const SizedBox(height: AppSpacing.lg),
             Wrap(
@@ -426,24 +387,25 @@ class _DormInvitePageState extends State<DormInvitePage> {
             if (invite != null)
               _InfoRow(label: '有效期至', value: _formatDateTime(invite.expiresAt)),
             const SizedBox(height: AppSpacing.md),
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
+            Row(
               children: <Widget>[
-                PrimaryButton(
-                  label: invite == null ? '生成邀请码' : '刷新邀请码',
-                  icon: Icons.qr_code_rounded,
-                  expand: false,
-                  onPressed: _isBusy ? null : () => _generateInvite(services),
+                Expanded(
+                  child: PrimaryButton(
+                    label: invite == null ? '生成邀请码' : '刷新邀请码',
+                    icon: Icons.qr_code_rounded,
+                    onPressed: _isBusy ? null : () => _generateInvite(services),
+                  ),
                 ),
-                PrimaryButton(
-                  label: '复制邀请码',
-                  icon: Icons.copy_rounded,
-                  expand: false,
-                  variant: PrimaryButtonVariant.soft,
-                  onPressed: invite == null
-                      ? null
-                      : () => _copyInviteCode(invite),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: PrimaryButton(
+                    label: '复制邀请码',
+                    icon: Icons.copy_rounded,
+                    variant: PrimaryButtonVariant.soft,
+                    onPressed: invite == null
+                        ? null
+                        : () => _copyInviteCode(invite),
+                  ),
                 ),
               ],
             ),

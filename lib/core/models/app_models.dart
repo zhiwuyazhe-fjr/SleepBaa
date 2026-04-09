@@ -32,6 +32,10 @@ enum AssistantMessageRole { user, assistant, system }
 
 enum AssistantMessageStatus { pending, complete, error }
 
+enum AssistantReplySourceMode { remoteSuccess, fallbackSuccess, error }
+
+enum PhoneVerificationTarget { any, existingUser, newUser }
+
 class PhoneVerificationChallenge {
   const PhoneVerificationChallenge({
     required this.verificationId,
@@ -42,6 +46,18 @@ class PhoneVerificationChallenge {
   final String verificationId;
   final int expiresIn;
   final bool isExistingUser;
+}
+
+class AuthCaptchaChallenge {
+  const AuthCaptchaChallenge({
+    required this.token,
+    required this.imageData,
+    required this.expiresIn,
+  });
+
+  final String token;
+  final String imageData;
+  final int expiresIn;
 }
 
 class UserProfile {
@@ -442,21 +458,13 @@ class NotificationItem {
 }
 
 class DormRule {
-  const DormRule({
-    this.id = '',
-    required this.title,
-    required this.detail,
-  });
+  const DormRule({this.id = '', required this.title, required this.detail});
 
   final String id;
   final String title;
   final String detail;
 
-  DormRule copyWith({
-    String? id,
-    String? title,
-    String? detail,
-  }) {
+  DormRule copyWith({String? id, String? title, String? detail}) {
     return DormRule(
       id: id ?? this.id,
       title: title ?? this.title,
@@ -486,17 +494,14 @@ class DormRulesSettings {
   factory DormRulesSettings.defaults() {
     return const DormRulesSettings(
       quietHours: '23:00 - 07:00',
-      specialCase:
-          '如果有临时讨论或紧急情况，请提前在宿舍群里说明。',
+      specialCase: '如果有临时讨论或紧急情况，请提前在宿舍群里说明。',
       lightsOffTime: '23:30 后关闭主灯',
-      personalLighting:
-          '仅使用个人台灯，避免灯光直射正在休息的室友。',
+      personalLighting: '仅使用个人台灯，避免灯光直射正在休息的室友。',
       examWeekMode: true,
       blackoutCurtain: true,
       vibrationFirst: true,
       alarmResponseSeconds: 60,
-      routineNote:
-          '平时起床时间约为 08:30，考试周可能会更早。',
+      routineNote: '平时起床时间约为 08:30，考试周可能会更早。',
       routineTags: <String>['考试周', '夜猫子', '早起党'],
       summerTempC: 26,
       winterTempC: 22,
@@ -544,8 +549,7 @@ class DormRulesSettings {
       examWeekMode: examWeekMode ?? this.examWeekMode,
       blackoutCurtain: blackoutCurtain ?? this.blackoutCurtain,
       vibrationFirst: vibrationFirst ?? this.vibrationFirst,
-      alarmResponseSeconds:
-          alarmResponseSeconds ?? this.alarmResponseSeconds,
+      alarmResponseSeconds: alarmResponseSeconds ?? this.alarmResponseSeconds,
       routineNote: routineNote ?? this.routineNote,
       routineTags: routineTags ?? this.routineTags,
       summerTempC: summerTempC ?? this.summerTempC,
@@ -874,13 +878,48 @@ class SleepReport {
     return SleepReport(
       title: title ?? this.title,
       averageSleepHours: averageSleepHours ?? this.averageSleepHours,
-      averageSleepQuality:
-          averageSleepQuality ?? this.averageSleepQuality,
+      averageSleepQuality: averageSleepQuality ?? this.averageSleepQuality,
       averageRestedLevel: averageRestedLevel ?? this.averageRestedLevel,
       calmNights: calmNights ?? this.calmNights,
       dreamEntriesCount: dreamEntriesCount ?? this.dreamEntriesCount,
       highlights: highlights ?? this.highlights,
       generatedAt: generatedAt ?? this.generatedAt,
+    );
+  }
+}
+
+class AssistantProfile {
+  const AssistantProfile({
+    required this.userId,
+    required this.assistantName,
+    required this.identityPrompt,
+    required this.tone,
+    required this.relationshipRole,
+    required this.updatedAt,
+  });
+
+  final String userId;
+  final String assistantName;
+  final String identityPrompt;
+  final String tone;
+  final String relationshipRole;
+  final DateTime updatedAt;
+
+  AssistantProfile copyWith({
+    String? userId,
+    String? assistantName,
+    String? identityPrompt,
+    String? tone,
+    String? relationshipRole,
+    DateTime? updatedAt,
+  }) {
+    return AssistantProfile(
+      userId: userId ?? this.userId,
+      assistantName: assistantName ?? this.assistantName,
+      identityPrompt: identityPrompt ?? this.identityPrompt,
+      tone: tone ?? this.tone,
+      relationshipRole: relationshipRole ?? this.relationshipRole,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 }
@@ -925,6 +964,10 @@ class AssistantMessage {
     required this.content,
     required this.createdAt,
     this.status = AssistantMessageStatus.complete,
+    this.sourceMode,
+    this.provider,
+    this.model,
+    this.errorMessage,
   });
 
   final String id;
@@ -933,6 +976,10 @@ class AssistantMessage {
   final String content;
   final DateTime createdAt;
   final AssistantMessageStatus status;
+  final AssistantReplySourceMode? sourceMode;
+  final String? provider;
+  final String? model;
+  final String? errorMessage;
 
   bool get fromAssistant => role == AssistantMessageRole.assistant;
 
@@ -943,6 +990,10 @@ class AssistantMessage {
     String? content,
     DateTime? createdAt,
     AssistantMessageStatus? status,
+    AssistantReplySourceMode? sourceMode,
+    String? provider,
+    String? model,
+    String? errorMessage,
   }) {
     return AssistantMessage(
       id: id ?? this.id,
@@ -951,6 +1002,10 @@ class AssistantMessage {
       content: content ?? this.content,
       createdAt: createdAt ?? this.createdAt,
       status: status ?? this.status,
+      sourceMode: sourceMode ?? this.sourceMode,
+      provider: provider ?? this.provider,
+      model: model ?? this.model,
+      errorMessage: errorMessage ?? this.errorMessage,
     );
   }
 }

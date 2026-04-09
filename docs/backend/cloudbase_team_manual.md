@@ -607,3 +607,7 @@ AI_PROVIDER_BASE_URL
 AI_PROVIDER_API_KEY
 AI_PROVIDER_MODEL
 AI_PROVIDER_TIMEOUT_MS
+
+
+如果你之后想改成 deepseek-v3.2，只需要这一条：
+.\scripts\deploy_cloudbase_functions.ps1 -ConfigPath .cloudbase.local.json -AIProviderModel "deepseek-v3.2"

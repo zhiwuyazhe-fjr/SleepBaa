@@ -73,6 +73,29 @@ DateTime _dateOf(dynamic value) {
   return DateTime.now();
 }
 
+NotificationCategory _notificationCategoryOf(dynamic value) {
+  final String name = _stringOf(value);
+  return NotificationCategory.values.firstWhere(
+    (NotificationCategory item) => item.name == name,
+    orElse: () => NotificationCategory.system,
+  );
+}
+
+NotificationItem _notificationFromMap(Map<String, dynamic> map) {
+  return NotificationItem(
+    id: _stringOf(map['id']),
+    category: _notificationCategoryOf(map['category']),
+    title: _stringOf(map['title']),
+    body: _stringOf(map['body']),
+    createdAt: _dateOf(map['createdAt']),
+    route: _stringOf(map['route']),
+    readAt: map['readAt'] == null ? null : _dateOf(map['readAt']),
+    ownerUid: _stringOf(map['ownerUid']).isEmpty
+        ? null
+        : _stringOf(map['ownerUid']),
+  );
+}
+
 double _doubleOf(dynamic value, [double fallback = 0]) {
   if (value is num) {
     return value.toDouble();
@@ -132,8 +155,8 @@ AudioTrack? _trackForAction(String actionId, String? trackId) {
   }
   return AudioTrack(
     id: trackId,
-    title: '助眠音频',
-    subtitle: 'AI 为你推荐的放松音轨',
+    title: '\u52a9\u7720\u97f3\u9891',
+    subtitle: 'AI \u4e3a\u4f60\u63a8\u8350\u7684\u653e\u677e\u97f3\u8f68',
     duration: const Duration(minutes: 45),
   );
 }
@@ -151,8 +174,14 @@ NightRecommendation _recommendationFromAction(Map<String, dynamic> action) {
   final NightRecommendation? known = catalog[actionId];
   return NightRecommendation(
     id: actionId,
-    title: known?.title ?? _stringOf(action['title'], '今晚行动'),
-    subtitle: known?.subtitle ?? _stringOf(action['subtitle'], '先按今晚建议做一个小动作。'),
+    title:
+        known?.title ?? _stringOf(action['title'], '\u4eca\u665a\u884c\u52a8'),
+    subtitle:
+        known?.subtitle ??
+        _stringOf(
+          action['subtitle'],
+          '\u5148\u6309\u4eca\u665a\u5efa\u8bae\u505a\u4e00\u4e2a\u5c0f\u52a8\u4f5c\u3002',
+        ),
     type: type,
     icon: _iconForAction(actionId, type),
     tags: _stringListOf(action['tags']).isNotEmpty
@@ -166,13 +195,14 @@ NightRecommendation _recommendationFromAction(Map<String, dynamic> action) {
 Dorm _unboundDorm() {
   return Dorm(
     id: '',
-    name: '未加入宿舍',
-    overview: '你还没有加入宿舍，先创建宿舍或使用邀请码加入吧。',
+    name: '\u672a\u52a0\u5165\u5bbf\u820d',
+    overview:
+        '\u4f60\u8fd8\u6ca1\u6709\u52a0\u5165\u5bbf\u820d\uff0c\u5148\u521b\u5efa\u5bbf\u820d\u6216\u4f7f\u7528\u9080\u8bf7\u7801\u52a0\u5165\u5427\u3002',
     noiseDb: 0,
     status: DormStatus.active,
     archivedAt: null,
-    lightLabel: '未设置',
-    quietLabel: '未加入',
+    lightLabel: '\u672a\u8bbe\u7f6e',
+    quietLabel: '\u672a\u52a0\u5165',
     rules: const <DormRule>[],
     members: const <DormMember>[],
     rulesSettings: buildDefaultDormRulesSettings(),
@@ -253,8 +283,11 @@ Dorm _dormFromMap(Map<String, dynamic> map, String currentUserId) {
   }
   return Dorm(
     id: _stringOf(map['id']),
-    name: _stringOf(map['name'], '宿舍'),
-    overview: _stringOf(map['overview'], '已加入宿舍协作空间。'),
+    name: _stringOf(map['name'], '\u5bbf\u820d'),
+    overview: _stringOf(
+      map['overview'],
+      '\u5df2\u52a0\u5165\u5bbf\u820d\u534f\u4f5c\u7a7a\u95f4\u3002',
+    ),
     noiseDb: (map['noiseDb'] as num?)?.toInt() ?? 32,
     status:
         _firstWhereOrNull(DormStatus.values, (DormStatus status) {
@@ -262,8 +295,8 @@ Dorm _dormFromMap(Map<String, dynamic> map, String currentUserId) {
         }) ??
         DormStatus.active,
     archivedAt: map['archivedAt'] == null ? null : _dateOf(map['archivedAt']),
-    lightLabel: _stringOf(map['lightLabel'], '平稳'),
-    quietLabel: _stringOf(map['quietLabel'], '良好'),
+    lightLabel: _stringOf(map['lightLabel'], '\u5e73\u7a33'),
+    quietLabel: _stringOf(map['quietLabel'], '\u826f\u597d'),
     rules: _mapListOf(
       map['rules'],
     ).map(_dormRuleFromMap).toList(growable: false),
@@ -277,25 +310,6 @@ Dorm _dormFromMap(Map<String, dynamic> map, String currentUserId) {
     invites: _mapListOf(
       map['invites'],
     ).map(_dormInviteFromMap).toList(growable: false),
-  );
-}
-
-NotificationItem _notificationFromMap(Map<String, dynamic> map) {
-  return NotificationItem(
-    id: _stringOf(map['id']),
-    category:
-        _firstWhereOrNull(
-          NotificationCategory.values,
-          (NotificationCategory category) =>
-              category.name == _stringOf(map['category']),
-        ) ??
-        NotificationCategory.system,
-    title: _stringOf(map['title']),
-    body: _stringOf(map['body']),
-    createdAt: _dateOf(map['createdAt']),
-    route: _stringOf(map['route'], AppRoutes.home),
-    readAt: map['readAt'] == null ? null : _dateOf(map['readAt']),
-    ownerUid: map['ownerUid'] as String?,
   );
 }
 
@@ -432,10 +446,76 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   bool get isAuthenticated => _currentUser.uid.isNotEmpty;
 
   @override
+  bool get hasVerifiedPhoneIdentity =>
+      _currentUser.uid.isNotEmpty &&
+      (_currentUser.phoneNumber?.trim().isNotEmpty == true);
+
+  @override
   bool get isAuthenticating => _isAuthenticating;
 
   @override
   String? get lastAuthError => _lastAuthError;
+
+  UserProfile _signedOutProfile() {
+    return buildDefaultUserProfile().copyWith(
+      uid: '',
+      clearDormId: true,
+      clearPhoneNumber: true,
+      clearPhoneLinkedAt: true,
+      clearAvatar: true,
+    );
+  }
+
+  Future<UserProfile> _clearSessionAndReset({
+    String? message,
+    bool clearAll = false,
+  }) async {
+    if (clearAll) {
+      await _sessionStore.clearAll();
+    } else {
+      await _sessionStore.clearSession();
+    }
+    _snapshotStore.clear();
+    _currentUser = _signedOutProfile();
+    _lastAuthError = message;
+    return _currentUser;
+  }
+
+  Future<CloudBaseUserInfo?> _readCurrentCloudBaseUser(
+    CloudBaseSession session,
+  ) async {
+    try {
+      return await _authClient.getCurrentUser(
+        accessToken: session.accessToken,
+        deviceId: session.deviceId,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _persistVerifiedPhoneIdentityIfNeeded() async {
+    if (!_appApiClient.isConfigured || !hasVerifiedPhoneIdentity) {
+      return;
+    }
+    try {
+      await _appApiClient.post(
+        '/api/profile/save',
+        body: <String, dynamic>{
+          'profile': <String, dynamic>{
+            'phoneNumber': _currentUser.phoneNumber,
+            'phoneLinkedAt':
+                _currentUser.phoneLinkedAt?.toIso8601String() ??
+                DateTime.now().toIso8601String(),
+          },
+        },
+      );
+      await _snapshotStore.refresh();
+      _syncFromSnapshot();
+    } catch (_) {
+      // The server bootstrap flow will retry this repair on the next read.
+    }
+  }
 
   @override
   Future<UserProfile> signInAnonymously() => ensureAuthenticated();
@@ -450,69 +530,83 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           ? _currentUser
           : buildDefaultUserProfile();
     }
-
     _isAuthenticating = true;
     _lastAuthError = null;
     notifyListeners();
     try {
       if (!_environment.hasCloudBaseAuthConfig) {
-        _currentUser = buildDefaultUserProfile().copyWith(
-          uid: _currentUser.uid.isEmpty
-              ? IdGenerator.next('cloudbase-local')
-              : _currentUser.uid,
-        );
-        _lastAuthError = 'CloudBase 鉴权尚未配置完整，当前先回退到本地模式。';
+        _lastAuthError =
+            'CloudBase \u9274\u6743\u914d\u7f6e\u4e0d\u5b8c\u6574\uff0c\u5f53\u524d\u65e0\u6cd5\u6062\u590d\u767b\u5f55\u72b6\u6001\u3002';
         return _currentUser;
       }
-
-      final String deviceId = await _sessionStore.ensureDeviceId();
-      CloudBaseSession? session = await _sessionStore.readSession();
-      if (session == null) {
-        final CloudBaseAuthTokenResponse token = await _authClient
-            .signInAnonymously(deviceId: deviceId);
-        session = CloudBaseSession(
-          accessToken: token.accessToken,
-          refreshToken: token.refreshToken,
-          subject: token.subject,
-          expiresAt: DateTime.now().add(Duration(seconds: token.expiresIn)),
-          deviceId: deviceId,
-          scope: token.scope,
-          tokenType: token.tokenType,
-        );
-        await _sessionStore.writeSession(session);
+      final String restoredDeviceId = await _sessionStore.ensureDeviceId();
+      CloudBaseSession? restoredSession = await _sessionStore.readSession();
+      if (restoredSession == null) {
+        return _clearSessionAndReset();
       }
-
+      if (restoredSession.isExpired) {
+        try {
+          final CloudBaseAuthTokenResponse refreshed = await _authClient
+              .refreshAccessToken(
+                refreshToken: restoredSession.refreshToken,
+                deviceId: restoredDeviceId,
+              );
+          restoredSession = CloudBaseSession(
+            accessToken: refreshed.accessToken,
+            refreshToken: refreshed.refreshToken,
+            subject: refreshed.subject,
+            expiresAt: DateTime.now().add(
+              Duration(seconds: refreshed.expiresIn),
+            ),
+            deviceId: restoredDeviceId,
+            scope: refreshed.scope,
+            tokenType: refreshed.tokenType,
+          );
+          await _sessionStore.writeSession(restoredSession);
+        } catch (_) {
+          return _clearSessionAndReset(
+            message:
+                '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
+          );
+        }
+      }
+      final CloudBaseUserInfo? restoredInfo =
+          !hasVerifiedPhoneIdentity || _currentUser.uid.isEmpty
+          ? await _readCurrentCloudBaseUser(restoredSession)
+          : null;
+      if (_currentUser.uid.isEmpty) {
+        _currentUser = buildDefaultUserProfile().copyWith(
+          uid: restoredSession.subject,
+          displayName:
+              restoredInfo?.name ?? buildDefaultUserProfile().displayName,
+          phoneNumber: restoredInfo?.phoneNumber,
+          phoneLinkedAt: restoredInfo?.phoneNumber?.trim().isNotEmpty == true
+              ? DateTime.now()
+              : null,
+          avatarUrl: restoredInfo?.picture,
+          clearDormId: true,
+        );
+      } else if ((_currentUser.phoneNumber?.trim().isNotEmpty != true) &&
+          restoredInfo?.phoneNumber?.trim().isNotEmpty == true) {
+        _currentUser = _currentUser.copyWith(
+          phoneNumber: restoredInfo!.phoneNumber,
+          phoneLinkedAt: DateTime.now(),
+          avatarUrl: restoredInfo.picture ?? _currentUser.avatarUrl,
+        );
+      }
       if (_appApiClient.isConfigured) {
         await _snapshotStore.refresh();
       }
       _syncFromSnapshot();
-
-      if (_currentUser.uid.isEmpty) {
-        CloudBaseUserInfo? info;
-        try {
-          info = await _authClient.getCurrentUser(
-            accessToken: session.accessToken,
-            deviceId: session.deviceId,
-          );
-        } catch (_) {
-          info = null;
-        }
-        _currentUser = buildDefaultUserProfile().copyWith(
-          uid: session.subject,
-          displayName: info?.name ?? buildDefaultUserProfile().displayName,
-          avatarUrl: info?.picture,
+      if (!hasVerifiedPhoneIdentity) {
+        return _clearSessionAndReset(
+          message:
+              '\u5f53\u524d\u767b\u5f55\u72b6\u6001\u7f3a\u5c11\u5df2\u9a8c\u8bc1\u624b\u673a\u53f7\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
         );
       }
-
       return _currentUser;
     } catch (error) {
-      _lastAuthError = error.toString();
-      if (_currentUser.uid.isEmpty) {
-        _currentUser = buildDefaultUserProfile().copyWith(
-          uid: IdGenerator.next('cloudbase-fallback'),
-        );
-      }
-      return _currentUser;
+      return _clearSessionAndReset(message: error.toString());
     } finally {
       _isAuthenticating = false;
       notifyListeners();
@@ -524,6 +618,12 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     _lastAuthError = null;
     notifyListeners();
     return ensureAuthenticated();
+  }
+
+  @override
+  Future<void> signOut() async {
+    await _clearSessionAndReset(clearAll: false);
+    notifyListeners();
   }
 
   @override
@@ -600,7 +700,9 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           '/api/profile/avatar',
           body: <String, dynamic>{
             'avatarPath': avatarPath,
-            'avatarBase64': avatarBytes == null ? null : base64Encode(avatarBytes),
+            'avatarBase64': avatarBytes == null
+                ? null
+                : base64Encode(avatarBytes),
             'fileName': avatarPath?.split('/').last.split('\\').last,
           },
         );
@@ -614,83 +716,528 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
 
   @override
   Future<PhoneVerificationChallenge> sendPhoneVerificationCode(
-    String phoneNumber,
-  ) async {
-    final UserProfile user = await ensureAuthenticated();
-    if (!_environment.hasCloudBaseAuthConfig) {
-      throw StateError('CloudBase 手机号登录尚未配置。');
-    }
+    String phoneNumber, {
+    PhoneVerificationTarget target = PhoneVerificationTarget.any,
+    String? captchaToken,
+  }) async {
+    _requireCloudBaseAuthConfig();
     final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
       phoneNumber,
     );
     final String deviceId = await _sessionStore.ensureDeviceId();
-    final CloudBasePhoneVerificationStart result = await _authClient
-        .sendPhoneVerificationCode(
-          phoneNumber: normalizedPhoneNumber,
-          deviceId: deviceId,
-        );
-    _currentUser = user;
-    notifyListeners();
-    return PhoneVerificationChallenge(
-      verificationId: result.verificationId,
-      expiresIn: result.expiresIn,
-      isExistingUser: result.isUser,
+    try {
+      final CloudBasePhoneVerificationStart result = await _authClient
+          .sendPhoneVerificationCode(
+            phoneNumber: normalizedPhoneNumber,
+            deviceId: deviceId,
+            target: _verificationTargetValue(target),
+            captchaToken: captchaToken,
+          );
+      final PhoneVerificationChallenge challenge = PhoneVerificationChallenge(
+        verificationId: result.verificationId,
+        expiresIn: result.expiresIn,
+        isExistingUser: result.isUser,
+      );
+      if (target == PhoneVerificationTarget.newUser &&
+          challenge.isExistingUser) {
+        _throwPhoneTargetMismatch('该手机号已注册，请直接登录。');
+      }
+      if (target == PhoneVerificationTarget.existingUser &&
+          !challenge.isExistingUser) {
+        _throwPhoneTargetMismatch('未找到该手机号，请先注册。');
+      }
+      _lastAuthError = null;
+      notifyListeners();
+      return challenge;
+    } on AuthPhoneTargetMismatchException {
+      rethrow;
+    } on CloudBaseAuthException catch (error) {
+      if (_isCaptchaRequired(error)) {
+        _throwCaptchaRequired();
+      }
+      _throwAuthFlowError(
+        _phoneAuthErrorMessage(error, action: 'sendCode', target: target),
+      );
+    } catch (error) {
+      _throwAuthFlowError(
+        _unexpectedPhoneAuthError(
+          error,
+          fallbackMessage:
+              '\u9a8c\u8bc1\u7801\u53d1\u9001\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<void> signInWithPassword({
+    required String phoneNumber,
+    required String password,
+    String? captchaToken,
+  }) async {
+    _requireCloudBaseAuthConfig();
+    final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
+      phoneNumber,
+    );
+    final String deviceId = await _sessionStore.ensureDeviceId();
+    try {
+      final CloudBaseAuthTokenResponse session = await _authClient
+          .signInWithPassword(
+            phoneNumber: normalizedPhoneNumber,
+            password: password,
+            deviceId: deviceId,
+            captchaToken: captchaToken,
+          );
+      await _completePhoneAuthentication(
+        session: session,
+        deviceId: deviceId,
+        requestedPhoneNumber: normalizedPhoneNumber,
+      );
+    } on CloudBaseAuthException catch (error) {
+      if (_isCaptchaRequired(error)) {
+        _throwCaptchaRequired();
+      }
+      _throwAuthFlowError(
+        _phoneAuthErrorMessage(error, action: 'passwordSignIn'),
+      );
+    } catch (error) {
+      _throwAuthFlowError(
+        _unexpectedPhoneAuthError(
+          error,
+          fallbackMessage:
+              '\u5bc6\u7801\u767b\u5f55\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<void> signInWithPhoneCode({
+    required String phoneNumber,
+    required String verificationId,
+    required String code,
+    String? captchaToken,
+  }) async {
+    _requireCloudBaseAuthConfig();
+    final String requestedPhoneNumber = normalizeCloudBasePhoneNumber(
+      phoneNumber,
+    );
+    final String verifiedDeviceId = await _sessionStore.ensureDeviceId();
+    try {
+      final CloudBasePhoneVerificationResult verificationResult =
+          await _authClient.verifyPhoneCode(
+            verificationId: verificationId,
+            code: code,
+            deviceId: verifiedDeviceId,
+          );
+      final CloudBaseAuthTokenResponse session = await _authClient
+          .signInWithVerificationToken(
+            verificationToken: verificationResult.verificationToken,
+            deviceId: verifiedDeviceId,
+            captchaToken: captchaToken,
+          );
+      await _completePhoneAuthentication(
+        session: session,
+        deviceId: verifiedDeviceId,
+        requestedPhoneNumber: requestedPhoneNumber,
+      );
+    } on CloudBaseAuthException catch (error) {
+      if (_isCaptchaRequired(error)) {
+        _throwCaptchaRequired();
+      }
+      _throwAuthFlowError(_phoneAuthErrorMessage(error, action: 'codeSignIn'));
+    } catch (error) {
+      _throwAuthFlowError(
+        _unexpectedPhoneAuthError(
+          error,
+          fallbackMessage:
+              '\u9a8c\u8bc1\u7801\u767b\u5f55\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<void> registerWithPhone({
+    required String phoneNumber,
+    required String verificationId,
+    required String code,
+    required String password,
+  }) async {
+    _requireCloudBaseAuthConfig();
+    final String requestedPhoneNumber = normalizeCloudBasePhoneNumber(
+      phoneNumber,
+    );
+    final String verifiedDeviceId = await _sessionStore.ensureDeviceId();
+    try {
+      final CloudBasePhoneVerificationResult verificationResult =
+          await _authClient.verifyPhoneCode(
+            verificationId: verificationId,
+            code: code,
+            deviceId: verifiedDeviceId,
+          );
+      final CloudBaseAuthTokenResponse session = await _authClient
+          .signUpWithVerificationToken(
+            phoneNumber: requestedPhoneNumber,
+            verificationToken: verificationResult.verificationToken,
+            password: password,
+            deviceId: verifiedDeviceId,
+          );
+      await _completePhoneAuthentication(
+        session: session,
+        deviceId: verifiedDeviceId,
+        requestedPhoneNumber: requestedPhoneNumber,
+      );
+    } on CloudBaseAuthException catch (error) {
+      _throwAuthFlowError(_phoneAuthErrorMessage(error, action: 'register'));
+    } catch (error) {
+      _throwAuthFlowError(
+        _unexpectedPhoneAuthError(
+          error,
+          fallbackMessage:
+              '\u6ce8\u518c\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<void> resetPasswordWithPhone({
+    required String phoneNumber,
+    required String verificationId,
+    required String code,
+    required String newPassword,
+  }) async {
+    _requireCloudBaseAuthConfig();
+    final String requestedPhoneNumber = normalizeCloudBasePhoneNumber(
+      phoneNumber,
+    );
+    final String verifiedDeviceId = await _sessionStore.ensureDeviceId();
+    try {
+      final CloudBasePhoneVerificationResult verificationResult =
+          await _authClient.verifyPhoneCode(
+            verificationId: verificationId,
+            code: code,
+            deviceId: verifiedDeviceId,
+          );
+      await _authClient.resetPasswordWithVerificationToken(
+        phoneNumber: requestedPhoneNumber,
+        verificationToken: verificationResult.verificationToken,
+        newPassword: newPassword,
+        deviceId: verifiedDeviceId,
+      );
+      final CloudBaseAuthTokenResponse session = await _authClient
+          .signInWithPassword(
+            phoneNumber: requestedPhoneNumber,
+            password: newPassword,
+            deviceId: verifiedDeviceId,
+          );
+      await _completePhoneAuthentication(
+        session: session,
+        deviceId: verifiedDeviceId,
+        requestedPhoneNumber: requestedPhoneNumber,
+      );
+    } on CloudBaseAuthException catch (error) {
+      _throwAuthFlowError(
+        _phoneAuthErrorMessage(error, action: 'resetPassword'),
+      );
+    } catch (error) {
+      _throwAuthFlowError(
+        _unexpectedPhoneAuthError(
+          error,
+          fallbackMessage:
+              '\u91cd\u7f6e\u5bc6\u7801\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<void> authenticateWithPhone({
+    required String phoneNumber,
+    required String verificationId,
+    required String code,
+    required bool isExistingUser,
+  }) async {
+    if (!isExistingUser) {
+      throw const AuthFlowException(
+        '\u65b0\u8d26\u53f7\u9700\u8981\u901a\u8fc7\u6ce8\u518c\u5165\u53e3\u5b8c\u6210\u521b\u5efa\u5e76\u8bbe\u7f6e\u5bc6\u7801\u3002',
+      );
+    }
+    await signInWithPhoneCode(
+      phoneNumber: phoneNumber,
+      verificationId: verificationId,
+      code: code,
     );
   }
 
   @override
-  Future<void> recoverWithPhone({
-    required String phoneNumber,
-    required String verificationId,
-    required String code,
-  }) async {
-    await ensureAuthenticated();
-    final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
-      phoneNumber,
-    );
+  Future<AuthCaptchaChallenge> createCaptchaChallenge() async {
+    _requireCloudBaseAuthConfig();
     final String deviceId = await _sessionStore.ensureDeviceId();
-    final CloudBasePhoneVerificationResult verification = await _authClient
-        .verifyPhoneCode(
-          verificationId: verificationId,
-          code: code,
-          deviceId: deviceId,
-        );
-    CloudBaseAuthTokenResponse phoneSession;
     try {
-      phoneSession = await _authClient.signInWithVerificationToken(
-        verificationToken: verification.verificationToken,
-        deviceId: deviceId,
+      final CloudBaseCaptchaChallenge challenge = await _authClient
+          .createCaptchaChallenge(deviceId: deviceId);
+      return AuthCaptchaChallenge(
+        token: challenge.token,
+        imageData: challenge.imageData,
+        expiresIn: challenge.expiresIn,
       );
     } on CloudBaseAuthException catch (error) {
-      if (error.statusCode != 404) {
-        rethrow;
-      }
-      phoneSession = await _authClient.signUpWithVerificationToken(
-        verificationToken: verification.verificationToken,
-        deviceId: deviceId,
+      _throwAuthFlowError(
+        _phoneAuthErrorMessage(error, action: 'captchaChallenge'),
+      );
+    } catch (error) {
+      _throwAuthFlowError(
+        _unexpectedPhoneAuthError(
+          error,
+          fallbackMessage:
+              '\u56fe\u5f62\u9a8c\u8bc1\u7801\u52a0\u8f7d\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+        ),
       );
     }
-    await _appApiClient.post(
-      '/api/auth/recover-phone-account',
-      body: <String, dynamic>{
-        'phoneNumber': normalizedPhoneNumber,
-        'verificationToken': verification.verificationToken,
-        'phoneAccessToken': phoneSession.accessToken,
-      },
+  }
+
+  @override
+  Future<String> verifyCaptchaChallenge({
+    required String token,
+    required String code,
+  }) async {
+    _requireCloudBaseAuthConfig();
+    final String deviceId = await _sessionStore.ensureDeviceId();
+    try {
+      final String captchaToken = await _authClient.verifyCaptchaChallenge(
+        token: token,
+        code: code,
+        deviceId: deviceId,
+      );
+      if (captchaToken.trim().isEmpty) {
+        throw const AuthFlowException(
+          '\u56fe\u5f62\u9a8c\u8bc1\u5931\u8d25\uff0c\u8bf7\u91cd\u65b0\u8f93\u5165\u3002',
+        );
+      }
+      _lastAuthError = null;
+      notifyListeners();
+      return captchaToken;
+    } on CloudBaseAuthException catch (error) {
+      _throwAuthFlowError(
+        _phoneAuthErrorMessage(error, action: 'captchaVerify'),
+      );
+    } catch (error) {
+      _throwAuthFlowError(
+        _unexpectedPhoneAuthError(
+          error,
+          fallbackMessage:
+              '\u56fe\u5f62\u9a8c\u8bc1\u5931\u8d25\uff0c\u8bf7\u91cd\u65b0\u8f93\u5165\u3002',
+        ),
+      );
+    }
+  }
+
+  void _requireCloudBaseAuthConfig() {
+    if (_environment.hasCloudBaseAuthConfig) {
+      return;
+    }
+    throw const AuthFlowException(
+      'CloudBase \u624b\u673a\u53f7\u8ba4\u8bc1\u5c1a\u672a\u5b8c\u6210\u914d\u7f6e\u3002',
     );
+  }
+
+  String _verificationTargetValue(PhoneVerificationTarget target) {
+    return switch (target) {
+      PhoneVerificationTarget.any => 'ANY',
+      PhoneVerificationTarget.existingUser => 'USER',
+      PhoneVerificationTarget.newUser => 'NOT_USER',
+    };
+  }
+
+  Future<void> _completePhoneAuthentication({
+    required CloudBaseAuthTokenResponse session,
+    required String deviceId,
+    required String requestedPhoneNumber,
+  }) async {
     await _sessionStore.writeSession(
       CloudBaseSession(
-        accessToken: phoneSession.accessToken,
-        refreshToken: phoneSession.refreshToken,
-        subject: phoneSession.subject,
-        expiresAt: DateTime.now().add(Duration(seconds: phoneSession.expiresIn)),
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        subject: session.subject,
+        expiresAt: DateTime.now().add(Duration(seconds: session.expiresIn)),
         deviceId: deviceId,
-        scope: phoneSession.scope,
-        tokenType: phoneSession.tokenType,
+        scope: session.scope,
+        tokenType: session.tokenType,
       ),
     );
-    await _snapshotStore.refresh();
+    _lastAuthError = null;
+    CloudBaseUserInfo? info;
+    try {
+      info = await _authClient.getCurrentUser(
+        accessToken: session.accessToken,
+        deviceId: deviceId,
+      );
+    } catch (_) {
+      info = null;
+    }
+    final bool hadCurrentUser = _currentUser.uid.isNotEmpty;
+    final UserProfile baseProfile = hadCurrentUser
+        ? _currentUser
+        : buildDefaultUserProfile().copyWith(
+            uid: session.subject,
+            clearDormId: true,
+          );
+    _currentUser = baseProfile.copyWith(
+      uid: session.subject,
+      displayName: info?.name ?? baseProfile.displayName,
+      phoneNumber: info?.phoneNumber ?? requestedPhoneNumber,
+      phoneLinkedAt: DateTime.now(),
+      avatarUrl: info?.picture ?? baseProfile.avatarUrl,
+      clearDormId: !hadCurrentUser,
+    );
+    notifyListeners();
+    await _persistVerifiedPhoneIdentityIfNeeded();
+    await _safeRefreshSnapshot();
     _syncFromSnapshot();
+    if (!hasVerifiedPhoneIdentity) {
+      await _clearSessionAndReset(
+        message:
+            '\u624b\u673a\u53f7\u540c\u6b65\u5931\u8d25\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55\u3002',
+      );
+      notifyListeners();
+      throw const AuthFlowException(
+        '\u624b\u673a\u53f7\u540c\u6b65\u5931\u8d25\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55\u3002',
+      );
+    }
+  }
+
+  Future<void> _safeRefreshSnapshot() async {
+    if (!_appApiClient.isConfigured) {
+      return;
+    }
+    try {
+      await _snapshotStore.refresh();
+    } catch (_) {
+      // Snapshot refresh should not block a successful auth result.
+    }
+  }
+
+  Never _throwAuthFlowError(String message) {
+    _lastAuthError = _normalizePhoneAuthenticationError(message);
+    notifyListeners();
+    throw AuthFlowException(_lastAuthError!);
+  }
+
+  Never _throwPhoneTargetMismatch(String message) {
+    _lastAuthError = _normalizePhoneAuthenticationError(message);
+    notifyListeners();
+    throw AuthPhoneTargetMismatchException(_lastAuthError!);
+  }
+
+  Never _throwCaptchaRequired() {
+    _lastAuthError =
+        '\u9700\u8981\u5148\u5b8c\u6210\u56fe\u5f62\u9a8c\u8bc1\u7801\u9a8c\u8bc1\u3002';
+    notifyListeners();
+    throw const AuthCaptchaRequiredException();
+  }
+
+  bool _isCaptchaRequired(CloudBaseAuthException error) {
+    final String message = error.message.toLowerCase();
+    final String code = (error.code ?? '').toLowerCase();
+    return message.contains('captcha_required') ||
+        message.contains('captcha required') ||
+        code.contains('captcha_required');
+  }
+
+  String _phoneAuthErrorMessage(
+    CloudBaseAuthException error, {
+    required String action,
+    PhoneVerificationTarget? target,
+  }) {
+    final String message = error.message.toLowerCase();
+    final String code = (error.code ?? '').toLowerCase();
+    if (message.contains('verification') ||
+        message.contains('otp') ||
+        message.contains('code') ||
+        code.contains('verification')) {
+      return '\u9a8c\u8bc1\u7801\u9519\u8bef\u6216\u5df2\u8fc7\u671f\uff0c\u8bf7\u91cd\u65b0\u83b7\u53d6\u540e\u518d\u8bd5\u3002';
+    }
+    if (message.contains('already') ||
+        message.contains('exists') ||
+        message.contains('registered') ||
+        code.contains('already')) {
+      return '\u8fd9\u4e2a\u624b\u673a\u53f7\u5df2\u7ecf\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002';
+    }
+    if (message.contains('not found') ||
+        code.contains('not_found') ||
+        code.contains('user_not_found')) {
+      return '\u672a\u627e\u5230\u8fd9\u4e2a\u624b\u673a\u53f7\u5bf9\u5e94\u7684\u8d26\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002';
+    }
+    if (message.contains('password') || code.contains('password')) {
+      if (action == 'passwordSignIn') {
+        return '\u624b\u673a\u53f7\u6216\u5bc6\u7801\u4e0d\u6b63\u786e\uff0c\u8bf7\u91cd\u8bd5\u3002';
+      }
+      return '\u5bc6\u7801\u6821\u9a8c\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u540e\u91cd\u8bd5\u3002';
+    }
+    if (message.contains('captcha') || code.contains('captcha')) {
+      return '\u9700\u8981\u5148\u5b8c\u6210\u56fe\u5f62\u9a8c\u8bc1\u7801\u9a8c\u8bc1\u3002';
+    }
+    if (message.contains('limit') ||
+        message.contains('too many') ||
+        code.contains('rate_limit')) {
+      return '\u64cd\u4f5c\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002';
+    }
+    if (message.contains('phone') || code.contains('phone')) {
+      return switch (target ?? PhoneVerificationTarget.any) {
+        PhoneVerificationTarget.newUser =>
+          '\u8fd9\u4e2a\u624b\u673a\u53f7\u5df2\u7ecf\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002',
+        PhoneVerificationTarget.existingUser =>
+          '\u672a\u627e\u5230\u8fd9\u4e2a\u624b\u673a\u53f7\u5bf9\u5e94\u7684\u8d26\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002',
+        PhoneVerificationTarget.any =>
+          '\u624b\u673a\u53f7\u6821\u9a8c\u5931\u8d25\uff0c\u8bf7\u786e\u8ba4\u8f93\u5165\u65e0\u8bef\u3002',
+      };
+    }
+    return switch (action) {
+      'sendCode' =>
+        '\u9a8c\u8bc1\u7801\u53d1\u9001\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+      'passwordSignIn' =>
+        '\u5bc6\u7801\u767b\u5f55\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+      'codeSignIn' =>
+        '\u9a8c\u8bc1\u7801\u767b\u5f55\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+      'register' =>
+        '\u6ce8\u518c\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+      'resetPassword' =>
+        '\u91cd\u7f6e\u5bc6\u7801\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+      'captchaChallenge' =>
+        '\u56fe\u5f62\u9a8c\u8bc1\u7801\u52a0\u8f7d\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+      'captchaVerify' =>
+        '\u56fe\u5f62\u9a8c\u8bc1\u5931\u8d25\uff0c\u8bf7\u91cd\u65b0\u8f93\u5165\u3002',
+      _ =>
+        '\u624b\u673a\u53f7\u8ba4\u8bc1\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+    };
+  }
+
+  String _unexpectedPhoneAuthError(
+    Object error, {
+    required String fallbackMessage,
+  }) {
+    if (error is AuthFlowException) {
+      return error.message;
+    }
+    final String normalized = _normalizePhoneAuthenticationError(
+      error.toString(),
+    );
+    if (normalized.isEmpty || normalized == 'Bad state') {
+      return fallbackMessage;
+    }
+    return normalized;
+  }
+
+  String _normalizePhoneAuthenticationError(String message) {
+    final String cleaned = message
+        .replaceFirst(RegExp(r'^Bad state:\s*'), '')
+        .replaceFirst(RegExp(r'^Exception:\s*'), '')
+        .trim();
+    return cleaned.isEmpty
+        ? '\u624b\u673a\u53f7\u8ba4\u8bc1\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002'
+        : cleaned;
   }
 
   void _syncFromSnapshot() {
@@ -701,14 +1248,18 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     if (snapshot.user.uid.isEmpty) {
       return;
     }
+    final String? snapshotPhone = snapshot.user.phoneNumber;
+    final DateTime? snapshotPhoneLinkedAt = snapshot.user.phoneLinkedAt;
     _currentUser = _currentUser.copyWith(
       uid: snapshot.user.uid,
       displayName: snapshot.user.displayName,
       tagline: snapshot.user.tagline,
       role: snapshot.user.role,
       dormId: snapshot.user.dormId,
-      phoneNumber: snapshot.user.phoneNumber,
-      phoneLinkedAt: snapshot.user.phoneLinkedAt,
+      phoneNumber: snapshotPhone?.trim().isNotEmpty == true
+          ? snapshotPhone
+          : _currentUser.phoneNumber,
+      phoneLinkedAt: snapshotPhoneLinkedAt ?? _currentUser.phoneLinkedAt,
       avatarUrl: snapshot.user.avatarUrl,
       avatarPath: snapshot.user.avatarPath,
       avatarStoragePath: snapshot.user.avatarStoragePath,
@@ -1328,10 +1879,12 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
     _currentDorm = Dorm(
       id: IdGenerator.next('dorm'),
       name: name,
-      overview: overview ?? '新宿舍已经创建，接下来可以邀请舍友加入。',
+      overview:
+          overview ??
+          '\u65b0\u5bbf\u820d\u5df2\u7ecf\u521b\u5efa\uff0c\u63a5\u4e0b\u6765\u53ef\u4ee5\u9080\u8bf7\u820d\u53cb\u52a0\u5165\u3002',
       noiseDb: 28,
-      lightLabel: '适中',
-      quietLabel: '可优化',
+      lightLabel: '\u9002\u4e2d',
+      quietLabel: '\u53ef\u4f18\u5316',
       rules: buildDormSummaryRules(nextRules),
       members: <DormMember>[
         DormMember(
@@ -1340,7 +1893,8 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
           status: DormMemberStatus.quiet,
           sleepModeActive: false,
           lastActiveAt: now,
-          note: '已创建宿舍，等待邀请舍友加入。',
+          note:
+              '\u5df2\u521b\u5efa\u5bbf\u820d\uff0c\u7b49\u5f85\u9080\u8bf7\u820d\u53cb\u52a0\u5165\u3002',
           avatarUrl: _authRepository.currentUser.avatarUrl,
         ),
       ],
@@ -1349,8 +1903,9 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
         DormEvent(
           id: IdGenerator.next('dorm-event'),
           type: DormEventType.system,
-          title: '宿舍已创建',
-          detail: '你现在可以生成邀请码并邀请舍友加入。',
+          title: '\u5bbf\u820d\u5df2\u521b\u5efa',
+          detail:
+              '\u4f60\u73b0\u5728\u53ef\u4ee5\u751f\u6210\u9080\u8bf7\u7801\u5e76\u9080\u8bf7\u820d\u53cb\u52a0\u5165\u3002',
           createdAt: now,
           actorUid: _authRepository.currentUser.uid,
         ),
@@ -1389,7 +1944,9 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
         DormEvent(
           id: IdGenerator.next('dorm-event'),
           type: DormEventType.memberStatus,
-          title: uid == _authRepository.currentUser.uid ? '你已更新状态' : '舍友更新了状态',
+          title: uid == _authRepository.currentUser.uid
+              ? '\u4f60\u5df2\u66f4\u65b0\u72b6\u6001'
+              : '\u820d\u53cb\u66f4\u65b0\u4e86\u72b6\u6001',
           detail: note,
           createdAt: DateTime.now(),
           actorUid: uid,
@@ -1417,7 +1974,9 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
   @override
   Future<DormInvite> createInvite() async {
     if (_currentDorm.id.isEmpty) {
-      throw StateError('请先创建宿舍或加入宿舍，再邀请舍友。');
+      throw StateError(
+        '\u8bf7\u5148\u521b\u5efa\u5bbf\u820d\u6216\u52a0\u5165\u5bbf\u820d\uff0c\u518d\u9080\u8bf7\u820d\u53cb\u3002',
+      );
     }
     if (_appApiClient.isConfigured) {
       try {
@@ -1502,7 +2061,8 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
                 status: DormMemberStatus.quiet,
                 sleepModeActive: false,
                 lastActiveAt: DateTime.now(),
-                note: '已通过邀请码加入宿舍。',
+                note:
+                    '\u5df2\u901a\u8fc7\u9080\u8bf7\u7801\u52a0\u5165\u5bbf\u820d\u3002',
                 avatarUrl: _authRepository.currentUser.avatarUrl,
               ),
               ..._currentDorm.members,
@@ -1560,13 +2120,55 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
             archivedAt: DateTime.now(),
             invites: _currentDorm.invites
                 .map(
-                  (DormInvite invite) => invite.copyWith(
-                    status: DormInviteStatus.revoked,
-                  ),
+                  (DormInvite invite) =>
+                      invite.copyWith(status: DormInviteStatus.revoked),
                 )
                 .toList(growable: false),
           )
         : _currentDorm.copyWith(members: remainingMembers);
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  @override
+  Future<void> sendGentleReminder({required String targetUid}) async {
+    if (_currentDorm.id.isEmpty || targetUid.trim().isEmpty) {
+      return;
+    }
+    if (_appApiClient.isConfigured) {
+      try {
+        await _authRepository.ensureAuthenticated();
+        await _appApiClient.post(
+          '/api/dorm/reminders/gentle',
+          body: <String, dynamic>{'targetUid': targetUid.trim()},
+        );
+        await _snapshotStore.refresh();
+        return;
+      } catch (_) {
+        // Fall back to local event logging below.
+      }
+    }
+    final DormMember? target = _firstWhereOrNull<DormMember>(
+      _currentDorm.members,
+      (DormMember member) => member.uid == targetUid,
+    );
+    if (target == null) {
+      return;
+    }
+    _currentDorm = _currentDorm.copyWith(
+      events: <DormEvent>[
+        DormEvent(
+          id: IdGenerator.next('dorm-event'),
+          type: DormEventType.notification,
+          title: '\u5df2\u53d1\u9001\u59d4\u5a49\u63d0\u9192',
+          detail:
+              '\u5df2\u5411 ${target.name} \u53d1\u9001\u4e00\u6761\u7ad9\u5185\u63d0\u9192\u3002',
+          createdAt: DateTime.now(),
+          actorUid: _authRepository.currentUser.uid,
+        ),
+        ..._currentDorm.events,
+      ],
+    );
     _emitCurrentState();
     notifyListeners();
   }
@@ -1723,7 +2325,7 @@ class CloudBaseInsightsRepository extends ChangeNotifier
           (Map<String, dynamic> card) => SleepInsight(
             id: _stringOf(card['id'], 'factor'),
             category: InsightCategory.interference,
-            title: _stringOf(card['title'], '干扰因子'),
+            title: _stringOf(card['title'], '\u5e72\u6270\u56e0\u5b50'),
             summary: _stringOf(card['subtitle']),
             metricLabel: _stringOf(card['metric']),
             createdAt: createdAt,
@@ -1750,7 +2352,7 @@ class CloudBaseInsightsRepository extends ChangeNotifier
       return _fallback.currentReport;
     }
     return SleepReport(
-      title: _stringOf(summaryCard['title'], '睡眠周报'),
+      title: _stringOf(summaryCard['title'], '\u7761\u7720\u5468\u62a5'),
       averageSleepHours: _doubleOf(payload['averageSleepHours']),
       averageSleepQuality: _doubleOf(payload['averageSleepQuality']),
       averageRestedLevel: _doubleOf(payload['averageRestedLevel']),
@@ -1812,10 +2414,11 @@ class CloudBaseAssistantRepository extends ChangeNotifier
        _snapshotStore = snapshotStore,
        _appApiClient = appApiClient {
     final String userId = authRepository.currentUser.uid;
+    _assistantProfile = buildDefaultAssistantProfile(userId);
     final AssistantThread thread = AssistantThread(
       id: 'thread-default',
       userId: userId,
-      title: '今晚睡前聊聊',
+      title: '\u4eca\u665a\u7761\u524d\u804a\u804a',
       createdAt: DateTime.now().subtract(const Duration(hours: 2)),
       updatedAt: DateTime.now().subtract(const Duration(minutes: 10)),
     );
@@ -1826,7 +2429,8 @@ class CloudBaseAssistantRepository extends ChangeNotifier
         id: 'msg-welcome',
         threadId: thread.id,
         role: AssistantMessageRole.assistant,
-        content: '我已经准备好陪你记录今晚的状态，我们先从最小、最容易执行的一步开始。',
+        content:
+            '\u6211\u5df2\u7ecf\u51c6\u5907\u597d\u966a\u4f60\u8bb0\u5f55\u4eca\u665a\u7684\u72b6\u6001\uff0c\u6211\u4eec\u5148\u4ece\u6700\u5c0f\u3001\u6700\u5bb9\u6613\u6267\u884c\u7684\u4e00\u6b65\u5f00\u59cb\u3002',
         createdAt: DateTime.now().subtract(const Duration(minutes: 9)),
       ),
     ];
@@ -1836,12 +2440,16 @@ class CloudBaseAssistantRepository extends ChangeNotifier
   final AuthRepository _authRepository;
   final CloudBaseSnapshotStore _snapshotStore;
   final CloudBaseAppApiClient _appApiClient;
+  late AssistantProfile _assistantProfile;
   List<AssistantThread> _threads = const <AssistantThread>[];
   final Map<String, List<AssistantMessage>> _messagesByThread =
       <String, List<AssistantMessage>>{};
   String? _currentThreadId;
 
   String get _userId => _authRepository.currentUser.uid;
+
+  @override
+  AssistantProfile get assistantProfile => _assistantProfile;
 
   @override
   List<AssistantThread> get threads {
@@ -1883,7 +2491,7 @@ class CloudBaseAssistantRepository extends ChangeNotifier
     final AssistantThread localThread = AssistantThread(
       id: IdGenerator.next('assistant-thread'),
       userId: _userId,
-      title: title ?? '新建对话',
+      title: title ?? '\u65b0\u5efa\u5bf9\u8bdd',
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -1982,7 +2590,7 @@ class CloudBaseAssistantRepository extends ChangeNotifier
     final AssistantThread thread = AssistantThread(
       id: IdGenerator.next('assistant-thread'),
       userId: _userId,
-      title: title ?? '新的睡前陪伴对话',
+      title: title ?? '\u65b0\u7684\u7761\u524d\u966a\u4f34\u5bf9\u8bdd',
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -1997,9 +2605,10 @@ class CloudBaseAssistantRepository extends ChangeNotifier
   Future<void> sendUserMessage({
     required String threadId,
     required String content,
+    String? messageId,
   }) async {
     final AssistantMessage message = AssistantMessage(
-      id: IdGenerator.next('assistant-msg'),
+      id: messageId ?? IdGenerator.next('assistant-msg'),
       threadId: threadId,
       role: AssistantMessageRole.user,
       content: content,
@@ -2017,15 +2626,24 @@ class CloudBaseAssistantRepository extends ChangeNotifier
   Future<void> addAssistantMessage({
     required String threadId,
     required String content,
+    String? messageId,
     AssistantMessageStatus status = AssistantMessageStatus.complete,
+    AssistantReplySourceMode? sourceMode,
+    String? provider,
+    String? model,
+    String? errorMessage,
   }) async {
     final AssistantMessage message = AssistantMessage(
-      id: IdGenerator.next('assistant-msg'),
+      id: messageId ?? IdGenerator.next('assistant-msg'),
       threadId: threadId,
       role: AssistantMessageRole.assistant,
       content: content,
       createdAt: DateTime.now(),
       status: status,
+      sourceMode: sourceMode,
+      provider: provider,
+      model: model,
+      errorMessage: errorMessage,
     );
     final List<AssistantMessage> next = List<AssistantMessage>.from(
       _messagesByThread[threadId] ?? const <AssistantMessage>[],
@@ -2036,8 +2654,50 @@ class CloudBaseAssistantRepository extends ChangeNotifier
   }
 
   @override
+  Future<void> updateAssistantMessage({
+    required String threadId,
+    required String messageId,
+    String? content,
+    AssistantMessageStatus? status,
+    AssistantReplySourceMode? sourceMode,
+    String? provider,
+    String? model,
+    String? errorMessage,
+  }) async {
+    final List<AssistantMessage> next = List<AssistantMessage>.from(
+      _messagesByThread[threadId] ?? const <AssistantMessage>[],
+    );
+    final int index = next.indexWhere(
+      (AssistantMessage item) => item.id == messageId,
+    );
+    if (index == -1) {
+      return;
+    }
+    next[index] = next[index].copyWith(
+      content: content,
+      status: status,
+      sourceMode: sourceMode,
+      provider: provider,
+      model: model,
+      errorMessage: errorMessage,
+    );
+    _messagesByThread[threadId] = next;
+    _touchThread(threadId);
+    notifyListeners();
+  }
+
+  @override
   Future<void> setCurrentThread(String threadId) async {
     _currentThreadId = threadId;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> updateAssistantProfileName(String assistantName) async {
+    _assistantProfile = _assistantProfile.copyWith(
+      assistantName: assistantName,
+      updatedAt: DateTime.now(),
+    );
     notifyListeners();
   }
 
@@ -2061,7 +2721,9 @@ class CloudBaseAssistantRepository extends ChangeNotifier
     _messagesByThread
       ..clear()
       ..addAll(snapshot.messagesByThread);
-    final String latestThreadId = _stringOf(snapshot.userState['latestThreadId']);
+    final String latestThreadId = _stringOf(
+      snapshot.userState['latestThreadId'],
+    );
     if (latestThreadId.isNotEmpty &&
         _threads.any((AssistantThread item) => item.id == latestThreadId)) {
       _currentThreadId = latestThreadId;

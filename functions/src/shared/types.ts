@@ -9,9 +9,14 @@ export type AssistantIntent =
   | "sleep_difficulty"
   | "noise_issue"
   | "dream_reflection"
-  | "plan_review";
+  | "plan_review"
+  | "system_identity";
 
 export type AssistantRunStatus = "success" | "fallback" | "error";
+export type AssistantRunSourceMode =
+  | "remoteSuccess"
+  | "fallbackSuccess"
+  | "error";
 
 export type SurfaceId =
   | "home_pre_sleep"
@@ -37,6 +42,15 @@ export interface ContextUserSettings {
   preferredTrackTitle: string;
   smartSuggestionsEnabled: boolean;
   selectedNightMood?: string | null;
+}
+
+export interface ContextAssistantProfile {
+  userId: string;
+  assistantName: string;
+  identityPrompt: string;
+  tone: string;
+  relationshipRole: string;
+  updatedAt: string;
 }
 
 export interface ContextDormMember {
@@ -96,7 +110,17 @@ export interface ContextAssistantMessage {
   role: string;
   content: string;
   status?: string;
+  sourceMode?: string;
   createdAt?: string;
+}
+
+export interface AssistantProfileDoc {
+  userId: string;
+  assistantName: string;
+  identityPrompt: string;
+  tone: string;
+  relationshipRole: string;
+  updatedAt: string;
 }
 
 export interface AssistantThreadSummaryDoc {
@@ -203,6 +227,7 @@ export interface AssistantRunDoc {
   provider: string;
   model: string;
   status: AssistantRunStatus;
+  sourceMode: AssistantRunSourceMode;
   inputRefs: string[];
   outputRefs: string[];
   error?: string | null;
@@ -210,6 +235,7 @@ export interface AssistantRunDoc {
 }
 
 export interface AssistantContext {
+  assistantProfile: ContextAssistantProfile;
   user: ContextUserProfile;
   settings: ContextUserSettings;
   dorm: ContextDorm;

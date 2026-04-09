@@ -39,13 +39,36 @@ class _FakeAssistantGateway implements AssistantReplyGateway {
   Future<AssistantReplyResult> generateReply({
     required String prompt,
     required String threadId,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  }) async {
+    return AssistantReplyResult(
+      reply: 'Backend reply',
+      sourceMode: AssistantReplySourceMode.remoteSuccess,
+      runId: 'run-1',
+      intent: 'general_support',
+      provider: 'xai_responses',
+      model: 'grok-4-1-fast-reasoning',
+      assistantMessageId: clientAssistantMessageId,
+      updatedSurfaces: <String>['assistant_context'],
+    );
+  }
+}
+
+class _ErrorAssistantGateway implements AssistantReplyGateway {
+  @override
+  Future<AssistantReplyResult> generateReply({
+    required String prompt,
+    required String threadId,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
     required Dorm dorm,
   }) async {
     return const AssistantReplyResult(
-      reply: 'Backend reply',
-      runId: 'run-1',
-      intent: 'general_support',
-      updatedSurfaces: <String>['assistant_context'],
+      reply: '暂时没有收到回复，请稍后再试。',
+      sourceMode: AssistantReplySourceMode.error,
+      errorMessage: 'gateway failure',
     );
   }
 }
@@ -104,8 +127,50 @@ void main() {
       expect(thread, isNotNull);
       final List<AssistantMessage> messages = assistantRepository
           .messagesForThread(thread!.id);
+      expect(messages, hasLength(3));
       expect(messages.last.content, 'Backend reply');
       expect(messages.last.role, AssistantMessageRole.assistant);
+      expect(messages.last.sourceMode, AssistantReplySourceMode.remoteSuccess);
+      expect(messages.last.provider, 'xai_responses');
+      expect(messages.last.model, 'grok-4-1-fast-reasoning');
+      facade.dispose();
+      authRepository.dispose();
+      assistantRepository.dispose();
+      dormRepository.dispose();
+    },
+  );
+
+  test(
+    'assistant facade preserves gateway error state instead of inventing a fallback reply',
+    () async {
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(
+          uid: 'assistant-user',
+        ),
+      );
+      final InMemoryAssistantRepository assistantRepository =
+          InMemoryAssistantRepository(userId: 'assistant-user');
+      final InMemoryDormRepository dormRepository = InMemoryDormRepository(
+        currentUserId: 'assistant-user',
+      );
+      final AssistantFacade facade = AssistantFacade(
+        authRepository: authRepository,
+        assistantRepository: assistantRepository,
+        dormRepository: dormRepository,
+        assistantReplyGateway: _ErrorAssistantGateway(),
+      );
+
+      await facade.sendPrompt('Can you help me settle down?');
+
+      final AssistantThread? thread = assistantRepository.currentThread;
+      expect(thread, isNotNull);
+      final AssistantMessage latest = assistantRepository
+          .messagesForThread(thread!.id)
+          .last;
+      expect(latest.status, AssistantMessageStatus.error);
+      expect(latest.sourceMode, AssistantReplySourceMode.error);
+      expect(latest.errorMessage, 'gateway failure');
+      expect(latest.content, '暂时没有收到回复，请稍后再试。');
       facade.dispose();
       authRepository.dispose();
       assistantRepository.dispose();

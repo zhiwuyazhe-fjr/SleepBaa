@@ -13,6 +13,14 @@ import {
 
 function buildContext(): AssistantContext {
   return {
+    assistantProfile: {
+      userId: "user-1",
+      assistantName: "小眠",
+      identityPrompt: "你是一个温和的情绪陪伴助手。",
+      tone: "温柔、稳定",
+      relationshipRole: "情绪陪伴助手",
+      updatedAt: "2026-04-06T10:00:00.000Z",
+    },
     user: {
       uid: "user-1",
       displayName: "Test User",

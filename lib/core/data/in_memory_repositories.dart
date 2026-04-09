@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
+import 'package:sleep_dorm_app/core/backend/cloudbase_auth_client.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/id_generator.dart';
@@ -29,6 +30,17 @@ UserSettings buildDefaultUserSettings() {
     bedtimeReminder: TimeOfDay(hour: 23, minute: 10),
     preferredTrackTitle: '深海海浪',
     smartSuggestionsEnabled: true,
+  );
+}
+
+AssistantProfile buildDefaultAssistantProfile(String userId) {
+  return AssistantProfile(
+    userId: userId,
+    assistantName: '小眠',
+    identityPrompt: '你是小眠，一位温和、低压、不评判的情绪陪伴型睡前助手。',
+    tone: '温柔、稳定、共情',
+    relationshipRole: '情绪陪伴助手',
+    updatedAt: DateTime.now(),
   );
 }
 
@@ -159,15 +171,26 @@ List<NightRecommendation> buildDefaultRecommendations() {
 
 class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
   InMemoryAuthRepository({UserProfile? initialProfile})
-    : _currentUser = initialProfile ?? buildDefaultUserProfile();
+    : _currentUser = initialProfile ?? buildDefaultUserProfile() {
+    final String? phoneNumber = _currentUser.phoneNumber;
+    if (phoneNumber != null && phoneNumber.trim().isNotEmpty) {
+      _registeredPhones.add(normalizeCloudBasePhoneNumber(phoneNumber));
+    }
+  }
 
   UserProfile _currentUser;
+  final Set<String> _registeredPhones = <String>{};
+  final Map<String, String> _passwordsByPhone = <String, String>{};
 
   @override
   UserProfile get currentUser => _currentUser;
 
   @override
   bool get isAuthenticated => _currentUser.uid.isNotEmpty;
+
+  @override
+  bool get hasVerifiedPhoneIdentity =>
+      _currentUser.phoneNumber?.trim().isNotEmpty == true;
 
   @override
   bool get isAuthenticating => false;
@@ -183,6 +206,18 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
 
   @override
   Future<UserProfile> retryAuthentication() async => _currentUser;
+
+  @override
+  Future<void> signOut() async {
+    _currentUser = buildDefaultUserProfile().copyWith(
+      uid: '',
+      clearDormId: true,
+      clearPhoneNumber: true,
+      clearPhoneLinkedAt: true,
+      clearAvatar: true,
+    );
+    notifyListeners();
+  }
 
   @override
   Future<void> updateProfile({
@@ -215,26 +250,150 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
 
   @override
   Future<PhoneVerificationChallenge> sendPhoneVerificationCode(
-    String phoneNumber,
-  ) async {
-    return const PhoneVerificationChallenge(
+    String phoneNumber, {
+    PhoneVerificationTarget target = PhoneVerificationTarget.any,
+    String? captchaToken,
+  }) async {
+    final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
+      phoneNumber,
+    );
+    final bool alreadyRegistered = _registeredPhones.contains(
+      normalizedPhoneNumber,
+    );
+    final bool isExistingUser = switch (target) {
+      PhoneVerificationTarget.any => alreadyRegistered,
+      PhoneVerificationTarget.existingUser => alreadyRegistered,
+      PhoneVerificationTarget.newUser => alreadyRegistered,
+    };
+    if (target == PhoneVerificationTarget.newUser && isExistingUser) {
+      throw const AuthPhoneTargetMismatchException('该手机号已注册，请直接登录。');
+    }
+    if (target == PhoneVerificationTarget.existingUser && !isExistingUser) {
+      throw const AuthPhoneTargetMismatchException('未找到该手机号，请先注册。');
+    }
+    return PhoneVerificationChallenge(
       verificationId: 'local-verification-id',
       expiresIn: 600,
-      isExistingUser: false,
+      isExistingUser: isExistingUser,
     );
   }
 
   @override
-  Future<void> recoverWithPhone({
-    required String phoneNumber,
-    required String verificationId,
+  Future<AuthCaptchaChallenge> createCaptchaChallenge() async {
+    return const AuthCaptchaChallenge(
+      token: 'local-captcha-token',
+      imageData: '',
+      expiresIn: 300,
+    );
+  }
+
+  @override
+  Future<String> verifyCaptchaChallenge({
+    required String token,
     required String code,
   }) async {
+    return 'local-captcha-proof';
+  }
+
+  @override
+  Future<void> signInWithPassword({
+    required String phoneNumber,
+    required String password,
+    String? captchaToken,
+  }) async {
+    final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
+      phoneNumber,
+    );
+    final String? savedPassword = _passwordsByPhone[normalizedPhoneNumber];
+    if (!_registeredPhones.contains(normalizedPhoneNumber) ||
+        (savedPassword != null && savedPassword != password)) {
+      throw const AuthFlowException('手机号或密码不正确，请重试。');
+    }
     _currentUser = _currentUser.copyWith(
-      phoneNumber: phoneNumber,
+      phoneNumber: normalizedPhoneNumber,
       phoneLinkedAt: DateTime.now(),
     );
     notifyListeners();
+  }
+
+  @override
+  Future<void> signInWithPhoneCode({
+    required String phoneNumber,
+    required String verificationId,
+    required String code,
+    String? captchaToken,
+  }) async {
+    final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
+      phoneNumber,
+    );
+    if (!_registeredPhones.contains(normalizedPhoneNumber)) {
+      throw const AuthFlowException('未找到该手机号，请先注册。');
+    }
+    _currentUser = _currentUser.copyWith(
+      phoneNumber: normalizedPhoneNumber,
+      phoneLinkedAt: DateTime.now(),
+    );
+    notifyListeners();
+  }
+
+  @override
+  Future<void> registerWithPhone({
+    required String phoneNumber,
+    required String verificationId,
+    required String code,
+    required String password,
+  }) async {
+    final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
+      phoneNumber,
+    );
+    if (_registeredPhones.contains(normalizedPhoneNumber)) {
+      throw const AuthFlowException('该手机号已注册，请直接登录。');
+    }
+    _registeredPhones.add(normalizedPhoneNumber);
+    _passwordsByPhone[normalizedPhoneNumber] = password;
+    _currentUser = _currentUser.copyWith(
+      phoneNumber: normalizedPhoneNumber,
+      phoneLinkedAt: DateTime.now(),
+    );
+    notifyListeners();
+  }
+
+  @override
+  Future<void> resetPasswordWithPhone({
+    required String phoneNumber,
+    required String verificationId,
+    required String code,
+    required String newPassword,
+  }) async {
+    final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
+      phoneNumber,
+    );
+    if (!_registeredPhones.contains(normalizedPhoneNumber)) {
+      throw const AuthFlowException('未找到该手机号，请先注册。');
+    }
+    _passwordsByPhone[normalizedPhoneNumber] = newPassword;
+    _currentUser = _currentUser.copyWith(
+      phoneNumber: normalizedPhoneNumber,
+      phoneLinkedAt: DateTime.now(),
+    );
+    notifyListeners();
+  }
+
+  @override
+  Future<void> authenticateWithPhone({
+    required String phoneNumber,
+    required String verificationId,
+    required String code,
+    required bool isExistingUser,
+  }) async {
+    if (!isExistingUser) {
+      throw const AuthFlowException('请使用注册入口完成新账号创建并设置密码。');
+    }
+    await signInWithPhoneCode(
+      phoneNumber: phoneNumber,
+      verificationId: verificationId,
+      code: code,
+    );
   }
 }
 
@@ -898,13 +1057,38 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
             archivedAt: DateTime.now(),
             invites: _currentDorm.invites
                 .map(
-                  (DormInvite invite) => invite.copyWith(
-                    status: DormInviteStatus.revoked,
-                  ),
+                  (DormInvite invite) =>
+                      invite.copyWith(status: DormInviteStatus.revoked),
                 )
                 .toList(growable: false),
           )
         : _currentDorm.copyWith(members: remainingMembers);
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  @override
+  Future<void> sendGentleReminder({required String targetUid}) async {
+    final DormMember? target = _currentDorm.members
+        .where((DormMember member) => member.uid == targetUid)
+        .cast<DormMember?>()
+        .firstWhere((DormMember? item) => item != null, orElse: () => null);
+    if (target == null) {
+      return;
+    }
+    _currentDorm = _currentDorm.copyWith(
+      events: <DormEvent>[
+        DormEvent(
+          id: IdGenerator.next('dorm-event'),
+          type: DormEventType.notification,
+          title: '已发送委婉提醒',
+          detail: '已向 ${target.name} 发送一条温和的休息提醒。',
+          createdAt: DateTime.now(),
+          actorUid: _currentUserId,
+        ),
+        ..._currentDorm.events,
+      ],
+    );
     _emitCurrentState();
     notifyListeners();
   }
@@ -1113,7 +1297,8 @@ class InMemoryInsightsRepository extends ChangeNotifier
 class InMemoryAssistantRepository extends ChangeNotifier
     implements AssistantRepository {
   InMemoryAssistantRepository({String userId = 'anon-paul'})
-    : _userId = userId {
+    : _userId = userId,
+      _assistantProfile = buildDefaultAssistantProfile(userId) {
     final AssistantThread thread = AssistantThread(
       id: 'thread-default',
       userId: userId,
@@ -1135,10 +1320,14 @@ class InMemoryAssistantRepository extends ChangeNotifier
   }
 
   final String _userId;
+  AssistantProfile _assistantProfile;
   late List<AssistantThread> _threads;
   final Map<String, List<AssistantMessage>> _messagesByThread =
       <String, List<AssistantMessage>>{};
   String? _currentThreadId;
+
+  @override
+  AssistantProfile get assistantProfile => _assistantProfile;
 
   @override
   List<AssistantThread> get threads {
@@ -1248,9 +1437,10 @@ class InMemoryAssistantRepository extends ChangeNotifier
   Future<void> sendUserMessage({
     required String threadId,
     required String content,
+    String? messageId,
   }) async {
     final AssistantMessage message = AssistantMessage(
-      id: IdGenerator.next('assistant-msg'),
+      id: messageId ?? IdGenerator.next('assistant-msg'),
       threadId: threadId,
       role: AssistantMessageRole.user,
       content: content,
@@ -1268,15 +1458,24 @@ class InMemoryAssistantRepository extends ChangeNotifier
   Future<void> addAssistantMessage({
     required String threadId,
     required String content,
+    String? messageId,
     AssistantMessageStatus status = AssistantMessageStatus.complete,
+    AssistantReplySourceMode? sourceMode,
+    String? provider,
+    String? model,
+    String? errorMessage,
   }) async {
     final AssistantMessage message = AssistantMessage(
-      id: IdGenerator.next('assistant-msg'),
+      id: messageId ?? IdGenerator.next('assistant-msg'),
       threadId: threadId,
       role: AssistantMessageRole.assistant,
       content: content,
       createdAt: DateTime.now(),
       status: status,
+      sourceMode: sourceMode,
+      provider: provider,
+      model: model,
+      errorMessage: errorMessage,
     );
     final List<AssistantMessage> next = List<AssistantMessage>.from(
       _messagesByThread[threadId] ?? const <AssistantMessage>[],
@@ -1287,8 +1486,50 @@ class InMemoryAssistantRepository extends ChangeNotifier
   }
 
   @override
+  Future<void> updateAssistantMessage({
+    required String threadId,
+    required String messageId,
+    String? content,
+    AssistantMessageStatus? status,
+    AssistantReplySourceMode? sourceMode,
+    String? provider,
+    String? model,
+    String? errorMessage,
+  }) async {
+    final List<AssistantMessage> current = List<AssistantMessage>.from(
+      _messagesByThread[threadId] ?? const <AssistantMessage>[],
+    );
+    final int index = current.indexWhere(
+      (AssistantMessage item) => item.id == messageId,
+    );
+    if (index == -1) {
+      return;
+    }
+    current[index] = current[index].copyWith(
+      content: content,
+      status: status,
+      sourceMode: sourceMode,
+      provider: provider,
+      model: model,
+      errorMessage: errorMessage,
+    );
+    _messagesByThread[threadId] = current;
+    _touchThread(threadId);
+    notifyListeners();
+  }
+
+  @override
   Future<void> setCurrentThread(String threadId) async {
     _currentThreadId = threadId;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> updateAssistantProfileName(String assistantName) async {
+    _assistantProfile = _assistantProfile.copyWith(
+      assistantName: assistantName.trim(),
+      updatedAt: DateTime.now(),
+    );
     notifyListeners();
   }
 

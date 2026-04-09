@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import {
   AIProvider,
+  AIProviderSourceMode,
+  buildSystemIdentityReply,
   buildDeterministicProfileSummary,
   classifyIntent,
 } from "../providers/ai_provider";
@@ -11,6 +13,7 @@ import {
   AssistantIntent,
   AssistantMemoryItem,
   AssistantRunDoc,
+  AssistantRunSourceMode,
   AssistantThreadSummaryDoc,
   DreamAnalysis,
   MorningReviewResult,
@@ -158,6 +161,33 @@ async function persistRun(
   await repo.writeAssistantRun(uid, runId, run);
 }
 
+function runStatusFromSourceMode(
+  sourceMode: AssistantRunSourceMode,
+): AssistantRunDoc["status"] {
+  return sourceMode === "remoteSuccess"
+    ? "success"
+    : sourceMode === "error"
+      ? "error"
+      : "fallback";
+}
+
+function combineSourceModes(
+  sourceModes: AIProviderSourceMode[],
+): AIProviderSourceMode {
+  return sourceModes.every((item) => item === "remoteSuccess")
+    ? "remoteSuccess"
+    : "fallbackSuccess";
+}
+
+function combineErrorMessages(
+  ...messages: Array<string | null | undefined>
+): string | null {
+  const next = messages
+    .map((item) => item?.trim() || "")
+    .filter((item) => item.length > 0);
+  return next.length > 0 ? next.join(" | ") : null;
+}
+
 export async function prepareTonightPlan(
   repo: AssistantDataRepository,
   provider: AIProvider,
@@ -168,11 +198,16 @@ export async function prepareTonightPlan(
   runId: string;
   userState: UserStateDoc;
   updatedSurfaces: SurfaceId[];
+  provider: string;
+  model: string;
+  sourceMode: AIProviderSourceMode;
+  errorMessage: string | null;
 }> {
   const runId = randomUUID();
   const context = await repo.buildAssistantContext(uid, threadId);
   const previous = context.userState ?? buildEmptyUserState();
-  const tonightPlan = await provider.generateTonightPlan(context, runId);
+  const tonightPlanResult = await provider.generateTonightPlan(context, runId);
+  const tonightPlan = tonightPlanResult.value;
   const userState: UserStateDoc = {
     ...previous,
     currentPhase: "home_pre_sleep",
@@ -193,9 +228,10 @@ export async function prepareTonightPlan(
   await persistRun(repo, uid, runId, {
     eventType: "prepare_tonight_plan",
     threadId: threadId ?? null,
-    provider: provider.providerName,
-    model: provider.modelName,
-    status: "success",
+    provider: tonightPlanResult.providerName,
+    model: tonightPlanResult.modelName,
+    status: runStatusFromSourceMode(tonightPlanResult.sourceMode),
+    sourceMode: tonightPlanResult.sourceMode,
     inputRefs: [
       "users",
       "user_settings",
@@ -204,10 +240,19 @@ export async function prepareTonightPlan(
       "dream_entries",
     ],
     outputRefs: ["user_state", "users.card_snapshots.home_pre_sleep"],
+    error: tonightPlanResult.errorMessage ?? null,
     createdAt: nowIso(),
   });
 
-  return { runId, userState, updatedSurfaces };
+  return {
+    runId,
+    userState,
+    updatedSurfaces,
+    provider: tonightPlanResult.providerName,
+    model: tonightPlanResult.modelName,
+    sourceMode: tonightPlanResult.sourceMode,
+    errorMessage: tonightPlanResult.errorMessage ?? null,
+  };
 }
 
 export async function handleAssistantReply(
@@ -222,12 +267,34 @@ export async function handleAssistantReply(
   intent: AssistantIntent;
   updatedSurfaces: SurfaceId[];
   userState: UserStateDoc;
+  provider: string;
+  model: string;
+  sourceMode: AIProviderSourceMode;
+  errorMessage: string | null;
 }> {
   const runId = randomUUID();
   const context = await repo.buildAssistantContext(uid, threadId);
   const intent = classifyIntent(prompt);
   const previous = context.userState ?? buildEmptyUserState();
-  const reply = await provider.generateStructuredReply(context, intent, prompt);
+  const replyResult =
+    intent === "system_identity"
+      ? {
+          value: buildSystemIdentityReply({
+            assistantName: context.assistantProfile.assistantName,
+            providerName: provider.providerName,
+            modelName: provider.modelName,
+            sourceMode: "fallbackSuccess",
+          }),
+          providerName: provider.providerName,
+          modelName: provider.modelName,
+          sourceMode: "fallbackSuccess" as AIProviderSourceMode,
+          errorMessage: null,
+        }
+      : await provider.generateStructuredReply(context, intent, prompt);
+  const reply = replyResult.value;
+  let planResult:
+    | Awaited<ReturnType<AIProvider["generateTonightPlan"]>>
+    | null = null;
 
   let nextState: UserStateDoc = {
     ...previous,
@@ -237,10 +304,11 @@ export async function handleAssistantReply(
     updatedAt: nowIso(),
   };
 
-  if (reply.updateTonightPlan || !nextState.tonightPlan) {
+  if (reply.updateTonightPlan) {
+    planResult = await provider.generateTonightPlan(context, runId);
     nextState = {
       ...nextState,
-      tonightPlan: await provider.generateTonightPlan(context, runId),
+      tonightPlan: planResult.value,
     };
   }
 
@@ -253,11 +321,24 @@ export async function handleAssistantReply(
   await persistRun(repo, uid, runId, {
     eventType: "assistant_reply",
     threadId,
-    provider: provider.providerName,
-    model: provider.modelName,
-    status: "success",
+    provider: replyResult.providerName,
+    model: replyResult.modelName,
+    status: runStatusFromSourceMode(
+      combineSourceModes([
+        replyResult.sourceMode,
+        ...(planResult ? [planResult.sourceMode] : []),
+      ]),
+    ),
+    sourceMode: combineSourceModes([
+      replyResult.sourceMode,
+      ...(planResult ? [planResult.sourceMode] : []),
+    ]),
     inputRefs: ["assistant_threads.messages", "user_state", "sleep_sessions"],
     outputRefs: ["users.assistant_runs", "user_state", ...reply.updatedSurfaces],
+    error: combineErrorMessages(
+      replyResult.errorMessage,
+      planResult?.errorMessage,
+    ),
     createdAt: nowIso(),
   });
 
@@ -276,9 +357,13 @@ export async function handleAssistantReply(
   return {
     runId,
     reply: reply.reply,
-    intent,
+    intent: reply.intent,
     updatedSurfaces: reply.updatedSurfaces,
     userState: nextState,
+    provider: replyResult.providerName,
+    model: replyResult.modelName,
+    sourceMode: replyResult.sourceMode,
+    errorMessage: replyResult.errorMessage ?? null,
   };
 }
 
@@ -292,10 +377,14 @@ export async function refreshUserCards(
   updatedSurfaces: SurfaceId[];
 }> {
   const context = await repo.buildAssistantContext(uid);
+  const tonightPlanResult = await provider.generateTonightPlan(
+    context,
+    randomUUID(),
+  );
   const userState = context.userState ?? {
     ...buildEmptyUserState(),
     profileSummary: buildDeterministicProfileSummary(context),
-    tonightPlan: await provider.generateTonightPlan(context, randomUUID()),
+    tonightPlan: tonightPlanResult.value,
   };
   const snapshots = buildCardSnapshots(context, userState, surfaces);
   for (const snapshot of snapshots) {
@@ -346,8 +435,8 @@ export async function handleSleepSessionChange(
     await repo.upsertNotification(uid, `feedback-${sessionId}`, {
       id: `feedback-${sessionId}`,
       category: "reminder",
-      title: "Morning feedback is ready",
-      body: "Rate last night so the assistant can improve the next plan.",
+      title: "晨间反馈待完成",
+      body: "补完昨晚的晨间反馈后，AI 才能继续优化下一晚的睡眠建议。",
       route: "/feedback/morning",
       createdAt: nowIso(),
       ownerUid: uid,
@@ -357,10 +446,12 @@ export async function handleSleepSessionChange(
   }
 
   if (afterStatus === "completed" && beforeStatus !== "completed") {
-    const review: MorningReviewResult = await provider.analyzeFeedback(
-      context,
-      sessionId,
-    );
+    const review: MorningReviewResult = (
+      await provider.analyzeFeedback(
+        context,
+        sessionId,
+      )
+    ).value;
     const nextState: UserStateDoc = {
       ...previous,
       currentPhase: "home_pre_sleep",
@@ -395,7 +486,7 @@ export async function handleDreamEntryChange(
 ): Promise<DreamAnalysis> {
   const context = await repo.buildAssistantContext(uid);
   const previous = context.userState ?? buildEmptyUserState();
-  const analysis = await provider.summarizeDream(body, context);
+  const analysis = (await provider.summarizeDream(body, context)).value;
   await repo.setDreamAnalysis(entryId, analysis);
 
   const nextState: UserStateDoc = {

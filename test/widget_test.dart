@@ -4,10 +4,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:sleep_dorm_app/app/app.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 import 'package:sleep_dorm_app/core/widgets/bottom_nav_shell.dart';
+import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/pages/assistant_page.dart';
+import 'package:sleep_dorm_app/features/auth/presentation/pages/phone_auth_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_status_page.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_journal_page.dart';
@@ -117,9 +121,7 @@ void main() {
     );
   });
 
-  testWidgets('legacy welcome skip behavior', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('legacy welcome skip behavior', (WidgetTester tester) async {
     await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
 
     await tester.tap(find.widgetWithText(TextButton, 'Skip'));
@@ -262,12 +264,258 @@ void main() {
         findsOneWidget,
       );
       expect(find.byType(TextField), findsOneWidget);
+      expect(find.text('和助手说点什么'), findsNothing);
 
       await tester.enterText(find.byType(TextField), '今晚宿舍有点吵');
       expect(find.text('今晚宿舍有点吵'), findsOneWidget);
-      expect(find.byIcon(Icons.send_rounded), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, '发送'), findsOneWidget);
     },
   );
+
+  testWidgets('assistant composer enables send only after input', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.assistant,
+      clock: _dayClock,
+    );
+
+    FilledButton sendButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, '发送'),
+    );
+    expect(sendButton.onPressed, isNull);
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('assistant-composer-field')),
+      '帮我总览今晚状态',
+    );
+    await tester.pump();
+
+    sendButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, '发送'),
+    );
+    expect(sendButton.onPressed, isNotNull);
+  });
+
+  testWidgets(
+    'cloudbase auth gate renders phone auth page without overlay errors',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.home,
+        clock: _dayClock,
+        environment: const AppEnvironment(
+          target: AppBackendTarget.emulator,
+          appIdPrefix: 'com.dormsleep.app',
+        ),
+      );
+
+      expect(find.byType(PhoneAuthPage), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('auth-login-password')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'phone auth page supports login register and password reset flows',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.authPhone,
+        clock: _dayClock,
+      );
+
+      expect(find.textContaining('首次进入需要'), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('auth-login-phone')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-forgot-password')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('auth-mode-register')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('auth-register-phone')),
+        findsOneWidget,
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-register-phone')),
+        '13800138000',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, '发送验证码').first);
+      await tester.pumpAndSettle();
+      expect(find.byType(SnackBar), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey<String>('auth-mode-login')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('auth-forgot-password')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-phone')),
+        findsOneWidget,
+      );
+      expect(find.text('返回登录'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'phone auth register fields stay editable and submit button enables after input',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.authPhone,
+        clock: _dayClock,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('auth-mode-register')),
+      );
+      await tester.pumpAndSettle();
+
+      final Finder phoneField = find.byKey(
+        const ValueKey<String>('auth-register-phone'),
+      );
+      final Finder passwordField = find.byKey(
+        const ValueKey<String>('auth-register-password'),
+      );
+      final Finder confirmField = find.byKey(
+        const ValueKey<String>('auth-register-password-confirm'),
+      );
+      final Finder codeField = find.byKey(
+        const ValueKey<String>('auth-register-code'),
+      );
+      final Finder submitButton = find.byKey(
+        const ValueKey<String>('auth-register-submit'),
+      );
+
+      await tester.enterText(phoneField, '13800138000');
+      await tester.enterText(phoneField, '13900139000');
+      await tester.enterText(passwordField, 'secret123');
+      await tester.enterText(confirmField, 'secret123');
+      await tester.enterText(codeField, '123456');
+      await tester.pump();
+
+      expect(find.text('13900139000'), findsOneWidget);
+      final PrimaryButton button = tester.widget<PrimaryButton>(submitButton);
+      expect(button.onPressed, isNotNull);
+    },
+  );
+
+  testWidgets('phone auth register password can be deleted and re-entered', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.authPhone,
+      clock: _dayClock,
+    );
+
+    await tester.tap(find.byKey(const ValueKey<String>('auth-mode-register')));
+    await tester.pumpAndSettle();
+
+    final Finder passwordField = find.byKey(
+      const ValueKey<String>('auth-register-password'),
+    );
+
+    await tester.enterText(passwordField, 'wrongpass');
+    await tester.pump();
+    expect(find.text('wrongpass'), findsOneWidget);
+
+    await tester.enterText(passwordField, '');
+    await tester.pump();
+    expect(find.text('wrongpass'), findsNothing);
+
+    await tester.enterText(passwordField, 'secret123');
+    await tester.pump();
+    expect(find.text('secret123'), findsOneWidget);
+  });
+
+  testWidgets('login sms send switches to register for unregistered phone', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.authPhone,
+      clock: _dayClock,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('auth-login-method-code')),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('auth-login-phone')),
+      '13900139000',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('auth-login-code-send')),
+    );
+    await tester.pumpAndSettle();
+
+    final TextField registerPhoneField = tester.widget<TextField>(
+      find.byKey(const ValueKey<String>('auth-register-phone')),
+    );
+    expect(registerPhoneField.controller?.text, '13900139000');
+    expect(
+      find.byKey(const ValueKey<String>('auth-register-submit')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('register send switches to login for registered phone', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.authPhone,
+      clock: _dayClock,
+    );
+
+    final BuildContext context = tester.element(find.byType(PhoneAuthPage));
+    final AppServices services = AppScope.of(context);
+    await services.profileFacade.registerWithPhone(
+      phoneNumber: '13800138000',
+      verificationId: 'verification-id',
+      code: '123456',
+      password: 'secret123',
+    );
+    await services.authRepository.signOut();
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey<String>('auth-mode-register')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('auth-register-phone')),
+      '13800138000',
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('auth-register-send')));
+    await tester.pumpAndSettle();
+
+    final TextField loginPhoneField = tester.widget<TextField>(
+      find.byKey(const ValueKey<String>('auth-login-phone')),
+    );
+    expect(loginPhoneField.controller?.text, '13800138000');
+    expect(
+      find.byKey(const ValueKey<String>('auth-login-code-send')),
+      findsOneWidget,
+    );
+    expect(find.text('该手机号已注册，请直接登录。'), findsOneWidget);
+  });
 
   testWidgets('dorm page uses a full-width hero and draggable drawer', (
     WidgetTester tester,
@@ -477,6 +725,7 @@ Future<void> _pumpApp(
   WidgetTester tester, {
   required String initialLocation,
   HomeMode homeMode = HomeMode.preSleep,
+  AppEnvironment? environment,
   DateTime Function()? clock,
   UserSettings? initialSettings,
   bool settle = true,
@@ -486,6 +735,7 @@ Future<void> _pumpApp(
     SleepDormApp(
       initialLocation: initialLocation,
       homeMode: homeMode,
+      environment: environment,
       clock: clock,
       initialSettings: initialSettings,
       showNightWelcomeOutsideNightInDebug: showNightWelcomeOutsideNightInDebug,

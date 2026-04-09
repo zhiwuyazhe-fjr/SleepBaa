@@ -17,6 +17,14 @@ import {
 
 function buildContext(): AssistantContext {
   return {
+    assistantProfile: {
+      userId: "user-1",
+      assistantName: "小眠",
+      identityPrompt: "你是一个温和的情绪陪伴助手。",
+      tone: "温柔、稳定",
+      relationshipRole: "情绪陪伴助手",
+      updatedAt: "2026-04-06T10:00:00.000Z",
+    },
     user: {
       uid: "user-1",
       displayName: "Test User",
@@ -146,6 +154,7 @@ test("prepareTonightPlan writes user_state, card snapshots, and assistant run", 
   assert.equal(fake.userStates.length, 1);
   assert.equal(fake.cardSnapshots.length, 2);
   assert.equal(fake.assistantRuns.length, 1);
+  assert.equal(fake.assistantRuns[0]?.run.sourceMode, "fallbackSuccess");
 });
 
 test("assistantReply refreshes state and records the run", async () => {
@@ -165,6 +174,7 @@ test("assistantReply refreshes state and records the run", async () => {
   assert.equal(fake.userStates.length, 1);
   assert.ok(fake.cardSnapshots.length >= 1);
   assert.equal(fake.assistantRuns.length, 1);
+  assert.equal(fake.assistantRuns[0]?.run.sourceMode, "fallbackSuccess");
   assert.equal(fake.threadSummaries.length, 1);
 });
 

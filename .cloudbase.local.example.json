@@ -3,5 +3,5 @@
   "CLOUDBASE_ENV_ID": "sleep-dorm-app-9ggjkxy371d18ebe",
   "CLOUDBASE_AUTH_BASE_URL": "https://sleep-dorm-app-9ggjkxy371d18ebe.api.tcloudbasegateway.com",
   "CLOUDBASE_APP_API_BASE_URL": "https://sleep-dorm-app-9ggjkxy371d18ebe.service.tcloudbase.com/app-api",
-  "CLOUDBASE_PUBLISHABLE_KEY": "PASTE_YOUR_PUBLISHABLE_KEY_HERE"
+  "CLOUDBASE_PUBLISHABLE_KEY": "粘贴PUBLISHABLE_KEY_HERE"
 }

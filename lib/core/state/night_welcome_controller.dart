@@ -14,11 +14,20 @@ class NightWelcomeController extends ChangeNotifier {
   final bool _showInDebugOutsideNight;
   String? _completedNightKey;
   String? _dismissedNightKey;
+  String? _themeOverrideNightKey;
+  NightMood? _activeNightMood;
   bool _isHomeVisible = false;
 
   String get currentNightKey => nightWindowKey(_clock());
 
   DateTime get now => _clock();
+
+  NightMood? effectiveMood(NightMood? persistedMood) {
+    if (_themeOverrideNightKey == currentNightKey) {
+      return _activeNightMood;
+    }
+    return persistedMood;
+  }
 
   bool shouldShowWelcome({required HomeMode homeMode}) {
     return homeMode == HomeMode.preSleep &&
@@ -32,6 +41,12 @@ class NightWelcomeController extends ChangeNotifier {
       return;
     }
     _dismissedNightKey = currentNightKey;
+    notifyListeners();
+  }
+
+  void clearSessionMoodOverride() {
+    _themeOverrideNightKey = currentNightKey;
+    _activeNightMood = null;
     notifyListeners();
   }
 
@@ -59,6 +74,12 @@ class NightWelcomeController extends ChangeNotifier {
     _completedNightKey = currentNightKey;
     _dismissedNightKey = null;
     notifyListeners();
+  }
+
+  void setCompletedMood(NightMood mood) {
+    _themeOverrideNightKey = currentNightKey;
+    _activeNightMood = mood;
+    markCompleted();
   }
 }
 

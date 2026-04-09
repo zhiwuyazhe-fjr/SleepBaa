@@ -3,37 +3,80 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 
 abstract final class AppTextStyles {
+  static const List<String> cjkFallbackFonts = <String>[
+    'PingFang SC',
+    'Hiragino Sans GB',
+    'Microsoft YaHei',
+    'Noto Sans SC',
+    'Noto Sans CJK SC',
+    'Source Han Sans SC',
+    'WenQuanYi Zen Hei',
+    'sans-serif',
+  ];
+
+  static TextStyle _inter({
+    required double fontSize,
+    required FontWeight fontWeight,
+    required Color color,
+    double? height,
+    double? letterSpacing,
+  }) {
+    return GoogleFonts.inter(
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      color: color,
+      height: height,
+      letterSpacing: letterSpacing,
+    ).copyWith(fontFamilyFallback: cjkFallbackFonts);
+  }
+
+  static TextStyle _manrope({
+    required double fontSize,
+    required FontWeight fontWeight,
+    required Color color,
+    double? height,
+    double? letterSpacing,
+  }) {
+    return GoogleFonts.manrope(
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      color: color,
+      height: height,
+      letterSpacing: letterSpacing,
+    ).copyWith(fontFamilyFallback: cjkFallbackFonts);
+  }
+
   static TextTheme buildTextTheme() {
     final TextTheme bodyTheme = GoogleFonts.interTextTheme().copyWith(
-      bodyLarge: GoogleFonts.inter(
+      bodyLarge: _inter(
         fontSize: 16,
         fontWeight: FontWeight.w500,
         color: AppColors.textPrimary,
         height: 1.45,
       ),
-      bodyMedium: GoogleFonts.inter(
+      bodyMedium: _inter(
         fontSize: 14,
         fontWeight: FontWeight.w500,
         color: AppColors.textPrimary,
         height: 1.5,
       ),
-      bodySmall: GoogleFonts.inter(
+      bodySmall: _inter(
         fontSize: 12,
         fontWeight: FontWeight.w500,
         color: AppColors.textSecondary,
         height: 1.4,
       ),
-      labelLarge: GoogleFonts.inter(
+      labelLarge: _inter(
         fontSize: 14,
         fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,
       ),
-      labelMedium: GoogleFonts.inter(
+      labelMedium: _inter(
         fontSize: 12,
         fontWeight: FontWeight.w700,
         color: AppColors.textSecondary,
       ),
-      labelSmall: GoogleFonts.inter(
+      labelSmall: _inter(
         fontSize: 10,
         fontWeight: FontWeight.w700,
         color: AppColors.textSecondary,
@@ -42,48 +85,48 @@ abstract final class AppTextStyles {
     );
 
     return bodyTheme.copyWith(
-      displayLarge: GoogleFonts.manrope(
+      displayLarge: _manrope(
         fontSize: 40,
         fontWeight: FontWeight.w800,
         color: AppColors.textPrimary,
         height: 1.05,
       ),
-      displayMedium: GoogleFonts.manrope(
+      displayMedium: _manrope(
         fontSize: 32,
         fontWeight: FontWeight.w800,
         color: AppColors.textPrimary,
         height: 1.1,
       ),
-      headlineLarge: GoogleFonts.manrope(
+      headlineLarge: _manrope(
         fontSize: 28,
         fontWeight: FontWeight.w800,
         color: AppColors.textPrimary,
         height: 1.12,
       ),
-      headlineMedium: GoogleFonts.manrope(
+      headlineMedium: _manrope(
         fontSize: 24,
         fontWeight: FontWeight.w800,
         color: AppColors.textPrimary,
         height: 1.15,
       ),
-      headlineSmall: GoogleFonts.manrope(
+      headlineSmall: _manrope(
         fontSize: 20,
         fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,
         height: 1.2,
       ),
-      titleLarge: GoogleFonts.manrope(
+      titleLarge: _manrope(
         fontSize: 18,
         fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,
         height: 1.2,
       ),
-      titleMedium: GoogleFonts.manrope(
+      titleMedium: _manrope(
         fontSize: 16,
         fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,
       ),
-      titleSmall: GoogleFonts.manrope(
+      titleSmall: _manrope(
         fontSize: 14,
         fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,

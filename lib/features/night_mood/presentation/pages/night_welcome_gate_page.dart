@@ -41,14 +41,16 @@ class _NightWelcomeGatePageState extends State<NightWelcomeGatePage> {
   }
 
   Future<void> _dismissLocally() async {
-    context.appServices.nightWelcomeController.dismissForCurrentVisit();
+    final controller = context.appServices.nightWelcomeController;
+    controller.clearSessionMoodOverride();
+    controller.dismissForCurrentVisit();
   }
 
   Future<void> _completeWelcome({
     required AppServices services,
     required NightMood mood,
   }) async {
-    services.nightWelcomeController.markCompleted();
+    services.nightWelcomeController.setCompletedMood(mood);
     await services.profileFacade.saveNightMood(mood);
   }
 }

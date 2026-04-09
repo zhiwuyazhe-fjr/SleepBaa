@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import {
   AssistantContext,
+  AssistantProfileDoc,
   AssistantMemoryItem,
   AssistantRunDoc,
   AssistantThreadSummaryDoc,
   CardSnapshotDoc,
   ContextAssistantMessage,
+  ContextAssistantProfile,
   ContextDorm,
   ContextDormEvent,
   ContextDormMember,
@@ -48,6 +50,7 @@ interface FileStorage {
 
 interface AppBootstrapPayload {
   data: {
+    assistantProfile: JsonMap;
     user: JsonMap;
     settings: JsonMap;
     dorm: JsonMap;
@@ -67,6 +70,7 @@ const Collections = {
   userState: "user_state",
   cardSnapshots: "card_snapshots",
   assistantRuns: "assistant_runs",
+  assistantProfiles: "assistant_profiles",
   accountMigrations: "account_migrations",
   assistantThreadSummaries: "assistant_thread_summaries",
   assistantMemoryItems: "assistant_memory_items",
@@ -144,6 +148,40 @@ function isMeaningfulString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function errorMessageOf(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error ?? "");
+}
+
+function isMissingCollectionError(
+  error: unknown,
+  collection?: string,
+): boolean {
+  const message = errorMessageOf(error).toLowerCase();
+  if (!message) {
+    return false;
+  }
+  const looksMissing =
+    message.includes("db or table not exist") ||
+    message.includes("database_collection_not_exist") ||
+    message.includes("resourcenotfound");
+  if (!looksMissing) {
+    return false;
+  }
+  return collection ? message.includes(collection.toLowerCase()) : true;
+}
+
+function isCollectionAlreadyExistsError(error: unknown): boolean {
+  const message = errorMessageOf(error).toLowerCase();
+  return (
+    message.includes("already exists") ||
+    message.includes("duplicate") ||
+    message.includes("duplicated")
+  );
+}
+
 function sanitizeCloudBasePayload(value: JsonMap): JsonMap {
   const payload = asMap(toJsonValue(value));
   delete payload._id;
@@ -204,6 +242,18 @@ function defaultUserSettings(): JsonMap {
     preferredTrackTitle: "深海海浪",
     smartSuggestionsEnabled: true,
     selectedNightMood: null,
+    updatedAt: nowIso(),
+  };
+}
+
+function defaultAssistantProfile(userId: string): JsonMap {
+  return {
+    userId,
+    assistantName: "小眠",
+    identityPrompt:
+      "你是小眠，一位温和、低压、不评判的情绪陪伴型睡前助手。你会记住用户给你起的名字、偏好和长期背景，用陪伴而不是说教的方式回应。",
+    tone: "温柔、稳定、共情",
+    relationshipRole: "情绪陪伴助手",
     updatedAt: nowIso(),
   };
 }
@@ -383,6 +433,7 @@ class InMemoryDocumentStore implements DocumentStore {
 
 class CloudBaseNoSqlStore implements DocumentStore {
   private readonly db: any;
+  private readonly ensuredCollections = new Set<string>();
 
   constructor(envId: string) {
     logRepo(`CloudBaseNoSqlStore constructor start env=${envId}`);
@@ -409,7 +460,17 @@ class CloudBaseNoSqlStore implements DocumentStore {
 
   async get(collection: string, id: string): Promise<JsonMap | null> {
     logRepo(`db.get start collection=${collection} id=${id}`);
-    const result = await this.db.collection(collection).doc(id).get();
+    let result;
+    try {
+      result = await this.db.collection(collection).doc(id).get();
+    } catch (error) {
+      if (!isMissingCollectionError(error, collection)) {
+        throw error;
+      }
+      logRepo(`db.get missing collection=${collection}, creating it lazily`);
+      await this.ensureCollectionExists(collection);
+      return null;
+    }
     logRepo(`db.get done collection=${collection} id=${id}`);
     const docs = this.normalizeDocs(result?.data);
     return docs[0] ?? null;
@@ -417,10 +478,22 @@ class CloudBaseNoSqlStore implements DocumentStore {
 
   async set(collection: string, id: string, data: JsonMap): Promise<void> {
     logRepo(`db.set start collection=${collection} id=${id}`);
-    await this.db
-      .collection(collection)
-      .doc(id)
-      .set(sanitizeCloudBasePayload(data));
+    try {
+      await this.db
+        .collection(collection)
+        .doc(id)
+        .set(sanitizeCloudBasePayload(data));
+    } catch (error) {
+      if (!isMissingCollectionError(error, collection)) {
+        throw error;
+      }
+      logRepo(`db.set missing collection=${collection}, creating it lazily`);
+      await this.ensureCollectionExists(collection);
+      await this.db
+        .collection(collection)
+        .doc(id)
+        .set(sanitizeCloudBasePayload(data));
+    }
     logRepo(`db.set done collection=${collection} id=${id}`);
   }
 
@@ -480,9 +553,35 @@ class CloudBaseNoSqlStore implements DocumentStore {
     if (options.limit && options.limit > 0) {
       ref = ref.limit(options.limit);
     }
-    const result = await ref.get();
+    let result;
+    try {
+      result = await ref.get();
+    } catch (error) {
+      if (!isMissingCollectionError(error, collection)) {
+        throw error;
+      }
+      logRepo(`db.query missing collection=${collection}, creating it lazily`);
+      await this.ensureCollectionExists(collection);
+      return [];
+    }
     logRepo(`db.query done collection=${collection}`);
     return this.normalizeDocs(result?.data);
+  }
+
+  private async ensureCollectionExists(collection: string): Promise<void> {
+    if (this.ensuredCollections.has(collection)) {
+      return;
+    }
+    try {
+      await this.db.createCollection(collection);
+      logRepo(`db.createCollection created collection=${collection}`);
+    } catch (error) {
+      if (!isCollectionAlreadyExistsError(error)) {
+        throw error;
+      }
+      logRepo(`db.createCollection already exists collection=${collection}`);
+    }
+    this.ensuredCollections.add(collection);
   }
 
   private normalizeDocs(value: unknown): JsonMap[] {
@@ -553,6 +652,8 @@ export interface AssistantDataRepository {
   ): Promise<AssistantContext>;
   getBootstrapPayload(uid: string): Promise<AppBootstrapPayload>;
   diagnoseBootstrap(uid: string): Promise<JsonMap>;
+  readAssistantProfile(uid: string): Promise<ContextAssistantProfile>;
+  saveAssistantProfile(uid: string, patch: JsonMap): Promise<JsonMap>;
   saveUserProfile(uid: string, patch: JsonMap): Promise<JsonMap>;
   saveUserSettings(uid: string, patch: JsonMap): Promise<JsonMap>;
   saveSleepSession(session: JsonMap): Promise<JsonMap>;
@@ -624,6 +725,11 @@ export interface AssistantDataRepository {
   ): Promise<{ dormId: string; acceptedAt: string }>;
   renameDorm(uid: string, name: string): Promise<JsonMap>;
   leaveDorm(uid: string): Promise<JsonMap>;
+  saveDormRules(uid: string, settings: JsonMap): Promise<JsonMap>;
+  sendGentleDormReminder(
+    uid: string,
+    targetUid: string,
+  ): Promise<{ targetUid: string; createdAt: string }>;
   writeAssistantThreadSummary(
     uid: string,
     summary: AssistantThreadSummaryDoc,
@@ -646,6 +752,38 @@ export class FirestoreRepository implements AssistantDataRepository {
 
   async getUserSettings(uid: string): Promise<ContextUserSettings> {
     return this.readUserSettings(uid);
+  }
+
+  async readAssistantProfile(uid: string): Promise<ContextAssistantProfile> {
+    await this.ensureUserBootstrap(uid);
+    const profile = withoutMeta(
+      ((await this.store.get(Collections.assistantProfiles, uid)) ??
+        defaultAssistantProfile(uid)) as JsonMap,
+    );
+    return {
+      userId: asString(profile.userId, uid),
+      assistantName: asString(profile.assistantName, "小眠"),
+      identityPrompt: asString(
+        profile.identityPrompt,
+        "你是小眠，一位温和、低压、不评判的情绪陪伴型睡前助手。",
+      ),
+      tone: asString(profile.tone, "温柔、稳定、共情"),
+      relationshipRole: asString(profile.relationshipRole, "情绪陪伴助手"),
+      updatedAt: asString(profile.updatedAt, nowIso()),
+    };
+  }
+
+  async saveAssistantProfile(uid: string, patch: JsonMap): Promise<JsonMap> {
+    await this.ensureUserBootstrap(uid);
+    await this.store.merge(Collections.assistantProfiles, uid, {
+      ...patch,
+      userId: uid,
+      updatedAt: nowIso(),
+    });
+    return withoutMeta(
+      ((await this.store.get(Collections.assistantProfiles, uid)) ??
+        defaultAssistantProfile(uid)) as JsonMap,
+    );
   }
 
   async getDorm(
@@ -770,6 +908,7 @@ export class FirestoreRepository implements AssistantDataRepository {
           role: asString(value.role, "assistant"),
           content: asString(value.content),
           status: asString(value.status, "complete"),
+          sourceMode: asString(value.sourceMode) || undefined,
           createdAt: asString(value.createdAt),
         };
     });
@@ -784,7 +923,8 @@ export class FirestoreRepository implements AssistantDataRepository {
     uid: string,
     threadId?: string,
   ): Promise<AssistantContext> {
-    const [user, settings, userState] = await Promise.all([
+    const [assistantProfile, user, settings, userState] = await Promise.all([
+      this.readAssistantProfile(uid),
       this.readUserProfile(uid),
       this.readUserSettings(uid),
       this.getUserState(uid),
@@ -807,6 +947,7 @@ export class FirestoreRepository implements AssistantDataRepository {
         this.listAssistantMemory(uid),
       ]);
     return {
+      assistantProfile,
       user,
       settings,
       dorm,
@@ -821,6 +962,8 @@ export class FirestoreRepository implements AssistantDataRepository {
 
   async getBootstrapPayload(uid: string): Promise<AppBootstrapPayload> {
     const startedAt = Date.now();
+    const assistantProfile = await this.readAssistantProfile(uid);
+    logDuration("bootstrap.readAssistantProfile", startedAt);
     const user = await this.readUserProfile(uid);
     logDuration("bootstrap.readUserProfile", startedAt);
     const settings = await this.readUserSettings(uid);
@@ -886,6 +1029,7 @@ export class FirestoreRepository implements AssistantDataRepository {
 
     return {
       data: {
+        assistantProfile: assistantProfile as unknown as JsonMap,
         user: user as unknown as JsonMap,
         settings: settings as unknown as JsonMap,
         dorm: dorm as unknown as JsonMap,
@@ -993,7 +1137,20 @@ export class FirestoreRepository implements AssistantDataRepository {
       uid,
       updatedAt: nowIso(),
     });
-    return withoutMeta((await this.store.get(Collections.users, uid)) ?? {});
+    const user = withoutMeta((await this.store.get(Collections.users, uid)) ?? {});
+    const dormId = asString(user.dormId);
+    if (dormId) {
+      const memberId = `${dormId}:${uid}`;
+      const member = await this.store.get(Collections.dormMembers, memberId);
+      if (member) {
+        await this.store.merge(Collections.dormMembers, memberId, {
+          name: asString(user.displayName),
+          avatarUrl: asString(user.avatarUrl) || null,
+          lastActiveAt: nowIso(),
+        });
+      }
+    }
+    return user;
   }
 
   async saveUserSettings(uid: string, patch: JsonMap): Promise<JsonMap> {
@@ -1548,6 +1705,78 @@ export class FirestoreRepository implements AssistantDataRepository {
     return { dormId, archived: false };
   }
 
+  async saveDormRules(uid: string, settings: JsonMap): Promise<JsonMap> {
+    const user = await this.getUserProfile(uid);
+    const dormId = user.dormId ? user.dormId.trim() : "";
+    if (!dormId) {
+      throw new Error("Create or join a dorm before updating rules.");
+    }
+    const nextSettings = {
+      ...defaultDormRulesSettings(),
+      ...asMap(settings),
+    };
+    await this.store.merge(Collections.dorms, dormId, {
+      rulesSettings: nextSettings,
+      rules: buildDormRules(nextSettings),
+      updatedAt: nowIso(),
+    });
+    await this.store.set(Collections.dormEvents, randomUUID(), {
+      id: randomUUID(),
+      dormId,
+      type: "ruleUpdate",
+      title: "宿舍公约已更新",
+      detail: `当前作息标签：${asStringArray(nextSettings.routineTags).join("、") || "未设置"}`,
+      actorUid: uid,
+      createdAt: nowIso(),
+    });
+    return withoutMeta((await this.store.get(Collections.dorms, dormId)) ?? {});
+  }
+
+  async sendGentleDormReminder(
+    uid: string,
+    targetUid: string,
+  ): Promise<{ targetUid: string; createdAt: string }> {
+    const user = await this.getUserProfile(uid);
+    const dormId = user.dormId ? user.dormId.trim() : "";
+    if (!dormId) {
+      throw new Error("Create or join a dorm before sending reminders.");
+    }
+    if (!targetUid || targetUid.trim() === uid) {
+      throw new Error("Select a roommate before sending the reminder.");
+    }
+    const targetMember = await this.store.get(
+      Collections.dormMembers,
+      `${dormId}:${targetUid}`,
+    );
+    if (!targetMember) {
+      throw new Error("The selected roommate was not found in the current dorm.");
+    }
+    const actorMember =
+      (await this.store.get(Collections.dormMembers, `${dormId}:${uid}`)) ??
+      defaultDormMember(uid, user.displayName, user.avatarUrl);
+    const createdAt = nowIso();
+    await this.store.set(Collections.notifications, `${targetUid}:gentle-${createdAt}`, {
+      id: `gentle-${createdAt}`,
+      category: "dorm",
+      title: "舍友提醒你稍微放轻一点",
+      body: `${asString(actorMember.name, "舍友")} 给你发来一条温和提醒：如果方便的话，今晚一起把宿舍环境再放轻一点。`,
+      route: "/dorm",
+      createdAt,
+      ownerUid: targetUid,
+      readAt: null,
+    });
+    await this.store.set(Collections.dormEvents, randomUUID(), {
+      id: randomUUID(),
+      dormId,
+      type: "notification",
+      title: "已发送委婉提醒",
+      detail: `已向 ${asString(targetMember.name, "舍友")} 发送站内提醒。`,
+      actorUid: uid,
+      createdAt,
+    });
+    return { targetUid, createdAt };
+  }
+
   async writeAssistantThreadSummary(
     uid: string,
     summary: AssistantThreadSummaryDoc,
@@ -1692,6 +1921,39 @@ export class FirestoreRepository implements AssistantDataRepository {
         canonicalSettings.selectedNightMood,
         sourceSettings.selectedNightMood,
         defaultSettings.selectedNightMood,
+      ),
+      updatedAt: migratedAt,
+    });
+
+    const sourceAssistantProfile =
+      (await this.store.get(Collections.assistantProfiles, sourceUid)) ??
+      defaultAssistantProfile(sourceUid);
+    const canonicalAssistantProfile =
+      (await this.store.get(Collections.assistantProfiles, canonicalUid)) ??
+      defaultAssistantProfile(canonicalUid);
+    const defaultAssistant = defaultAssistantProfile(canonicalUid);
+    await this.store.set(Collections.assistantProfiles, canonicalUid, {
+      ...withoutMeta(canonicalAssistantProfile),
+      userId: canonicalUid,
+      assistantName: this.preferString(
+        canonicalAssistantProfile.assistantName,
+        sourceAssistantProfile.assistantName,
+        defaultAssistant.assistantName,
+      ),
+      identityPrompt: this.preferString(
+        canonicalAssistantProfile.identityPrompt,
+        sourceAssistantProfile.identityPrompt,
+        defaultAssistant.identityPrompt,
+      ),
+      tone: this.preferString(
+        canonicalAssistantProfile.tone,
+        sourceAssistantProfile.tone,
+        defaultAssistant.tone,
+      ),
+      relationshipRole: this.preferString(
+        canonicalAssistantProfile.relationshipRole,
+        sourceAssistantProfile.relationshipRole,
+        defaultAssistant.relationshipRole,
       ),
       updatedAt: migratedAt,
     });
@@ -2087,6 +2349,17 @@ export class FirestoreRepository implements AssistantDataRepository {
         Collections.userSettings,
         uid,
         defaultUserSettings(),
+      );
+    }
+    const existingAssistantProfile = await this.store.get(
+      Collections.assistantProfiles,
+      uid,
+    );
+    if (!existingAssistantProfile) {
+      await this.store.set(
+        Collections.assistantProfiles,
+        uid,
+        defaultAssistantProfile(uid),
       );
     }
     if (resolvedDormId) {

@@ -81,27 +81,101 @@ class ProfileFacade extends ChangeNotifier {
   }
 
   Future<PhoneVerificationChallenge> sendPhoneVerificationCode(
-    String phoneNumber,
-  ) {
-    return _authRepository.sendPhoneVerificationCode(phoneNumber);
-  }
-
-  Future<void> recoverWithPhone({
-    required String phoneNumber,
-    required String verificationId,
-    required String code,
+    String phoneNumber, {
+    PhoneVerificationTarget target = PhoneVerificationTarget.any,
+    String? captchaToken,
   }) {
-    return _authRepository.recoverWithPhone(
-      phoneNumber: phoneNumber,
-      verificationId: verificationId,
-      code: code,
+    return _authRepository.sendPhoneVerificationCode(
+      phoneNumber,
+      target: target,
+      captchaToken: captchaToken,
     );
   }
 
-  bool _shouldRefreshRecommendations(
-    UserSettings previous,
-    UserSettings next,
-  ) {
+  Future<AuthCaptchaChallenge> createCaptchaChallenge() {
+    return _authRepository.createCaptchaChallenge();
+  }
+
+  Future<String> verifyCaptchaChallenge({
+    required String token,
+    required String code,
+  }) {
+    return _authRepository.verifyCaptchaChallenge(token: token, code: code);
+  }
+
+  Future<void> signInWithPassword({
+    required String phoneNumber,
+    required String password,
+    String? captchaToken,
+  }) {
+    return _authRepository.signInWithPassword(
+      phoneNumber: phoneNumber,
+      password: password,
+      captchaToken: captchaToken,
+    );
+  }
+
+  Future<void> signInWithPhoneCode({
+    required String phoneNumber,
+    required String verificationId,
+    required String code,
+    String? captchaToken,
+  }) {
+    return _authRepository.signInWithPhoneCode(
+      phoneNumber: phoneNumber,
+      verificationId: verificationId,
+      code: code,
+      captchaToken: captchaToken,
+    );
+  }
+
+  Future<void> registerWithPhone({
+    required String phoneNumber,
+    required String verificationId,
+    required String code,
+    required String password,
+  }) {
+    return _authRepository.registerWithPhone(
+      phoneNumber: phoneNumber,
+      verificationId: verificationId,
+      code: code,
+      password: password,
+    );
+  }
+
+  Future<void> resetPasswordWithPhone({
+    required String phoneNumber,
+    required String verificationId,
+    required String code,
+    required String newPassword,
+  }) {
+    return _authRepository.resetPasswordWithPhone(
+      phoneNumber: phoneNumber,
+      verificationId: verificationId,
+      code: code,
+      newPassword: newPassword,
+    );
+  }
+
+  Future<void> authenticateWithPhone({
+    required String phoneNumber,
+    required String verificationId,
+    required String code,
+    required bool isExistingUser,
+  }) {
+    return _authRepository.authenticateWithPhone(
+      phoneNumber: phoneNumber,
+      verificationId: verificationId,
+      code: code,
+      isExistingUser: isExistingUser,
+    );
+  }
+
+  Future<void> signOut() {
+    return _authRepository.signOut();
+  }
+
+  bool _shouldRefreshRecommendations(UserSettings previous, UserSettings next) {
     if (!next.smartSuggestionsEnabled) {
       return false;
     }
@@ -250,6 +324,10 @@ class DormFacade extends ChangeNotifier {
 
   Future<void> leaveDorm() => _dormRepository.leaveDorm();
 
+  Future<void> sendGentleReminder({required String targetUid}) {
+    return _dormRepository.sendGentleReminder(targetUid: targetUid);
+  }
+
   @override
   void dispose() {
     _authRepository.removeListener(notifyListeners);
@@ -381,6 +459,8 @@ class AssistantFacade extends ChangeNotifier {
 
   AssistantThread? get currentThread => _assistantRepository.currentThread;
   List<AssistantThread> get threads => _assistantRepository.threads;
+  AssistantProfile get assistantProfile =>
+      _assistantRepository.assistantProfile;
   List<AssistantMessage> get currentMessages {
     final AssistantThread? thread = currentThread;
     if (thread == null) {
@@ -393,10 +473,7 @@ class AssistantFacade extends ChangeNotifier {
     return _assistantRepository.createThread(title: title);
   }
 
-  Future<void> renameThread({
-    required String threadId,
-    required String title,
-  }) {
+  Future<void> renameThread({required String threadId, required String title}) {
     return _assistantRepository.renameThread(threadId: threadId, title: title);
   }
 
@@ -406,6 +483,10 @@ class AssistantFacade extends ChangeNotifier {
 
   Future<void> selectMostRecentThread() {
     return _assistantRepository.selectMostRecentThread();
+  }
+
+  Future<void> updateAssistantProfileName(String assistantName) {
+    return _assistantRepository.updateAssistantProfileName(assistantName);
   }
 
   Future<void> sendPrompt(String prompt) async {
@@ -418,35 +499,86 @@ class AssistantFacade extends ChangeNotifier {
       title: '今晚睡前聊聊',
     );
     await _assistantRepository.setCurrentThread(thread.id);
+    final String clientUserMessageId = IdGenerator.next('assistant-msg-user');
+    final String clientAssistantMessageId = IdGenerator.next(
+      'assistant-msg-assistant',
+    );
     await _assistantRepository.sendUserMessage(
       threadId: thread.id,
       content: normalizedPrompt,
+      messageId: clientUserMessageId,
+    );
+    await _assistantRepository.addAssistantMessage(
+      threadId: thread.id,
+      content: '小眠正在整理回复...',
+      messageId: clientAssistantMessageId,
+      status: AssistantMessageStatus.pending,
     );
     try {
       final AssistantReplyResult reply = await _assistantReplyGateway
           .generateReply(
             prompt: normalizedPrompt,
             threadId: thread.id,
+            clientUserMessageId: clientUserMessageId,
+            clientAssistantMessageId: clientAssistantMessageId,
             dorm: _dormRepository.currentDorm,
           );
       final List<AssistantMessage> existingMessages = _assistantRepository
           .messagesForThread(thread.id);
-      final bool alreadySynced =
-          existingMessages.isNotEmpty &&
-          existingMessages.last.role == AssistantMessageRole.assistant &&
-          existingMessages.last.content == reply.reply;
-      if (!alreadySynced) {
+      final String assistantMessageId =
+          reply.assistantMessageId ?? clientAssistantMessageId;
+      if (existingMessages.any(
+        (AssistantMessage item) => item.id == assistantMessageId,
+      )) {
+        await _assistantRepository.updateAssistantMessage(
+          threadId: thread.id,
+          messageId: assistantMessageId,
+          content: reply.reply,
+          status: reply.sourceMode == AssistantReplySourceMode.error
+              ? AssistantMessageStatus.error
+              : AssistantMessageStatus.complete,
+          sourceMode: reply.sourceMode,
+          provider: reply.provider,
+          model: reply.model,
+          errorMessage: reply.errorMessage,
+        );
+      } else {
         await _assistantRepository.addAssistantMessage(
           threadId: thread.id,
           content: reply.reply,
+          messageId: assistantMessageId,
+          status: reply.sourceMode == AssistantReplySourceMode.error
+              ? AssistantMessageStatus.error
+              : AssistantMessageStatus.complete,
+          sourceMode: reply.sourceMode,
+          provider: reply.provider,
+          model: reply.model,
+          errorMessage: reply.errorMessage,
         );
       }
-    } catch (_) {
-      await _assistantRepository.addAssistantMessage(
-        threadId: thread.id,
-        content: '暂时没有收到回复，请稍后再试。',
-        status: AssistantMessageStatus.error,
-      );
+    } catch (error) {
+      if (_assistantRepository
+          .messagesForThread(thread.id)
+          .any(
+            (AssistantMessage item) => item.id == clientAssistantMessageId,
+          )) {
+        await _assistantRepository.updateAssistantMessage(
+          threadId: thread.id,
+          messageId: clientAssistantMessageId,
+          content: '暂时没有收到回复，请稍后再试。',
+          status: AssistantMessageStatus.error,
+          sourceMode: AssistantReplySourceMode.error,
+          errorMessage: error.toString(),
+        );
+      } else {
+        await _assistantRepository.addAssistantMessage(
+          threadId: thread.id,
+          content: '暂时没有收到回复，请稍后再试。',
+          status: AssistantMessageStatus.error,
+          sourceMode: AssistantReplySourceMode.error,
+          errorMessage: error.toString(),
+        );
+      }
     }
   }
 

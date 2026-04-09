@@ -142,18 +142,17 @@ async function resolveAuthenticatedUser(
     throw new Error("Missing Authorization bearer token.");
   }
 
-  const localUid = readUidFromAccessToken(accessToken);
-  if (localUid) {
-    logHttp(`auth resolved from jwt -> uid=${localUid}`);
-    return { uid: localUid, accessToken };
-  }
-
   if (!baseUrl) {
+    const localUid = readUidFromAccessToken(accessToken);
+    if (localUid) {
+      logHttp(`auth resolved from jwt -> uid=${localUid}`);
+      return { uid: localUid, accessToken };
+    }
     logHttp(`auth fallback without auth base url -> uid=${fallbackUid}`);
     return { uid: fallbackUid, accessToken };
   }
 
-  logHttp("auth jwt decode missed uid, falling back to /auth/v1/user/me");
+  logHttp("auth verifying bearer token with /auth/v1/user/me");
   const response = await fetch(`${baseUrl}/auth/v1/user/me`, {
     method: "GET",
     headers: {
@@ -171,7 +170,9 @@ async function resolveAuthenticatedUser(
     asString(payload.sub) ||
     asString(payload.user_id) ||
     asString(payload.id) ||
+    readUidFromAccessToken(accessToken) ||
     fallbackUid;
+  logHttp(`auth verified by cloudbase -> uid=${uid}`);
   return { uid, accessToken };
 }
 
@@ -219,6 +220,43 @@ async function resolvePhoneAccountIdentity(
     uid,
     phoneNumber: normalizeCloudBasePhoneNumber(phoneNumber),
   };
+}
+
+async function maybeRepairBootstrapPhone(params: {
+  request: AuthedRequest;
+  repo: ReturnType<typeof createRepositoryFromEnv>;
+  uid: string;
+  payload: JsonMap;
+}): Promise<JsonMap> {
+  const user = asMap(asMap(params.payload.data).user);
+  if (asString(user.phoneNumber).trim()) {
+    return params.payload;
+  }
+  const accessToken = params.request.authContext?.accessToken?.trim() || "";
+  if (!accessToken) {
+    logHttp(`bootstrap phone repair skipped uid=${params.uid} reason=no_access_token`);
+    return params.payload;
+  }
+
+  try {
+    const identity = await resolvePhoneAccountIdentity(params.request, accessToken);
+    if (identity.uid !== params.uid) {
+      logHttp(
+        `bootstrap phone repair skipped uid=${params.uid} reason=uid_mismatch resolvedUid=${identity.uid}`,
+      );
+      return params.payload;
+    }
+    await params.repo.saveUserProfile(params.uid, {
+      phoneNumber: identity.phoneNumber,
+      phoneLinkedAt: nowIso(),
+    });
+    logHttp(`bootstrap phone repaired uid=${params.uid}`);
+    return (await params.repo.getBootstrapPayload(params.uid)) as unknown as JsonMap;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logHttp(`bootstrap phone repair failed uid=${params.uid} error=${message}`);
+    return params.payload;
+  }
 }
 
 function asyncRoute(
@@ -359,7 +397,12 @@ export function createAppApiServer() {
       logHttp(`bootstrap before createRepository uid=${uid}`);
       const repo = createRepositoryFromEnv();
       logHttp(`bootstrap after createRepository uid=${uid}`);
-      const payload = await repo.getBootstrapPayload(uid);
+      const payload = await maybeRepairBootstrapPhone({
+        request,
+        repo,
+        uid,
+        payload: (await repo.getBootstrapPayload(uid)) as unknown as JsonMap,
+      });
       logHttp(`bootstrap done uid=${uid} durationMs=${Date.now() - startedAt}`);
       response.json(payload);
     }),
@@ -393,6 +436,19 @@ export function createAppApiServer() {
         result.settings = await repo.saveUserSettings(uid, settings);
       }
       response.json(result);
+    }),
+  );
+
+  app.post(
+    "/api/assistant/profile",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      response.json(
+        await repo.saveAssistantProfile(
+          request.authContext!.uid,
+          asMap(request.body),
+        ),
+      );
     }),
   );
 
@@ -689,6 +745,33 @@ export function createAppApiServer() {
   );
 
   app.post(
+    "/api/dorm/rules",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      const body = asMap(request.body);
+      response.json(
+        await repo.saveDormRules(
+          request.authContext!.uid,
+          asMap(body.rulesSettings ?? body),
+        ),
+      );
+    }),
+  );
+
+  app.post(
+    "/api/dorm/reminders/gentle",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      response.json(
+        await repo.sendGentleDormReminder(
+          request.authContext!.uid,
+          asString(asMap(request.body).targetUid),
+        ),
+      );
+    }),
+  );
+
+  app.post(
     "/api/assistant/threads",
     asyncRoute(async (request, response) => {
       const repo = createRepositoryFromEnv();
@@ -739,13 +822,24 @@ export function createAppApiServer() {
         `thread-${request.authContext!.uid}`,
       );
       const prompt = asString(body.prompt);
+      if (!prompt.trim()) {
+        throw new Error("prompt is required.");
+      }
+      logHttp(
+        `assistant reply start uid=${request.authContext!.uid} threadId=${threadId} provider=${provider.providerName} model=${provider.modelName}`,
+      );
+      const clientUserMessageId = asString(body.clientUserMessageId, randomUUID());
+      const clientAssistantMessageId = asString(
+        body.clientAssistantMessageId,
+        randomUUID(),
+      );
       await repo.ensureAssistantThread(
         request.authContext!.uid,
         threadId,
         asString(body.title, "今晚睡前聊聊"),
       );
       await repo.appendAssistantMessage({
-        id: randomUUID(),
+        id: clientUserMessageId,
         threadId,
         role: "user",
         content: prompt,
@@ -759,15 +853,25 @@ export function createAppApiServer() {
         repo,
         provider,
       });
+      logHttp(
+        `assistant reply done uid=${request.authContext!.uid} threadId=${threadId} provider=${asString(reply.provider)} model=${asString(reply.model)} sourceMode=${asString(reply.sourceMode)} error=${asString(reply.errorMessage)}`,
+      );
       await repo.appendAssistantMessage({
-        id: randomUUID(),
+        id: clientAssistantMessageId,
         threadId,
         role: "assistant",
         content: asString(reply.reply),
         createdAt: nowIso(),
-        status: "complete",
+        status: asString(reply.sourceMode) === "error" ? "error" : "complete",
+        sourceMode: asString(reply.sourceMode, "fallbackSuccess"),
+        provider: asString(reply.provider) || undefined,
+        model: asString(reply.model) || undefined,
+        errorMessage: asString(reply.errorMessage) || undefined,
       });
-      response.json(reply);
+      response.json({
+        ...reply,
+        assistantMessageId: clientAssistantMessageId,
+      });
     }),
   );
 
@@ -789,63 +893,23 @@ export function createAppApiServer() {
 
   app.post(
     "/api/auth/recover-phone-account",
-    asyncRoute(async (request, response) => {
-      const repo = createRepositoryFromEnv();
-      const body = asMap(request.body);
-      const requestedPhoneNumber = normalizeCloudBasePhoneNumber(
-        asString(body.phoneNumber),
-      );
-      const verifiedIdentity = await resolvePhoneAccountIdentity(
-        request,
-        asString(body.phoneAccessToken),
-      );
-      if (
-        requestedPhoneNumber &&
-        requestedPhoneNumber.trim() &&
-        requestedPhoneNumber.trim() != verifiedIdentity.phoneNumber
-      ) {
-        throw new Error(
-          "Verified phone number does not match the requested phone number.",
-        );
-      }
-      response.json(
-        await repo.recoverPhoneAccount({
-          sourceUid: request.authContext!.uid,
-          canonicalUid: verifiedIdentity.uid,
-          phoneNumber: verifiedIdentity.phoneNumber,
-        }),
-      );
+    asyncRoute(async (_request, response) => {
+      response.status(410).json({
+        code: "LEGACY_DISABLED",
+        message:
+          "手机号恢复旧匿名账号流程已停用，请直接使用手机号验证码登录或注册。",
+      });
     }),
   );
 
   app.post(
     "/api/auth/link-phone",
-    asyncRoute(async (request, response) => {
-      const repo = createRepositoryFromEnv();
-      const body = asMap(request.body);
-      const requestedPhoneNumber = normalizeCloudBasePhoneNumber(
-        asString(body.phoneNumber),
-      );
-      const verifiedIdentity = await resolvePhoneAccountIdentity(
-        request,
-        asString(body.phoneAccessToken),
-      );
-      if (
-        requestedPhoneNumber &&
-        requestedPhoneNumber.trim() &&
-        requestedPhoneNumber.trim() != verifiedIdentity.phoneNumber
-      ) {
-        throw new Error(
-          "Verified phone number does not match the requested phone number.",
-        );
-      }
-      response.json(
-        await repo.recoverPhoneAccount({
-          sourceUid: request.authContext!.uid,
-          canonicalUid: verifiedIdentity.uid,
-          phoneNumber: verifiedIdentity.phoneNumber,
-        }),
-      );
+    asyncRoute(async (_request, response) => {
+      response.status(410).json({
+        code: "LEGACY_DISABLED",
+        message:
+          "手机号绑定旧匿名账号流程已停用，请直接使用手机号验证码登录或注册。",
+      });
     }),
   );
 

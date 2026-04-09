@@ -1,10 +1,10 @@
 param(
   [string]$ConfigPath = ".cloudbase.local.json",
-  [string]$AIProviderMode = "deterministic",
-  [string]$AIProviderTimeoutMs = "12000",
+  [string]$AIProviderMode = "cloudbase_ai",
+  [string]$AIProviderTimeoutMs = "60000",
   [string]$AIProviderBaseUrl = "",
   [string]$AIProviderApiKey = "",
-  [string]$AIProviderModel = "",
+  [string]$AIProviderModel = "hunyuan-2.0-instruct-20251111",
   [switch]$SkipGateway
 )
 
@@ -90,6 +90,93 @@ function Invoke-McporterWithRetry(
   }
 }
 
+function Get-MapValue($Map, [string]$Key) {
+  if ($null -eq $Map) {
+    return $null
+  }
+  if ($Map -is [System.Collections.IDictionary]) {
+    if ($Map.Contains($Key)) {
+      return $Map[$Key]
+    }
+    return $null
+  }
+  $prop = $Map.PSObject.Properties[$Key]
+  if ($null -ne $prop) {
+    return $prop.Value
+  }
+  return $null
+}
+
+function Convert-ToHashtable($Value) {
+  $result = @{}
+  if ($null -eq $Value) {
+    return $result
+  }
+  if (($Value -is [System.Collections.IEnumerable]) -and -not ($Value -is [string]) -and -not ($Value -is [System.Collections.IDictionary])) {
+    return $result
+  }
+  if ($Value -is [System.Collections.IDictionary]) {
+    foreach ($key in $Value.Keys) {
+      $result[[string]$key] = [string]$Value[$key]
+    }
+    return $result
+  }
+  foreach ($prop in $Value.PSObject.Properties) {
+    $result[[string]$prop.Name] = [string]$prop.Value
+  }
+  return $result
+}
+
+function Convert-EnvVariablesToHashtable($Value) {
+  $result = @{}
+  if ($null -eq $Value) {
+    return $result
+  }
+  if ($Value -is [System.Collections.IEnumerable] -and -not ($Value -is [string])) {
+    foreach ($item in $Value) {
+      $key = [string](Get-MapValue $item "Key")
+      if ([string]::IsNullOrWhiteSpace($key)) {
+        continue
+      }
+      $result[$key] = [string](Get-MapValue $item "Value")
+    }
+  }
+  return $result
+}
+
+function Get-FunctionEnvVariables([string]$FunctionName) {
+  $detail = Invoke-Mcporter "cloudbase.queryFunctions(action: 'getFunctionDetail', functionName: '$FunctionName')"
+  $candidates = @(
+    (Get-MapValue $detail "EnvVariables"),
+    (Get-MapValue (Get-MapValue $detail "data") "EnvVariables"),
+    (Get-MapValue (Get-MapValue $detail "FunctionInfo") "EnvVariables"),
+    (Get-MapValue (Get-MapValue (Get-MapValue $detail "data") "FunctionInfo") "EnvVariables"),
+    (Get-MapValue (Get-MapValue (Get-MapValue $detail "data") "functionDetail") "EnvVariables"),
+    (Get-MapValue (Get-MapValue (Get-MapValue (Get-MapValue $detail "data") "functionDetail") "Environment") "Variables"),
+    (Get-MapValue (Get-MapValue (Get-MapValue $detail "data") "raw") "EnvVariables"),
+    (Get-MapValue (Get-MapValue (Get-MapValue (Get-MapValue $detail "data") "raw") "Environment") "Variables")
+  )
+  foreach ($candidate in $candidates) {
+    $map = Convert-EnvVariablesToHashtable $candidate
+    if ($map.Count -gt 0) {
+      return $map
+    }
+    $map = Convert-ToHashtable $candidate
+    if ($map.Count -gt 0) {
+      return $map
+    }
+  }
+  return @{}
+}
+
+function Format-EnvLiteral($Map) {
+  $parts = @()
+  foreach ($entry in $Map.GetEnumerator() | Sort-Object Name) {
+    $parts += "$($entry.Key): '$(Escape-Literal ([string]$entry.Value))'"
+  }
+  return $parts -join ", "
+}
+
 $repoRoot = Get-RepoRoot
 $config = Read-Config -RepoRoot $repoRoot -RelativePath $ConfigPath
 $envId = [string]$config.CLOUDBASE_ENV_ID
@@ -130,27 +217,53 @@ try {
       }
     }
 
-    $envEntries = @(
-      "CLOUDBASE_ENV_ID: '$(Escape-Literal $envId)'",
-      "AI_PROVIDER_MODE: '$(Escape-Literal $AIProviderMode)'",
-      "AI_PROVIDER_TIMEOUT_MS: '$(Escape-Literal $AIProviderTimeoutMs)'"
-    )
-
-    if (-not [string]::IsNullOrWhiteSpace($AIProviderBaseUrl)) {
-      $envEntries += "AI_PROVIDER_BASE_URL: '$(Escape-Literal $AIProviderBaseUrl)'"
-    }
-    if (-not [string]::IsNullOrWhiteSpace($AIProviderApiKey)) {
-      $envEntries += "AI_PROVIDER_API_KEY: '$(Escape-Literal $AIProviderApiKey)'"
-    }
-    if (-not [string]::IsNullOrWhiteSpace($AIProviderModel)) {
-      $envEntries += "AI_PROVIDER_MODEL: '$(Escape-Literal $AIProviderModel)'"
+    $currentEnv = Get-FunctionEnvVariables $name
+    $nextEnv = @{}
+    foreach ($entry in $currentEnv.GetEnumerator()) {
+      $nextEnv[[string]$entry.Key] = [string]$entry.Value
     }
 
-    $envLiteral = $envEntries -join ", "
+    $nextEnv["CLOUDBASE_ENV_ID"] = $envId
+    $nextEnv["AI_PROVIDER_MODE"] = $AIProviderMode
+    $nextEnv["AI_PROVIDER_TIMEOUT_MS"] = $AIProviderTimeoutMs
+    $nextEnv["AI_PROVIDER_BASE_URL"] = $AIProviderBaseUrl
+    $nextEnv["AI_PROVIDER_API_KEY"] = $AIProviderApiKey
+    $nextEnv["AI_PROVIDER_MODEL"] = $AIProviderModel
+
+    $envLiteral = Format-EnvLiteral $nextEnv
     Invoke-McporterWithRetry "cloudbase.manageFunctions(action: 'updateFunctionConfig', functionName: '$name', envVariables: { $envLiteral })"
+
+    $verifiedEnv = Get-FunctionEnvVariables $name
+    $verifiedMode = [string](Get-MapValue $verifiedEnv "AI_PROVIDER_MODE")
+    $verifiedModel = [string](Get-MapValue $verifiedEnv "AI_PROVIDER_MODEL")
+    $verifiedBaseUrl = [string](Get-MapValue $verifiedEnv "AI_PROVIDER_BASE_URL")
+    $verifiedTimeout = [string](Get-MapValue $verifiedEnv "AI_PROVIDER_TIMEOUT_MS")
+    if (
+      $verifiedMode -ne $AIProviderMode -or
+      $verifiedModel -ne $AIProviderModel -or
+      $verifiedBaseUrl -ne $AIProviderBaseUrl -or
+      $verifiedTimeout -ne $AIProviderTimeoutMs
+    ) {
+      throw "Function '$name' config verification failed. Expected mode=$AIProviderMode model=$AIProviderModel baseUrl=$AIProviderBaseUrl timeout=$AIProviderTimeoutMs but got mode=$verifiedMode model=$verifiedModel baseUrl=$verifiedBaseUrl timeout=$verifiedTimeout"
+    }
+    Write-Host "[$name] AI_PROVIDER_MODE=$verifiedMode"
+    Write-Host "[$name] AI_PROVIDER_MODEL=$verifiedModel"
+    Write-Host "[$name] AI_PROVIDER_BASE_URL=$verifiedBaseUrl"
+    Write-Host "[$name] AI_PROVIDER_TIMEOUT_MS=$verifiedTimeout"
   }
 
-  Invoke-Mcporter "cloudbase.writeSecurityRule(resourceType: 'function', resourceId: 'app-api', aclTag: 'CUSTOM', rule: { '*': { invoke: 'auth != null' } })"
+  try {
+    Invoke-Mcporter "cloudbase.writeSecurityRule(resourceType: 'function', resourceId: 'app-api', aclTag: 'CUSTOM', rule: { '*': { invoke: 'auth != null' } })"
+  }
+  catch {
+    $securityRuleMessage = $_.Exception.Message
+    if ($securityRuleMessage -like "*Tool writeSecurityRule not found*" -or $securityRuleMessage -like "*Did you mean*") {
+      Write-Warning "Skipping function security rule update because the current CloudBase MCP runtime does not expose writeSecurityRule."
+    }
+    else {
+      throw
+    }
+  }
 
   if (-not $SkipGateway) {
     $gateway = Invoke-Mcporter "cloudbase.queryGateway(action: 'getAccess', targetType: 'function', targetName: 'app-api')"

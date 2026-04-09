@@ -41,6 +41,18 @@ String normalizeCloudBasePhoneNumber(
   return '$normalizedCountryCode $digitsOnly';
 }
 
+String cloudBaseUsernameFromPhone(String phoneNumber) {
+  final String normalized = normalizeCloudBasePhoneNumber(phoneNumber);
+  final String digitsOnly = normalized.replaceAll(RegExp(r'\D'), '');
+  if (digitsOnly.isEmpty) {
+    return 'u000000';
+  }
+  final String trimmedDigits = digitsOnly.length > 24
+      ? digitsOnly.substring(digitsOnly.length - 24)
+      : digitsOnly;
+  return 'u$trimmedDigits';
+}
+
 class CloudBaseAuthException implements Exception {
   const CloudBaseAuthException({
     required this.message,
@@ -102,6 +114,18 @@ class CloudBasePhoneVerificationResult {
   final int expiresIn;
 }
 
+class CloudBaseCaptchaChallenge {
+  const CloudBaseCaptchaChallenge({
+    required this.token,
+    required this.imageData,
+    required this.expiresIn,
+  });
+
+  final String token;
+  final String imageData;
+  final int expiresIn;
+}
+
 class CloudBaseUserInfo {
   const CloudBaseUserInfo({
     required this.subject,
@@ -143,6 +167,7 @@ class CloudBaseAuthClient {
     required String phoneNumber,
     String target = 'ANY',
     String? deviceId,
+    String? captchaToken,
   }) async {
     final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
       phoneNumber,
@@ -156,6 +181,7 @@ class CloudBaseAuthClient {
         'target': target,
       },
       includePublishableKey: true,
+      captchaToken: captchaToken,
     );
     return CloudBasePhoneVerificationStart(
       verificationId: data['verification_id'] as String? ?? '',
@@ -188,6 +214,7 @@ class CloudBaseAuthClient {
   Future<CloudBaseAuthTokenResponse> signInWithVerificationToken({
     required String verificationToken,
     String? deviceId,
+    String? captchaToken,
   }) async {
     final Map<String, dynamic> data = await _send(
       method: 'POST',
@@ -195,22 +222,114 @@ class CloudBaseAuthClient {
       deviceId: deviceId,
       body: <String, dynamic>{'verification_token': verificationToken},
       includePublishableKey: true,
+      captchaToken: captchaToken,
     );
     return _tokenFromMap(data);
   }
 
   Future<CloudBaseAuthTokenResponse> signUpWithVerificationToken({
+    required String phoneNumber,
     required String verificationToken,
+    required String password,
     String? deviceId,
   }) async {
+    final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
+      phoneNumber,
+    );
     final Map<String, dynamic> data = await _send(
       method: 'POST',
       path: '/auth/v1/signup',
       deviceId: deviceId,
-      body: <String, dynamic>{'verification_token': verificationToken},
+      body: <String, dynamic>{
+        'username': cloudBaseUsernameFromPhone(normalizedPhoneNumber),
+        'phone_number': normalizedPhoneNumber,
+        'verification_token': verificationToken,
+        'password': password,
+      },
       includePublishableKey: true,
     );
     return _tokenFromMap(data);
+  }
+
+  Future<CloudBaseAuthTokenResponse> signInWithPassword({
+    required String phoneNumber,
+    required String password,
+    String? deviceId,
+    String? captchaToken,
+  }) async {
+    final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
+      phoneNumber,
+    );
+    final String username = cloudBaseUsernameFromPhone(normalizedPhoneNumber);
+    final String legacyDigitsUsername = normalizedPhoneNumber.replaceAll(
+      RegExp(r'\D'),
+      '',
+    );
+    final List<Map<String, dynamic>> attempts = <Map<String, dynamic>>[
+      <String, dynamic>{'username': username, 'password': password},
+      <String, dynamic>{
+        'username': legacyDigitsUsername,
+        'password': password,
+      },
+      <String, dynamic>{
+        'username': normalizedPhoneNumber.replaceAll(' ', ''),
+        'password': password,
+      },
+      <String, dynamic>{
+        'username': normalizedPhoneNumber,
+        'password': password,
+      },
+      <String, dynamic>{
+        'phone_number': normalizedPhoneNumber,
+        'password': password,
+      },
+      <String, dynamic>{'phone': normalizedPhoneNumber, 'password': password},
+    ];
+
+    CloudBaseAuthException? lastError;
+    for (final Map<String, dynamic> payload in attempts) {
+      try {
+        final Map<String, dynamic> data = await _send(
+          method: 'POST',
+          path: '/auth/v1/signin',
+          deviceId: deviceId,
+          body: payload,
+          includePublishableKey: true,
+          captchaToken: captchaToken,
+        );
+        return _tokenFromMap(data);
+      } on CloudBaseAuthException catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError ??
+        const CloudBaseAuthException(
+          message: 'CloudBase password sign-in failed.',
+        );
+  }
+
+  Future<void> resetPasswordWithVerificationToken({
+    required String phoneNumber,
+    required String verificationToken,
+    required String newPassword,
+    String? deviceId,
+  }) async {
+    final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
+      phoneNumber,
+    );
+    await _send(
+      method: 'POST',
+      path: '/auth/v1/reset',
+      deviceId: deviceId,
+      body: <String, dynamic>{
+        'phone_number': normalizedPhoneNumber,
+        'verification_token': verificationToken,
+        'new_password': newPassword,
+        'confirm_password': newPassword,
+      },
+      includePublishableKey: true,
+    );
   }
 
   Future<CloudBaseAuthTokenResponse> refreshAccessToken({
@@ -252,6 +371,42 @@ class CloudBaseAuthClient {
     );
   }
 
+  Future<CloudBaseCaptchaChallenge> createCaptchaChallenge({
+    String? deviceId,
+  }) async {
+    final Map<String, dynamic> data = await _send(
+      method: 'POST',
+      path: '/auth/v1/captcha/data',
+      deviceId: deviceId,
+      body: const <String, dynamic>{},
+      includePublishableKey: true,
+    );
+    return CloudBaseCaptchaChallenge(
+      token: data['token'] as String? ?? '',
+      imageData:
+          data['captcha'] as String? ??
+          data['image_data'] as String? ??
+          data['data'] as String? ??
+          '',
+      expiresIn: (data['expires_in'] as num?)?.toInt() ?? 300,
+    );
+  }
+
+  Future<String> verifyCaptchaChallenge({
+    required String token,
+    required String code,
+    String? deviceId,
+  }) async {
+    final Map<String, dynamic> data = await _send(
+      method: 'POST',
+      path: '/auth/v1/captcha/data/verify',
+      deviceId: deviceId,
+      body: <String, dynamic>{'token': token, 'key': code},
+      includePublishableKey: true,
+    );
+    return data['captcha_token'] as String? ?? '';
+  }
+
   Future<Map<String, dynamic>> _send({
     required String method,
     required String path,
@@ -259,6 +414,7 @@ class CloudBaseAuthClient {
     String? deviceId,
     Map<String, dynamic>? body,
     bool includePublishableKey = false,
+    String? captchaToken,
   }) async {
     final String? baseUrl = _environment.cloudbaseAuthBaseUrl;
     if (baseUrl == null || baseUrl.isEmpty) {
@@ -273,6 +429,8 @@ class CloudBaseAuthClient {
       if (deviceId != null && deviceId.isNotEmpty) 'x-device-id': deviceId,
       if (_environment.cloudbaseClientId?.isNotEmpty ?? false)
         'x-cloudbase-client-id': _environment.cloudbaseClientId!,
+      if (captchaToken != null && captchaToken.isNotEmpty)
+        'x-captcha-token': captchaToken,
     };
     final String? authorization =
         accessToken ??

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
@@ -133,12 +134,12 @@ class _NotificationSection extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
-                            item.title,
+                            _localizedTitle(item),
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           const SizedBox(height: AppSpacing.xs),
                           Text(
-                            item.body,
+                            _localizedBody(item),
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(color: AppColors.textSecondary),
                           ),
@@ -176,5 +177,27 @@ class _NotificationSection extends StatelessWidget {
       NotificationCategory.dorm => palette.primaryDeep,
       NotificationCategory.system => AppColors.textSecondary,
     };
+  }
+
+  String _localizedTitle(NotificationItem item) {
+    if (_isLegacyMorningFeedback(item)) {
+      return '晨间反馈';
+    }
+    return item.title;
+  }
+
+  String _localizedBody(NotificationItem item) {
+    if (_isLegacyMorningFeedback(item)) {
+      return '昨晚的睡眠记录已经准备好，醒来后记得补充晨间反馈。';
+    }
+    return item.body;
+  }
+
+  bool _isLegacyMorningFeedback(NotificationItem item) {
+    if (item.route != AppRoutes.feedbackMorning) {
+      return false;
+    }
+    final String combined = '${item.title} ${item.body}'.toLowerCase();
+    return RegExp(r'[a-z]').hasMatch(combined);
   }
 }

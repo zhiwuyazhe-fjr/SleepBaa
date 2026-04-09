@@ -334,6 +334,30 @@ abstract final class ModelSerializers {
     );
   }
 
+  static Map<String, dynamic> assistantProfileToMap(AssistantProfile profile) {
+    return <String, dynamic>{
+      'userId': profile.userId,
+      'assistantName': profile.assistantName,
+      'identityPrompt': profile.identityPrompt,
+      'tone': profile.tone,
+      'relationshipRole': profile.relationshipRole,
+      'updatedAt': profile.updatedAt,
+    };
+  }
+
+  static AssistantProfile assistantProfileFromMap(Map<String, dynamic> map) {
+    return AssistantProfile(
+      userId: map['userId'] as String? ?? '',
+      assistantName: map['assistantName'] as String? ?? '小眠',
+      identityPrompt:
+          map['identityPrompt'] as String? ??
+          '你是小眠，一位温和、低压、不评判的情绪陪伴型睡前助手。',
+      tone: map['tone'] as String? ?? '温柔、稳定、共情',
+      relationshipRole: map['relationshipRole'] as String? ?? '情绪陪伴助手',
+      updatedAt: _dateValue(map['updatedAt']) ?? DateTime.now(),
+    );
+  }
+
   static Map<String, dynamic> assistantMessageToMap(AssistantMessage message) {
     return <String, dynamic>{
       'id': message.id,
@@ -342,6 +366,10 @@ abstract final class ModelSerializers {
       'content': message.content,
       'createdAt': message.createdAt,
       'status': message.status.name,
+      'sourceMode': message.sourceMode?.name,
+      'provider': message.provider,
+      'model': message.model,
+      'errorMessage': message.errorMessage,
     };
   }
 
@@ -355,6 +383,10 @@ abstract final class ModelSerializers {
       createdAt: _dateValue(map['createdAt']) ?? DateTime.now(),
       status: _assistantStatusFromName(map['status'] as String?) ??
           AssistantMessageStatus.complete,
+      sourceMode: _assistantSourceModeFromName(map['sourceMode'] as String?),
+      provider: map['provider'] as String?,
+      model: map['model'] as String?,
+      errorMessage: map['errorMessage'] as String?,
     );
   }
 
@@ -392,7 +424,7 @@ abstract final class ModelSerializers {
       return null;
     }
     if (value is DateTime) {
-      return value;
+      return value.isUtc ? value.toLocal() : value;
     }
     if (value is Map) {
       final dynamic seconds = value['_seconds'] ?? value['seconds'];
@@ -405,11 +437,15 @@ abstract final class ModelSerializers {
         return DateTime.fromMillisecondsSinceEpoch(
           millis,
           isUtc: true,
-        ).add(Duration(microseconds: extraMicros));
+        ).add(Duration(microseconds: extraMicros)).toLocal();
       }
     }
     if (value is String) {
-      return DateTime.tryParse(value);
+      final DateTime? parsed = DateTime.tryParse(value);
+      if (parsed == null) {
+        return null;
+      }
+      return parsed.isUtc ? parsed.toLocal() : parsed;
     }
     return null;
   }
@@ -465,6 +501,13 @@ abstract final class ModelSerializers {
     return _firstWhereOrNull(
       AssistantMessageStatus.values,
       (AssistantMessageStatus item) => item.name == value,
+    );
+  }
+
+  static AssistantReplySourceMode? _assistantSourceModeFromName(String? value) {
+    return _firstWhereOrNull(
+      AssistantReplySourceMode.values,
+      (AssistantReplySourceMode item) => item.name == value,
     );
   }
 

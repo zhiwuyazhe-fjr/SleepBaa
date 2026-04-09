@@ -1,0 +1,286 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { DeterministicAIProvider } from "../src/providers/ai_provider";
+import { createAIProviderFromEnv } from "../src/providers/provider_factory";
+import { AssistantContext } from "../src/shared/types";
+
+function buildContext(): AssistantContext {
+  return {
+    assistantProfile: {
+      userId: "user-1",
+      assistantName: "小眠",
+      identityPrompt: "你是一个温柔的睡前陪伴助手。",
+      tone: "温柔、稳定、共情",
+      relationshipRole: "睡前陪伴助手",
+      updatedAt: "2026-04-08T12:00:00.000Z",
+    },
+    user: {
+      uid: "user-1",
+      displayName: "Test User",
+      tagline: "Dorm sleeper",
+      role: "Student",
+      dormId: "dorm-204",
+      avatarUrl: "",
+    },
+    settings: {
+      sleepGoalHours: 7.5,
+      preferredTrackTitle: "Deep Ocean Waves",
+      smartSuggestionsEnabled: true,
+      selectedNightMood: "calm",
+    },
+    dorm: {
+      id: "dorm-204",
+      name: "Dorm 204",
+      overview: "Quiet enough for sleep.",
+      noiseDb: 34,
+      lightLabel: "Dim",
+      quietLabel: "Stable",
+      members: [
+        {
+          uid: "user-1",
+          name: "Test User",
+          status: "quiet",
+          sleepModeActive: false,
+        },
+      ],
+      events: [],
+    },
+    recentSessions: [],
+    recentDreams: [],
+    recentMessages: [],
+    userState: null,
+  };
+}
+
+test("provider factory honors explicit deterministic mode even when baseUrl exists", () => {
+  const provider = createAIProviderFromEnv({
+    AI_PROVIDER_MODE: "deterministic",
+    AI_PROVIDER_BASE_URL: "https://example.com/not-used",
+  } as NodeJS.ProcessEnv);
+
+  assert.ok(provider instanceof DeterministicAIProvider);
+});
+
+test("xAI responses provider returns remoteSuccess for valid structured JSON", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    ({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          output_text: JSON.stringify({
+            reply: "这次先从耳塞和放松音频开始。",
+            intent: "noise_issue",
+            recommendedActions: [
+              {
+                id: "earplug",
+                title: "提前准备耳塞",
+                subtitle: "先压住宿舍噪声。",
+                type: "quickAction",
+                priority: 1,
+                reason: "噪声是第一干扰项。",
+                route: "/intervention/task",
+                trackId: null,
+                tags: ["1 分钟"],
+              },
+            ],
+            updateTonightPlan: true,
+            updatedSurfaces: ["assistant_context", "home_pre_sleep"],
+          }),
+        }),
+    }) as Response);
+
+  try {
+    const provider = createAIProviderFromEnv({
+      AI_PROVIDER_MODE: "xai_responses",
+      AI_PROVIDER_API_KEY: "test-key",
+      AI_PROVIDER_MODEL: "grok-test",
+      AI_PROVIDER_BASE_URL: "https://api.x.ai/v1/responses",
+    } as NodeJS.ProcessEnv);
+
+    const result = await provider.generateStructuredReply(
+      buildContext(),
+      "noise_issue",
+      "宿舍有点吵，今晚怎么办？",
+    );
+
+    assert.equal(result.sourceMode, "remoteSuccess");
+    assert.equal(result.providerName, "xai_responses");
+    assert.equal(result.modelName, "grok-test");
+    assert.equal(result.value.reply, "这次先从耳塞和放松音频开始。");
+    assert.equal(result.errorMessage, null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("xAI responses provider falls back when remote payload is not valid JSON", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ output_text: "not-json-at-all" }),
+    }) as Response);
+
+  try {
+    const provider = createAIProviderFromEnv({
+      AI_PROVIDER_MODE: "xai_responses",
+      AI_PROVIDER_API_KEY: "test-key",
+      AI_PROVIDER_MODEL: "grok-test",
+      AI_PROVIDER_BASE_URL: "https://api.x.ai/v1/responses",
+    } as NodeJS.ProcessEnv);
+
+    const result = await provider.generateStructuredReply(
+      buildContext(),
+      "general_support",
+      "陪我说两句",
+    );
+
+    assert.equal(result.sourceMode, "fallbackSuccess");
+    assert.equal(result.providerName, "xai_responses");
+    assert.equal(result.modelName, "grok-test");
+    assert.ok(result.errorMessage?.includes("valid JSON object"));
+    assert.notEqual(result.value.reply.trim(), "");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("xAI responses provider falls back when remote JSON misses required reply fields", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    ({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          output_text: JSON.stringify({
+            intent: "general_support",
+            recommendedActions: [],
+            updateTonightPlan: false,
+            updatedSurfaces: ["assistant_context"],
+          }),
+        }),
+    }) as Response);
+
+  try {
+    const provider = createAIProviderFromEnv({
+      AI_PROVIDER_MODE: "xai_responses",
+      AI_PROVIDER_API_KEY: "test-key",
+      AI_PROVIDER_MODEL: "grok-test",
+      AI_PROVIDER_BASE_URL: "https://api.x.ai/v1/responses",
+    } as NodeJS.ProcessEnv);
+
+    const result = await provider.generateStructuredReply(
+      buildContext(),
+      "general_support",
+      "你是什么模型？",
+    );
+
+    assert.equal(result.sourceMode, "fallbackSuccess");
+    assert.ok(result.errorMessage?.includes("reply"));
+    assert.notEqual(result.value.reply.trim(), "");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("xAI responses provider retries regional endpoint after network fetch failure", async () => {
+  const originalFetch = globalThis.fetch;
+  let attempt = 0;
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    attempt += 1;
+    const url = String(input);
+    if (attempt === 1) {
+      const error = new Error("fetch failed") as Error & {
+        cause?: { code: string; message: string };
+      };
+      error.cause = {
+        code: "ECONNRESET",
+        message: "socket hang up",
+      };
+      throw error;
+    }
+    assert.equal(url, "https://us-east-1.api.x.ai/v1/responses");
+    return {
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          output_text: JSON.stringify({
+            reply: "Regional retry succeeded.",
+            intent: "general_support",
+            recommendedActions: [],
+            updateTonightPlan: false,
+            updatedSurfaces: ["assistant_context"],
+          }),
+        }),
+    } as Response;
+  }) as typeof fetch;
+
+  try {
+    const provider = createAIProviderFromEnv({
+      AI_PROVIDER_MODE: "xai_responses",
+      AI_PROVIDER_API_KEY: "test-key",
+      AI_PROVIDER_MODEL: "grok-test",
+      AI_PROVIDER_BASE_URL: "https://api.x.ai/v1/responses",
+    } as NodeJS.ProcessEnv);
+
+    const result = await provider.generateStructuredReply(
+      buildContext(),
+      "general_support",
+      "陪我说句话",
+    );
+
+    assert.equal(result.sourceMode, "remoteSuccess");
+    assert.equal(result.value.reply, "Regional retry succeeded.");
+    assert.equal(attempt, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("cloudbase_ai preserves remote reply text when structured metadata is incomplete", async () => {
+  const modulePath = require.resolve("@cloudbase/node-sdk");
+  const originalExports = require(modulePath);
+  require.cache[modulePath]!.exports = {
+    init: () => ({
+      ai: () => ({
+        createModel: () => ({
+          generateText: async () => ({
+            text: JSON.stringify({
+              reply: "这条内容来自真实模型，只是没有补全其它结构字段。",
+            }),
+          }),
+        }),
+      }),
+    }),
+  };
+
+  try {
+    const provider = createAIProviderFromEnv({
+      AI_PROVIDER_MODE: "cloudbase_ai",
+      AI_PROVIDER_MODEL: "hunyuan-2.0-instruct-20251111",
+      CLOUDBASE_ENV_ID: "demo-env",
+    } as NodeJS.ProcessEnv);
+
+    const result = await provider.generateStructuredReply(
+      buildContext(),
+      "general_support",
+      "hi",
+    );
+
+    assert.equal(result.sourceMode, "fallbackSuccess");
+    assert.equal(result.providerName, "cloudbase_ai");
+    assert.equal(result.modelName, "hunyuan-2.0-instruct-20251111");
+    assert.equal(
+      result.value.reply,
+      "这条内容来自真实模型，只是没有补全其它结构字段。",
+    );
+    assert.ok(result.errorMessage?.includes("intent"));
+  } finally {
+    require.cache[modulePath]!.exports = originalExports;
+  }
+});

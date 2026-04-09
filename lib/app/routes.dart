@@ -5,6 +5,7 @@ import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/features/analysis/presentation/pages/interference_factor_page.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/pages/assistant_page.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/pages/assistant_history_page.dart';
+import 'package:sleep_dorm_app/features/auth/presentation/pages/phone_auth_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_invite_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_rules_page.dart';
@@ -49,6 +50,7 @@ abstract final class AppRoutes {
   static const String notifications = '/notifications';
   static const String assistant = '/assistant';
   static const String assistantHistory = '/assistant/history';
+  static const String authPhone = '/auth/phone';
 }
 
 GoRouter createRouter({
@@ -195,6 +197,11 @@ GoRouter createRouter({
         path: AppRoutes.assistantHistory,
         builder: (BuildContext context, GoRouterState state) =>
             const AssistantHistoryPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.authPhone,
+        builder: (BuildContext context, GoRouterState state) =>
+            const PhoneAuthPage(),
       ),
       GoRoute(
         path: AppRoutes.notifications,

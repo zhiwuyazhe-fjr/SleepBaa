@@ -4,7 +4,6 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
-import 'package:sleep_dorm_app/core/widgets/ambient_orb.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
@@ -33,6 +32,7 @@ class _DormRulesPageState extends State<DormRulesPage> {
   double _winterTemp = 22;
   double _ventilationMinutes = 30;
   String _selectedVentilationWindow = 'Morning';
+  List<String> _routineTags = <String>[];
 
   @override
   void didChangeDependencies() {
@@ -40,16 +40,22 @@ class _DormRulesPageState extends State<DormRulesPage> {
     if (_initialized) {
       return;
     }
-
-    final Dorm dorm = context.appServices.dormRepository.currentDorm;
-    _quietHoursController.text = '23:00 - 07:00';
-    _specialCaseController.text = dorm.rules.length > 1
-        ? dorm.rules[1].detail
-        : '如有小组讨论或临时会议，请提前在宿舍群里同步。';
-    _lightsOffController.text = 'After 23:30';
-    _personalLightingController.text = '仅使用护眼台灯，避免直射到正在休息的室友。';
-    _alarmResponseController.text = '60';
-    _routineNoteController.text = '通常在 08:30 起床，考试周会提前到 07:20。';
+    final DormRulesSettings settings =
+        context.appServices.dormRepository.currentDorm.rulesSettings;
+    _quietHoursController.text = settings.quietHours;
+    _specialCaseController.text = settings.specialCase;
+    _lightsOffController.text = settings.lightsOffTime;
+    _personalLightingController.text = settings.personalLighting;
+    _alarmResponseController.text = settings.alarmResponseSeconds.toString();
+    _routineNoteController.text = settings.routineNote;
+    _examWeekMode = settings.examWeekMode;
+    _blackoutCurtain = settings.blackoutCurtain;
+    _vibrationFirst = settings.vibrationFirst;
+    _summerTemp = settings.summerTempC;
+    _winterTemp = settings.winterTempC;
+    _ventilationMinutes = settings.ventilationMinutes;
+    _selectedVentilationWindow = settings.ventilationWindow;
+    _routineTags = List<String>.from(settings.routineTags);
     _initialized = true;
   }
 
@@ -69,7 +75,6 @@ class _DormRulesPageState extends State<DormRulesPage> {
     final Dorm dorm = context.appServices.dormRepository.currentDorm;
     final NightMoodPalette palette = context.nightMoodPalette;
     return Scaffold(
-      extendBody: true,
       appBar: AppBar(title: const Text('宿舍公约')),
       bottomNavigationBar: Container(
         padding: const EdgeInsets.fromLTRB(
@@ -78,480 +83,292 @@ class _DormRulesPageState extends State<DormRulesPage> {
           AppSpacing.xl,
           AppSpacing.lg,
         ),
-        decoration: BoxDecoration(
-          color: AppColors.surface.withAlpha(242),
-          boxShadow: const <BoxShadow>[
-            BoxShadow(
-              color: Color(0x14000000),
-              blurRadius: 24,
-              offset: Offset(0, -8),
-            ),
-          ],
-        ),
+        color: AppColors.surface.withAlpha(245),
         child: SafeArea(
           top: false,
           child: PrimaryButton(label: '保存规则', onPressed: _handleSave),
         ),
       ),
-      body: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          final double horizontalPadding = constraints.maxWidth >= 720
-              ? AppSpacing.xxxl
-              : AppSpacing.lg;
-
-          return Stack(
-            children: <Widget>[
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: <Color>[
-                        Color(0xFFEAF7F9),
-                        Color(0xFFF7F4EA),
-                        AppColors.background,
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: -60,
-                right: -40,
-                child: AmbientOrb(
-                  size: 180,
-                  color: palette.primarySoft,
-                  animate: true,
-                ),
-              ),
-              Positioned(
-                top: 220,
-                left: -48,
-                child: AmbientOrb(
-                  size: 140,
-                  color: const Color(0xFFE5C187),
-                  animate: true,
-                ),
-              ),
-              Align(
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 760),
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(
-                      horizontalPadding,
-                      AppSpacing.sm,
-                      horizontalPadding,
-                      150,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        _RulesHeroCard(dorm: dorm),
-                        const SizedBox(height: AppSpacing.lg),
-                        _RuleSectionCard(
-                          icon: Icons.volume_off_rounded,
-                          title: '声音公约',
-                          subtitle: 'Quiet hours & noise limits',
-                          iconGradient: const <Color>[
-                            Color(0xFFFF8A3D),
-                            Color(0xFFF45B49),
-                          ],
-                          trailing: _MiniSwitch(
-                            value: _examWeekMode,
-                            onChanged: (bool value) {
-                              setState(() {
-                                _examWeekMode = value;
-                              });
-                            },
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              _RuleField(
-                                label: '静音时段',
-                                icon: Icons.schedule_rounded,
-                                controller: _quietHoursController,
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              _RuleField(
-                                label: '特殊情况说明',
-                                icon: Icons.message_outlined,
-                                controller: _specialCaseController,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        _RuleSectionCard(
-                          icon: Icons.lightbulb_rounded,
-                          title: '灯光管理',
-                          subtitle: 'Light usage & sleep hygiene',
-                          iconGradient: const <Color>[
-                            Color(0xFFF8C748),
-                            Color(0xFFF1A12D),
-                          ],
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              _RuleField(
-                                label: '主灯关闭时间',
-                                icon: Icons.dark_mode_rounded,
-                                controller: _lightsOffController,
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              _RuleField(
-                                label: '个人照明要求',
-                                icon: Icons.bedtime_rounded,
-                                controller: _personalLightingController,
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () {
-                                  setState(() {
-                                    _blackoutCurtain = !_blackoutCurtain;
-                                  });
-                                },
-                                child: Row(
-                                  children: <Widget>[
-                                    AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 180,
-                                      ),
-                                      width: 24,
-                                      height: 24,
-                                      decoration: BoxDecoration(
-                                        color: _blackoutCurtain
-                                            ? palette.primarySoft
-                                            : AppColors.surfaceMuted,
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      alignment: Alignment.center,
-                                      child: Icon(
-                                        Icons.check_rounded,
-                                        size: 16,
-                                        color: _blackoutCurtain
-                                            ? palette.primaryDeep
-                                            : Colors.transparent,
-                                      ),
-                                    ),
-                                    const SizedBox(width: AppSpacing.sm),
-                                    Expanded(
-                                      child: Text(
-                                        '建议统一使用遮光帘，减少走廊和窗边杂光。',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                              color: AppColors.textPrimary,
-                                            ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        _RuleSectionCard(
-                          icon: Icons.alarm_rounded,
-                          title: '闹钟与作息',
-                          subtitle: 'Alarms and daily cycles',
-                          iconGradient: const <Color>[
-                            Color(0xFF4DB7F5),
-                            Color(0xFF2B7DE1),
-                          ],
-                          trailing: _MiniSwitch(
-                            value: _vibrationFirst,
-                            onChanged: (bool value) {
-                              setState(() {
-                                _vibrationFirst = value;
-                              });
-                            },
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Row(
-                                children: <Widget>[
-                                  Expanded(
-                                    child: _RuleField(
-                                      label: '闹钟响应时限 (秒)',
-                                      icon: Icons.timer_outlined,
-                                      controller: _alarmResponseController,
-                                      keyboardType: TextInputType.number,
-                                    ),
-                                  ),
-                                  const SizedBox(width: AppSpacing.md),
-                                  Expanded(
-                                    child: Container(
-                                      padding: const EdgeInsets.all(
-                                        AppSpacing.md,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.surfaceMuted,
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: <Widget>[
-                                          Text(
-                                            '振动优先',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .labelMedium
-                                                ?.copyWith(
-                                                  color:
-                                                      AppColors.textSecondary,
-                                                ),
-                                          ),
-                                          const SizedBox(height: AppSpacing.xs),
-                                          Text(
-                                            _vibrationFirst ? '已开启' : '未开启',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium
-                                                ?.copyWith(
-                                                  fontWeight: FontWeight.w800,
-                                                ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              _RuleField(
-                                label: '作息习惯备注',
-                                icon: Icons.notes_rounded,
-                                controller: _routineNoteController,
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              Wrap(
-                                spacing: AppSpacing.xs,
-                                runSpacing: AppSpacing.xs,
-                                children: const <Widget>[
-                                  _TagChip(label: '考研党', active: true),
-                                  _TagChip(label: '夜猫子'),
-                                  _TagChip(label: '早起鸟'),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        _RuleSectionCard(
-                          icon: Icons.thermostat_rounded,
-                          title: '温度调节',
-                          subtitle: 'AC & ventilation preferences',
-                          iconGradient: const <Color>[
-                            Color(0xFF5CD7B4),
-                            Color(0xFF1DAE8E),
-                          ],
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              _TemperatureSlider(
-                                label: '夏季空调',
-                                value: _summerTemp,
-                                color: const Color(0xFFEE8A32),
-                                onChanged: (double value) {
-                                  setState(() {
-                                    _summerTemp = value;
-                                  });
-                                },
-                              ),
-                              const SizedBox(height: AppSpacing.lg),
-                              _TemperatureSlider(
-                                label: '冬季采暖',
-                                value: _winterTemp,
-                                color: const Color(0xFFE55B4A),
-                                onChanged: (double value) {
-                                  setState(() {
-                                    _winterTemp = value;
-                                  });
-                                },
-                              ),
-                              const SizedBox(height: AppSpacing.lg),
-                              Text(
-                                '通风时段',
-                                style: Theme.of(context).textTheme.labelMedium
-                                    ?.copyWith(color: AppColors.textSecondary),
-                              ),
-                              const SizedBox(height: AppSpacing.sm),
-                              Wrap(
-                                spacing: AppSpacing.xs,
-                                runSpacing: AppSpacing.xs,
-                                children: <String>['Morning', 'Noon', 'Bedtime']
-                                    .map((String label) {
-                                      return _TagChip(
-                                        label: label,
-                                        active:
-                                            _selectedVentilationWindow == label,
-                                        onTap: () {
-                                          setState(() {
-                                            _selectedVentilationWindow = label;
-                                          });
-                                        },
-                                      );
-                                    })
-                                    .toList(),
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              Text(
-                                '通风时长 ${_ventilationMinutes.round()} 分钟',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.w800),
-                              ),
-                              SliderTheme(
-                                data: SliderTheme.of(context).copyWith(
-                                  activeTrackColor: palette.primarySoft,
-                                  inactiveTrackColor: AppColors.surfaceSoft,
-                                  thumbColor: palette.primary,
-                                  overlayColor: palette.primarySoft.withAlpha(
-                                    48,
-                                  ),
-                                ),
-                                child: Slider(
-                                  min: 10,
-                                  max: 60,
-                                  value: _ventilationMinutes,
-                                  onChanged: (double value) {
-                                    setState(() {
-                                      _ventilationMinutes = value;
-                                    });
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  void _handleSave() {
-    FocusScope.of(context).unfocus();
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('宿舍规则已保存到当前会话。')));
-  }
-}
-
-class _RulesHeroCard extends StatelessWidget {
-  const _RulesHeroCard({required this.dorm});
-
-  final Dorm dorm;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      boxShadow: AppColors.floatingShadow,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      body: ListView(
+        padding: const EdgeInsets.all(AppSpacing.xl),
         children: <Widget>[
-          Text(
-            dorm.name,
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  dorm.name,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  '把每个人的作息边界写清楚，宿舍就能更安静地运转。',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            '把每个人的作息边界写清楚，宿舍就能更安静地运转。',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+          const SizedBox(height: AppSpacing.lg),
+          _RulesSection(
+            title: '声音公约',
+            child: Column(
+              children: <Widget>[
+                _RuleField(
+                  label: '安静时段',
+                  controller: _quietHoursController,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _RuleField(
+                  label: '特殊情况说明',
+                  controller: _specialCaseController,
+                  maxLines: 3,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('考试周模式'),
+                  subtitle: const Text('考试周时默认更严格地控制声音'),
+                  value: _examWeekMode,
+                  activeThumbColor: palette.primary,
+                  onChanged: (bool value) {
+                    setState(() => _examWeekMode = value);
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _RulesSection(
+            title: '灯光与睡前习惯',
+            child: Column(
+              children: <Widget>[
+                _RuleField(
+                  label: '主灯关闭时间',
+                  controller: _lightsOffController,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _RuleField(
+                  label: '个人照明要求',
+                  controller: _personalLightingController,
+                  maxLines: 3,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('统一使用遮光帘'),
+                  subtitle: const Text('减少走廊和窗边杂光'),
+                  value: _blackoutCurtain,
+                  activeThumbColor: palette.primary,
+                  onChanged: (bool value) {
+                    setState(() => _blackoutCurtain = value);
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _RulesSection(
+            title: '作息约定',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: _RuleField(
+                        label: '闹钟响应时限（秒）',
+                        controller: _alarmResponseController,
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('振动优先'),
+                        subtitle: const Text('先振动，再外放'),
+                        value: _vibrationFirst,
+                        activeThumbColor: palette.primary,
+                        onChanged: (bool value) {
+                          setState(() => _vibrationFirst = value);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _RuleField(
+                  label: '作息习惯备注',
+                  controller: _routineNoteController,
+                  maxLines: 3,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  '宿舍作息标签',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Wrap(
+                  spacing: AppSpacing.xs,
+                  runSpacing: AppSpacing.xs,
+                  children: <String>['考研党', '夜猫子', '早起党']
+                      .map(
+                        (String label) => _TagChip(
+                          label: label,
+                          active: _routineTags.contains(label),
+                          onTap: () {
+                            setState(() {
+                              if (_routineTags.contains(label)) {
+                                _routineTags.remove(label);
+                              } else {
+                                _routineTags.add(label);
+                              }
+                            });
+                          },
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _RulesSection(
+            title: '温度与通风',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                _SliderTile(
+                  label: '夏季空调',
+                  value: _summerTemp,
+                  min: 18,
+                  max: 30,
+                  suffix: '°C',
+                  onChanged: (double value) {
+                    setState(() => _summerTemp = value);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _SliderTile(
+                  label: '冬季采暖',
+                  value: _winterTemp,
+                  min: 18,
+                  max: 30,
+                  suffix: '°C',
+                  onChanged: (double value) {
+                    setState(() => _winterTemp = value);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  '通风时段',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Wrap(
+                  spacing: AppSpacing.xs,
+                  runSpacing: AppSpacing.xs,
+                  children: <String>['Morning', 'Noon', 'Bedtime']
+                      .map(
+                        (String label) => _TagChip(
+                          label: label,
+                          active: _selectedVentilationWindow == label,
+                          onTap: () {
+                            setState(() => _selectedVentilationWindow = label);
+                          },
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _SliderTile(
+                  label: '通风时长',
+                  value: _ventilationMinutes,
+                  min: 10,
+                  max: 60,
+                  suffix: '分钟',
+                  onChanged: (double value) {
+                    setState(() => _ventilationMinutes = value);
+                  },
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
+
+  Future<void> _handleSave() async {
+    FocusScope.of(context).unfocus();
+    final AppServices services = context.appServices;
+    final DormRulesSettings current = services.dormRepository.currentDorm.rulesSettings;
+    final DormRulesSettings next = current.copyWith(
+      quietHours: _quietHoursController.text.trim().isEmpty
+          ? current.quietHours
+          : _quietHoursController.text.trim(),
+      specialCase: _specialCaseController.text.trim().isEmpty
+          ? current.specialCase
+          : _specialCaseController.text.trim(),
+      lightsOffTime: _lightsOffController.text.trim().isEmpty
+          ? current.lightsOffTime
+          : _lightsOffController.text.trim(),
+      personalLighting: _personalLightingController.text.trim().isEmpty
+          ? current.personalLighting
+          : _personalLightingController.text.trim(),
+      examWeekMode: _examWeekMode,
+      blackoutCurtain: _blackoutCurtain,
+      vibrationFirst: _vibrationFirst,
+      alarmResponseSeconds:
+          int.tryParse(_alarmResponseController.text.trim()) ??
+          current.alarmResponseSeconds,
+      routineNote: _routineNoteController.text.trim().isEmpty
+          ? current.routineNote
+          : _routineNoteController.text.trim(),
+      routineTags: _routineTags,
+      summerTempC: _summerTemp,
+      winterTempC: _winterTemp,
+      ventilationWindow: _selectedVentilationWindow,
+      ventilationMinutes: _ventilationMinutes,
+    );
+    await services.dormFacade.saveRules(next);
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('宿舍规则已保存。')));
+  }
 }
 
-class _RuleSectionCard extends StatelessWidget {
-  const _RuleSectionCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.iconGradient,
-    required this.child,
-    this.trailing,
-  });
+class _RulesSection extends StatelessWidget {
+  const _RulesSection({required this.title, required this.child});
 
-  final IconData icon;
   final String title;
-  final String subtitle;
-  final List<Color> iconGradient;
   final Widget child;
-  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  gradient: LinearGradient(colors: iconGradient),
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: iconGradient.last.withAlpha(56),
-                      blurRadius: 18,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                alignment: Alignment.center,
-                child: Icon(icon, color: AppColors.onDark),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (trailing case final Widget trailing) trailing,
-            ],
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
           child,
         ],
       ),
@@ -562,67 +379,50 @@ class _RuleSectionCard extends StatelessWidget {
 class _RuleField extends StatelessWidget {
   const _RuleField({
     required this.label,
-    required this.icon,
     required this.controller,
+    this.maxLines = 1,
     this.keyboardType,
   });
 
   final String label;
-  final IconData icon;
   final TextEditingController controller;
+  final int maxLines;
   final TextInputType? keyboardType;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          label,
-          style: Theme.of(
-            context,
-          ).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary),
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: AppColors.surfaceMuted,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide.none,
         ),
-        const SizedBox(height: AppSpacing.xs),
-        TextField(
-          controller: controller,
-          keyboardType: keyboardType,
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: AppColors.surfaceMuted,
-            prefixIcon: Icon(icon, size: 18, color: AppColors.textSecondary),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.md,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(20),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(20),
-              borderSide: BorderSide(
-                color: context.nightMoodPalette.primary.withAlpha(120),
-              ),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
 
-class _TemperatureSlider extends StatelessWidget {
-  const _TemperatureSlider({
+class _SliderTile extends StatelessWidget {
+  const _SliderTile({
     required this.label,
     required this.value,
-    required this.color,
+    required this.min,
+    required this.max,
+    required this.suffix,
     required this.onChanged,
   });
 
   final String label;
   final double value;
-  final Color color;
+  final double min;
+  final double max;
+  final String suffix;
   final ValueChanged<double> onChanged;
 
   @override
@@ -630,34 +430,17 @@ class _TemperatureSlider extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: Text(
-                label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ),
-            Text(
-              '${value.round()}°C',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: color,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            activeTrackColor: color,
-            inactiveTrackColor: AppColors.surfaceSoft,
-            thumbColor: AppColors.surface,
-            overlayColor: color.withAlpha(48),
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+        Text(
+          '$label ${value.round()}$suffix',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
           ),
-          child: Slider(min: 18, max: 30, value: value, onChanged: onChanged),
+        ),
+        Slider(
+          min: min,
+          max: max,
+          value: value,
+          onChanged: onChanged,
         ),
       ],
     );
@@ -665,11 +448,15 @@ class _TemperatureSlider extends StatelessWidget {
 }
 
 class _TagChip extends StatelessWidget {
-  const _TagChip({required this.label, this.active = false, this.onTap});
+  const _TagChip({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
 
   final String label;
   final bool active;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -689,41 +476,15 @@ class _TagChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: active
-                ? context.nightMoodPalette.primarySoft.withAlpha(120)
+                ? context.nightMoodPalette.primarySoft.withAlpha(140)
                 : Colors.transparent,
           ),
         ),
         child: Text(
           label,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: active
-                ? context.nightMoodPalette.primaryDeep
-                : AppColors.textSecondary,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MiniSwitch extends StatelessWidget {
-  const _MiniSwitch({required this.value, required this.onChanged});
-
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 28,
-      child: FittedBox(
-        fit: BoxFit.contain,
-        child: Switch.adaptive(
-          value: value,
-          onChanged: onChanged,
-          activeThumbColor: context.nightMoodPalette.primary,
-          activeTrackColor: context.nightMoodPalette.primarySoft,
         ),
       ),
     );

@@ -17,7 +17,7 @@ const ACTION_CATALOG: RecommendedAction[] = [
     subtitle: "先用一段低刺激海浪白噪音，让身体慢慢降速。",
     type: "audio",
     priority: 1,
-    reason: "稳定背景音可以降低宿舍随机噪声带来的打断感。",
+    reason: "稳定背景音能减少宿舍随机噪声带来的打断感。",
     route: "/intervention/task",
     trackId: "deep-ocean",
     tags: ["15 分钟", "放松"],
@@ -28,7 +28,7 @@ const ACTION_CATALOG: RecommendedAction[] = [
     subtitle: "先把容易打断入睡的宿舍噪声压下来。",
     type: "quickAction",
     priority: 2,
-    reason: "噪声控制通常是今晚最直接的风险缓解手段。",
+    reason: "噪声控制通常是今晚最直接的缓解手段。",
     route: "/intervention/task",
     trackId: null,
     tags: ["1 分钟", "降噪"],
@@ -36,10 +36,10 @@ const ACTION_CATALOG: RecommendedAction[] = [
   {
     id: "phone-down",
     title: "把手机放远一点",
-    subtitle: "减少屏幕光和临睡前消息刺激，保持收束节奏。",
+    subtitle: "减少屏幕光和临睡前消息刺激，帮助收束节奏。",
     type: "quickAction",
     priority: 3,
-    reason: "稳定的睡前流程更有助于判断真实干扰因子。",
+    reason: "稳定的睡前流程更有助于判断真实干扰因素。",
     route: "/intervention/task",
     trackId: null,
     tags: ["立刻执行", "作息"],
@@ -50,7 +50,7 @@ const ACTION_CATALOG: RecommendedAction[] = [
     subtitle: "避免半夜口渴起身，打断已经形成的困意。",
     type: "quickAction",
     priority: 4,
-    reason: "提前去掉容易发生的小中断，能让整晚数据更稳定。",
+    reason: "提前移除小中断，能让整晚状态更稳定。",
     route: "/intervention/task",
     trackId: null,
     tags: ["30 秒", "准备"],
@@ -69,14 +69,16 @@ function summarizeSleepPattern(context: AssistantContext): string {
   if (completed.length === 0) {
     return "AI 助手还在积累你的睡眠反馈，完成几次夜间记录后，画像会更稳定。";
   }
-  return `最近几晚平均睡眠 ${averageSleep.toFixed(1)} 小时，今晚更适合优先稳住节奏，而不是一次塞进太多动作。`;
+  return `最近几晚平均睡眠 ${averageSleep.toFixed(
+    1,
+  )} 小时，今晚更适合优先稳住节奏，而不是一次塞进太多动作。`;
 }
 
 function summarizeDreamTrend(context: AssistantContext): string {
   if (context.recentDreams.length === 0) {
     return "梦境记录还比较少，起床后尽量用一句话记下最强烈的画面和情绪。";
   }
-  const lastEmotion = context.recentDreams[0].emotionLabel || "混合";
+  const lastEmotion = context.recentDreams[0]?.emotionLabel || "混合";
   return `最近的梦境情绪偏向 ${lastEmotion}，建议继续结合晨间恢复感一起观察。`;
 }
 
@@ -91,6 +93,7 @@ function pickRecommendedActions(
   const factors = rankInterferenceFactors(context);
   const [topFactor] = factors;
   const prioritized = [...ACTION_CATALOG];
+
   if (topFactor?.key === "noise") {
     prioritized.sort((a, b) => {
       const aScore = a.id === "earplug" ? -2 : a.id === "audio-ocean" ? -1 : 0;
@@ -98,6 +101,7 @@ function pickRecommendedActions(
       return aScore - bScore;
     });
   }
+
   if (topFactor?.key === "routine") {
     prioritized.sort((a, b) => {
       const aScore =
@@ -107,6 +111,7 @@ function pickRecommendedActions(
       return aScore - bScore;
     });
   }
+
   return prioritized.slice(0, 4).map((action, index) => ({
     ...action,
     priority: index + 1,
@@ -127,6 +132,16 @@ function buildProfileSummary(context: AssistantContext): ProfileSummary {
   };
 }
 
+export type AIProviderSourceMode = "remoteSuccess" | "fallbackSuccess";
+
+export interface AIProviderResult<T> {
+  value: T;
+  providerName: string;
+  modelName: string;
+  sourceMode: AIProviderSourceMode;
+  errorMessage?: string | null;
+}
+
 export interface AIProvider {
   readonly providerName: string;
   readonly modelName: string;
@@ -135,81 +150,128 @@ export interface AIProvider {
     context: AssistantContext,
     intent: AssistantIntent,
     prompt: string,
-  ): Promise<StructuredAssistantReply>;
+  ): Promise<AIProviderResult<StructuredAssistantReply>>;
 
   generateTonightPlan(
     context: AssistantContext,
     runId: string,
-  ): Promise<TonightPlan>;
+  ): Promise<AIProviderResult<TonightPlan>>;
 
   summarizeDream(
     body: string,
     context: AssistantContext,
-  ): Promise<DreamAnalysis>;
+  ): Promise<AIProviderResult<DreamAnalysis>>;
 
   analyzeFeedback(
     context: AssistantContext,
     sessionId: string,
-  ): Promise<MorningReviewResult>;
+  ): Promise<AIProviderResult<MorningReviewResult>>;
+}
+
+export function buildSystemIdentityReply(params: {
+  assistantName: string;
+  providerName: string;
+  modelName: string;
+  sourceMode: AIProviderSourceMode;
+  errorMessage?: string | null;
+}): StructuredAssistantReply {
+  const assistantName = params.assistantName || "小眠";
+  const connectivity =
+    params.sourceMode === "remoteSuccess" ? "远端模型成功返回" : "回退状态";
+  const errorSuffix =
+    params.errorMessage && params.errorMessage.trim()
+      ? ` 最近一次远端异常是：${params.errorMessage.trim()}。`
+      : "";
+
+  return {
+    reply:
+      `${assistantName}当前正式使用的是 ${params.providerName} / ${params.modelName}。` +
+      ` 这条回答是系统状态说明，当前按${connectivity}展示。${errorSuffix}`,
+    intent: "system_identity",
+    recommendedActions: [],
+    updateTonightPlan: false,
+    updatedSurfaces: ["assistant_context"],
+  };
+}
+
+function deterministicResult<T>(value: T): AIProviderResult<T> {
+  return {
+    value,
+    providerName: "deterministic",
+    modelName: "rules-v1",
+    sourceMode: "fallbackSuccess",
+    errorMessage: null,
+  };
 }
 
 export class DeterministicAIProvider implements AIProvider {
-  readonly providerName = "deterministic-fallback";
+  readonly providerName = "deterministic";
   readonly modelName = "rules-v1";
 
   async generateStructuredReply(
     context: AssistantContext,
     intent: AssistantIntent,
     prompt: string,
-  ): Promise<StructuredAssistantReply> {
-    const plan = await this.generateTonightPlan(context, `reply-${Date.now()}`);
-    let reply =
-      "我已经更新了你的上下文，今晚会继续用温和、可执行的小步骤陪你推进。";
+  ): Promise<AIProviderResult<StructuredAssistantReply>> {
+    const assistantName = context.assistantProfile.assistantName || "小眠";
+    const planResult = await this.generateTonightPlan(
+      context,
+      `reply-${Date.now()}`,
+    );
+    const plan = planResult.value;
+
+    let reply = `${assistantName}在，我会继续用温和、低压、可执行的小步骤陪你慢慢往前走。`;
     if (intent === "noise_issue") {
-      reply = `现在宿舍噪声大约 ${context.dorm.noiseDb} dB，先做降噪，再配合低刺激音频，不要急着强迫自己立刻睡着。`;
+      reply = `${assistantName}注意到现在宿舍噪声大约 ${
+        context.dorm.noiseDb
+      } dB，先做一点降噪，再慢慢把身体节奏收回来，不用逼自己立刻睡着。`;
     } else if (intent === "sleep_difficulty") {
-      reply =
-        "先别和失眠对抗，把刺激降下来，别盯时间，从今晚建议里选一个最小动作重新收束节奏。";
+      reply = `${assistantName}建议你先别和失眠对抗，先把刺激降下来，不看时间，从今晚建议里挑一个最小动作开始就够了。`;
     } else if (intent === "dream_reflection") {
-      reply =
-        "这条梦境我会当作恢复信号来处理。你先记下最强烈的画面和情绪，我会把它并进画像总结。";
+      reply = `${assistantName}会把这条梦当作一个恢复信号来理解。你先记下最强烈的画面和情绪，我们再一起看它和今晚状态之间的联系。`;
     } else if (intent === "plan_review") {
-      reply = `今晚的建议会优先围绕 ${plan.topFactors[0]?.label || "状态稳定"} 展开，再用 2 到 3 个低负担动作收尾。`;
+      reply = `${assistantName}会先围绕 ${
+        plan.topFactors[0]?.label || "状态稳定"
+      } 来安排今晚建议，再用 2 到 3 个低负担动作收尾。`;
     } else if (prompt.trim().length > 0) {
-      reply = `我已经记下“${prompt.trim()}”，也结合了你最近的睡眠、宿舍和梦境记录。今晚先把节奏稳住，比额外加码更重要。`;
+      reply = `${assistantName}已经记下“${prompt.trim()}”，也结合了你最近的睡眠、宿舍和梦境记录。今晚先把节奏稳住，比额外加码更重要。`;
     }
-    return {
+
+    return deterministicResult<StructuredAssistantReply>({
       reply,
       intent,
       recommendedActions: plan.recommendedActions,
       updateTonightPlan: intent !== "general_support",
       updatedSurfaces: ["assistant_context", "home_pre_sleep"],
-    };
+    });
   }
 
   async generateTonightPlan(
     context: AssistantContext,
     runId: string,
-  ): Promise<TonightPlan> {
+  ): Promise<AIProviderResult<TonightPlan>> {
     const topFactors = rankInterferenceFactors(context).slice(0, 3);
     const topScore = topFactors[0]?.score ?? 0;
     const riskLevel =
       topScore >= 70 ? "high" : topScore >= 40 ? "medium" : "low";
-    return {
+
+    return deterministicResult<TonightPlan>({
       dateKey: new Date().toISOString().slice(0, 10),
-      coachSummary: `今晚先处理${topFactors[0]?.label || "节奏稳定"}，其余动作尽量保持安静、简单、可重复。`,
+      coachSummary: `今晚先处理 ${
+        topFactors[0]?.label || "节奏稳定"
+      }，其余动作尽量保持安静、简单、可重复。`,
       riskLevel,
       topFactors,
       recommendedActions: pickRecommendedActions(context),
       generatedAt: new Date().toISOString(),
       sourceRunId: runId,
-    };
+    });
   }
 
   async summarizeDream(
     body: string,
     context: AssistantContext,
-  ): Promise<DreamAnalysis> {
+  ): Promise<AIProviderResult<DreamAnalysis>> {
     const normalized = body.toLowerCase();
     const dominantEmotion =
       normalized.includes("run") ||
@@ -217,7 +279,6 @@ export class DeterministicAIProvider implements AIProvider {
       normalized.includes("考试") ||
       normalized.includes("迟到") ||
       normalized.includes("追赶") ||
-      normalized.includes("逃") ||
       normalized.includes("panic")
         ? "不安"
         : normalized.includes("water") ||
@@ -232,18 +293,19 @@ export class DeterministicAIProvider implements AIProvider {
               normalized.includes("家")
             ? "温暖"
             : "混合";
-    return {
-      summary: `这条梦境更像是一次“${dominantEmotion}”情绪投射，建议和今晚心情、明早恢复感放在一起看。`,
+
+    return deterministicResult<DreamAnalysis>({
+      summary: `这条梦更像是一次“${dominantEmotion}”情绪投射，建议和今晚心情、明早恢复感放在一起看。`,
       dominantEmotion,
       suggestedFocus: context.dorm.noiseDb > 35 ? "noise" : "routine",
       sourceRefs: ["dream_entries.body", "user_settings.selectedNightMood"],
-    };
+    });
   }
 
   async analyzeFeedback(
     context: AssistantContext,
     sessionId: string,
-  ): Promise<MorningReviewResult> {
+  ): Promise<AIProviderResult<MorningReviewResult>> {
     const lastPlan = context.userState?.tonightPlan;
     const effectiveActions = lastPlan?.recommendedActions
       .slice(0, 2)
@@ -251,18 +313,36 @@ export class DeterministicAIProvider implements AIProvider {
     const ineffectiveActions = lastPlan?.recommendedActions
       .slice(2)
       .map((item) => item.title) ?? ["把手机放远一点"];
-    return {
+
+    return deterministicResult<MorningReviewResult>({
       reviewSummary:
         "这次晨间反馈已经并入画像，下一轮建议会优先保留有效动作，减少低信号建议。",
       effectiveActions,
       ineffectiveActions,
       profileSummary: buildProfileSummary(context),
-    };
+    });
   }
 }
 
 export function classifyIntent(prompt: string): AssistantIntent {
   const normalized = prompt.toLowerCase();
+
+  if (
+    normalized.includes("what model") ||
+    normalized.includes("which model") ||
+    normalized.includes("provider") ||
+    normalized.includes("are you online") ||
+    normalized.includes("联网") ||
+    normalized.includes("在线") ||
+    normalized.includes("什么模型") ||
+    normalized.includes("哪个模型") ||
+    normalized.includes("是不是ai") ||
+    normalized.includes("你是ai") ||
+    normalized.includes("你是什么模型")
+  ) {
+    return "system_identity";
+  }
+
   if (
     normalized.includes("noise") ||
     normalized.includes("loud") ||
@@ -274,6 +354,7 @@ export function classifyIntent(prompt: string): AssistantIntent {
   ) {
     return "noise_issue";
   }
+
   if (
     normalized.includes("can't sleep") ||
     normalized.includes("awake") ||
@@ -285,9 +366,11 @@ export function classifyIntent(prompt: string): AssistantIntent {
   ) {
     return "sleep_difficulty";
   }
+
   if (normalized.includes("dream") || normalized.includes("梦")) {
     return "dream_reflection";
   }
+
   if (
     normalized.includes("plan") ||
     normalized.includes("tonight") ||
@@ -298,6 +381,7 @@ export function classifyIntent(prompt: string): AssistantIntent {
   ) {
     return "plan_review";
   }
+
   return "general_support";
 }
 
