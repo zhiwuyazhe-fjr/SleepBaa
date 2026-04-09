@@ -5,6 +5,7 @@ import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 class NightAwakeningLogPage extends StatefulWidget {
@@ -63,9 +64,9 @@ class _NightAwakeningLogPageState extends State<NightAwakeningLogPage> {
                 const SizedBox(height: AppSpacing.xl),
                 Text(
                   '记录夜醒',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: AppColors.onDark,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.headlineMedium?.copyWith(color: AppColors.onDark),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
@@ -132,8 +133,7 @@ class _NightAwakeningLogPageState extends State<NightAwakeningLogPage> {
                                 label: trigger,
                                 selected: selected,
                                 palette: palette,
-                                onTap: () =>
-                                    setState(() => _trigger = trigger),
+                                onTap: () => setState(() => _trigger = trigger),
                               );
                             }).toList(),
                       ),
@@ -208,8 +208,6 @@ class _NightAwakeningLogPageState extends State<NightAwakeningLogPage> {
                   label: '保存夜醒记录',
                   foregroundColor: Colors.white,
                   onPressed: () async {
-                    final ScaffoldMessengerState messenger =
-                        ScaffoldMessenger.of(context);
                     final NavigatorState navigator = Navigator.of(context);
                     final DateTime now = DateTime.now();
                     final DateTime occurredAt = DateTime(
@@ -226,12 +224,10 @@ class _NightAwakeningLogPageState extends State<NightAwakeningLogPage> {
                           minutesToSleep: 0,
                           note: _noteController.text.trim(),
                         );
-                    if (!mounted) {
+                    if (!context.mounted) {
                       return;
                     }
-                    messenger.showSnackBar(
-                      const SnackBar(content: Text('夜醒记录已保存')),
-                    );
+                    notifyPassiveToast(context, message: '夜醒记录已保存');
                     navigator.pop();
                   },
                 ),

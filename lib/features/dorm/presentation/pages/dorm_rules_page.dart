@@ -4,6 +4,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/ambient_orb.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
@@ -445,9 +446,7 @@ class _DormRulesPageState extends State<DormRulesPage> {
 
   void _handleSave() {
     FocusScope.of(context).unfocus();
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('宿舍规则已保存到当前会话。')));
+    notifyPassiveToast(context, message: '宿舍规则已保存到当前会话。');
   }
 }
 
