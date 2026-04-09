@@ -204,9 +204,3 @@ npm --prefix functions run build
 8. 提交晨间反馈
 9. 发 assistant prompt
 
-## 12. 为什么 CloudBase 更适合现在这版 MVP
-
-- 中国大陆网络环境下更稳定
-- 匿名登录、短信登录、云函数、文档数据库都在同一平台
-- AI 放云端更安全，避免客户端泄漏 key
-- 更符合 Android 优先、尽快跑通 MVP 的目标

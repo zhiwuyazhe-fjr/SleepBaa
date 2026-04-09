@@ -78,44 +78,4 @@ AI 助手不负责：
 
 它负责的是结构化分析与编排，不负责认证和视图层实现细节。
 
-## 6. 以后怎么切换模型和供应商
 
-### 换同一供应商的模型
-
-只改部署参数：
-
-- `AI_PROVIDER_MODEL`
-
-例如从 `grok-4-1-fast-reasoning` 切到同一家别的模型，不需要改前端，也不需要改编排器。
-
-### 换同一供应商的地址
-
-只改部署参数：
-
-- `AI_PROVIDER_BASE_URL`
-
-### 换供应商
-
-需要做两件事：
-
-1. 在 `functions/src/providers/` 新增一个 adapter。
-2. 在 `provider_factory.ts` 里新增一个 `AI_PROVIDER_MODE` 分支。
-
-然后部署时改：
-
-- `AI_PROVIDER_MODE`
-- `AI_PROVIDER_BASE_URL`
-- `AI_PROVIDER_API_KEY`
-- `AI_PROVIDER_MODEL`
-
-编排层和 Flutter 助手页不需要跟着改。
-
-## 7. 手机号首登与助手的关系
-
-现在 CloudBase 环境下，用户首次进入必须先手机号验证码登录或注册，匿名首登已经退出主流程。
-
-这样做的好处是：
-
-- 助手上下文和用户身份稳定绑定
-- 不再出现“绑定手机号/恢复失败”的旧链路
-- 后续多设备恢复、供应商切换和日志排查更清晰

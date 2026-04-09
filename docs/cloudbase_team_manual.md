@@ -1,8 +1,6 @@
 # CloudBase 团队总手册
 
-这份文档是当前项目接入 CloudBase 真环境的唯一主手册。
-
-说明：
+这份文档是当前项目接入 CloudBase 真环境的唯一主手册，仔细阅读！！
 
 - 当前运行主线已经切到 CloudBase。
 - `docs/backend/firebase_setup.md` 保留不动，只作为历史文档，不再作为运行指南。
@@ -166,7 +164,8 @@ npx mcporter call cloudbase.envQuery action=info --output json
 
 ## 6. 首次初始化环境清单
 
-这些只需要咱们一个人做，我已经做了，但是如果有人改了 functions/**，那改后端的人需要重新执行 .\deploy_cloudbase_functions.cmd
+这些只需要咱们一个人做，我已经做了！！！
+但是如果有人改了 functions/**，那改后端的人需要重新执行 .\deploy_cloudbase_functions.cmd
 
 ## 6.1 创建 14 个集合
 
@@ -263,7 +262,7 @@ npx mcporter call cloudbase.queryGateway action=getAccess targetType=function ta
 - 开启鉴权
 
 ## 7. 数据库触发器怎么配
-这个我也已经做了，大家不用做了。
+这个我也已经做了，大家不用做了！！！
 
 这是最容易漏掉的一步。
 
@@ -307,7 +306,7 @@ npx mcporter call cloudbase.queryGateway action=getAccess targetType=function ta
 如果日志有触发记录，说明配置成功。
 
 ## 8. 日常开发最短命令 ！！！
-
+如果第二个命令不成功，问AI让AI帮你
 平时最常用就两条：
 
 ```powershell
@@ -384,54 +383,14 @@ flutter devices
 - `POST /api/dorm/create`
 - `POST /api/auth/link-phone`
 
-## 11. 手机号绑定链路
 
-设置页现在走的是这条链：
 
-1. 客户端调用 CloudBase Auth 发送验证码
-2. 客户端校验验证码，拿到 `verificationToken`
-3. 客户端再通过手机号会话换到 `phoneAccessToken`
-4. 客户端调用 `POST /api/auth/link-phone`
-5. `app-api` 用 `phoneAccessToken` 去 CloudBase 验证手机号
-6. 验证通过后写入 `users.phoneNumber` 和 `users.phoneLinkedAt`
-
-注意：
-
-- 这轮做的是“已验证手机号绑定到当前业务资料”
-- 不是做匿名账号升级或账号合并
-- 当前 App 会自动把 `13800138000` 这种输入格式归一化成 `+86 13800138000`
-- 如果你手动在控制台测试 CloudBase Auth 接口，也要按 `+86 13800138000` 的格式传手机号
-
-两者区别：
-
-- “绑定到当前资料”只是在当前匿名用户资料上写入 `phoneNumber` 和 `phoneLinkedAt`
-- 这样做可以显示手机号、做通知和后续联系，但卸载重装后不能直接靠手机号找回原来的匿名数据
-- “匿名账号升级/合并账号”则是把当前匿名身份正式迁移成手机号身份，或者把旧匿名数据合并到手机号主账号
-- 如果后面要支持“换手机/重装后用手机号找回原数据”，下一阶段要补账号 linking / 数据迁移方案，本轮 MVP 先不做这一步
-
-## 12. 宿舍创建 / 加入链路
+## 11. 宿舍创建 / 加入链路
 
 宿舍邀请页现在支持两条首轮流：
 
-### 12.1 创建宿舍
 
-1. 填宿舍名称
-2. 可选填简介、安静时段、熄灯时间、作息备注
-3. 调 `POST /api/dorm/create`
-4. 创建成功后直接生成邀请码
-
-### 12.2 加入宿舍
-
-1. 输入邀请码
-2. 调 `POST /api/dorm/invite/accept`
-3. 成功后刷新当前宿舍快照
-
-注意：
-
-- 后端不会再强行给新用户自动绑定默认宿舍
-- `user.dormId` 现在允许为 `null`
-
-## 13. AI Provider 怎么切
+## 11. AI Provider 怎么切（一般不用动，我已经设置了qwen-3.5 plus）
 
 默认模式：
 
@@ -444,13 +403,13 @@ AI_PROVIDER_MODE=deterministic
 - 没有真实 AI 密钥时也能跑通 MVP
 - 今晚建议、梦境分析、晨间反馈、assistant 回复都会有 deterministic fallback
 
-### 13.1 切到 CloudBase AI
+### 12.1 切到 CloudBase AI
 
 ```powershell
 .\deploy_cloudbase_functions.cmd -AIProviderMode cloudbase_ai -AIProviderModel hunyuan-2.0-instruct-20251111
 ```
 
-### 13.2 切到外部 HTTP AI
+### 12.2 切到外部 HTTP AI
 
 ```powershell
 .\deploy_cloudbase_functions.cmd `
@@ -502,44 +461,10 @@ AI_PROVIDER_MODE=deterministic
 
 不要把 AI key 放进 Flutter 客户端。
 
-## 14. 常见问题排查
+## 13. 常见问题排查
 
-### 14.1 匿名登录失败
 
-先检查：
-
-1. 控制台是否开启匿名登录
-2. `.cloudbase.local.json` 里的 `CLOUDBASE_PUBLISHABLE_KEY` 是否真实且属于当前环境
-3. App 是否使用了正确的 `staging` 配置
-
-### 14.2 `app-api` 返回 401
-
-优先检查：
-
-1. 客户端是否真的完成了匿名登录
-2. `app-api` 网关是否开启鉴权
-3. `app-api` 安全规则是否是 `auth != null`
-
-### 14.3 函数状态一直是 `Updating`
-
-直接重跑：
-
-```powershell
-.\deploy_cloudbase_functions.cmd
-```
-
-当前脚本已经带重试逻辑。
-
-### 14.4 手机号验证码发送失败
-
-优先检查：
-
-1. 控制台“身份认证”里是否已经打开手机号登录
-2. 手机号是否使用了 `+86 13800138000` 这种格式
-3. 如果 App 里直接输入 `13800138000`，当前代码会自动补成 `+86 13800138000`
-4. 如果还是失败，检查 CloudBase 手机短信通道是否已经开通、配额是否充足
-
-### 14.5 Android 没有安装到设备
+### 13.1 Android 没有安装到设备
 
 先跑：
 
@@ -549,16 +474,8 @@ flutter devices
 
 只有当这里能看到 Android 真机或模拟器时，`.\run_android_cloudbase.cmd` 才会真正安装 App。
 
-### 14.5 触发器没反应
 
-先确认：
-
-1. 控制台里真的给 `sleep_sessions` 配了触发器
-2. 控制台里真的给 `dream_entries` 配了触发器
-3. 目标函数名称没有选错
-4. 去对应函数日志里看是否被触发
-
-## 15. 队员协作约定
+## 14. 队员协作约定
 
 不要提交：
 
@@ -566,19 +483,9 @@ flutter devices
 - 本地临时日志
 - 个人私有密钥
 
-可以提交：
 
-- `functions/**`
-- `lib/core/**`
-- 允许修改的页面文件
-- `docs/**`
 
-不要碰：
-
-- `docs/backend/firebase_setup.md`
-- 未授权的 `lib/features/**/presentation` 页面
-
-## 16. 每天最常用的两条命令
+## 15. 每天最常用的两条命令
 
 ```powershell
 .\deploy_cloudbase_functions.cmd
@@ -586,7 +493,7 @@ flutter devices
 ```
 
 
-另外：
+另外：切换模型
 (我已经添加)
 放 CloudBase 云函数环境变量里。最稳的是直接用部署脚本：
 
@@ -609,5 +516,3 @@ AI_PROVIDER_MODEL
 AI_PROVIDER_TIMEOUT_MS
 
 
-如果你之后想改成 deepseek-v3.2，只需要这一条：
-.\scripts\deploy_cloudbase_functions.ps1 -ConfigPath .cloudbase.local.json -AIProviderModel "deepseek-v3.2"
