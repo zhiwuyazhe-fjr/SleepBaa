@@ -15,6 +15,7 @@ import 'package:sleep_dorm_app/features/feedback/presentation/pages/morning_feed
 import 'package:sleep_dorm_app/features/home/presentation/pages/home_post_sleep_page.dart';
 import 'package:sleep_dorm_app/features/home/presentation/pages/home_pre_sleep_page.dart';
 import 'package:sleep_dorm_app/features/intervention/presentation/pages/micro_intervention_task_page.dart';
+import 'package:sleep_dorm_app/features/night_mood/presentation/widgets/night_mood_welcome_flow.dart';
 import 'package:sleep_dorm_app/features/notifications/presentation/pages/notifications_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/calendar_checkin_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_page.dart';
@@ -134,6 +135,162 @@ void main() {
 
     expect(find.byType(HomePreSleepPage), findsOneWidget);
     expect(find.text('今晚你更接近哪一种心情？'), findsNothing);
+  });
+
+  testWidgets('welcome top card keeps about 52.5% viewport height', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
+
+    final double availableHeight = tester
+        .getSize(
+          find.byKey(
+            const ValueKey<NightMoodFlowStep>(NightMoodFlowStep.select),
+          ),
+        )
+        .height;
+    final Size topCardSize = tester.getSize(
+      find.byKey(const ValueKey<String>('night-mood-top-card')),
+    );
+    expect(
+      topCardSize.height,
+      moreOrLessEquals(availableHeight * 0.525, epsilon: 4),
+    );
+  });
+
+  testWidgets('welcome title uses predefined line break on narrow width', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
+    expect(find.text('今晚你更接近哪一种心情？'), findsOneWidget);
+
+    await tester.binding.setSurfaceSize(const Size(360, 844));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('今晚你更接近\n哪一种心情？'), findsOneWidget);
+    expect(find.text('今晚你更接近哪一种心情？'), findsNothing);
+  });
+
+  testWidgets('welcome action bar stays aligned across all three steps', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
+
+    final double step1Top = tester
+        .getTopLeft(find.widgetWithText(FilledButton, '下一步'))
+        .dy;
+
+    await tester.tap(find.widgetWithText(FilledButton, '下一步'));
+    await tester.pumpAndSettle();
+    final double step2Top = tester
+        .getTopLeft(find.widgetWithText(FilledButton, '继续'))
+        .dy;
+
+    await tester.tap(find.widgetWithText(FilledButton, '继续'));
+    await tester.pumpAndSettle();
+    final double step3Top = tester
+        .getTopLeft(find.widgetWithText(FilledButton, '进入今晚首页'))
+        .dy;
+
+    expect(step2Top, moreOrLessEquals(step1Top, epsilon: 2));
+    expect(step3Top, moreOrLessEquals(step1Top, epsilon: 2));
+  });
+
+  testWidgets('welcome flow uses slide transition between steps', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
+
+    await tester.tap(find.widgetWithText(FilledButton, '下一步'));
+    await tester.pump(const Duration(milliseconds: 80));
+
+    expect(find.byType(SlideTransition), findsWidgets);
+  });
+
+  testWidgets('welcome flow keeps small viewport without overflow', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(360, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.widgetWithText(FilledButton, '下一步'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.widgetWithText(FilledButton, '继续'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('welcome confirmation title is 准备就绪', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
+
+    await tester.tap(find.widgetWithText(FilledButton, '下一步'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '继续'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('准备就绪'), findsOneWidget);
+  });
+
+  testWidgets('reasons step allows clearing the last selected reason', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
+
+    await tester.tap(find.widgetWithText(FilledButton, '下一步'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('呼吸很顺'));
+    await tester.pumpAndSettle();
+
+    final FilledButton continueButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, '继续'),
+    );
+    expect(continueButton.onPressed, isNull);
+
+    await tester.tap(find.widgetWithText(FilledButton, '继续'));
+    await tester.pumpAndSettle();
+    expect(find.text('什么在支撑你此刻的平静？'), findsOneWidget);
+    expect(find.text('准备就绪'), findsNothing);
+  });
+
+  testWidgets('reselecting a reason enables continue and enters welcome step', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
+
+    await tester.tap(find.widgetWithText(FilledButton, '下一步'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('呼吸很顺'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('脑子清楚了'));
+    await tester.pumpAndSettle();
+
+    final FilledButton continueButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, '继续'),
+    );
+    expect(continueButton.onPressed, isNotNull);
+
+    await tester.tap(find.widgetWithText(FilledButton, '继续'));
+    await tester.pumpAndSettle();
+    expect(find.text('准备就绪'), findsOneWidget);
   });
 
   testWidgets('bottom navigation switches between shell tabs', (
