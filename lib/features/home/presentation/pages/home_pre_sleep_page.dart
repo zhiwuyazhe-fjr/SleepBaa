@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -10,8 +11,24 @@ import 'package:sleep_dorm_app/core/widgets/metric_tile.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.dart';
 
-class HomePreSleepPage extends StatelessWidget {
+class HomePreSleepPage extends StatefulWidget {
   const HomePreSleepPage({super.key});
+
+  @override
+  State<HomePreSleepPage> createState() => _HomePreSleepPageState();
+}
+
+class _HomePreSleepPageState extends State<HomePreSleepPage> {
+  bool _bannerExpanded = false;
+
+  Future<void> _dismissBanner() async {
+    await context.appServices.sleepCaptureRepository.clearPendingBanner();
+    if (mounted) {
+      setState(() {
+        _bannerExpanded = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,9 +41,10 @@ class HomePreSleepPage extends StatelessWidget {
           services.notificationRepository,
           services.recommendationRepository,
           services.audioPlaybackController,
+          services.sleepCaptureRepository,
         ]),
         builder: (BuildContext context, Widget? child) {
-          final palette = context.nightMoodPalette;
+          final NightMoodPalette palette = context.nightMoodPalette;
           final UserProfile profile = services.authRepository.currentUser;
           final Dorm dorm = services.dormRepository.currentDorm;
           final List<NightRecommendation> recommendations =
@@ -34,6 +52,20 @@ class HomePreSleepPage extends StatelessWidget {
           final int unread = services.notificationRepository
               .unreadNotifications()
               .length;
+          final PendingSleepMemoBanner? pendingBanner =
+              services.sleepCaptureRepository.pendingSleepMemoBanner;
+          final bool showExpandedBanner =
+              pendingBanner != null && _bannerExpanded;
+
+          if (pendingBanner == null && _bannerExpanded) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                setState(() {
+                  _bannerExpanded = false;
+                });
+              }
+            });
+          }
 
           return SafeArea(
             child: LayoutBuilder(
@@ -218,12 +250,227 @@ class HomePreSleepPage extends StatelessWidget {
                             );
                           },
                     ),
+                    if (showExpandedBanner)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onTap: _dismissBanner,
+                          child: const SizedBox.expand(),
+                        ),
+                      ),
+                    Positioned(
+                      top: 6,
+                      left: 0,
+                      right: 0,
+                      child: IgnorePointer(
+                        ignoring: pendingBanner == null,
+                        child: Center(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 320),
+                            reverseDuration: const Duration(milliseconds: 260),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            transitionBuilder:
+                                (Widget child, Animation<double> animation) {
+                                  final Animation<Offset> slide = Tween<Offset>(
+                                    begin: const Offset(0, -0.18),
+                                    end: Offset.zero,
+                                  ).animate(animation);
+                                  return FadeTransition(
+                                    opacity: animation,
+                                    child: SlideTransition(
+                                      position: slide,
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                            child: pendingBanner == null
+                                ? const SizedBox.shrink()
+                                : _SleepMemoBanner(
+                                    key: ValueKey<DateTime>(
+                                      pendingBanner.createdAt,
+                                    ),
+                                    banner: pendingBanner,
+                                    expanded: showExpandedBanner,
+                                    onTap: () {
+                                      if (!_bannerExpanded) {
+                                        setState(() {
+                                          _bannerExpanded = true;
+                                        });
+                                      }
+                                    },
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 );
               },
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _SleepMemoBanner extends StatelessWidget {
+  const _SleepMemoBanner({
+    super.key,
+    required this.banner,
+    required this.expanded,
+    required this.onTap,
+  });
+
+  final PendingSleepMemoBanner banner;
+  final bool expanded;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final NightMoodPalette palette = context.nightMoodPalette;
+    return Material(
+      color: Colors.transparent,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 240),
+          width: 380,
+          constraints: const BoxConstraints(maxWidth: 380),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.md,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.darkSurface.withAlpha(242),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: AppColors.floatingShadow,
+            border: Border.all(color: palette.primarySoft.withAlpha(70)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: palette.primarySoft.withAlpha(38),
+                    ),
+                    child: const Icon(
+                      Icons.inventory_2_rounded,
+                      color: AppColors.onDark,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          banner.title,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: AppColors.onDark,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          expanded ? '点击任意位置返回主页。' : banner.subtitle,
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(
+                                color: AppColors.onDark.withAlpha(190),
+                                height: 1.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: !expanded
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.md),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: banner.groups.map((PendingSleepMemoGroup group) {
+                            return Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: AppSpacing.md,
+                              ),
+                              child: _MemoGroupCard(group: group),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MemoGroupCard extends StatelessWidget {
+  const _MemoGroupCard({required this.group});
+
+  final PendingSleepMemoGroup group;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(14),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        border: Border.all(color: Colors.white.withAlpha(20)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            group.label,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ...group.items.asMap().entries.map((MapEntry<int, String> entry) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: entry.key == group.items.length - 1 ? 0 : AppSpacing.sm,
+              ),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: AppColors.darkCard.withAlpha(170),
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                ),
+                child: Text(
+                  '事记${entry.key + 1}：${entry.value}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.onDark.withAlpha(220),
+                    height: 1.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
@@ -248,7 +495,7 @@ class _NotificationBell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.nightMoodPalette;
+    final NightMoodPalette palette = context.nightMoodPalette;
     return InkWell(
       borderRadius: BorderRadius.circular(999),
       onTap: onTap,
@@ -279,14 +526,12 @@ class _NotificationBell extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: palette.primarySoft,
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: AppColors.darkSurface, width: 2),
-                    boxShadow: AppColors.cardShadow,
                   ),
                   alignment: Alignment.center,
                   child: Text(
                     unread > 99 ? '99+' : '$unread',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: palette.primaryDeep,
+                      color: AppColors.primaryDeep,
                       fontWeight: FontWeight.w800,
                     ),
                   ),

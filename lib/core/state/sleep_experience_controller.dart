@@ -11,6 +11,7 @@ class SleepExperienceController extends ChangeNotifier {
     required RecommendationRepository recommendationRepository,
     required SleepSessionRepository sleepSessionRepository,
     required FeedbackRepository feedbackRepository,
+    required SleepCaptureRepository sleepCaptureRepository,
     required NotificationRepository notificationRepository,
     required DormRepository dormRepository,
     required AudioPlaybackController audioPlaybackController,
@@ -20,6 +21,7 @@ class SleepExperienceController extends ChangeNotifier {
        _recommendationRepository = recommendationRepository,
        _sleepSessionRepository = sleepSessionRepository,
        _feedbackRepository = feedbackRepository,
+       _sleepCaptureRepository = sleepCaptureRepository,
        _notificationRepository = notificationRepository,
        _dormRepository = dormRepository,
        _audioPlaybackController = audioPlaybackController,
@@ -30,6 +32,7 @@ class SleepExperienceController extends ChangeNotifier {
   final RecommendationRepository _recommendationRepository;
   final SleepSessionRepository _sleepSessionRepository;
   final FeedbackRepository _feedbackRepository;
+  final SleepCaptureRepository _sleepCaptureRepository;
   final NotificationRepository _notificationRepository;
   final DormRepository _dormRepository;
   final AudioPlaybackController _audioPlaybackController;
@@ -41,6 +44,7 @@ class SleepExperienceController extends ChangeNotifier {
       _recommendationRepository;
   SleepSessionRepository get sleepSessionRepository => _sleepSessionRepository;
   FeedbackRepository get feedbackRepository => _feedbackRepository;
+  SleepCaptureRepository get sleepCaptureRepository => _sleepCaptureRepository;
   NotificationRepository get notificationRepository => _notificationRepository;
   DormRepository get dormRepository => _dormRepository;
   AudioPlaybackController get audioPlaybackController =>
@@ -134,6 +138,7 @@ class SleepExperienceController extends ChangeNotifier {
       sessionId: activeSession.id,
       when: DateTime.now().add(const Duration(hours: 8)),
     );
+    await _sleepCaptureRepository.showPendingBannerForSession(activeSession.id);
   }
 
   Future<void> addNightAwakening({

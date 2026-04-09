@@ -38,6 +38,7 @@ class _AppScopeState extends State<AppScope> {
   late final InMemoryRecommendationRepository _recommendationRepository;
   late final InMemorySleepSessionRepository _sleepSessionRepository;
   late final InMemoryFeedbackRepository _feedbackRepository;
+  late final InMemorySleepCaptureRepository _sleepCaptureRepository;
   late final InMemoryNotificationRepository _notificationRepository;
   late final InMemoryDormRepository _dormRepository;
   late final AudioPlaybackController _audioPlaybackController;
@@ -57,6 +58,7 @@ class _AppScopeState extends State<AppScope> {
     _feedbackRepository = InMemoryFeedbackRepository(
       sleepSessionRepository: _sleepSessionRepository,
     );
+    _sleepCaptureRepository = InMemorySleepCaptureRepository();
     _notificationRepository = InMemoryNotificationRepository();
     _dormRepository = InMemoryDormRepository();
     _audioPlaybackController = AudioPlaybackController();
@@ -71,6 +73,7 @@ class _AppScopeState extends State<AppScope> {
       recommendationRepository: _recommendationRepository,
       sleepSessionRepository: _sleepSessionRepository,
       feedbackRepository: _feedbackRepository,
+      sleepCaptureRepository: _sleepCaptureRepository,
       notificationRepository: _notificationRepository,
       dormRepository: _dormRepository,
       audioPlaybackController: _audioPlaybackController,
@@ -82,6 +85,7 @@ class _AppScopeState extends State<AppScope> {
       recommendationRepository: _recommendationRepository,
       sleepSessionRepository: _sleepSessionRepository,
       feedbackRepository: _feedbackRepository,
+      sleepCaptureRepository: _sleepCaptureRepository,
       notificationRepository: _notificationRepository,
       dormRepository: _dormRepository,
       audioPlaybackController: _audioPlaybackController,
@@ -99,6 +103,7 @@ class _AppScopeState extends State<AppScope> {
     _dormRepository.dispose();
     _notificationRepository.dispose();
     _feedbackRepository.dispose();
+    _sleepCaptureRepository.dispose();
     _sleepSessionRepository.dispose();
     _recommendationRepository.dispose();
     _settingsRepository.dispose();
@@ -128,6 +133,7 @@ class AppServices {
     required this.recommendationRepository,
     required this.sleepSessionRepository,
     required this.feedbackRepository,
+    required this.sleepCaptureRepository,
     required this.notificationRepository,
     required this.dormRepository,
     required this.audioPlaybackController,
@@ -140,6 +146,7 @@ class AppServices {
   final RecommendationRepository recommendationRepository;
   final SleepSessionRepository sleepSessionRepository;
   final FeedbackRepository feedbackRepository;
+  final SleepCaptureRepository sleepCaptureRepository;
   final NotificationRepository notificationRepository;
   final DormRepository dormRepository;
   final AudioPlaybackController audioPlaybackController;

@@ -25,11 +25,12 @@ class ProfilePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     return ListenableBuilder(
-      listenable: Listenable.merge(<Listenable>[
-        services.authRepository,
-        services.settingsRepository,
-        services.sleepSessionRepository,
-      ]),
+        listenable: Listenable.merge(<Listenable>[
+          services.authRepository,
+          services.settingsRepository,
+          services.sleepSessionRepository,
+          services.sleepCaptureRepository,
+        ]),
       builder: (BuildContext context, Widget? child) {
         final NightMoodPalette palette = context.nightMoodPalette;
         final UserProfile profile = services.authRepository.currentUser;
@@ -255,6 +256,44 @@ class ProfilePage extends StatelessWidget {
                             const SizedBox(height: AppSpacing.xs),
                             Text(
                               '记录昨夜梦境片段、醒来后的情绪和关键词。',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      const Icon(
+                        Icons.east_rounded,
+                        color: AppColors.textSecondary,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                AppCard(
+                  borderRadius: AppRadius.card,
+                  border: Border.all(color: palette.primarySoft.withAlpha(50)),
+                  onTap: () => context.push(AppRoutes.profileThoughtVault),
+                  child: Row(
+                    children: <Widget>[
+                      IconBadge(
+                        icon: Icons.inventory_2_rounded,
+                        backgroundColor: palette.primaryHighlight.withAlpha(180),
+                        iconColor: palette.primaryDeep,
+                        borderRadius: BorderRadius.circular(AppRadius.xl),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              '事记仓库',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              '收好睡眠模式里记下的待办、念头与夜间灵感。',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ],

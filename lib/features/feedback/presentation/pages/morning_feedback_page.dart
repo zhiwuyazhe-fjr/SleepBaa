@@ -22,7 +22,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
       <String, RecommendationFeedbackStatus>{};
   final Map<String, TextEditingController> _feedbackNotes =
       <String, TextEditingController>{};
-  double _sleepHours = 7.1;
+  int _estimatedSleepLatency = 20;
   int _sleepQuality = 4;
   int _restedLevel = 4;
 
@@ -52,6 +52,18 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
           if (session == null) {
             return const Center(child: Text('当前没有待反馈的睡眠记录。'));
           }
+          final DateTime endAt = session.endedAt ?? DateTime.now();
+          final Duration totalRecordDuration = endAt.difference(
+            session.startedAt,
+          );
+          final int totalRecordMinutes = totalRecordDuration.inMinutes.clamp(
+            0,
+            24 * 60,
+          );
+          final int actualSleepMinutes = (totalRecordMinutes -
+                  _estimatedSleepLatency)
+              .clamp(0, 24 * 60);
+          final double actualSleepHours = actualSleepMinutes / 60;
 
           return ListView(
             padding: const EdgeInsets.all(AppSpacing.xl),
@@ -65,16 +77,31 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
                     const SizedBox(height: AppSpacing.md),
+                    _MetricSummary(
+                      label: '总记录时长',
+                      primaryValue: _formatDurationMinutes(totalRecordMinutes),
+                      detail: _formatDateTimeRangeLabel(session.startedAt, endAt),
+                      palette: palette,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
                     _MetricSlider(
-                      label: '总睡眠时长',
-                      value: _sleepHours,
-                      min: 4,
-                      max: 10,
-                      suffix: 'h',
+                      label: '预计入睡时长',
+                      value: _estimatedSleepLatency.toDouble(),
+                      min: 0,
+                      max: 120,
+                      divisions: 24,
+                      suffix: 'min',
                       palette: palette,
                       onChanged: (double value) {
-                        setState(() => _sleepHours = value);
+                        setState(() => _estimatedSleepLatency = value.round());
                       },
+                    ),
+                    _MetricSummary(
+                      label: '实际睡眠时长',
+                      primaryValue: _formatDurationMinutes(actualSleepMinutes),
+                      detail:
+                          '按总记录时长减去预计入睡时长自动推算得到',
+                      palette: palette,
                     ),
                     _MetricSlider(
                       label: '睡眠质量',
@@ -89,7 +116,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                       },
                     ),
                     _MetricSlider(
-                      label: '起床恢复感',
+                      label: '起床疲倦感',
                       value: _restedLevel.toDouble(),
                       min: 1,
                       max: 5,
@@ -200,7 +227,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                         summary: MorningSummary(
                           sleepQuality: _sleepQuality,
                           restedLevel: _restedLevel,
-                          totalSleepHours: _sleepHours,
+                          totalSleepHours: actualSleepHours,
                           awakeningsCount: session.awakenings.length,
                           note: _noteController.text.trim(),
                         ),
@@ -230,6 +257,27 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
       RecommendationFeedbackStatus.skipped => '未执行',
     };
   }
+
+  String _formatDurationMinutes(int minutes) {
+    final int hours = minutes ~/ 60;
+    final int remainder = minutes % 60;
+    if (hours <= 0) {
+      return '${remainder}min';
+    }
+    return '${hours}h ${remainder.toString().padLeft(2, '0')}min';
+  }
+
+  String _formatDateTimeRangeLabel(DateTime start, DateTime end) {
+    final String startDay = '昨日';
+    final String endDay = start.day == end.day ? '今日' : '今日';
+    return '$startDay ${_formatClock(start)} 到 $endDay ${_formatClock(end)}';
+  }
+
+  String _formatClock(DateTime dateTime) {
+    final String hour = dateTime.hour.toString().padLeft(2, '0');
+    final String minute = dateTime.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
 }
 
 class _MetricSlider extends StatelessWidget {
@@ -251,7 +299,7 @@ class _MetricSlider extends StatelessWidget {
   final int? divisions;
   final String suffix;
   final NightMoodPalette palette;
-  final ValueChanged<double> onChanged;
+  final ValueChanged<double>? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -270,15 +318,67 @@ class _MetricSlider extends StatelessWidget {
             ),
           ],
         ),
-        Slider(
-          value: value,
-          min: min,
-          max: max,
-          divisions: divisions,
-          onChanged: onChanged,
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            disabledActiveTrackColor: palette.primary,
+            disabledInactiveTrackColor: AppColors.surfaceBorder,
+            disabledThumbColor: palette.primary,
+          ),
+          child: Slider(
+            value: value,
+            min: min,
+            max: max,
+            divisions: divisions,
+            onChanged: onChanged,
+          ),
         ),
         const SizedBox(height: AppSpacing.sm),
       ],
+    );
+  }
+}
+
+class _MetricSummary extends StatelessWidget {
+  const _MetricSummary({
+    required this.label,
+    required this.primaryValue,
+    required this.detail,
+    required this.palette,
+  });
+
+  final String label;
+  final String primaryValue;
+  final String detail;
+  final NightMoodPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Text(label, style: Theme.of(context).textTheme.titleMedium),
+              const Spacer(),
+              Text(
+                primaryValue,
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(color: palette.primary),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            detail,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

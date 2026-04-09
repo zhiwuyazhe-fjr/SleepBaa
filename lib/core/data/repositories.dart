@@ -59,6 +59,19 @@ abstract interface class FeedbackRepository implements Listenable {
   });
 }
 
+abstract interface class SleepCaptureRepository implements Listenable {
+  List<SleepCaptureRecord> recordsByType(SleepCaptureType type);
+  List<SleepCaptureRecord> recordsForSession(String sessionId);
+  PendingSleepMemoBanner? get pendingSleepMemoBanner;
+  Future<SleepCaptureRecord> addRecord({
+    required SleepCaptureType type,
+    required String sessionId,
+    required String content,
+  });
+  Future<void> showPendingBannerForSession(String sessionId);
+  Future<void> clearPendingBanner();
+}
+
 abstract interface class NotificationRepository implements Listenable {
   List<NotificationItem> get notifications;
   List<NotificationItem> unreadNotifications();
