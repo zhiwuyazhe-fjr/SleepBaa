@@ -10,6 +10,7 @@ import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/home_metric_card.dart';
 import 'package:sleep_dorm_app/core/widgets/quick_action_icon_button.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
+import 'package:sleep_dorm_app/features/home/presentation/widgets/home_hero_pair.dart';
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.dart';
 
 class HomePreSleepPage extends StatefulWidget {
@@ -115,32 +116,23 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                               ],
                             ),
                             const SizedBox(height: AppSpacing.md),
-                            Row(
-                              children: <Widget>[
-                                Expanded(
-                                  child: SleepRiskCard(
-                                    riskLabel: dorm.noiseDb <= 35 ? '偏低' : '中等',
-                                    primaryValue: '${dorm.noiseDb} dB',
-                                  ),
-                                ),
-                                const SizedBox(width: AppSpacing.md),
-                                Expanded(
-                                  child: StartSleepModeCard(
-                                    isAudioReady:
-                                        services
-                                            .audioPlaybackController
-                                            .currentTrack !=
-                                        null,
-                                    onTap: () async {
-                                      await services.sleepExperienceController
-                                          .enterSleepMode();
-                                      if (context.mounted) {
-                                        context.go(AppRoutes.homePostSleep);
-                                      }
-                                    },
-                                  ),
-                                ),
-                              ],
+                            HomeHeroPair(
+                              left: SleepRiskCard(
+                                riskLabel: dorm.noiseDb <= 35 ? '偏低' : '中等',
+                                primaryValue: '${dorm.noiseDb} dB',
+                              ),
+                              right: StartSleepModeCard(
+                                isAudioReady:
+                                    services.audioPlaybackController.currentTrack !=
+                                    null,
+                                onTap: () async {
+                                  await services.sleepExperienceController
+                                      .enterSleepMode();
+                                  if (context.mounted) {
+                                    context.go(AppRoutes.homePostSleep);
+                                  }
+                                },
+                              ),
                             ),
                             const SizedBox(height: AppSpacing.xl),
                             SectionTitle(
