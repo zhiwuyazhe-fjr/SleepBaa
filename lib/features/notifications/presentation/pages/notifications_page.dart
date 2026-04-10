@@ -48,14 +48,14 @@ class NotificationsPage extends StatelessWidget {
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(
-              AppSpacing.xl,
-              AppSpacing.xl,
-              AppSpacing.xl,
-              120,
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.md,
+              96,
             ),
             children: <Widget>[
               _NotificationOverviewCard(unreadCount: unread.length),
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: AppSpacing.md),
               _NotificationSection(
                 title: '待处理',
                 items: unread,
@@ -109,23 +109,24 @@ class _NotificationSection extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xl),
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           SectionTitle(
             title: title,
             titleStyle: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontSize: 22,
+              fontSize: 20,
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
           ...items.map(
             (NotificationItem item) => Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
               child: AppCard(
                 onTap: () => onTap(item),
+                padding: const EdgeInsets.all(AppSpacing.md),
                 borderRadius: BorderRadius.circular(20),
                 color: item.isRead
                     ? AppColors.surface
@@ -134,19 +135,20 @@ class _NotificationSection extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Container(
-                      width: 44,
-                      height: 44,
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
                         color: _colorForCategory(item.category).withAlpha(24),
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(14),
                       ),
                       alignment: Alignment.center,
                       child: Icon(
                         _iconForCategory(item.category),
+                        size: 20,
                         color: _colorForCategory(item.category),
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.md),
+                    const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -155,15 +157,16 @@ class _NotificationSection extends StatelessWidget {
                             _localizedTitle(item),
                             style: Theme.of(
                               context,
-                            ).textTheme.titleLarge?.copyWith(
+                            ).textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          const SizedBox(height: AppSpacing.xs),
+                          const SizedBox(height: 6),
                           Text(
                             _localizedBody(item),
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
+                                  fontSize: 13,
                                   color: const Color(0xFF888888),
                                   fontWeight: FontWeight.w400,
                                 ),
@@ -171,9 +174,10 @@ class _NotificationSection extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.md),
+                    const SizedBox(width: AppSpacing.xs),
                     Icon(
                       Icons.chevron_right_rounded,
+                      size: 20,
                       color: const Color(0xFFA0A0A0),
                     ),
                   ],
@@ -244,38 +248,41 @@ class _NotificationOverviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      borderRadius: BorderRadius.circular(24),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      borderRadius: BorderRadius.circular(20),
       color: AppColors.surface,
       child: Row(
         children: <Widget>[
           Container(
-            width: 44,
-            height: 44,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               color: const Color(0xFFE7F4F0),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
             ),
             alignment: Alignment.center,
             child: const Icon(
               Icons.notifications_active_rounded,
+              size: 20,
               color: Color(0xFF2C8E78),
             ),
           ),
-          const SizedBox(width: AppSpacing.md),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
                   unreadCount > 0 ? '有 $unreadCount 条待处理消息' : '消息都已处理',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xs),
+                const SizedBox(height: 6),
                 Text(
                   unreadCount > 0 ? '建议先查看「待处理」分组' : '今晚可以专注休息了',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontSize: 13,
                     color: const Color(0xFF888888),
                     fontWeight: FontWeight.w400,
                   ),

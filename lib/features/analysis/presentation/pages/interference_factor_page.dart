@@ -7,7 +7,6 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/home_metric_card.dart';
-import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/mock/mock_data.dart';
 
@@ -21,6 +20,7 @@ class InterferenceFactorPage extends StatelessWidget {
         MockData.placeholderPages[AppRoutes.analysisInterferenceFactors]!;
     final NightMoodPalette palette = context.nightMoodPalette;
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(title: Text(meta.title)),
       body: ListenableBuilder(
         listenable: services.dormRepository,
@@ -28,10 +28,10 @@ class InterferenceFactorPage extends StatelessWidget {
           final Dorm dorm = services.dormRepository.currentDorm;
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(
-              AppSpacing.xl,
-              AppSpacing.xl,
-              AppSpacing.xl,
-              120,
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.md,
+              96,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -39,11 +39,11 @@ class InterferenceFactorPage extends StatelessWidget {
                 SectionTitle(
                   title: '今晚影响因素',
                   titleStyle: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontSize: 22,
+                    fontSize: 20,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.sm),
                 Row(
                   children: <Widget>[
                     Expanded(
@@ -63,7 +63,7 @@ class InterferenceFactorPage extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.sm),
                 const Row(
                   children: <Widget>[
                     Expanded(
@@ -83,9 +83,11 @@ class InterferenceFactorPage extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: AppSpacing.xl),
+                const SizedBox(height: AppSpacing.lg),
                 AppCard(
                   color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  padding: const EdgeInsets.all(AppSpacing.md),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -106,9 +108,11 @@ class InterferenceFactorPage extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.sm),
                 AppCard(
-                  color: const Color(0xFFF7F8FA),
+                  color: const Color(0xFFF2F2F2),
+                  borderRadius: BorderRadius.circular(20),
+                  padding: const EdgeInsets.all(AppSpacing.md),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -118,7 +122,7 @@ class InterferenceFactorPage extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.md),
+                      const SizedBox(height: AppSpacing.sm),
                       for (final String point in meta.supportingPoints) ...<Widget>[
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -144,17 +148,29 @@ class InterferenceFactorPage extends StatelessWidget {
                             ),
                           ],
                         ),
-                        const SizedBox(height: AppSpacing.sm),
+                        const SizedBox(height: AppSpacing.xs),
                       ],
                     ],
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xl),
-                PrimaryButton(
-                  label: meta.primaryActionLabel,
-                  icon: Icons.insights_rounded,
-                  onPressed: () {},
-                  variant: PrimaryButtonVariant.soft,
+                const SizedBox(height: AppSpacing.lg),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton.icon(
+                    onPressed: () {},
+                    style: FilledButton.styleFrom(
+                      backgroundColor: palette.primary,
+                      foregroundColor: AppColors.onDark,
+                      shape: const StadiumBorder(),
+                      textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    icon: const Icon(Icons.insights_rounded, size: 18),
+                    label: Text(meta.primaryActionLabel),
+                  ),
                 ),
               ],
             ),
