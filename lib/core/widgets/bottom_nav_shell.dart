@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
-import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
-import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
@@ -75,37 +73,30 @@ class _BottomNavShellState extends State<BottomNavShell> {
               if (!hideShellChrome)
                 Positioned(
                   right: AppSpacing.xl,
-                  bottom: 110,
+                  bottom: 124,
                   child: const SafeArea(top: false, child: AssistantFab()),
                 ),
               if (!hideShellChrome)
                 Positioned(
-                  left: AppSpacing.md,
-                  right: AppSpacing.md,
-                  bottom: 8,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
                   child: SafeArea(
                     top: false,
+                    bottom: false,
                     child: Container(
                       key: BottomNavShell.navBarKey,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: 6,
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.xl,
+                        10,
+                        AppSpacing.xl,
+                        22,
                       ),
                       decoration: BoxDecoration(
-                        color: AppColors.surface.withAlpha(232),
-                        borderRadius: AppRadius.pill,
-                        boxShadow: const <BoxShadow>[
-                          BoxShadow(
-                            color: Color(0x14000000),
-                            blurRadius: 22,
-                            offset: Offset(0, 10),
-                          ),
-                          BoxShadow(
-                            color: Color(0x0F000000),
-                            blurRadius: 8,
-                            offset: Offset(0, 3),
-                          ),
-                        ],
+                        color: AppColors.surface,
+                        border: Border(
+                          top: BorderSide(color: AppColors.divider, width: 1),
+                        ),
                       ),
                       child: Row(
                         children: List<Widget>.generate(_items.length, (
@@ -116,9 +107,7 @@ class _BottomNavShellState extends State<BottomNavShell> {
                               index == widget.navigationShell.currentIndex;
                           return Expanded(
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
                               child: _NavPillButton(
                                 item: item,
                                 selected: selected,
@@ -187,36 +176,36 @@ class _NavPillButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.nightMoodPalette;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
-        color: selected ? palette.primary : Colors.transparent,
-        borderRadius: AppRadius.pill,
+        color: selected ? const Color(0xFF1A1A1A) : Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
       ),
       child: InkWell(
-        borderRadius: AppRadius.pill,
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: 8,
+          padding: EdgeInsets.symmetric(
+            horizontal: selected ? 22 : 16,
+            vertical: 6,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Icon(
                 item.icon,
-                color: selected ? AppColors.onDark : AppColors.textSecondary,
+                color: selected ? AppColors.onDark : const Color(0xFFA0A0A0),
                 size: 20,
               ),
               const SizedBox(height: 2),
               Text(
                 item.label,
                 style: textTheme.labelSmall?.copyWith(
-                  color: selected ? AppColors.onDark : AppColors.textSecondary,
+                  color: selected ? AppColors.onDark : const Color(0xFFA0A0A0),
+                  fontWeight: FontWeight.w400,
                 ),
               ),
             ],
