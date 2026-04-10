@@ -141,7 +141,7 @@ class _NotificationSection extends StatelessWidget {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: _colorForCategory(item.category).withAlpha(24),
+                        color: palette.primaryHighlight,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       alignment: Alignment.center,
@@ -250,7 +250,7 @@ class _NotificationOverviewCard extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: const Color(0xFFE7F4F0),
+              color: palette.primaryHighlight,
               borderRadius: BorderRadius.circular(12),
             ),
             alignment: Alignment.center,

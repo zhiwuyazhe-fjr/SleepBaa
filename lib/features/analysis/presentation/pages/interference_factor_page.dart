@@ -160,8 +160,8 @@ class InterferenceFactorPage extends StatelessWidget {
                   child: FilledButton.icon(
                     onPressed: () {},
                     style: FilledButton.styleFrom(
-                      backgroundColor: palette.primary,
-                      foregroundColor: AppColors.onDark,
+                      backgroundColor: palette.welcomeAccentColor,
+                      foregroundColor: palette.welcomeTextOnAccent,
                       shape: const StadiumBorder(),
                       textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
                         fontSize: 15,
