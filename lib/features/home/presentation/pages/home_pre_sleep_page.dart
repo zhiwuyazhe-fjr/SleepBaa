@@ -8,6 +8,7 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/home_metric_card.dart';
+import 'package:sleep_dorm_app/core/widgets/quick_action_icon_button.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.dart';
 
@@ -152,23 +153,23 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: <Widget>[
-                                _QuickFunctionButton(
+                                QuickActionIconButton(
                                   icon: Icons.auto_stories_rounded,
                                   label: '梦记一刻',
                                   onTap: () => context.push(AppRoutes.dreamJournal),
                                 ),
-                                _QuickFunctionButton(
+                                QuickActionIconButton(
                                   icon: Icons.calendar_month_rounded,
                                   label: '打卡日历',
                                   onTap: () => context.push(AppRoutes.profileCalendar),
                                 ),
-                                _QuickFunctionButton(
+                                QuickActionIconButton(
                                   icon: Icons.menu_book_rounded,
                                   label: '睡眠百科',
                                   onTap: () =>
                                       context.push(AppRoutes.interventionTask),
                                 ),
-                                _QuickFunctionButton(
+                                QuickActionIconButton(
                                   icon: Icons.psychology_alt_rounded,
                                   label: '思绪清理',
                                   onTap: () => context.push(
@@ -426,49 +427,6 @@ class _SleepMemoBanner extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _QuickFunctionButton extends StatelessWidget {
-  const _QuickFunctionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Column(
-        children: <Widget>[
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: palette.primaryHighlight,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            alignment: Alignment.center,
-            child: Icon(icon, size: 24, color: palette.primary),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        ],
       ),
     );
   }
