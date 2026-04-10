@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 
 class HomeMetricCard extends StatelessWidget {
   const HomeMetricCard({
@@ -16,6 +17,7 @@ class HomeMetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.nightMoodPalette;
     final Widget content = Container(
       padding: const EdgeInsets.all(16),
       constraints: const BoxConstraints(minHeight: 84),
@@ -28,7 +30,7 @@ class HomeMetricCard extends StatelessWidget {
         children: <Widget>[
           Row(
             children: <Widget>[
-              Icon(icon, size: 24, color: const Color(0xFF2C8E78)),
+              Icon(icon, size: 24, color: palette.primary),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(

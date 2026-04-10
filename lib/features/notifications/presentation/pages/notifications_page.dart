@@ -197,12 +197,7 @@ class _NotificationSection extends StatelessWidget {
   }
 
   Color _colorForCategory(NotificationCategory category) {
-    return switch (category) {
-      NotificationCategory.reminder => palette.primary,
-      NotificationCategory.session => palette.calmBlue,
-      NotificationCategory.dorm => palette.primaryDeep,
-      NotificationCategory.system => AppColors.textSecondary,
-    };
+    return palette.primary;
   }
 
   String _localizedTitle(NotificationItem item) {
@@ -244,6 +239,7 @@ class _NotificationOverviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final NightMoodPalette palette = context.nightMoodPalette;
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.sm),
       borderRadius: BorderRadius.circular(20),
@@ -258,10 +254,10 @@ class _NotificationOverviewCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             alignment: Alignment.center,
-            child: const Icon(
+            child: Icon(
               Icons.notifications_active_rounded,
               size: 18,
-              color: Color(0xFF2C8E78),
+              color: palette.primary,
             ),
           ),
           const SizedBox(width: AppSpacing.xs),
