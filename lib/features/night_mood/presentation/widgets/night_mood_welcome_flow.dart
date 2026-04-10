@@ -216,9 +216,9 @@ extension on NightMood {
 
   String get welcomeCopy {
     return switch (this) {
-      NightMood.happy => '今晚延续这份好状态，帮你更轻松地进入休息节奏。',
-      NightMood.sad => '今晚会给你更安静、更柔和的陪伴，让你慢慢缓下来。',
-      NightMood.calm => '今晚就顺着这份稳定，慢慢进入睡眠。',
+      NightMood.happy => '今晚延续这份好状态\n帮你更轻松地进入休息节奏',
+      NightMood.sad => '今晚会给你更安静更柔和的陪伴\n让你慢慢缓下来',
+      NightMood.calm => '今晚就顺着这份稳定\n慢慢进入睡眠',
     };
   }
 
@@ -579,7 +579,7 @@ class _WelcomeStep extends StatelessWidget {
                         color: palette.welcomeTextOnAccent,
                         fontSize: metrics.welcomeTitleFontSize,
                         height: 1.1,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -701,8 +701,8 @@ class _MoodSelector extends StatelessWidget {
                                     : Colors.white70,
                                 fontSize: 14,
                                 fontWeight: isSelected
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
                               ),
                             ),
                           ),
@@ -760,8 +760,8 @@ class _BottomActionBar extends StatelessWidget {
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.white,
                       textStyle: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                     child: Text(secondaryLabel!),
@@ -770,7 +770,7 @@ class _BottomActionBar extends StatelessWidget {
           const SizedBox(width: 16),
           Expanded(
             child: SizedBox(
-              height: 64,
+              height: 52,
               child: FilledButton(
                 onPressed: onPrimaryPressed == null
                     ? null
@@ -787,8 +787,8 @@ class _BottomActionBar extends StatelessWidget {
                   disabledForegroundColor: primaryTextColor.withAlpha(153),
                   shape: const StadiumBorder(),
                   textStyle: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 child: Text(primaryLabel),
