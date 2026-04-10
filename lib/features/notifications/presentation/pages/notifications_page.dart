@@ -48,14 +48,14 @@ class NotificationsPage extends StatelessWidget {
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md,
-              AppSpacing.md,
-              AppSpacing.md,
-              96,
+              AppSpacing.sm,
+              AppSpacing.sm,
+              AppSpacing.sm,
+              88,
             ),
             children: <Widget>[
               _NotificationOverviewCard(unreadCount: unread.length),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.sm),
               _NotificationSection(
                 title: '待处理',
                 items: unread,
@@ -109,7 +109,7 @@ class _NotificationSection extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -120,13 +120,13 @@ class _NotificationSection extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.xs),
           ...items.map(
             (NotificationItem item) => Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              padding: const EdgeInsets.only(bottom: AppSpacing.xs),
               child: AppCard(
                 onTap: () => onTap(item),
-                padding: const EdgeInsets.all(AppSpacing.md),
+                padding: const EdgeInsets.all(AppSpacing.sm),
                 borderRadius: BorderRadius.circular(20),
                 color: item.isRead
                     ? AppColors.surface
@@ -135,20 +135,20 @@ class _NotificationSection extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Container(
-                      width: 40,
-                      height: 40,
+                      width: 36,
+                      height: 36,
                       decoration: BoxDecoration(
                         color: _colorForCategory(item.category).withAlpha(24),
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       alignment: Alignment.center,
                       child: Icon(
                         _iconForCategory(item.category),
-                        size: 20,
+                        size: 18,
                         color: _colorForCategory(item.category),
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
+                    const SizedBox(width: AppSpacing.xs),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,12 +161,12 @@ class _NotificationSection extends StatelessWidget {
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 4),
                           Text(
                             _localizedBody(item),
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
-                                  fontSize: 13,
+                                  fontSize: 12,
                                   color: const Color(0xFF888888),
                                   fontWeight: FontWeight.w400,
                                 ),
@@ -174,10 +174,10 @@ class _NotificationSection extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.xs),
+                    const SizedBox(width: AppSpacing.xxs),
                     Icon(
                       Icons.chevron_right_rounded,
-                      size: 20,
+                      size: 18,
                       color: const Color(0xFFA0A0A0),
                     ),
                   ],
@@ -248,26 +248,26 @@ class _NotificationOverviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.sm),
       borderRadius: BorderRadius.circular(20),
       color: AppColors.surface,
       child: Row(
         children: <Widget>[
           Container(
-            width: 40,
-            height: 40,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
               color: const Color(0xFFE7F4F0),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
             ),
             alignment: Alignment.center,
             child: const Icon(
               Icons.notifications_active_rounded,
-              size: 20,
+              size: 18,
               color: Color(0xFF2C8E78),
             ),
           ),
-          const SizedBox(width: AppSpacing.sm),
+          const SizedBox(width: AppSpacing.xs),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,11 +278,11 @@ class _NotificationOverviewCard extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   unreadCount > 0 ? '建议先查看「待处理」分组' : '今晚可以专注休息了',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 13,
+                    fontSize: 12,
                     color: const Color(0xFF888888),
                     fontWeight: FontWeight.w400,
                   ),
