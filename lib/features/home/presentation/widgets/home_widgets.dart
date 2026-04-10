@@ -14,12 +14,10 @@ class SleepRiskCard extends StatelessWidget {
     super.key,
     required this.riskLabel,
     required this.primaryValue,
-    required this.secondaryValue,
   });
 
   final String riskLabel;
   final String primaryValue;
-  final String secondaryValue;
 
   @override
   Widget build(BuildContext context) {
@@ -27,91 +25,46 @@ class SleepRiskCard extends StatelessWidget {
     final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       padding: EdgeInsets.zero,
+      borderRadius: BorderRadius.circular(24),
       boxShadow: AppColors.floatingShadow,
       child: Container(
         height: 120,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(34),
+          borderRadius: BorderRadius.circular(24),
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
             colors: <Color>[
-              palette.heroGradientStart,
-              palette.heroGradientMid,
-              palette.heroGradientEnd,
+              palette.welcomeAccentColor,
+              palette.primarySoft,
+              palette.primary,
             ],
           ),
         ),
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-        child: Stack(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: <Widget>[
-            Positioned(
-              right: -4,
-              top: -6,
-              child: Container(
-                width: 96,
-                height: 96,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(34),
-                  gradient: RadialGradient(
-                    center: const Alignment(0.25, -0.1),
-                    radius: 0.9,
-                    colors: <Color>[
-                      Colors.white.withAlpha(28),
-                      Colors.white.withAlpha(8),
-                      Colors.white.withAlpha(0),
-                    ],
-                  ),
-                ),
+            Text(
+              '睡眠风险',
+              style: textTheme.titleLarge?.copyWith(
+                color: AppColors.onDark,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            Positioned(
-              right: 34,
-              top: 26,
-              child: Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: palette.primarySoft.withAlpha(16),
-                ),
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Row(
               children: <Widget>[
-                Text(
-                  '睡眠风险',
-                  style: textTheme.labelMedium?.copyWith(
-                    color: AppColors.onDark.withAlpha(196),
-                    fontWeight: FontWeight.w700,
-                  ),
+                _CardMetaPill(
+                  label: riskLabel,
+                  backgroundColor: palette.primaryDeep,
+                  foregroundColor: AppColors.onDark,
                 ),
-                Text(
-                  riskLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.headlineMedium?.copyWith(
-                    color: AppColors.onDark,
-                    fontWeight: FontWeight.w800,
-                    height: 1,
-                  ),
-                ),
-                Row(
-                  children: <Widget>[
-                    _CardMetaPill(
-                      label: primaryValue,
-                      backgroundColor: Colors.white.withAlpha(18),
-                      foregroundColor: AppColors.onDark,
-                    ),
-                    const SizedBox(width: AppSpacing.xs),
-                    _CardMetaPill(
-                      label: secondaryValue,
-                      backgroundColor: palette.primarySoft.withAlpha(16),
-                      foregroundColor: AppColors.onDark.withAlpha(210),
-                    ),
-                  ],
+                const SizedBox(width: AppSpacing.xs),
+                _CardMetaPill(
+                  label: primaryValue,
+                  backgroundColor: palette.primaryDeep,
+                  foregroundColor: AppColors.onDark,
                 ),
               ],
             ),
@@ -138,74 +91,58 @@ class StartSleepModeCard extends StatelessWidget {
     final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       padding: EdgeInsets.zero,
+      borderRadius: BorderRadius.circular(24),
       border: Border.all(color: AppColors.divider),
       boxShadow: AppColors.cardShadow,
       onTap: onTap,
       child: Container(
         height: 120,
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: Stack(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: <Widget>[
-            Positioned(
-              right: -18,
-              bottom: -18,
-              child: Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: palette.primarySoft.withAlpha(12),
-                ),
+            Text(
+              '开启睡眠模式',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.titleLarge?.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
                 Container(
-                  width: 54,
-                  height: 54,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F5F5),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    isAudioReady ? '音频已同步' : '轻触进入',
+                    style: textTheme.labelSmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                Container(
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: <Color>[
-                        palette.primaryHighlight,
-                        palette.primarySoft,
-                        palette.primary,
-                      ],
-                    ),
-                    boxShadow: <BoxShadow>[
-                      BoxShadow(
-                        color: palette.primarySoft.withAlpha(150),
-                        blurRadius: 24,
-                        spreadRadius: 2,
-                      ),
-                    ],
+                    color: palette.welcomeAccentColor,
                   ),
                   alignment: Alignment.center,
-                  child: Transform.rotate(
-                    angle: -math.pi / 10,
-                    child: const Icon(
-                      Icons.nightlight_round,
-                      color: AppColors.onDark,
-                      size: 30,
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '开启睡眠模式',
-                  maxLines: 2,
-                  style: textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    height: 1.05,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  isAudioReady ? '音频已同步' : '轻触进入',
-                  style: textTheme.labelMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w700,
+                  child: Icon(
+                    Icons.dark_mode_rounded,
+                    color: palette.welcomeTextOnAccent,
+                    size: 20,
                   ),
                 ),
               ],
@@ -245,7 +182,7 @@ class _CardMetaPill extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
           color: foregroundColor,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w400,
         ),
       ),
     );
@@ -270,35 +207,37 @@ class HomeActionCard extends StatelessWidget {
     final bool selected =
         recommendation.executionState != RecommendationExecutionState.idle;
     final Color foreground = _isAudio
-        ? palette.primaryDeep
+        ? palette.welcomeTextOnAccent
         : AppColors.textPrimary;
 
     return AppCard(
       padding: EdgeInsets.zero,
-      color: _isAudio ? palette.primaryHighlight : AppColors.surface,
+      color: _isAudio ? palette.welcomeAccentColor : AppColors.surface,
       border: _isAudio ? null : Border.all(color: AppColors.divider),
       child: Container(
-        height: 70,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.all(16),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
             Container(
-              width: 34,
-              height: 34,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
                 color: _isAudio
-                    ? Colors.white.withAlpha(188)
-                    : palette.primary.withAlpha(12),
+                    ? Colors.white.withAlpha(208)
+                    : AppColors.background,
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
               child: Icon(
                 recommendation.icon,
-                size: 18,
-                color: _isAudio ? palette.primaryDeep : palette.primary,
+                size: 20,
+                color: _isAudio
+                    ? palette.welcomeTextOnAccent
+                    : palette.primary,
               ),
             ),
-            const SizedBox(width: AppSpacing.sm),
+            const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -308,34 +247,57 @@ class HomeActionCard extends StatelessWidget {
                     recommendation.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: foreground,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    recommendation.subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: _isAudio
-                          ? palette.primaryDeep.withAlpha(180)
-                          : AppColors.textSecondary,
-                    ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Wrap(
+                    spacing: AppSpacing.xs,
+                    runSpacing: AppSpacing.xs,
+                    children: recommendation.tags
+                        .take(2)
+                        .map(
+                          (String tag) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _isAudio
+                                  ? Colors.white.withAlpha(170)
+                                  : AppColors.background,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              tag,
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: _isAudio
+                                        ? palette.welcomeTextOnAccent
+                                        : AppColors.textSecondary,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                            ),
+                          ),
+                        )
+                        .toList(),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: AppSpacing.sm),
+            const SizedBox(width: AppSpacing.md),
             InkWell(
               onTap: onTap,
               borderRadius: BorderRadius.circular(999),
               child: Container(
-                width: 40,
-                height: 40,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(_isAudio ? 255 : 0),
+                  color: _isAudio
+                      ? Colors.white.withAlpha(220)
+                      : AppColors.background,
                   shape: BoxShape.circle,
                   border: !_isAudio
                       ? Border.all(
@@ -349,7 +311,9 @@ class HomeActionCard extends StatelessWidget {
                 child: Icon(
                   _trailingIcon(selected),
                   size: 22,
-                  color: selected ? palette.primary : foreground,
+                  color: _isAudio
+                      ? palette.welcomeTextOnAccent
+                      : (selected ? palette.primary : foreground),
                 ),
               ),
             ),

@@ -8,12 +8,16 @@ class SectionTitle extends StatelessWidget {
     this.actionLabel,
     this.actionKey,
     this.onAction,
+    this.titleStyle,
+    this.actionStyle,
   });
 
   final String title;
   final String? actionLabel;
   final Key? actionKey;
   final VoidCallback? onAction;
+  final TextStyle? titleStyle;
+  final TextStyle? actionStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +26,9 @@ class SectionTitle extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: <Widget>[
-        Expanded(child: Text(title, style: textTheme.headlineSmall)),
+        Expanded(
+          child: Text(title, style: titleStyle ?? textTheme.headlineSmall),
+        ),
         if (actionLabel != null)
           TextButton.icon(
             key: actionKey,
@@ -35,7 +41,10 @@ class SectionTitle extends StatelessWidget {
             ),
             iconAlignment: IconAlignment.end,
             icon: const Icon(Icons.chevron_right_rounded, size: 18),
-            label: Text(actionLabel!, style: textTheme.labelMedium),
+            label: Text(
+              actionLabel!,
+              style: actionStyle ?? textTheme.labelMedium,
+            ),
           ),
       ],
     );

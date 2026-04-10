@@ -7,8 +7,10 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
-import 'package:sleep_dorm_app/core/widgets/metric_tile.dart';
+import 'package:sleep_dorm_app/core/widgets/home_metric_card.dart';
+import 'package:sleep_dorm_app/core/widgets/quick_action_icon_button.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
+import 'package:sleep_dorm_app/features/home/presentation/widgets/home_hero_pair.dart';
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.dart';
 
 class HomePreSleepPage extends StatefulWidget {
@@ -44,7 +46,6 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
           services.sleepCaptureRepository,
         ]),
         builder: (BuildContext context, Widget? child) {
-          final NightMoodPalette palette = context.nightMoodPalette;
           final UserProfile profile = services.authRepository.currentUser;
           final Dorm dorm = services.dormRepository.currentDorm;
           final List<NightRecommendation> recommendations =
@@ -56,6 +57,19 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
               services.sleepCaptureRepository.pendingSleepMemoBanner;
           final bool showExpandedBanner =
               pendingBanner != null && _bannerExpanded;
+          final List<NightRecommendation> displayedRecommendations =
+              <NightRecommendation>[
+                ...recommendations.take(2),
+                const NightRecommendation(
+                  id: 'thought-clean',
+                  title: '睡前思绪清理',
+                  subtitle: '记录一下今天最想放下的一件事',
+                  type: RecommendationType.quickAction,
+                  icon: Icons.edit_note_rounded,
+                  tags: <String>['5 min', '情绪干预'],
+                  executionState: RecommendationExecutionState.idle,
+                ),
+              ];
 
           if (pendingBanner == null && _bannerExpanded) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -69,186 +83,211 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
 
           return SafeArea(
             child: LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints constraints) {
+              builder: (BuildContext context, BoxConstraints _) {
                 final String greeting = _greetingFor(DateTime.now());
                 return Stack(
                   children: <Widget>[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.xl,
-                        AppSpacing.xl,
-                        AppSpacing.xl,
-                        0,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Expanded(
-                                child: Text(
-                                  '$greeting，${profile.displayName}',
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.displayMedium,
+                    Positioned.fill(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.xl,
+                          AppSpacing.xl,
+                          AppSpacing.xl,
+                          108,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Expanded(
+                                  child: Text(
+                                    '$greeting，${profile.displayName}',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.headlineLarge?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: AppSpacing.sm),
-                              _NotificationBell(
-                                unread: unread,
-                                onTap: () =>
-                                    context.push(AppRoutes.notifications),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: SleepRiskCard(
-                                  riskLabel: dorm.noiseDb <= 35 ? '偏低' : '中等',
-                                  primaryValue: '${dorm.noiseDb} dB',
-                                  secondaryValue: dorm.lightLabel,
+                                const SizedBox(width: AppSpacing.md),
+                                _NotificationBell(
+                                  unread: unread,
+                                  onTap: () => context.push(AppRoutes.notifications),
                                 ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            HomeHeroPair(
+                              left: SleepRiskCard(
+                                riskLabel: dorm.noiseDb <= 35 ? '偏低' : '中等',
+                                primaryValue: '${dorm.noiseDb} dB',
                               ),
-                              const SizedBox(width: AppSpacing.sm),
-                              Expanded(
-                                child: StartSleepModeCard(
-                                  isAudioReady:
-                                      services
-                                          .audioPlaybackController
-                                          .currentTrack !=
-                                      null,
+                              right: StartSleepModeCard(
+                                isAudioReady:
+                                    services.audioPlaybackController.currentTrack !=
+                                    null,
+                                onTap: () async {
+                                  await services.sleepExperienceController
+                                      .enterSleepMode();
+                                  if (context.mounted) {
+                                    context.go(AppRoutes.homePostSleep);
+                                  }
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xl),
+                            SectionTitle(
+                              title: '快捷功能',
+                              actionLabel: '编辑',
+                              titleStyle: Theme.of(
+                                context,
+                              ).textTheme.headlineSmall?.copyWith(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              actionStyle: Theme.of(
+                                context,
+                              ).textTheme.bodyMedium?.copyWith(
+                                color: const Color(0xFFA0A0A0),
+                                fontWeight: FontWeight.w400,
+                              ),
+                              onAction: () =>
+                                  context.push(AppRoutes.interventionTask),
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: <Widget>[
+                                QuickActionIconButton(
+                                  icon: Icons.auto_stories_rounded,
+                                  label: '梦记一刻',
+                                  onTap: () => context.push(AppRoutes.dreamJournal),
+                                ),
+                                QuickActionIconButton(
+                                  icon: Icons.calendar_month_rounded,
+                                  label: '打卡日历',
+                                  onTap: () => context.push(AppRoutes.profileCalendar),
+                                ),
+                                QuickActionIconButton(
+                                  icon: Icons.menu_book_rounded,
+                                  label: '睡眠百科',
+                                  onTap: () =>
+                                      context.push(AppRoutes.interventionTask),
+                                ),
+                                QuickActionIconButton(
+                                  icon: Icons.psychology_alt_rounded,
+                                  label: '思绪清理',
+                                  onTap: () => context.push(
+                                    '${AppRoutes.assistant}?flow=sleep_capture&mode=memo',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.xl),
+                            SectionTitle(
+                              title: '今晚影响因素',
+                              actionLabel: '查看详情',
+                              titleStyle: Theme.of(
+                                context,
+                              ).textTheme.headlineSmall?.copyWith(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              actionStyle: Theme.of(
+                                context,
+                              ).textTheme.bodyMedium?.copyWith(
+                                color: const Color(0xFFA0A0A0),
+                                fontWeight: FontWeight.w400,
+                              ),
+                              onAction: () => context.push(
+                                AppRoutes.analysisInterferenceFactors,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: HomeMetricCard(
+                                    icon: Icons.volume_up_outlined,
+                                    label: '宿舍噪声',
+                                    value: '${dorm.noiseDb} dB',
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.md),
+                                Expanded(
+                                  child: HomeMetricCard(
+                                    icon: Icons.lightbulb_outline_rounded,
+                                    label: '灯光环境',
+                                    value: dorm.lightLabel,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            const Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: HomeMetricCard(
+                                    icon: Icons.smartphone_rounded,
+                                    label: '手机使用',
+                                    value: '45 分钟',
+                                  ),
+                                ),
+                                SizedBox(width: AppSpacing.md),
+                                Expanded(
+                                  child: HomeMetricCard(
+                                    icon: Icons.favorite_border_rounded,
+                                    label: '情绪压力',
+                                    value: '低强度',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.xl),
+                            SectionTitle(
+                              title: '今晚行动建议',
+                              actionLabel: '查看全部',
+                              titleStyle: Theme.of(
+                                context,
+                              ).textTheme.headlineSmall?.copyWith(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              actionStyle: Theme.of(
+                                context,
+                              ).textTheme.bodyMedium?.copyWith(
+                                color: const Color(0xFFA0A0A0),
+                                fontWeight: FontWeight.w400,
+                              ),
+                              onAction: () =>
+                                  context.push(AppRoutes.interventionTask),
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            ...displayedRecommendations.map(
+                              (NightRecommendation recommendation) => Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: AppSpacing.sm,
+                                ),
+                                child: HomeActionCard(
+                                  recommendation: recommendation,
                                   onTap: () async {
-                                    await services.sleepExperienceController
-                                        .enterSleepMode();
-                                    if (context.mounted) {
-                                      context.go(AppRoutes.homePostSleep);
+                                    if (recommendation.id == 'thought-clean') {
+                                      context.push(
+                                        '${AppRoutes.assistant}?flow=sleep_capture&mode=memo',
+                                      );
+                                      return;
                                     }
+                                    await services.sleepExperienceController
+                                        .handleRecommendationTap(recommendation);
                                   },
                                 ),
                               ),
-                            ],
-                          ),
-                        ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    DraggableScrollableSheet(
-                      initialChildSize: 0.72,
-                      minChildSize: 0.68,
-                      maxChildSize: 0.9,
-                      builder:
-                          (
-                            BuildContext context,
-                            ScrollController scrollController,
-                          ) {
-                            return Container(
-                              decoration: BoxDecoration(
-                                color: AppColors.surface,
-                                borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(48),
-                                ),
-                                boxShadow: AppColors.floatingShadow,
-                              ),
-                              child: ListView(
-                                controller: scrollController,
-                                padding: const EdgeInsets.fromLTRB(
-                                  AppSpacing.xl,
-                                  AppSpacing.sm,
-                                  AppSpacing.xl,
-                                  208,
-                                ),
-                                children: <Widget>[
-                                  Center(
-                                    child: Container(
-                                      width: 46,
-                                      height: 5,
-                                      decoration: BoxDecoration(
-                                        color: palette.primarySoft.withAlpha(
-                                          140,
-                                        ),
-                                        borderRadius: BorderRadius.circular(
-                                          999,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: AppSpacing.md),
-                                  SectionTitle(
-                                    title: '今晚行动建议',
-                                    actionLabel: '查看全部',
-                                    onAction: () => context.push(
-                                      AppRoutes.interventionTask,
-                                    ),
-                                  ),
-                                  const SizedBox(height: AppSpacing.md),
-                                  ...recommendations.map(
-                                    (NightRecommendation recommendation) =>
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            bottom: AppSpacing.sm,
-                                          ),
-                                          child: HomeActionCard(
-                                            recommendation: recommendation,
-                                            onTap: () async {
-                                              await services
-                                                  .sleepExperienceController
-                                                  .handleRecommendationTap(
-                                                    recommendation,
-                                                  );
-                                            },
-                                          ),
-                                        ),
-                                  ),
-                                  const SizedBox(height: AppSpacing.xl),
-                                  SectionTitle(
-                                    title: '今晚影响因素',
-                                    actionLabel: '查看详情',
-                                    onAction: () => context.push(
-                                      AppRoutes.analysisInterferenceFactors,
-                                    ),
-                                  ),
-                                  const SizedBox(height: AppSpacing.md),
-                                  GridView.count(
-                                    crossAxisCount: 2,
-                                    crossAxisSpacing: AppSpacing.md,
-                                    mainAxisSpacing: AppSpacing.md,
-                                    shrinkWrap: true,
-                                    physics:
-                                        const NeverScrollableScrollPhysics(),
-                                    childAspectRatio: 1.12,
-                                    children: <Widget>[
-                                      MetricTile(
-                                        icon: Icons.volume_down_rounded,
-                                        label: '宿舍噪声',
-                                        value: '${dorm.noiseDb} dB',
-                                        detail: '当前状态较稳定',
-                                      ),
-                                      MetricTile(
-                                        icon: Icons.lightbulb_rounded,
-                                        label: '灯光环境',
-                                        value: dorm.lightLabel,
-                                        detail: '适合进入放松状态',
-                                      ),
-                                      const MetricTile(
-                                        icon: Icons.phone_iphone_rounded,
-                                        label: '手机使用',
-                                        value: '45 分钟',
-                                        detail: '建议睡前先放下 15 分钟',
-                                      ),
-                                      const MetricTile(
-                                        icon: Icons.favorite_rounded,
-                                        label: '情绪压力',
-                                        value: '低强度',
-                                        detail: '适合干预后再入睡',
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
                     ),
                     if (showExpandedBanner)
                       Positioned.fill(
@@ -346,7 +385,9 @@ class _SleepMemoBanner extends StatelessWidget {
             color: AppColors.darkSurface.withAlpha(242),
             borderRadius: BorderRadius.circular(24),
             boxShadow: AppColors.floatingShadow,
-            border: Border.all(color: palette.primarySoft.withAlpha(70)),
+            border: Border.all(
+              color: palette.welcomeAccentColor.withAlpha(70),
+            ),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -360,7 +401,7 @@ class _SleepMemoBanner extends StatelessWidget {
                     height: 44,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: palette.primarySoft.withAlpha(38),
+                      color: palette.welcomeAccentColor.withAlpha(38),
                     ),
                     child: const Icon(
                       Icons.inventory_2_rounded,
@@ -377,7 +418,7 @@ class _SleepMemoBanner extends StatelessWidget {
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
                                 color: AppColors.onDark,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w500,
                               ),
                         ),
                         const SizedBox(height: AppSpacing.xs),
@@ -387,7 +428,7 @@ class _SleepMemoBanner extends StatelessWidget {
                               ?.copyWith(
                                 color: AppColors.onDark.withAlpha(190),
                                 height: 1.5,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w400,
                               ),
                         ),
                       ],
@@ -443,7 +484,7 @@ class _MemoGroupCard extends StatelessWidget {
             group.label,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
               color: Colors.white,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w400,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -464,7 +505,7 @@ class _MemoGroupCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppColors.onDark.withAlpha(220),
                     height: 1.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),
@@ -532,7 +573,7 @@ class _NotificationBell extends StatelessWidget {
                     unread > 99 ? '99+' : '$unread',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: AppColors.primaryDeep,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
