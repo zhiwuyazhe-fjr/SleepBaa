@@ -20,7 +20,7 @@ class HomeMetricCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       constraints: const BoxConstraints(minHeight: 84),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8F8F8),
+        color: const Color(0xFFF2F2F2),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
