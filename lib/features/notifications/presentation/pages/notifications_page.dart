@@ -7,6 +7,7 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 
 class NotificationsPage extends StatelessWidget {
   const NotificationsPage({super.key});
@@ -16,6 +17,7 @@ class NotificationsPage extends StatelessWidget {
     final AppServices services = context.appServices;
     final NightMoodPalette palette = context.nightMoodPalette;
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('消息中心')),
       body: ListenableBuilder(
         listenable: services.notificationRepository,
@@ -45,8 +47,15 @@ class NotificationsPage extends StatelessWidget {
               .toList();
 
           return ListView(
-            padding: const EdgeInsets.all(AppSpacing.xl),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl,
+              AppSpacing.xl,
+              AppSpacing.xl,
+              120,
+            ),
             children: <Widget>[
+              _NotificationOverviewCard(unreadCount: unread.length),
+              const SizedBox(height: AppSpacing.lg),
               _NotificationSection(
                 title: '待处理',
                 items: unread,
@@ -104,16 +113,23 @@ class _NotificationSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(title, style: Theme.of(context).textTheme.headlineSmall),
+          SectionTitle(
+            title: title,
+            titleStyle: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: AppSpacing.md),
           ...items.map(
             (NotificationItem item) => Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.md),
               child: AppCard(
                 onTap: () => onTap(item),
+                borderRadius: BorderRadius.circular(20),
                 color: item.isRead
                     ? AppColors.surface
-                    : palette.primarySoft.withAlpha(45),
+                    : const Color(0xFFF2F2F2),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
@@ -137,13 +153,20 @@ class _NotificationSection extends StatelessWidget {
                         children: <Widget>[
                           Text(
                             _localizedTitle(item),
-                            style: Theme.of(context).textTheme.titleLarge,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                           const SizedBox(height: AppSpacing.xs),
                           Text(
                             _localizedBody(item),
                             style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: AppColors.textSecondary),
+                                ?.copyWith(
+                                  color: const Color(0xFF888888),
+                                  fontWeight: FontWeight.w400,
+                                ),
                           ),
                         ],
                       ),
@@ -151,7 +174,7 @@ class _NotificationSection extends StatelessWidget {
                     const SizedBox(width: AppSpacing.md),
                     Icon(
                       Icons.chevron_right_rounded,
-                      color: AppColors.textSecondary.withAlpha(140),
+                      color: const Color(0xFFA0A0A0),
                     ),
                   ],
                 ),
@@ -211,6 +234,59 @@ void _navigateFromNotification(BuildContext context, String route) {
     return;
   }
   context.push(route);
+}
+
+class _NotificationOverviewCard extends StatelessWidget {
+  const _NotificationOverviewCard({required this.unreadCount});
+
+  final int unreadCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      borderRadius: BorderRadius.circular(24),
+      color: AppColors.surface,
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE7F4F0),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.notifications_active_rounded,
+              color: Color(0xFF2C8E78),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  unreadCount > 0 ? '有 $unreadCount 条待处理消息' : '消息都已处理',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  unreadCount > 0 ? '建议先查看「待处理」分组' : '今晚可以专注休息了',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF888888),
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 bool _isShellRootRoute(String route) {
