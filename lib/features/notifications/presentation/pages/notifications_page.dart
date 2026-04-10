@@ -126,8 +126,11 @@ class _NotificationSection extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: AppSpacing.xs),
               child: AppCard(
                 onTap: () => onTap(item),
-                padding: const EdgeInsets.all(AppSpacing.sm),
-                borderRadius: BorderRadius.circular(20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: AppSpacing.sm,
+                ),
+                borderRadius: BorderRadius.circular(16),
                 color: item.isRead
                     ? AppColors.surface
                     : const Color(0xFFF2F2F2),
@@ -173,12 +176,6 @@ class _NotificationSection extends StatelessWidget {
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(width: AppSpacing.xxs),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      size: 18,
-                      color: const Color(0xFFA0A0A0),
                     ),
                   ],
                 ),
