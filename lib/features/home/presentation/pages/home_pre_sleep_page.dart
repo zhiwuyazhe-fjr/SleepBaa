@@ -7,6 +7,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/home_metric_card.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.dart';
 
@@ -188,7 +189,7 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                             Row(
                               children: <Widget>[
                                 Expanded(
-                                  child: _FactorCard(
+                                  child: HomeMetricCard(
                                     icon: Icons.volume_up_outlined,
                                     label: '宿舍噪声',
                                     value: '${dorm.noiseDb} dB',
@@ -196,7 +197,7 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                 ),
                                 const SizedBox(width: AppSpacing.md),
                                 Expanded(
-                                  child: _FactorCard(
+                                  child: HomeMetricCard(
                                     icon: Icons.lightbulb_outline_rounded,
                                     label: '灯光环境',
                                     value: dorm.lightLabel,
@@ -208,7 +209,7 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                             const Row(
                               children: <Widget>[
                                 Expanded(
-                                  child: _FactorCard(
+                                  child: HomeMetricCard(
                                     icon: Icons.smartphone_rounded,
                                     label: '手机使用',
                                     value: '45 分钟',
@@ -216,7 +217,7 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                 ),
                                 SizedBox(width: AppSpacing.md),
                                 Expanded(
-                                  child: _FactorCard(
+                                  child: HomeMetricCard(
                                     icon: Icons.favorite_border_rounded,
                                     label: '情绪压力',
                                     value: '低强度',
@@ -464,63 +465,6 @@ class _QuickFunctionButton extends StatelessWidget {
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
               color: AppColors.textPrimary,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FactorCard extends StatelessWidget {
-  const _FactorCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F7F7),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFEDEDED)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Icon(icon, size: 20, color: palette.primary),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: AppColors.textSecondary,
               fontWeight: FontWeight.w400,
             ),
           ),
