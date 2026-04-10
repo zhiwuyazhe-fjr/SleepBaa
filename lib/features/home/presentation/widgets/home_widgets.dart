@@ -48,9 +48,9 @@ class SleepRiskCard extends StatelessWidget {
           children: <Widget>[
             Text(
               '睡眠风险',
-              style: textTheme.titleMedium?.copyWith(
+              style: textTheme.titleLarge?.copyWith(
                 color: AppColors.onDark,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
               ),
             ),
             Row(
@@ -106,9 +106,9 @@ class StartSleepModeCard extends StatelessWidget {
               '开启睡眠模式',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: textTheme.titleMedium?.copyWith(
+              style: textTheme.titleLarge?.copyWith(
                 color: AppColors.textPrimary,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
               ),
             ),
             Row(
@@ -247,9 +247,9 @@ class HomeActionCard extends StatelessWidget {
                     recommendation.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: foreground,
-                      fontWeight: FontWeight.w400,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
