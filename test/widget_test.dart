@@ -668,6 +668,64 @@ void main() {
     expect(find.byType(NotificationsPage), findsOneWidget);
   });
 
+  testWidgets('dorm notification opens dorm tab and keeps tab switching stable', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.notifications,
+      clock: _dayClock,
+    );
+
+    await tester.tap(find.text('宿舍环境保持安静').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DormPage), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.home_rounded));
+    await tester.pumpAndSettle();
+    expect(find.byType(HomePreSleepPage), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.night_shelter_rounded));
+    await tester.pumpAndSettle();
+    expect(find.byType(DormPage), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.person_rounded).last);
+    await tester.pumpAndSettle();
+    expect(find.byType(ProfilePage), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.night_shelter_rounded));
+    await tester.pumpAndSettle();
+    expect(find.byType(DormPage), findsOneWidget);
+  });
+
+  testWidgets(
+    'entering notifications from home then opening dorm keeps shell tab state correct',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.homePreSleep,
+        clock: _dayClock,
+      );
+
+      await tester.tap(find.byIcon(Icons.notifications_none_rounded));
+      await tester.pumpAndSettle();
+      expect(find.byType(NotificationsPage), findsOneWidget);
+
+      await tester.tap(find.text('宿舍环境保持安静').first);
+      await tester.pumpAndSettle();
+      expect(find.byType(DormPage), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.person_rounded).last);
+      await tester.pumpAndSettle();
+      expect(find.byType(ProfilePage), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.night_shelter_rounded));
+      await tester.pumpAndSettle();
+      expect(find.byType(DormPage), findsOneWidget);
+    },
+  );
+
   testWidgets('morning feedback page renders submit flow', (
     WidgetTester tester,
   ) async {

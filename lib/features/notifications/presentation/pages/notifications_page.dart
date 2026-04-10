@@ -54,7 +54,7 @@ class NotificationsPage extends StatelessWidget {
                 onTap: (NotificationItem item) async {
                   await services.notificationRepository.markRead(item.id);
                   if (context.mounted) {
-                    context.push(item.route);
+                    _navigateFromNotification(context, item.route);
                   }
                 },
               ),
@@ -62,13 +62,15 @@ class NotificationsPage extends StatelessWidget {
                 title: '今天',
                 items: today,
                 palette: palette,
-                onTap: (NotificationItem item) => context.push(item.route),
+                onTap: (NotificationItem item) =>
+                    _navigateFromNotification(context, item.route),
               ),
               _NotificationSection(
                 title: '更早',
                 items: earlier,
                 palette: palette,
-                onTap: (NotificationItem item) => context.push(item.route),
+                onTap: (NotificationItem item) =>
+                    _navigateFromNotification(context, item.route),
               ),
             ],
           );
@@ -200,4 +202,19 @@ class _NotificationSection extends StatelessWidget {
     final String combined = '${item.title} ${item.body}'.toLowerCase();
     return RegExp(r'[a-z]').hasMatch(combined);
   }
+
+}
+
+void _navigateFromNotification(BuildContext context, String route) {
+  if (_isShellRootRoute(route)) {
+    context.go(route);
+    return;
+  }
+  context.push(route);
+}
+
+bool _isShellRootRoute(String route) {
+  return route == AppRoutes.homePreSleep ||
+      route == AppRoutes.dorm ||
+      route == AppRoutes.profile;
 }
