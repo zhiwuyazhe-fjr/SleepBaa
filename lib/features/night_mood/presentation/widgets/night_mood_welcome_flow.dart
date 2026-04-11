@@ -277,14 +277,12 @@ class _SelectionStep extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double mediaTop = MediaQuery.paddingOf(context).top;
-        final double topCardHeight = math.max(
-          metrics.topCardMinHeight,
-          constraints.maxHeight * 0.525,
+        final double topCardHeight = constraints.maxHeight * 0.525;
+        final double avatarSize = math.min(
+          topCardHeight * 0.66,
+          constraints.maxWidth * 0.72,
         );
-        final bool useTwoLineTitle = constraints.maxWidth < 370;
-        final String title = useTwoLineTitle
-            ? '今晚你更接近\n哪一种心情？'
-            : '今晚你更接近哪一种心情？';
+        const String title = '今晚你更接近\n哪一种心情';
 
         return SafeArea(
           top: false,
@@ -303,32 +301,40 @@ class _SelectionStep extends StatelessWidget {
                     bottom: Radius.circular(40),
                   ),
                 ),
-                child: Column(
+                child: Stack(
+                  fit: StackFit.expand,
                   children: <Widget>[
-                    const _FlowProgressIndicator(activeStep: 1),
-                    const Spacer(),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 420),
-                      switchInCurve: Curves.easeOutBack,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder:
-                          (Widget child, Animation<double> animation) {
-                            return ScaleTransition(
-                              scale: Tween<double>(
-                                begin: 0.86,
-                                end: 1,
-                              ).animate(animation),
-                              child: child,
-                            );
-                          },
-                      child: MoodAvatar(
-                        key: ValueKey<NightMood>(selectedMood),
-                        mood: selectedMood,
-                        size: metrics.avatarSize,
-                        fillColor: palette.welcomeFaceColor,
+                    Align(
+                      alignment: Alignment.topCenter,
+                      child: Padding(
+                        padding: EdgeInsets.only(top: topCardHeight * 0.02),
+                        child: const _FlowProgressIndicator(activeStep: 1),
                       ),
                     ),
-                    SizedBox(height: metrics.avatarBottomSpacing),
+                    Align(
+                      alignment: Alignment.center,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 420),
+                        switchInCurve: Curves.easeOutBack,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder:
+                            (Widget child, Animation<double> animation) {
+                              return ScaleTransition(
+                                scale: Tween<double>(
+                                  begin: 0.86,
+                                  end: 1,
+                                ).animate(animation),
+                                child: child,
+                              );
+                            },
+                        child: MoodAvatar(
+                          key: ValueKey<NightMood>(selectedMood),
+                          mood: selectedMood,
+                          size: avatarSize,
+                          fillColor: palette.welcomeFaceColor,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
