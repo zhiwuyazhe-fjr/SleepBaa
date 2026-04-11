@@ -8,6 +8,7 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
+import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
 import 'package:sleep_dorm_app/core/widgets/bottom_nav_shell.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/pages/assistant_page.dart';
@@ -248,6 +249,79 @@ void main() {
       find.byKey(const ValueKey<String>('assistant-page-default-avatar')),
       findsNothing,
     );
+  });
+
+  testWidgets('assistant fab snaps to left edge after crossing midline', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+    );
+
+    final Finder assistantFinder = find.byType(AssistantFab);
+    final double initialLeft = tester.getTopLeft(assistantFinder).dx;
+    expect(initialLeft, greaterThan(200));
+
+    await tester.drag(assistantFinder, const Offset(-240, 40));
+    await tester.pumpAndSettle();
+
+    final double leftAfterDrag = tester.getTopLeft(assistantFinder).dx;
+    expect(leftAfterDrag, lessThanOrEqualTo(1));
+  });
+
+  testWidgets('assistant fab stays within vertical drag percentage limits', (
+    WidgetTester tester,
+  ) async {
+    const Size screenSize = Size(390, 844);
+    await tester.binding.setSurfaceSize(screenSize);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+    );
+
+    final Finder assistantFinder = find.byType(AssistantFab);
+    final double minTop =
+        (screenSize.height * 0.18) - (AssistantFab.bounds.height / 2);
+    final double maxTop =
+        (screenSize.height * 0.78) - (AssistantFab.bounds.height / 2);
+
+    await tester.drag(assistantFinder, const Offset(0, -1400));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(assistantFinder).dy, greaterThanOrEqualTo(minTop));
+
+    await tester.drag(assistantFinder, const Offset(0, 1800));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(assistantFinder).dy, lessThanOrEqualTo(maxTop));
+  });
+
+  testWidgets('post sleep page reuses assistant dock and opens assistant', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePostSleep,
+      homeMode: HomeMode.postSleep,
+      clock: _dayClock,
+      settle: false,
+    );
+    await tester.pump(const Duration(milliseconds: 450));
+
+    final Finder assistantFinder = find.byType(AssistantFab);
+    expect(assistantFinder, findsOneWidget);
+    expect(find.byType(AssistantFabDock), findsOneWidget);
+
+    await tester.tap(assistantFinder);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AssistantPage), findsOneWidget);
   });
 
   testWidgets(
@@ -668,36 +742,37 @@ void main() {
     expect(find.byType(NotificationsPage), findsOneWidget);
   });
 
-  testWidgets('dorm notification opens dorm tab and keeps tab switching stable', (
-    WidgetTester tester,
-  ) async {
-    await _pumpApp(
-      tester,
-      initialLocation: AppRoutes.notifications,
-      clock: _dayClock,
-    );
+  testWidgets(
+    'dorm notification opens dorm tab and keeps tab switching stable',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.notifications,
+        clock: _dayClock,
+      );
 
-    await tester.tap(find.text('宿舍环境保持安静').first);
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('宿舍环境保持安静').first);
+      await tester.pumpAndSettle();
 
-    expect(find.byType(DormPage), findsOneWidget);
+      expect(find.byType(DormPage), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.home_rounded));
-    await tester.pumpAndSettle();
-    expect(find.byType(HomePreSleepPage), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.home_rounded));
+      await tester.pumpAndSettle();
+      expect(find.byType(HomePreSleepPage), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.night_shelter_rounded));
-    await tester.pumpAndSettle();
-    expect(find.byType(DormPage), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.night_shelter_rounded));
+      await tester.pumpAndSettle();
+      expect(find.byType(DormPage), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.person_rounded).last);
-    await tester.pumpAndSettle();
-    expect(find.byType(ProfilePage), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.person_rounded).last);
+      await tester.pumpAndSettle();
+      expect(find.byType(ProfilePage), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.night_shelter_rounded));
-    await tester.pumpAndSettle();
-    expect(find.byType(DormPage), findsOneWidget);
-  });
+      await tester.tap(find.byIcon(Icons.night_shelter_rounded));
+      await tester.pumpAndSettle();
+      expect(find.byType(DormPage), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'entering notifications from home then opening dorm keeps shell tab state correct',

@@ -10,6 +10,8 @@ import 'package:sleep_dorm_app/core/widgets/mood_avatar.dart';
 class AssistantFab extends StatefulWidget {
   const AssistantFab({super.key});
 
+  static const Size bounds = Size(108, 118);
+
   @override
   State<AssistantFab> createState() => _AssistantFabState();
 }
@@ -44,8 +46,8 @@ class _AssistantFabState extends State<AssistantFab>
       child: GestureDetector(
         onTap: () => context.push(AppRoutes.assistant),
         child: SizedBox(
-          width: 108,
-          height: 118,
+          width: AssistantFab.bounds.width,
+          height: AssistantFab.bounds.height,
           child: AnimatedBuilder(
             animation: _controller,
             builder: (BuildContext context, Widget? child) {
@@ -61,7 +63,7 @@ class _AssistantFabState extends State<AssistantFab>
                       shadows: <Shadow>[
                         Shadow(
                           color: palette.primarySoft,
-                          blurRadius: 14 + (pulse * 7),
+                          blurRadius: 12 + (pulse * 5),
                         ),
                       ],
                     )
@@ -78,8 +80,8 @@ class _AssistantFabState extends State<AssistantFab>
                 children: <Widget>[
                   // Glow ring
                   Container(
-                    width: 74 + (pulse * 14),
-                    height: 74 + (pulse * 14),
+                    width: 66 + (pulse * 12),
+                    height: 66 + (pulse * 12),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: palette.primarySoft.withValues(
@@ -88,8 +90,8 @@ class _AssistantFabState extends State<AssistantFab>
                       boxShadow: <BoxShadow>[
                         BoxShadow(
                           color: palette.primarySoft.withValues(alpha: 0.34),
-                          blurRadius: 30 + (pulse * 14),
-                          spreadRadius: 4 + (pulse * 8),
+                          blurRadius: 24 + (pulse * 10),
+                          spreadRadius: 2 + (pulse * 5),
                         ),
                       ],
                     ),
