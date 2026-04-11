@@ -307,7 +307,7 @@ class _SelectionStep extends StatelessWidget {
                     Align(
                       alignment: Alignment.topCenter,
                       child: Padding(
-                        padding: EdgeInsets.only(top: topCardHeight * 0.02),
+                        padding: const EdgeInsets.only(top: 2),
                         child: const _FlowProgressIndicator(activeStep: 1),
                       ),
                     ),
