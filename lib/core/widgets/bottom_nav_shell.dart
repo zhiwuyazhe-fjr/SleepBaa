@@ -6,6 +6,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
+import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
 
 class BottomNavShell extends StatefulWidget {
   const BottomNavShell({super.key, required this.navigationShell});
@@ -71,10 +72,11 @@ class _BottomNavShellState extends State<BottomNavShell> {
             children: <Widget>[
               Positioned.fill(child: widget.navigationShell),
               if (!hideShellChrome)
-                Positioned(
-                  right: AppSpacing.xl,
-                  bottom: 124,
-                  child: const SafeArea(top: false, child: AssistantFab()),
+                Positioned.fill(
+                  child: SafeArea(
+                    top: false,
+                    child: AssistantFabDock(child: const AssistantFab()),
+                  ),
                 ),
               if (!hideShellChrome)
                 Positioned(
@@ -107,7 +109,9 @@ class _BottomNavShellState extends State<BottomNavShell> {
                               index == widget.navigationShell.currentIndex;
                           return Expanded(
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
                               child: _NavPillButton(
                                 item: item,
                                 selected: selected,
