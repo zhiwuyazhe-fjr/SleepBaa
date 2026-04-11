@@ -8,12 +8,14 @@ class HomeMetricCard extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
+    this.backgroundColor,
     this.onTap,
   });
 
   final IconData icon;
   final String label;
   final String value;
+  final Color? backgroundColor;
   final VoidCallback? onTap;
 
   @override
@@ -23,7 +25,8 @@ class HomeMetricCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       constraints: const BoxConstraints(minHeight: 84),
       decoration: BoxDecoration(
-        color: AppColors.metricCardSurface,
+        color: backgroundColor ?? AppColors.metricCardSurface,
+        border: Border.all(color: AppColors.divider),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
