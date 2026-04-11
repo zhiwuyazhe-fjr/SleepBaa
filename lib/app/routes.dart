@@ -19,6 +19,7 @@ import 'package:sleep_dorm_app/features/logs/presentation/pages/night_awakening_
 import 'package:sleep_dorm_app/features/night_mood/presentation/pages/night_welcome_gate_page.dart';
 import 'package:sleep_dorm_app/features/notifications/presentation/pages/notifications_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/calendar_checkin_page.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/honor_badges_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_edit_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/settings_page.dart';
@@ -45,6 +46,7 @@ abstract final class AppRoutes {
   static const String dormInvite = '/dorm/invite';
   static const String dormStatus = '/dorm/status';
   static const String profile = '/profile';
+  static const String profileBadges = '/profile/badges';
   static const String profileReport = '/profile/report';
   static const String profileCalendar = '/profile/calendar';
   static const String profileSettings = '/profile/settings';
@@ -160,7 +162,10 @@ GoRouter createRouter({
       GoRoute(
         path: AppRoutes.dormRules,
         builder: (BuildContext context, GoRouterState state) =>
-            const DormRulesPage(),
+            DormRulesPage(
+              showReviewOverlayOnOpen:
+                  state.uri.queryParameters['review'] == '1',
+            ),
       ),
       GoRoute(
         path: AppRoutes.dormInvite,
@@ -171,6 +176,11 @@ GoRouter createRouter({
         path: AppRoutes.dormStatus,
         builder: (BuildContext context, GoRouterState state) =>
             const DormStatusPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.profileBadges,
+        builder: (BuildContext context, GoRouterState state) =>
+            const HonorBadgesPage(),
       ),
       GoRoute(
         path: AppRoutes.profileReport,

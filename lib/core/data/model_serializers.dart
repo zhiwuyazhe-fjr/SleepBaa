@@ -8,6 +8,8 @@ abstract final class ModelSerializers {
       'displayName': profile.displayName,
       'tagline': profile.tagline,
       'role': profile.role,
+      'earnedBadgeIds': profile.earnedBadgeIds,
+      'equippedBadgeId': profile.equippedBadgeId,
       'dormId': profile.dormId,
       'phoneNumber': profile.phoneNumber,
       'phoneLinkedAt': profile.phoneLinkedAt?.toIso8601String(),
@@ -24,6 +26,11 @@ abstract final class ModelSerializers {
       displayName: map['displayName'] as String? ?? '',
       tagline: map['tagline'] as String? ?? '',
       role: map['role'] as String? ?? '',
+      earnedBadgeIds:
+          (map['earnedBadgeIds'] as List<dynamic>? ?? const <dynamic>[])
+              .map((dynamic item) => item as String)
+              .toList(growable: false),
+      equippedBadgeId: map['equippedBadgeId'] as String?,
       dormId: map['dormId'] as String?,
       phoneNumber: map['phoneNumber'] as String?,
       phoneLinkedAt: _dateValue(map['phoneLinkedAt']),
@@ -283,6 +290,74 @@ abstract final class ModelSerializers {
       ventilationWindow: map['ventilationWindow'] as String? ?? '早晨',
       ventilationMinutes:
           (map['ventilationMinutes'] as num?)?.toDouble() ?? 30,
+    );
+  }
+
+  static Map<String, dynamic> dormRuleToMap(DormRule rule) {
+    return <String, dynamic>{
+      'id': rule.id,
+      'title': rule.title,
+      'detail': rule.detail,
+    };
+  }
+
+  static DormRule dormRuleFromMap(Map<String, dynamic> map) {
+    return DormRule(
+      id: map['id'] as String? ?? '',
+      title: map['title'] as String? ?? '',
+      detail: map['detail'] as String? ?? '',
+    );
+  }
+
+  static Map<String, dynamic> dormPendingRuleProposalToMap(
+    DormPendingRuleProposal proposal,
+  ) {
+    return <String, dynamic>{
+      'id': proposal.id,
+      'proposedSettings': dormRulesSettingsToMap(proposal.proposedSettings),
+      'proposedRules': proposal.proposedRules
+          .map(dormRuleToMap)
+          .toList(growable: false),
+      'proposerUid': proposal.proposerUid,
+      'proposerName': proposal.proposerName,
+      'createdAt': proposal.createdAt.toIso8601String(),
+      'reviewerUids': proposal.reviewerUids,
+      'approvedUids': proposal.approvedUids,
+      'rejectedByUid': proposal.rejectedByUid,
+      'rejectedReason': proposal.rejectedReason,
+      'resolvedAt': proposal.resolvedAt?.toIso8601String(),
+    };
+  }
+
+  static DormPendingRuleProposal dormPendingRuleProposalFromMap(
+    Map<String, dynamic> map,
+  ) {
+    return DormPendingRuleProposal(
+      id: map['id'] as String? ?? '',
+      proposedSettings: dormRulesSettingsFromMap(
+        Map<String, dynamic>.from(
+          map['proposedSettings'] as Map? ?? const <String, dynamic>{},
+        ),
+      ),
+      proposedRules: (map['proposedRules'] as List<dynamic>? ?? const <dynamic>[])
+          .map(
+            (dynamic item) => dormRuleFromMap(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(growable: false),
+      proposerUid: map['proposerUid'] as String? ?? '',
+      proposerName: map['proposerName'] as String? ?? '',
+      createdAt: _dateValue(map['createdAt']) ?? DateTime.now(),
+      reviewerUids: (map['reviewerUids'] as List<dynamic>? ?? const <dynamic>[])
+          .map((dynamic item) => item.toString())
+          .toList(growable: false),
+      approvedUids: (map['approvedUids'] as List<dynamic>? ?? const <dynamic>[])
+          .map((dynamic item) => item.toString())
+          .toList(growable: false),
+      rejectedByUid: map['rejectedByUid'] as String?,
+      rejectedReason: map['rejectedReason'] as String?,
+      resolvedAt: _dateValue(map['resolvedAt']),
     );
   }
 

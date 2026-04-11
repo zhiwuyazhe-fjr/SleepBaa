@@ -143,6 +143,7 @@ void main() {
         authRepository: authRepository,
         settingsRepository: settingsRepository,
         recommendationRepository: recommendationRepository,
+        dormRepository: InMemoryDormRepository(),
       );
 
       await facade.saveNightMood(NightMood.calm);
@@ -153,6 +154,69 @@ void main() {
       );
       expect(recommendationRepository.resetCalled, isTrue);
       facade.dispose();
+      authRepository.dispose();
+      settingsRepository.dispose();
+    },
+  );
+
+  test(
+    'profile facade syncs equipped badge to local dorm member card',
+    () async {
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository();
+      final InMemoryUserSettingsRepository settingsRepository =
+          InMemoryUserSettingsRepository();
+      final InMemoryDormRepository dormRepository = InMemoryDormRepository(
+        currentUserId: authRepository.currentUser.uid,
+      );
+      final ProfileFacade facade = ProfileFacade(
+        authRepository: authRepository,
+        settingsRepository: settingsRepository,
+        dormRepository: dormRepository,
+      );
+
+      await facade.saveEquippedBadge('early-sleeper');
+
+      final DormMember currentMember = dormRepository.currentDorm.members
+          .firstWhere((DormMember member) => member.uid == authRepository.currentUser.uid);
+      expect(currentMember.displayBadgeId, 'early-sleeper');
+      expect(authRepository.currentUser.displayBadgeId, 'early-sleeper');
+
+      facade.dispose();
+      dormRepository.dispose();
+      authRepository.dispose();
+      settingsRepository.dispose();
+    },
+  );
+
+  test(
+    'profile facade syncs updated avatar to local dorm member card',
+    () async {
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository();
+      final InMemoryUserSettingsRepository settingsRepository =
+          InMemoryUserSettingsRepository();
+      final InMemoryDormRepository dormRepository = InMemoryDormRepository(
+        currentUserId: authRepository.currentUser.uid,
+      );
+      final ProfileFacade facade = ProfileFacade(
+        authRepository: authRepository,
+        settingsRepository: settingsRepository,
+        dormRepository: dormRepository,
+      );
+
+      await facade.updateAvatar(
+        avatarPath: '/mock/new-avatar.png',
+        avatarBytes: Uint8List.fromList(<int>[1, 2, 3, 4]),
+      );
+
+      final DormMember currentMember = dormRepository.currentDorm.members
+          .firstWhere(
+            (DormMember member) => member.uid == authRepository.currentUser.uid,
+          );
+      expect(authRepository.currentUser.avatarPath, '/mock/new-avatar.png');
+      expect(currentMember.avatarUrl, '/mock/new-avatar.png');
+
+      facade.dispose();
+      dormRepository.dispose();
       authRepository.dispose();
       settingsRepository.dispose();
     },

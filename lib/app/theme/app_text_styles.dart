@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 
 abstract final class AppTextStyles {
@@ -21,13 +20,14 @@ abstract final class AppTextStyles {
     double? height,
     double? letterSpacing,
   }) {
-    return GoogleFonts.inter(
+    return TextStyle(
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color,
       height: height,
       letterSpacing: letterSpacing,
-    ).copyWith(fontFamilyFallback: cjkFallbackFonts);
+      fontFamilyFallback: cjkFallbackFonts,
+    );
   }
 
   static TextStyle _manrope({
@@ -37,17 +37,18 @@ abstract final class AppTextStyles {
     double? height,
     double? letterSpacing,
   }) {
-    return GoogleFonts.manrope(
+    return TextStyle(
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color,
       height: height,
       letterSpacing: letterSpacing,
-    ).copyWith(fontFamilyFallback: cjkFallbackFonts);
+      fontFamilyFallback: cjkFallbackFonts,
+    );
   }
 
   static TextTheme buildTextTheme() {
-    final TextTheme bodyTheme = GoogleFonts.interTextTheme().copyWith(
+    final TextTheme bodyTheme = const TextTheme().copyWith(
       bodyLarge: _inter(
         fontSize: 16,
         fontWeight: FontWeight.w500,

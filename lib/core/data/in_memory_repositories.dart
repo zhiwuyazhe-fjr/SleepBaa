@@ -14,6 +14,11 @@ UserProfile buildDefaultUserProfile() {
     displayName: 'Paul',
     tagline: 'Dorm Sleep Explorer',
     role: '宿舍睡眠优化实验成员',
+    earnedBadgeIds: <String>[
+      'first-week',
+      'early-sleeper',
+      'sleep-master',
+    ],
     dormId: 'dorm-204',
     phoneNumber: null,
     phoneLinkedAt: null,
@@ -83,6 +88,7 @@ Dorm buildDefaultDorm(String currentUserId) {
         sleepModeActive: false,
         lastActiveAt: DateTime.now().subtract(const Duration(minutes: 22)),
         note: '准备做睡前放松。',
+        displayBadgeId: 'sleep-master',
       ),
       DormMember(
         uid: 'roommate-a',
@@ -91,6 +97,7 @@ Dorm buildDefaultDorm(String currentUserId) {
         sleepModeActive: true,
         lastActiveAt: DateTime.now().subtract(const Duration(minutes: 12)),
         note: '已开启睡眠模式。',
+        displayBadgeId: 'monthly-perfect',
       ),
       DormMember(
         uid: 'roommate-b',
@@ -99,6 +106,7 @@ Dorm buildDefaultDorm(String currentUserId) {
         sleepModeActive: false,
         lastActiveAt: DateTime.now().subtract(const Duration(minutes: 6)),
         note: '正在收拾桌面，预计 10 分钟后安静下来。',
+        displayBadgeId: 'quiet-guardian',
       ),
     ],
     events: <DormEvent>[
@@ -230,6 +238,20 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
       tagline: tagline,
       role: role,
       avatarFallbackSeed: displayName,
+    );
+    notifyListeners();
+  }
+
+  @override
+  Future<void> updateBadgePreferences({
+    required List<String> earnedBadgeIds,
+    String? equippedBadgeId,
+    bool clearEquippedBadge = false,
+  }) async {
+    _currentUser = _currentUser.copyWith(
+      earnedBadgeIds: earnedBadgeIds,
+      equippedBadgeId: equippedBadgeId,
+      clearEquippedBadge: clearEquippedBadge,
     );
     notifyListeners();
   }
@@ -1114,15 +1136,127 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
 
   @override
   Future<void> saveRules(DormRulesSettings settings) async {
+    if (_currentDorm.pendingRuleProposal != null) {
+      return;
+    }
+    final DateTime now = DateTime.now();
+    final List<DormRule> proposedRules = buildDormSummaryRules(settings);
+    final List<String> reviewerUids = _currentDorm.members
+        .map((DormMember member) => member.uid)
+        .toList(growable: false);
+    final DormPendingRuleProposal proposal = DormPendingRuleProposal(
+      id: IdGenerator.next('rule-proposal'),
+      proposedSettings: settings,
+      proposedRules: proposedRules,
+      proposerUid: _currentUserId,
+      proposerName: _memberNameFor(_currentUserId),
+      createdAt: now,
+      reviewerUids: reviewerUids,
+      approvedUids: <String>[_currentUserId],
+    );
+    if (_isProposalFullyApproved(proposal)) {
+      _currentDorm = _currentDorm.copyWith(
+        rulesSettings: settings,
+        rules: proposedRules,
+        events: <DormEvent>[
+          DormEvent(
+            id: IdGenerator.next('dorm-event'),
+            type: DormEventType.ruleUpdate,
+            title: '宿舍公约已更新',
+            detail: '安静时段：${settings.quietHours}',
+            createdAt: now,
+            actorUid: _currentUserId,
+          ),
+          ..._currentDorm.events,
+        ],
+      );
+    } else {
+      _currentDorm = _currentDorm.copyWith(
+        pendingRuleProposal: proposal,
+        events: <DormEvent>[
+          DormEvent(
+            id: IdGenerator.next('dorm-event'),
+            type: DormEventType.ruleUpdate,
+            title: '有新宿舍公约待确认',
+            detail: '${proposal.proposerName} 提交了新的宿舍规则，等待室友确认。',
+            createdAt: now,
+            actorUid: _currentUserId,
+          ),
+          ..._currentDorm.events,
+        ],
+      );
+    }
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  @override
+  Future<void> approvePendingRules() async {
+    final DormPendingRuleProposal? proposal = _currentDorm.pendingRuleProposal;
+    if (proposal == null || !proposal.needsReviewFrom(_currentUserId)) {
+      return;
+    }
+    final DateTime now = DateTime.now();
+    final DormPendingRuleProposal nextProposal = proposal.copyWith(
+      approvedUids: <String>{...proposal.approvedUids, _currentUserId}.toList(
+        growable: false,
+      ),
+    );
+    if (_isProposalFullyApproved(nextProposal)) {
+      _currentDorm = _currentDorm.copyWith(
+        rulesSettings: nextProposal.proposedSettings,
+        rules: nextProposal.proposedRules,
+        clearPendingRuleProposal: true,
+        events: <DormEvent>[
+          DormEvent(
+            id: IdGenerator.next('dorm-event'),
+            type: DormEventType.ruleUpdate,
+            title: '新宿舍公约已生效',
+            detail: '全部室友已同意，新的宿舍公约开始执行。',
+            createdAt: now,
+            actorUid: _currentUserId,
+          ),
+          ..._currentDorm.events,
+        ],
+      );
+    } else {
+      _currentDorm = _currentDorm.copyWith(
+        pendingRuleProposal: nextProposal,
+        events: <DormEvent>[
+          DormEvent(
+            id: IdGenerator.next('dorm-event'),
+            type: DormEventType.ruleUpdate,
+            title: '室友已同意新公约',
+            detail: '${_memberNameFor(_currentUserId)} 已同意这次规则调整。',
+            createdAt: now,
+            actorUid: _currentUserId,
+          ),
+          ..._currentDorm.events,
+        ],
+      );
+    }
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  @override
+  Future<void> rejectPendingRules({required String reason}) async {
+    final DormPendingRuleProposal? proposal = _currentDorm.pendingRuleProposal;
+    if (proposal == null || !proposal.needsReviewFrom(_currentUserId)) {
+      return;
+    }
+    final String trimmedReason = reason.trim();
+    if (trimmedReason.isEmpty) {
+      return;
+    }
     _currentDorm = _currentDorm.copyWith(
-      rulesSettings: settings,
-      rules: buildDormSummaryRules(settings),
+      clearPendingRuleProposal: true,
       events: <DormEvent>[
         DormEvent(
           id: IdGenerator.next('dorm-event'),
           type: DormEventType.ruleUpdate,
-          title: '宿舍规则已更新',
-          detail: '安静时段：${settings.quietHours}',
+          title: '新宿舍公约未通过',
+          detail: '${_memberNameFor(_currentUserId)} 提出异议：$trimmedReason',
           createdAt: DateTime.now(),
           actorUid: _currentUserId,
         ),
@@ -1245,7 +1379,10 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
   }
 
   @override
-  Future<void> sendGentleReminder({required String targetUid}) async {
+  Future<void> sendGentleReminder({
+    required String targetUid,
+    bool anonymous = true,
+  }) async {
     final DormMember? target = _currentDorm.members
         .where((DormMember member) => member.uid == targetUid)
         .cast<DormMember?>()
@@ -1253,13 +1390,14 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
     if (target == null) {
       return;
     }
+    final String senderName = anonymous ? '您的舍友' : _currentUserLabel();
     _currentDorm = _currentDorm.copyWith(
       events: <DormEvent>[
         DormEvent(
           id: IdGenerator.next('dorm-event'),
           type: DormEventType.notification,
           title: '已发送委婉提醒',
-          detail: '已向 ${target.name} 发送一条温和的休息提醒。',
+          detail: '已由 $senderName 向 ${target.name} 发送一条温和的休息提醒。',
           createdAt: DateTime.now(),
           actorUid: _currentUserId,
         ),
@@ -1270,6 +1408,32 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
     notifyListeners();
   }
 
+  void syncCurrentUserProfile(UserProfile profile) {
+    _currentDorm = _currentDorm.copyWith(
+      members: _currentDorm.members
+          .map(
+            (DormMember member) => member.uid == profile.uid
+                ? member.copyWith(
+                    name: profile.displayName,
+                    avatarUrl: profile.avatarUrl,
+                    displayBadgeId: profile.displayBadgeId,
+                  )
+                : member,
+          )
+          .toList(growable: false),
+    );
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  String _currentUserLabel() {
+    final DormMember? currentMember = _currentDorm.members
+        .where((DormMember member) => member.uid == _currentUserId)
+        .cast<DormMember?>()
+        .firstWhere((DormMember? item) => item != null, orElse: () => null);
+    return currentMember?.name ?? '舍友';
+  }
+
   void _emitCurrentState() {
     if (_dormController.isClosed) {
       return;
@@ -1278,6 +1442,19 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
     _membersController.add(List<DormMember>.unmodifiable(_currentDorm.members));
     _rulesController.add(List<DormRule>.unmodifiable(_currentDorm.rules));
     _eventsController.add(List<DormEvent>.unmodifiable(_currentDorm.events));
+  }
+
+  bool _isProposalFullyApproved(DormPendingRuleProposal proposal) {
+    return proposal.reviewerUids.every(proposal.approvedUids.contains);
+  }
+
+  String _memberNameFor(String uid) {
+    for (final DormMember member in _currentDorm.members) {
+      if (member.uid == uid) {
+        return member.name;
+      }
+    }
+    return _currentUserId == uid ? '你' : '室友';
   }
 
   @override

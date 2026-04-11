@@ -468,6 +468,19 @@ export function createAppApiServer() {
   );
 
   app.post(
+    "/api/dorm/member-status",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      response.json(
+        await repo.updateDormMemberStatus(
+          request.authContext!.uid,
+          asMap(request.body),
+        ),
+      );
+    }),
+  );
+
+  app.post(
     "/api/profile/night-mood",
     asyncRoute(async (request, response) => {
       const repo = createRepositoryFromEnv();
@@ -816,6 +829,35 @@ export function createAppApiServer() {
   );
 
   app.post(
+    "/api/dorm/rules/approve",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      const body = asMap(request.body);
+      response.json(
+        await repo.approveDormRules(
+          request.authContext!.uid,
+          asString(body.proposalId),
+        ),
+      );
+    }),
+  );
+
+  app.post(
+    "/api/dorm/rules/reject",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      const body = asMap(request.body);
+      response.json(
+        await repo.rejectDormRules(
+          request.authContext!.uid,
+          asString(body.proposalId),
+          asString(body.reason),
+        ),
+      );
+    }),
+  );
+
+  app.post(
     "/api/dorm/reminders/gentle",
     asyncRoute(async (request, response) => {
       const repo = createRepositoryFromEnv();
@@ -823,6 +865,7 @@ export function createAppApiServer() {
         await repo.sendGentleDormReminder(
           request.authContext!.uid,
           asString(asMap(request.body).targetUid),
+          asMap(request.body).anonymous === false ? false : true,
         ),
       );
     }),
