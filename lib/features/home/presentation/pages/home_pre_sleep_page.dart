@@ -104,17 +104,17 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                 Expanded(
                                   child: Text(
                                     '$greeting，${profile.displayName}',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.headlineLarge?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineLarge
+                                        ?.copyWith(fontWeight: FontWeight.w700),
                                   ),
                                 ),
                                 const SizedBox(width: AppSpacing.md),
                                 _NotificationBell(
                                   unread: unread,
-                                  onTap: () => context.push(AppRoutes.notifications),
+                                  onTap: () =>
+                                      context.push(AppRoutes.notifications),
                                 ),
                               ],
                             ),
@@ -126,7 +126,9 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                               ),
                               right: StartSleepModeCard(
                                 isAudioReady:
-                                    services.audioPlaybackController.currentTrack !=
+                                    services
+                                        .audioPlaybackController
+                                        .currentTrack !=
                                     null,
                                 onTap: () async {
                                   await services.sleepExperienceController
@@ -141,18 +143,20 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                             SectionTitle(
                               title: '快捷功能',
                               actionLabel: '编辑',
-                              titleStyle: Theme.of(
-                                context,
-                              ).textTheme.headlineSmall?.copyWith(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w700,
-                              ),
-                              actionStyle: Theme.of(
-                                context,
-                              ).textTheme.bodyMedium?.copyWith(
-                                color: const Color(0xFFA0A0A0),
-                                fontWeight: FontWeight.w400,
-                              ),
+                              titleStyle: Theme.of(context)
+                                  .textTheme
+                                  .headlineSmall
+                                  ?.copyWith(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                              actionStyle: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: AppColors.textHint,
+                                    fontWeight: FontWeight.w400,
+                                  ),
                               onAction: () =>
                                   context.push(AppRoutes.interventionTask),
                             ),
@@ -163,12 +167,14 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                 QuickActionIconButton(
                                   icon: Icons.auto_stories_rounded,
                                   label: '梦记一刻',
-                                  onTap: () => context.push(AppRoutes.dreamJournal),
+                                  onTap: () =>
+                                      context.push(AppRoutes.dreamJournal),
                                 ),
                                 QuickActionIconButton(
                                   icon: Icons.calendar_month_rounded,
                                   label: '打卡日历',
-                                  onTap: () => context.push(AppRoutes.profileCalendar),
+                                  onTap: () =>
+                                      context.push(AppRoutes.profileCalendar),
                                 ),
                                 QuickActionIconButton(
                                   icon: Icons.menu_book_rounded,
@@ -187,20 +193,22 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                             ),
                             const SizedBox(height: AppSpacing.xl),
                             SectionTitle(
-                              title: '今晚影响因素',
+                              title: '影响因素',
                               actionLabel: '查看详情',
-                              titleStyle: Theme.of(
-                                context,
-                              ).textTheme.headlineSmall?.copyWith(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w700,
-                              ),
-                              actionStyle: Theme.of(
-                                context,
-                              ).textTheme.bodyMedium?.copyWith(
-                                color: const Color(0xFFA0A0A0),
-                                fontWeight: FontWeight.w400,
-                              ),
+                              titleStyle: Theme.of(context)
+                                  .textTheme
+                                  .headlineSmall
+                                  ?.copyWith(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                              actionStyle: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: AppColors.textHint,
+                                    fontWeight: FontWeight.w400,
+                                  ),
                               onAction: () => context.push(
                                 AppRoutes.analysisInterferenceFactors,
                               ),
@@ -247,20 +255,22 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                             ),
                             const SizedBox(height: AppSpacing.xl),
                             SectionTitle(
-                              title: '今晚行动建议',
+                              title: '行动建议',
                               actionLabel: '查看全部',
-                              titleStyle: Theme.of(
-                                context,
-                              ).textTheme.headlineSmall?.copyWith(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w700,
-                              ),
-                              actionStyle: Theme.of(
-                                context,
-                              ).textTheme.bodyMedium?.copyWith(
-                                color: const Color(0xFFA0A0A0),
-                                fontWeight: FontWeight.w400,
-                              ),
+                              titleStyle: Theme.of(context)
+                                  .textTheme
+                                  .headlineSmall
+                                  ?.copyWith(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                              actionStyle: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: AppColors.textHint,
+                                    fontWeight: FontWeight.w400,
+                                  ),
                               onAction: () =>
                                   context.push(AppRoutes.interventionTask),
                             ),
@@ -280,7 +290,9 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                       return;
                                     }
                                     await services.sleepExperienceController
-                                        .handleRecommendationTap(recommendation);
+                                        .handleRecommendationTap(
+                                          recommendation,
+                                        );
                                   },
                                 ),
                               ),
@@ -385,9 +397,7 @@ class _SleepMemoBanner extends StatelessWidget {
             color: AppColors.darkSurface.withAlpha(242),
             borderRadius: BorderRadius.circular(24),
             boxShadow: AppColors.floatingShadow,
-            border: Border.all(
-              color: palette.welcomeAccentColor.withAlpha(70),
-            ),
+            border: Border.all(color: palette.welcomeAccentColor.withAlpha(70)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -444,7 +454,9 @@ class _SleepMemoBanner extends StatelessWidget {
                         padding: const EdgeInsets.only(top: AppSpacing.md),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: banner.groups.map((PendingSleepMemoGroup group) {
+                          children: banner.groups.map((
+                            PendingSleepMemoGroup group,
+                          ) {
                             return Padding(
                               padding: const EdgeInsets.only(
                                 bottom: AppSpacing.md,

@@ -78,7 +78,7 @@ class HomePostSleepPage extends StatelessWidget {
                             label: session == null
                                 ? '刚刚进入睡眠模式'
                                 : '已运行 ${(DateTime.now().difference(session.startedAt).inMinutes).clamp(1, 240)} 分钟',
-                            backgroundColor: const Color(0x14FFFFFF),
+                            backgroundColor: AppColors.darkBorder,
                             foregroundColor: AppColors.onDark,
                             borderColor: AppColors.darkBorder,
                             showDot: true,
@@ -86,14 +86,14 @@ class HomePostSleepPage extends StatelessWidget {
                           ),
                           StatusChip(
                             label: '宿舍 ${dorm.quietLabel}',
-                            backgroundColor: const Color(0x14FFFFFF),
+                            backgroundColor: AppColors.darkBorder,
                             foregroundColor: AppColors.onDark,
                             borderColor: AppColors.darkBorder,
                             icon: Icons.volume_off_rounded,
                           ),
                           const StatusChip(
                             label: 'AI 守护中',
-                            backgroundColor: Color(0x14FFFFFF),
+                            backgroundColor: AppColors.darkBorder,
                             foregroundColor: AppColors.onDark,
                             borderColor: AppColors.darkBorder,
                             icon: Icons.security_rounded,
