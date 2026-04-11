@@ -181,7 +181,7 @@ class _NavPillButton extends StatelessWidget {
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
-        color: selected ? const Color(0xFF1A1A1A) : Colors.transparent,
+        color: selected ? AppColors.darkPill : Colors.transparent,
         borderRadius: BorderRadius.circular(20),
       ),
       child: InkWell(
@@ -197,14 +197,14 @@ class _NavPillButton extends StatelessWidget {
             children: <Widget>[
               Icon(
                 item.icon,
-                color: selected ? AppColors.onDark : const Color(0xFFA0A0A0),
+                color: selected ? AppColors.onDark : AppColors.textHint,
                 size: 20,
               ),
               const SizedBox(height: 2),
               Text(
                 item.label,
                 style: textTheme.labelSmall?.copyWith(
-                  color: selected ? AppColors.onDark : const Color(0xFFA0A0A0),
+                  color: selected ? AppColors.onDark : AppColors.textHint,
                   fontWeight: FontWeight.w400,
                 ),
               ),

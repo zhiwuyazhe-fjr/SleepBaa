@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 
 class HomeMetricCard extends StatelessWidget {
@@ -22,7 +23,7 @@ class HomeMetricCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       constraints: const BoxConstraints(minHeight: 84),
       decoration: BoxDecoration(
-        color: const Color(0xFFF2F2F2),
+        color: AppColors.metricCardSurface,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -38,7 +39,7 @@ class HomeMetricCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: const Color(0xFF1A1A1A),
+                    color: AppColors.textStrong,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -51,7 +52,7 @@ class HomeMetricCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFF888888),
+              color: AppColors.textSubtle,
               fontWeight: FontWeight.w400,
             ),
           ),

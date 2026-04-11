@@ -37,11 +37,9 @@ class InterferenceFactorPage extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 SectionTitle(
-                  title: '今晚影响因素',
-                  titleStyle: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  title: '影响因素',
+                  titleStyle: Theme.of(context).textTheme.headlineSmall
+                      ?.copyWith(fontSize: 20, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Row(
@@ -118,12 +116,12 @@ class InterferenceFactorPage extends StatelessWidget {
                     children: <Widget>[
                       Text(
                         '本页将逐步补全',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: AppSpacing.sm),
-                      for (final String point in meta.supportingPoints) ...<Widget>[
+                      for (final String point
+                          in meta.supportingPoints) ...<Widget>[
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
@@ -162,11 +160,11 @@ class InterferenceFactorPage extends StatelessWidget {
                     style: FilledButton.styleFrom(
                       backgroundColor: palette.welcomeAccentColor,
                       foregroundColor: palette.welcomeTextOnAccent,
+                      elevation: 0,
+                      shadowColor: Colors.transparent,
                       shape: const StadiumBorder(),
-                      textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      textStyle: Theme.of(context).textTheme.labelLarge
+                          ?.copyWith(fontSize: 15, fontWeight: FontWeight.w600),
                     ),
                     icon: const Icon(Icons.insights_rounded, size: 18),
                     label: Text(meta.primaryActionLabel),

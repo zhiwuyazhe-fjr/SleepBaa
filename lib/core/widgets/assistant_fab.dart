@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
+import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/widgets/mood_avatar.dart';
 
@@ -105,7 +106,10 @@ class _AssistantFabState extends State<AssistantFab>
                         gradient: const LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
-                          colors: <Color>[Color(0xFF2B3240), Color(0xFF121417)],
+                          colors: <Color>[
+                            AppColors.assistantFabShellStart,
+                            AppColors.assistantFabShellEnd,
+                          ],
                         ),
                         border: Border.all(
                           color: palette.primarySoft.withValues(alpha: 0.4),
@@ -113,7 +117,7 @@ class _AssistantFabState extends State<AssistantFab>
                         ),
                         boxShadow: const <BoxShadow>[
                           BoxShadow(
-                            color: Color(0x66000000),
+                            color: AppColors.assistantFabShadow,
                             blurRadius: 18,
                             offset: Offset(0, 8),
                           ),

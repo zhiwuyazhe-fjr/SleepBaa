@@ -121,7 +121,7 @@ class StartSleepModeCard extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF5F5F5),
+                    color: AppColors.surfaceSubtle,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Text(
