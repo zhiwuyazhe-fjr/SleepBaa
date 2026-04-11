@@ -460,8 +460,8 @@ class _ReasonsStep extends StatelessWidget {
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 260),
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 18,
+                                  horizontal: 14,
+                                  vertical: 16,
                                 ),
                                 decoration: BoxDecoration(
                                   color: isSelected
@@ -482,7 +482,7 @@ class _ReasonsStep extends StatelessWidget {
                                         color: isSelected
                                             ? palette.welcomeTextOnAccent
                                             : Colors.white,
-                                        fontSize: 16,
+                                        fontSize: 15,
                                         fontWeight: isSelected
                                             ? FontWeight.w700
                                             : FontWeight.w500,
@@ -507,6 +507,7 @@ class _ReasonsStep extends StatelessWidget {
                   ? null
                   : () => onNext(),
               padding: metrics.bottomActionPadding,
+              buttonSpacing: 22,
               secondaryLabel: '返回',
               onSecondaryPressed: isSubmitting ? null : () => onBack(),
             ),
@@ -613,6 +614,7 @@ class _WelcomeStep extends StatelessWidget {
               primaryTextColor: Colors.black,
               onPrimaryPressed: isSubmitting ? null : () => onEnter(),
               padding: metrics.bottomActionPadding,
+              buttonSpacing: 22,
               secondaryLabel: '返回',
               onSecondaryPressed: isSubmitting ? null : () => onBack(),
             ),
@@ -728,6 +730,7 @@ class _BottomActionBar extends StatelessWidget {
     required this.primaryTextColor,
     required this.onPrimaryPressed,
     this.padding = const EdgeInsets.fromLTRB(24, 24, 24, 30),
+    this.buttonSpacing = 16,
     this.secondaryLabel,
     this.onSecondaryPressed,
   });
@@ -737,6 +740,7 @@ class _BottomActionBar extends StatelessWidget {
   final Color primaryTextColor;
   final AsyncVoidCallback? onPrimaryPressed;
   final EdgeInsetsGeometry padding;
+  final double buttonSpacing;
   final String? secondaryLabel;
   final AsyncVoidCallback? onSecondaryPressed;
 
@@ -767,7 +771,7 @@ class _BottomActionBar extends StatelessWidget {
                     child: Text(secondaryLabel!),
                   ),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: buttonSpacing),
           Expanded(
             child: SizedBox(
               height: 52,
