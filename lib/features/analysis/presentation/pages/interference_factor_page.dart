@@ -108,7 +108,7 @@ class InterferenceFactorPage extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 AppCard(
-                  color: const Color(0xFFF2F2F2),
+                  color: AppColors.legacyCardSurface,
                   borderRadius: BorderRadius.circular(20),
                   padding: const EdgeInsets.all(AppSpacing.md),
                   child: Column(

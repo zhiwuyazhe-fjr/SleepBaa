@@ -31,6 +31,8 @@ abstract final class AppColors {
 
   static const Color surfaceSubtle = Color(0xFFF5F5F5);
   static const Color metricCardSurface = AppColors.surface;
+  static const Color legacyCardSurface = Color(0xFFF2F2F2);
+  static const Color cardBorderSubtle = AppColors.divider;
 
   static const Color assistantFabShellStart = Color(0xFF2B3240);
   static const Color assistantFabShellEnd = Color(0xFF121417);

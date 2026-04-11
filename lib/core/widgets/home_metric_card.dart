@@ -26,7 +26,6 @@ class HomeMetricCard extends StatelessWidget {
       constraints: const BoxConstraints(minHeight: 84),
       decoration: BoxDecoration(
         color: backgroundColor ?? AppColors.metricCardSurface,
-        border: Border.all(color: AppColors.divider),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(

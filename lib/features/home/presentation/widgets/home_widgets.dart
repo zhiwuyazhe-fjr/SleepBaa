@@ -92,7 +92,7 @@ class StartSleepModeCard extends StatelessWidget {
     return AppCard(
       padding: EdgeInsets.zero,
       borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: AppColors.divider),
+      border: Border.all(color: AppColors.cardBorderSubtle),
       boxShadow: AppColors.cardShadow,
       onTap: onTap,
       child: Container(
@@ -232,9 +232,7 @@ class HomeActionCard extends StatelessWidget {
               child: Icon(
                 recommendation.icon,
                 size: 20,
-                color: _isAudio
-                    ? palette.welcomeTextOnAccent
-                    : palette.primary,
+                color: _isAudio ? palette.welcomeTextOnAccent : palette.primary,
               ),
             ),
             const SizedBox(width: AppSpacing.md),

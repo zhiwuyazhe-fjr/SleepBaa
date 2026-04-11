@@ -133,7 +133,7 @@ class _NotificationSection extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
                 color: item.isRead
                     ? AppColors.surface
-                    : const Color(0xFFF2F2F2),
+                    : AppColors.legacyCardSurface,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
@@ -158,11 +158,8 @@ class _NotificationSection extends StatelessWidget {
                         children: <Widget>[
                           Text(
                             _localizedTitle(item),
-                            style: Theme.of(
-                              context,
-                            ).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -221,7 +218,6 @@ class _NotificationSection extends StatelessWidget {
     final String combined = '${item.title} ${item.body}'.toLowerCase();
     return RegExp(r'[a-z]').hasMatch(combined);
   }
-
 }
 
 void _navigateFromNotification(BuildContext context, String route) {
