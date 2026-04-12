@@ -829,6 +829,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('勋章图鉴'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('profile-badge-strip-card-0')),
+      findsOneWidget,
+    );
 
     final Finder earlyBirdCardFinder = find.ancestor(
       of: find.text('早睡先锋'),
