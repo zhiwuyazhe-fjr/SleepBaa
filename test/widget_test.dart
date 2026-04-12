@@ -760,11 +760,11 @@ void main() {
       final PageView pageView = tester.widget<PageView>(find.byType(PageView));
       final PageController pageController = pageView.controller!;
 
-      expect((firstCardWidth - settingsWidth).abs(), lessThan(2));
-      expect(carouselWidth - firstCardWidth, greaterThan(10));
+      expect(settingsWidth - firstCardWidth, greaterThan(20));
+      expect(carouselWidth - firstCardWidth, greaterThan(20));
       expect(pageView.clipBehavior, Clip.none);
       expect(pageView.padEnds, isTrue);
-      expect(pageController.viewportFraction, lessThan(1));
+      expect(pageController.viewportFraction, lessThan(0.94));
       expect(
         find.byKey(const ValueKey<String>('profile-carousel-indicators')),
         findsOneWidget,
@@ -789,6 +789,42 @@ void main() {
       expect((reportWidth - sideWidth).abs(), lessThan(28));
     },
   );
+
+  testWidgets('home and profile cards use a unified rectangular radius', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+    );
+
+    final AppCard startSleepCard = tester.widget<AppCard>(
+      find.ancestor(of: find.text('开启睡眠模式'), matching: find.byType(AppCard)),
+    );
+    final AppCard actionCard = tester.widget<AppCard>(
+      find.ancestor(of: find.text('睡前放松音频'), matching: find.byType(AppCard)),
+    );
+
+    expect(startSleepCard.borderRadius, BorderRadius.circular(AppRadius.md));
+    expect(actionCard.borderRadius, BorderRadius.circular(AppRadius.md));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    final AppCard reportCard = tester.widget<AppCard>(
+      find.ancestor(of: find.text('实验报告'), matching: find.byType(AppCard)),
+    );
+    final AppCard qualityCard = tester.widget<AppCard>(
+      find.ancestor(of: find.text('睡眠质量(分)'), matching: find.byType(AppCard)),
+    );
+
+    expect(reportCard.borderRadius, BorderRadius.circular(AppRadius.md));
+    expect(qualityCard.borderRadius, BorderRadius.circular(AppRadius.md));
+  });
 
   testWidgets('profile dream card opens dream journal page', (
     WidgetTester tester,

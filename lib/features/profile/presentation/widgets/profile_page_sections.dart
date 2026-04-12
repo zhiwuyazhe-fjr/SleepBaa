@@ -7,6 +7,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_strip_card.dart';
 import 'package:sleep_dorm_app/core/widgets/user_avatar.dart';
 import 'package:sleep_dorm_app/features/profile/data/profile_badges.dart';
 
@@ -54,7 +55,7 @@ class ProfileHeaderSection extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               color: palette.primaryHighlight,
-              borderRadius: BorderRadius.circular(AppRadius.xl),
+              borderRadius: AppRadius.pill,
             ),
             child: Text(
               profile.role,
@@ -80,7 +81,7 @@ class ProfileQuoteCard extends StatelessWidget {
     final NightMoodPalette palette = context.nightMoodPalette;
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.lg),
-      borderRadius: BorderRadius.circular(AppRadius.lg),
+      borderRadius: AppRadius.surfacePrimary,
       color: palette.primarySoft,
       child: Row(
         children: <Widget>[
@@ -89,7 +90,7 @@ class ProfileQuoteCard extends StatelessWidget {
             height: 48,
             decoration: BoxDecoration(
               color: palette.primaryDeep,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
+              borderRadius: AppRadius.iconContainer,
             ),
             child: Icon(
               Icons.format_quote_rounded,
@@ -128,7 +129,7 @@ class ProfileDataCarousel extends StatefulWidget {
 }
 
 class _ProfileDataCarouselState extends State<ProfileDataCarousel> {
-  static const double _carouselViewportFraction = 0.955;
+  static const double _carouselViewportFraction = 0.92;
 
   late final PageController _controller;
   int _currentPage = 0;
@@ -162,12 +163,20 @@ class _ProfileDataCarouselState extends State<ProfileDataCarousel> {
               });
             },
             children: <Widget>[
-              _SleepQualityCard(sessions: widget.sessions),
-              _SleepDurationCard(sessions: widget.sessions),
-              _CheckInHeatmapCard(
-                heatmapValues: widget.heatmapValues,
-                onTap: widget.onHeatmapTap,
-              ),
+              for (final Widget card in <Widget>[
+                _SleepQualityCard(sessions: widget.sessions),
+                _SleepDurationCard(sessions: widget.sessions),
+                _CheckInHeatmapCard(
+                  heatmapValues: widget.heatmapValues,
+                  onTap: widget.onHeatmapTap,
+                ),
+              ])
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xs,
+                  ),
+                  child: card,
+                ),
             ],
           ),
         ),
@@ -294,24 +303,64 @@ class ProfileSettingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    final NightMoodPalette palette = context.nightMoodPalette;
+
+    return Column(
       key: const ValueKey<String>('profile-settings-card'),
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: Column(
-        children: <Widget>[
-          _ProfileMenuRow(
+      children: <Widget>[
+        AppStripCard(
+          onTap: onSettingsTap,
+          leading: _MenuLeadingIcon(
             icon: Icons.settings_outlined,
-            title: '设置',
-            onTap: onSettingsTap,
+            palette: palette,
           ),
-          _ProfileMenuRow(
+          title: '设置',
+          titleStyle: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+          trailing: const Icon(
+            Icons.chevron_right_rounded,
+            color: AppColors.textHint,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        AppStripCard(
+          onTap: onFaqTap,
+          leading: _MenuLeadingIcon(
             icon: Icons.help_outline_rounded,
-            title: '常见问题',
-            onTap: onFaqTap,
+            palette: palette,
           ),
-        ],
+          title: '常见问题',
+          titleStyle: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+          trailing: const Icon(
+            Icons.chevron_right_rounded,
+            color: AppColors.textHint,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MenuLeadingIcon extends StatelessWidget {
+  const _MenuLeadingIcon({required this.icon, required this.palette});
+
+  final IconData icon;
+  final NightMoodPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        shape: BoxShape.circle,
       ),
+      alignment: Alignment.center,
+      child: Icon(icon, color: palette.primaryDeep),
     );
   }
 }
@@ -334,7 +383,7 @@ class _SleepQualityCard extends StatelessWidget {
         AppSpacing.md,
         AppSpacing.sm,
       ),
-      borderRadius: BorderRadius.circular(AppRadius.sm),
+      borderRadius: AppRadius.surfacePrimary,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -453,7 +502,7 @@ class _SleepDurationCard extends StatelessWidget {
         AppSpacing.md,
         AppSpacing.sm,
       ),
-      borderRadius: BorderRadius.circular(AppRadius.sm),
+      borderRadius: AppRadius.surfacePrimary,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -506,7 +555,7 @@ class _CheckInHeatmapCard extends StatelessWidget {
     return AppCard(
       onTap: onTap,
       padding: const EdgeInsets.all(AppSpacing.md),
-      borderRadius: BorderRadius.circular(AppRadius.sm),
+      borderRadius: AppRadius.surfacePrimary,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -602,7 +651,7 @@ class _ReportInsightCard extends StatelessWidget {
 
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.md),
-      borderRadius: BorderRadius.circular(AppRadius.sm),
+      borderRadius: AppRadius.surfacePrimary,
       onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -631,7 +680,7 @@ class _ReportInsightCard extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               color: palette.primaryHighlight,
-              borderRadius: BorderRadius.circular(AppRadius.xl),
+              borderRadius: AppRadius.surfaceSecondary,
             ),
             child: Text(
               '查看本周结论',
@@ -668,7 +717,7 @@ class _MiniInsightCard extends StatelessWidget {
 
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.sm),
-      borderRadius: BorderRadius.circular(AppRadius.sm),
+      borderRadius: AppRadius.surfacePrimary,
       onTap: onTap,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -726,7 +775,7 @@ class _BadgePreviewCard extends StatelessWidget {
         AppSpacing.lg,
         AppSpacing.sm,
       ),
-      borderRadius: BorderRadius.circular(AppRadius.lg),
+      borderRadius: AppRadius.surfacePrimary,
       onTap: onOverviewTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -787,7 +836,7 @@ class _BadgePreviewItem extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.sm),
+        borderRadius: AppRadius.surfaceSecondary,
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
@@ -824,54 +873,6 @@ class _BadgePreviewItem extends StatelessWidget {
                       ? AppColors.textPrimary
                       : AppColors.textHint,
                 ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ProfileMenuRow extends StatelessWidget {
-  const _ProfileMenuRow({
-    required this.icon,
-    required this.title,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg,
-            vertical: AppSpacing.md,
-          ),
-          child: Row(
-            children: <Widget>[
-              Icon(icon, color: palette.primaryDeep),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.textHint,
               ),
             ],
           ),
@@ -919,7 +920,7 @@ class _DurationBar extends StatelessWidget {
                     end: Alignment.topCenter,
                     colors: <Color>[palette.primary, palette.primarySoft],
                   ),
-                  borderRadius: BorderRadius.circular(AppRadius.xl),
+                  borderRadius: AppRadius.pill,
                 ),
               ),
             ),
@@ -995,7 +996,7 @@ class _ChartBadgeMarker extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
+          borderRadius: AppRadius.surfaceSecondary,
           boxShadow: const <BoxShadow>[
             BoxShadow(
               color: Color(0x1A000000),

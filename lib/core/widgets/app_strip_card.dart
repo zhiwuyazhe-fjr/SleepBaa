@@ -42,7 +42,7 @@ class AppStripCard extends StatelessWidget {
       onTap: onTap,
       padding: padding,
       color: backgroundColor,
-      borderRadius: borderRadius ?? BorderRadius.circular(AppRadius.md),
+      borderRadius: borderRadius ?? AppRadius.stripCard,
       border: Border.all(color: borderColor),
       boxShadow: boxShadow,
       child: Row(
