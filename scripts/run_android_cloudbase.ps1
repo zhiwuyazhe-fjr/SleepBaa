@@ -4,6 +4,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# Flutter prints notices (e.g. mirror URL) to stderr; PS 7.2+ can treat that as a terminating error with -ErrorAction Stop.
+if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
+  $PSNativeCommandUseErrorActionPreference = $false
+}
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
@@ -24,12 +28,13 @@ function Resolve-AndroidDevice([string]$RequestedDevice) {
     return $RequestedDevice
   }
 
-  $devicesJson = & flutter devices --machine 2>$null
-  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($devicesJson -join ""))) {
+  # Use cmd so stderr (mirror / asset notices) is dropped reliably; stdout stays JSON only.
+  $devicesText = cmd.exe /c "flutter devices --machine 2>nul"
+  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace([string]$devicesText)) {
     throw "Unable to read flutter devices. Run `flutter devices` manually first."
   }
 
-  $devices = ($devicesJson -join [Environment]::NewLine) | ConvertFrom-Json
+  $devices = $devicesText | ConvertFrom-Json
   $androidDevice = $devices | Where-Object {
     $_.targetPlatform -like "android-*"
   } | Select-Object -First 1

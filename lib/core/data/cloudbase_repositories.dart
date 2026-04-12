@@ -223,15 +223,23 @@ DormMember _dormMemberFromMap(Map<String, dynamic> map) {
     lastActiveAt: _dateOf(map['lastActiveAt']),
     note: _stringOf(map['note']),
     avatarUrl: map['avatarUrl'] as String?,
+    displayBadgeId: map['displayBadgeId'] as String?,
   );
 }
 
 DormRule _dormRuleFromMap(Map<String, dynamic> map) {
-  return DormRule(
-    id: _stringOf(map['id']),
-    title: _stringOf(map['title']),
-    detail: _stringOf(map['detail']),
-  );
+  return ModelSerializers.dormRuleFromMap(map);
+}
+
+DormPendingRuleProposal? _dormPendingRuleProposalFromMap(dynamic value) {
+  if (value is! Map) {
+    return null;
+  }
+  final Map<String, dynamic> map = Map<String, dynamic>.from(value);
+  if (map.isEmpty) {
+    return null;
+  }
+  return ModelSerializers.dormPendingRuleProposalFromMap(map);
 }
 
 DormEvent _dormEventFromMap(Map<String, dynamic> map) {
@@ -280,6 +288,10 @@ Dorm _dormFromMap(Map<String, dynamic> map, String currentUserId) {
   if (_stringOf(map['id']).isEmpty) {
     return _unboundDorm();
   }
+  final List<String> earnedDormBadgeIds =
+      (map['earnedDormBadgeIds'] as List<dynamic>? ?? const <dynamic>[])
+          .map((dynamic item) => item.toString())
+          .toList(growable: false);
   return Dorm(
     id: _stringOf(map['id']),
     name: _stringOf(map['name'], '\u5bbf\u820d'),
@@ -309,6 +321,12 @@ Dorm _dormFromMap(Map<String, dynamic> map, String currentUserId) {
     invites: _mapListOf(
       map['invites'],
     ).map(_dormInviteFromMap).toList(growable: false),
+    earnedDormBadgeIds: earnedDormBadgeIds.isEmpty
+        ? const <String>['no-trouble-room', 'no-wake-room']
+        : earnedDormBadgeIds,
+    pendingRuleProposal: _dormPendingRuleProposalFromMap(
+      map['pendingRuleProposal'],
+    ),
   );
 }
 
@@ -343,7 +361,9 @@ PendingSleepMemoBanner? _pendingSleepMemoBannerFromUserState(
   Map<String, dynamic> userState,
 ) {
   final Map<String, dynamic> sleepCapture = _mapOf(userState['sleepCapture']);
-  final Map<String, dynamic> pending = _mapOf(sleepCapture['pendingMemoBanner']);
+  final Map<String, dynamic> pending = _mapOf(
+    sleepCapture['pendingMemoBanner'],
+  );
   if (pending.isEmpty) {
     return null;
   }
@@ -413,9 +433,9 @@ class _SnapshotData {
       dreams: _mapListOf(
         root['dreamEntries'],
       ).map(ModelSerializers.dreamEntryFromMap).toList(growable: false),
-      sleepCaptureRecords: _mapListOf(root['sleepCaptureRecords'])
-          .map(ModelSerializers.sleepCaptureRecordFromMap)
-          .toList(growable: false),
+      sleepCaptureRecords: _mapListOf(
+        root['sleepCaptureRecords'],
+      ).map(ModelSerializers.sleepCaptureRecordFromMap).toList(growable: false),
       pendingSleepMemoBanner: _pendingSleepMemoBannerFromUserState(
         _mapOf(root['userState']),
       ),
@@ -672,6 +692,122 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       } catch (error) {
         _lastAuthError = error.toString();
         notifyListeners();
+      }
+    }
+  }
+
+  @override
+  Future<void> updateBadgePreferences({
+    required List<String> earnedBadgeIds,
+    String? equippedBadgeId,
+    bool clearEquippedBadge = false,
+  }) async {
+    final UserProfile next =
+        (_currentUser.uid.isNotEmpty
+                ? _currentUser
+                : await ensureAuthenticated())
+            .copyWith(
+              earnedBadgeIds: earnedBadgeIds,
+              equippedBadgeId: equippedBadgeId,
+              clearEquippedBadge: clearEquippedBadge,
+            );
+    _currentUser = next;
+    notifyListeners();
+    if (_appApiClient.isConfigured) {
+      try {
+        await _appApiClient.post(
+          '/api/profile/save',
+          body: <String, dynamic>{
+            'profile': <String, dynamic>{
+              'earnedBadgeIds': next.earnedBadgeIds,
+              'equippedBadgeId': next.equippedBadgeId,
+            },
+          },
+        );
+        await _snapshotStore.refresh();
+        _currentUser = _currentUser.copyWith(
+          earnedBadgeIds: next.earnedBadgeIds,
+          equippedBadgeId: next.equippedBadgeId,
+          clearEquippedBadge: next.equippedBadgeId == null,
+        );
+        notifyListeners();
+      } catch (error) {
+        _lastAuthError = error.toString();
+        notifyListeners();
+        rethrow;
+      }
+    }
+  }
+
+  @override
+  Future<void> updateDormBadgeVisibility({
+    required bool showDormPulseBadge,
+  }) async {
+    final UserProfile next =
+        (_currentUser.uid.isNotEmpty
+                ? _currentUser
+                : await ensureAuthenticated())
+            .copyWith(showDormPulseBadge: showDormPulseBadge);
+    _currentUser = next;
+    notifyListeners();
+    if (_appApiClient.isConfigured) {
+      try {
+        await _appApiClient.post(
+          '/api/profile/save',
+          body: <String, dynamic>{
+            'profile': <String, dynamic>{
+              'showDormPulseBadge': next.showDormPulseBadge,
+            },
+          },
+        );
+        await _snapshotStore.refresh();
+        _currentUser = _currentUser.copyWith(
+          showDormPulseBadge: next.showDormPulseBadge,
+        );
+        notifyListeners();
+      } catch (error) {
+        _lastAuthError = error.toString();
+        notifyListeners();
+        rethrow;
+      }
+    }
+  }
+
+  @override
+  Future<void> updateDormBadgeSelection({
+    String? selectedDormBadgeId,
+    bool clearSelectedDormBadgeId = false,
+  }) async {
+    final UserProfile next =
+        (_currentUser.uid.isNotEmpty
+                ? _currentUser
+                : await ensureAuthenticated())
+            .copyWith(
+              selectedDormBadgeId: selectedDormBadgeId,
+              clearSelectedDormBadgeId: clearSelectedDormBadgeId,
+            );
+    _currentUser = next;
+    notifyListeners();
+    if (_appApiClient.isConfigured) {
+      try {
+        await _appApiClient.post(
+          '/api/profile/save',
+          body: <String, dynamic>{
+            'profile': <String, dynamic>{
+              'selectedDormBadgeId': next.selectedDormBadgeId,
+            },
+          },
+        );
+        await _snapshotStore.refresh();
+        _currentUser = _currentUser.copyWith(
+          selectedDormBadgeId: next.selectedDormBadgeId,
+          clearSelectedDormBadgeId: next.selectedDormBadgeId == null,
+        );
+        notifyListeners();
+      } catch (error) {
+        _lastAuthError = error.toString();
+        notifyListeners();
+        rethrow;
       }
     }
   }
@@ -1261,6 +1397,13 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   }
 
   void _syncFromSnapshot() {
+    if (_snapshotStore.isRefreshing || !_snapshotStore.hasPayload) {
+      return;
+    }
+    final Map<String, dynamic> root = _snapshotStore.payload['data'] is Map
+        ? Map<String, dynamic>.from(_snapshotStore.payload['data'] as Map)
+        : _snapshotStore.payload;
+    final Map<String, dynamic> rawUser = _mapOf(root['user']);
     final _SnapshotData snapshot = _SnapshotData.fromPayload(
       _snapshotStore.payload,
       _currentUser.uid,
@@ -1275,6 +1418,24 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       displayName: snapshot.user.displayName,
       tagline: snapshot.user.tagline,
       role: snapshot.user.role,
+      earnedBadgeIds: rawUser.containsKey('earnedBadgeIds')
+          ? snapshot.user.earnedBadgeIds
+          : _currentUser.earnedBadgeIds,
+      equippedBadgeId: rawUser.containsKey('equippedBadgeId')
+          ? snapshot.user.equippedBadgeId
+          : _currentUser.equippedBadgeId,
+      clearEquippedBadge:
+          rawUser.containsKey('equippedBadgeId') &&
+          snapshot.user.equippedBadgeId == null,
+      showDormPulseBadge: rawUser.containsKey('showDormPulseBadge')
+          ? snapshot.user.showDormPulseBadge
+          : _currentUser.showDormPulseBadge,
+      selectedDormBadgeId: rawUser.containsKey('selectedDormBadgeId')
+          ? snapshot.user.selectedDormBadgeId
+          : _currentUser.selectedDormBadgeId,
+      clearSelectedDormBadgeId:
+          rawUser.containsKey('selectedDormBadgeId') &&
+          snapshot.user.selectedDormBadgeId == null,
       dormId: snapshot.user.dormId,
       phoneNumber: snapshotPhone?.trim().isNotEmpty == true
           ? snapshotPhone
@@ -1762,25 +1923,25 @@ class CloudBaseSleepCaptureRepository extends ChangeNotifier
 
   @override
   List<SleepCaptureRecord> recordsByType(SleepCaptureType type) {
-    final List<SleepCaptureRecord> matches = _records
-        .where((SleepCaptureRecord item) => item.type == type)
-        .toList()
-      ..sort(
-        (SleepCaptureRecord a, SleepCaptureRecord b) =>
-            b.createdAt.compareTo(a.createdAt),
-      );
+    final List<SleepCaptureRecord> matches =
+        _records.where((SleepCaptureRecord item) => item.type == type).toList()
+          ..sort(
+            (SleepCaptureRecord a, SleepCaptureRecord b) =>
+                b.createdAt.compareTo(a.createdAt),
+          );
     return List<SleepCaptureRecord>.unmodifiable(matches);
   }
 
   @override
   List<SleepCaptureRecord> recordsForSession(String sessionId) {
-    final List<SleepCaptureRecord> matches = _records
-        .where((SleepCaptureRecord item) => item.sessionId == sessionId)
-        .toList()
-      ..sort(
-        (SleepCaptureRecord a, SleepCaptureRecord b) =>
-            b.createdAt.compareTo(a.createdAt),
-      );
+    final List<SleepCaptureRecord> matches =
+        _records
+            .where((SleepCaptureRecord item) => item.sessionId == sessionId)
+            .toList()
+          ..sort(
+            (SleepCaptureRecord a, SleepCaptureRecord b) =>
+                b.createdAt.compareTo(a.createdAt),
+          );
     return List<SleepCaptureRecord>.unmodifiable(matches);
   }
 
@@ -1801,9 +1962,10 @@ class CloudBaseSleepCaptureRepository extends ChangeNotifier
       type: type,
       sessionId: sessionId,
       createdAt: now,
-      title: title ?? _buildTitle(type: type, now: now, content: normalizedContent),
-      outline:
-          outline ?? _buildOutline(type: type, content: normalizedContent),
+      title:
+          title ??
+          _buildTitle(type: type, now: now, content: normalizedContent),
+      outline: outline ?? _buildOutline(type: type, content: normalizedContent),
       content: normalizedContent,
     );
     _upsertLocalRecord(localRecord);
@@ -2220,6 +2382,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
     if (_currentDorm.id.isEmpty) {
       return;
     }
+    final DateTime now = DateTime.now();
     _currentDorm = _currentDorm.copyWith(
       members: _currentDorm.members
           .map((DormMember member) {
@@ -2229,7 +2392,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
             return member.copyWith(
               status: status,
               sleepModeActive: sleepModeActive,
-              lastActiveAt: DateTime.now(),
+              lastActiveAt: now,
               note: note,
             );
           })
@@ -2242,7 +2405,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
               ? '\u4f60\u5df2\u66f4\u65b0\u72b6\u6001'
               : '\u820d\u53cb\u66f4\u65b0\u4e86\u72b6\u6001',
           detail: note,
-          createdAt: DateTime.now(),
+          createdAt: now,
           actorUid: uid,
         ),
         ..._currentDorm.events,
@@ -2250,6 +2413,21 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
     );
     _emitCurrentState();
     notifyListeners();
+    if (_appApiClient.isConfigured) {
+      try {
+        await _appApiClient.post(
+          '/api/dorm/member-status',
+          body: <String, dynamic>{
+            'status': status.name,
+            'sleepModeActive': sleepModeActive,
+            'note': note,
+          },
+        );
+        await _snapshotStore.refresh();
+      } catch (_) {
+        // Keep the optimistic local dorm state when remote sync fails.
+      }
+    }
   }
 
   @override
@@ -2257,9 +2435,173 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
     if (_currentDorm.id.isEmpty) {
       return;
     }
+    if (_currentDorm.pendingRuleProposal != null) {
+      return;
+    }
+    if (_appApiClient.isConfigured) {
+      try {
+        await _appApiClient.post(
+          '/api/dorm/rules',
+          body: <String, dynamic>{
+            'rulesSettings': ModelSerializers.dormRulesSettingsToMap(settings),
+          },
+        );
+        await _snapshotStore.refresh();
+        return;
+      } catch (_) {
+        // Fall back to local state when app-api is unavailable.
+      }
+    }
+    final DateTime now = DateTime.now();
+    final List<DormRule> proposedRules = buildDormSummaryRules(settings);
+    final DormPendingRuleProposal proposal = DormPendingRuleProposal(
+      id: IdGenerator.next('rule-proposal'),
+      proposedSettings: settings,
+      proposedRules: proposedRules,
+      proposerUid: _authRepository.currentUser.uid,
+      proposerName: _currentUserDisplayName(),
+      createdAt: now,
+      reviewerUids: _currentDorm.members
+          .map((DormMember member) => member.uid)
+          .toList(growable: false),
+      approvedUids: <String>[_authRepository.currentUser.uid],
+    );
+    if (_isProposalFullyApproved(proposal)) {
+      _currentDorm = _currentDorm.copyWith(
+        rulesSettings: settings,
+        rules: proposedRules,
+        events: <DormEvent>[
+          DormEvent(
+            id: IdGenerator.next('dorm-event'),
+            type: DormEventType.ruleUpdate,
+            title: '宿舍公约已更新',
+            detail: '安静时段：${settings.quietHours}',
+            createdAt: now,
+            actorUid: _authRepository.currentUser.uid,
+          ),
+          ..._currentDorm.events,
+        ],
+      );
+    } else {
+      _currentDorm = _currentDorm.copyWith(
+        pendingRuleProposal: proposal,
+        events: <DormEvent>[
+          DormEvent(
+            id: IdGenerator.next('dorm-event'),
+            type: DormEventType.ruleUpdate,
+            title: '有新宿舍公约待确认',
+            detail: '${proposal.proposerName} 提交了新的宿舍规则，等待室友确认。',
+            createdAt: now,
+            actorUid: _authRepository.currentUser.uid,
+          ),
+          ..._currentDorm.events,
+        ],
+      );
+    }
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  @override
+  Future<void> approvePendingRules() async {
+    final DormPendingRuleProposal? proposal = _currentDorm.pendingRuleProposal;
+    final String currentUserId = _authRepository.currentUser.uid;
+    if (proposal == null || !proposal.needsReviewFrom(currentUserId)) {
+      return;
+    }
+    if (_appApiClient.isConfigured) {
+      try {
+        await _appApiClient.post(
+          '/api/dorm/rules/approve',
+          body: <String, dynamic>{'proposalId': proposal.id},
+        );
+        await _snapshotStore.refresh();
+        return;
+      } catch (_) {
+        // Fall back to local state when app-api is unavailable.
+      }
+    }
+    final DormPendingRuleProposal nextProposal = proposal.copyWith(
+      approvedUids: <String>{
+        ...proposal.approvedUids,
+        currentUserId,
+      }.toList(growable: false),
+    );
+    if (_isProposalFullyApproved(nextProposal)) {
+      _currentDorm = _currentDorm.copyWith(
+        rulesSettings: nextProposal.proposedSettings,
+        rules: nextProposal.proposedRules,
+        clearPendingRuleProposal: true,
+        events: <DormEvent>[
+          DormEvent(
+            id: IdGenerator.next('dorm-event'),
+            type: DormEventType.ruleUpdate,
+            title: '新宿舍公约已生效',
+            detail: '全部室友已同意，新的宿舍公约开始执行。',
+            createdAt: DateTime.now(),
+            actorUid: currentUserId,
+          ),
+          ..._currentDorm.events,
+        ],
+      );
+    } else {
+      _currentDorm = _currentDorm.copyWith(
+        pendingRuleProposal: nextProposal,
+        events: <DormEvent>[
+          DormEvent(
+            id: IdGenerator.next('dorm-event'),
+            type: DormEventType.ruleUpdate,
+            title: '室友已同意新公约',
+            detail: '${_currentUserDisplayName()} 已同意这次规则调整。',
+            createdAt: DateTime.now(),
+            actorUid: currentUserId,
+          ),
+          ..._currentDorm.events,
+        ],
+      );
+    }
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  @override
+  Future<void> rejectPendingRules({required String reason}) async {
+    final DormPendingRuleProposal? proposal = _currentDorm.pendingRuleProposal;
+    final String currentUserId = _authRepository.currentUser.uid;
+    final String trimmedReason = reason.trim();
+    if (proposal == null ||
+        !proposal.needsReviewFrom(currentUserId) ||
+        trimmedReason.isEmpty) {
+      return;
+    }
+    if (_appApiClient.isConfigured) {
+      try {
+        await _appApiClient.post(
+          '/api/dorm/rules/reject',
+          body: <String, dynamic>{
+            'proposalId': proposal.id,
+            'reason': trimmedReason,
+          },
+        );
+        await _snapshotStore.refresh();
+        return;
+      } catch (_) {
+        // Fall back to local state when app-api is unavailable.
+      }
+    }
     _currentDorm = _currentDorm.copyWith(
-      rulesSettings: settings,
-      rules: buildDormSummaryRules(settings),
+      clearPendingRuleProposal: true,
+      events: <DormEvent>[
+        DormEvent(
+          id: IdGenerator.next('dorm-event'),
+          type: DormEventType.ruleUpdate,
+          title: '新宿舍公约未通过',
+          detail: '${_currentUserDisplayName()} 提出异议：$trimmedReason',
+          createdAt: DateTime.now(),
+          actorUid: currentUserId,
+        ),
+        ..._currentDorm.events,
+      ],
     );
     _emitCurrentState();
     notifyListeners();
@@ -2425,8 +2767,15 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
   }
 
   @override
-  Future<void> sendGentleReminder({required String targetUid}) async {
-    if (_currentDorm.id.isEmpty || targetUid.trim().isEmpty) {
+  Future<void> sendGentleReminder({
+    required String targetUid,
+    bool anonymous = true,
+    required String message,
+  }) async {
+    final String trimmedMessage = message.trim();
+    if (_currentDorm.id.isEmpty ||
+        targetUid.trim().isEmpty ||
+        trimmedMessage.isEmpty) {
       return;
     }
     if (_appApiClient.isConfigured) {
@@ -2434,7 +2783,11 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
         await _authRepository.ensureAuthenticated();
         await _appApiClient.post(
           '/api/dorm/reminders/gentle',
-          body: <String, dynamic>{'targetUid': targetUid.trim()},
+          body: <String, dynamic>{
+            'targetUid': targetUid.trim(),
+            'anonymous': anonymous,
+            'message': trimmedMessage,
+          },
         );
         await _snapshotStore.refresh();
         return;
@@ -2449,6 +2802,9 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
     if (target == null) {
       return;
     }
+    final String senderName = anonymous
+        ? '您的舍友'
+        : _authRepository.currentUser.displayName;
     _currentDorm = _currentDorm.copyWith(
       events: <DormEvent>[
         DormEvent(
@@ -2456,7 +2812,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
           type: DormEventType.notification,
           title: '\u5df2\u53d1\u9001\u59d4\u5a49\u63d0\u9192',
           detail:
-              '\u5df2\u5411 ${target.name} \u53d1\u9001\u4e00\u6761\u7ad9\u5185\u63d0\u9192\u3002',
+              '\u5df2\u7531 $senderName \u5411 ${target.name} \u53d1\u9001\u4e00\u6761\u7ad9\u5185\u63d0\u9192\uff1a$trimmedMessage',
           createdAt: DateTime.now(),
           actorUid: _authRepository.currentUser.uid,
         ),
@@ -2485,6 +2841,16 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
     _membersController.add(List<DormMember>.unmodifiable(_currentDorm.members));
     _rulesController.add(List<DormRule>.unmodifiable(_currentDorm.rules));
     _eventsController.add(List<DormEvent>.unmodifiable(_currentDorm.events));
+  }
+
+  bool _isProposalFullyApproved(DormPendingRuleProposal proposal) {
+    return proposal.reviewerUids.every(proposal.approvedUids.contains);
+  }
+
+  String _currentUserDisplayName() {
+    return _authRepository.currentUser.displayName.isEmpty
+        ? '室友'
+        : _authRepository.currentUser.displayName;
   }
 
   @override

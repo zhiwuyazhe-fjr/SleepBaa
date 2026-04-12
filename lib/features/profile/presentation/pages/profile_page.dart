@@ -25,12 +25,12 @@ class ProfilePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     return ListenableBuilder(
-        listenable: Listenable.merge(<Listenable>[
-          services.authRepository,
-          services.settingsRepository,
-          services.sleepSessionRepository,
-          services.sleepCaptureRepository,
-        ]),
+      listenable: Listenable.merge(<Listenable>[
+        services.authRepository,
+        services.settingsRepository,
+        services.sleepSessionRepository,
+        services.sleepCaptureRepository,
+      ]),
       builder: (BuildContext context, Widget? child) {
         final NightMoodPalette palette = context.nightMoodPalette;
         final UserProfile profile = services.authRepository.currentUser;
@@ -45,6 +45,7 @@ class ProfilePage extends StatelessWidget {
         final List<SleepSession> completed = weekly
             .where((SleepSession item) => item.summary != null)
             .toList();
+        final HonorBadge? activeBadge = honorBadgeById(profile.displayBadgeId);
         final double averageSleep = completed.isEmpty
             ? 0
             : completed.fold<double>(
@@ -278,7 +279,9 @@ class ProfilePage extends StatelessWidget {
                     children: <Widget>[
                       IconBadge(
                         icon: Icons.inventory_2_rounded,
-                        backgroundColor: palette.primaryHighlight.withAlpha(180),
+                        backgroundColor: palette.primaryHighlight.withAlpha(
+                          180,
+                        ),
                         iconColor: palette.primaryDeep,
                         borderRadius: BorderRadius.circular(AppRadius.xl),
                       ),
@@ -310,10 +313,18 @@ class ProfilePage extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xl),
                 Row(
                   children: <Widget>[
-                    Text('荣誉勋章', style: Theme.of(context).textTheme.titleLarge),
-                    const Spacer(),
                     Text(
-                      '3 / 10',
+                      '专属荣誉勋章',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () => context.push(AppRoutes.profileBadges),
+                      child: const Text('查看全部'),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      '${profile.earnedBadgeIds.length} / ${kHonorBadgeCatalog.length}',
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: AppColors.textSecondary,
                       ),
@@ -321,37 +332,57 @@ class ProfilePage extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
-                const Row(
+                Row(
                   children: <Widget>[
                     Expanded(
-                      child: _BadgeTile(
-                        icon: Icons.military_tech_rounded,
-                        label: '首周达成',
-                        unlocked: true,
+                      child: Text(
+                        activeBadge == null
+                            ? '当前默认展示最新获得的勋章'
+                            : '当前展示：${activeBadge.label}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ),
-                    Expanded(
-                      child: _BadgeTile(
-                        icon: Icons.rocket_launch_rounded,
-                        label: '早睡先锋',
-                        unlocked: true,
-                      ),
-                    ),
-                    Expanded(
-                      child: _BadgeTile(
-                        icon: Icons.dark_mode_rounded,
-                        label: '安睡大师',
-                        unlocked: true,
-                      ),
-                    ),
-                    Expanded(
-                      child: _BadgeTile(
-                        icon: Icons.lock_rounded,
-                        label: '月度全勤',
-                        unlocked: false,
-                      ),
+                    TextButton(
+                      onPressed: profile.equippedBadgeId == null
+                          ? null
+                          : () async {
+                              await services.profileFacade.saveEquippedBadge(
+                                null,
+                              );
+                            },
+                      child: const Text('恢复最新获得'),
                     ),
                   ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.md,
+                  children: kHonorBadgeCatalog
+                      .map((HonorBadge badge) {
+                        final bool unlocked = profile.hasEarnedBadge(badge.id);
+                        final bool selected =
+                            profile.displayBadgeId == badge.id;
+                        return SizedBox(
+                          width: 98,
+                          child: _BadgeTile(
+                            badge: badge,
+                            unlocked: unlocked,
+                            selected: selected,
+                            onTap: !unlocked
+                                ? null
+                                : () async {
+                                    await services.profileFacade
+                                        .saveEquippedBadge(
+                                          selected ? null : badge.id,
+                                        );
+                                  },
+                          ),
+                        );
+                      })
+                      .toList(growable: false),
                 ),
               ],
             ),
@@ -516,52 +547,78 @@ class _WeeklyTrendChart extends StatelessWidget {
 
 class _BadgeTile extends StatelessWidget {
   const _BadgeTile({
-    required this.icon,
-    required this.label,
+    required this.badge,
     required this.unlocked,
+    required this.selected,
+    this.onTap,
   });
 
-  final IconData icon;
-  final String label;
+  final HonorBadge badge;
   final bool unlocked;
+  final bool selected;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Column(
-        children: <Widget>[
-          Container(
-            width: 68,
-            height: 68,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: unlocked
-                  ? context.nightMoodPalette.primary.withAlpha(18)
-                  : AppColors.surfaceSoft,
-              border: unlocked
-                  ? Border.all(
-                      color: context.nightMoodPalette.primarySoft,
-                      width: 2,
-                    )
-                  : null,
-            ),
-            child: Icon(
-              icon,
-              color: unlocked
-                  ? context.nightMoodPalette.primary
-                  : AppColors.textSecondary.withAlpha(110),
-            ),
+    final NightMoodPalette palette = context.nightMoodPalette;
+    return Tooltip(
+      message: badge.description,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Column(
+            children: <Widget>[
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: unlocked
+                      ? palette.primary.withAlpha(selected ? 28 : 18)
+                      : AppColors.surfaceSoft,
+                  border: Border.all(
+                    color: selected
+                        ? palette.primary
+                        : unlocked
+                        ? palette.primarySoft
+                        : AppColors.divider,
+                    width: selected ? 2.5 : 1.5,
+                  ),
+                ),
+                child: Icon(
+                  unlocked ? badge.icon : Icons.lock_rounded,
+                  color: unlocked
+                      ? palette.primary
+                      : AppColors.textSecondary.withAlpha(110),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                badge.label,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppColors.textPrimary.withAlpha(unlocked ? 255 : 120),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                selected
+                    ? '当前佩戴'
+                    : unlocked
+                    ? '点击佩戴'
+                    : '未获得',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: selected ? palette.primary : AppColors.textSecondary,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textPrimary.withAlpha(unlocked ? 255 : 120),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -33,6 +33,16 @@ abstract interface class AuthRepository implements Listenable {
     required String tagline,
     required String role,
   });
+  Future<void> updateBadgePreferences({
+    required List<String> earnedBadgeIds,
+    String? equippedBadgeId,
+    bool clearEquippedBadge = false,
+  });
+  Future<void> updateDormBadgeVisibility({required bool showDormPulseBadge});
+  Future<void> updateDormBadgeSelection({
+    String? selectedDormBadgeId,
+    bool clearSelectedDormBadgeId = false,
+  });
   Future<void> updateAvatar({
     required String? avatarPath,
     required Uint8List? avatarBytes,
@@ -168,11 +178,17 @@ abstract interface class DormRepository implements Listenable {
     required String note,
   });
   Future<void> saveRules(DormRulesSettings settings);
+  Future<void> approvePendingRules();
+  Future<void> rejectPendingRules({required String reason});
   Future<DormInvite> createInvite();
   Future<void> acceptInvite(String inviteCode);
   Future<void> renameDorm(String name);
   Future<void> leaveDorm();
-  Future<void> sendGentleReminder({required String targetUid});
+  Future<void> sendGentleReminder({
+    required String targetUid,
+    bool anonymous = true,
+    required String message,
+  });
 }
 
 abstract interface class DreamRepository implements Listenable {

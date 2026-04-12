@@ -68,6 +68,10 @@ class UserProfile {
     required this.displayName,
     required this.tagline,
     required this.role,
+    this.earnedBadgeIds = const <String>[],
+    this.equippedBadgeId,
+    this.showDormPulseBadge = true,
+    this.selectedDormBadgeId,
     this.dormId,
     this.phoneNumber,
     this.phoneLinkedAt,
@@ -82,6 +86,10 @@ class UserProfile {
   final String displayName;
   final String tagline;
   final String role;
+  final List<String> earnedBadgeIds;
+  final String? equippedBadgeId;
+  final bool showDormPulseBadge;
+  final String? selectedDormBadgeId;
   final String? dormId;
   final String? phoneNumber;
   final DateTime? phoneLinkedAt;
@@ -91,11 +99,47 @@ class UserProfile {
   final String? avatarStoragePath;
   final String? avatarFallbackSeed;
 
+  String? get latestEarnedBadgeId =>
+      earnedBadgeIds.isEmpty ? null : earnedBadgeIds.last;
+
+  String? get displayBadgeId {
+    final String? normalizedEquipped = equippedBadgeId?.trim();
+    if (normalizedEquipped != null &&
+        normalizedEquipped.isNotEmpty &&
+        earnedBadgeIds.contains(normalizedEquipped)) {
+      return normalizedEquipped;
+    }
+    return latestEarnedBadgeId;
+  }
+
+  bool hasEarnedBadge(String badgeId) => earnedBadgeIds.contains(badgeId);
+
+  String? resolveDormBadgeId(Iterable<String> earnedDormBadgeIds) {
+    final String? normalizedSelected = selectedDormBadgeId?.trim();
+    if (normalizedSelected != null &&
+        normalizedSelected.isNotEmpty &&
+        earnedDormBadgeIds.contains(normalizedSelected)) {
+      return normalizedSelected;
+    }
+    if (earnedDormBadgeIds is List<String>) {
+      return earnedDormBadgeIds.isEmpty ? null : earnedDormBadgeIds.last;
+    }
+    String? latestBadgeId;
+    for (final String badgeId in earnedDormBadgeIds) {
+      latestBadgeId = badgeId;
+    }
+    return latestBadgeId;
+  }
+
   UserProfile copyWith({
     String? uid,
     String? displayName,
     String? tagline,
     String? role,
+    List<String>? earnedBadgeIds,
+    String? equippedBadgeId,
+    bool? showDormPulseBadge,
+    String? selectedDormBadgeId,
     String? dormId,
     String? phoneNumber,
     DateTime? phoneLinkedAt,
@@ -103,6 +147,8 @@ class UserProfile {
     Uint8List? avatarBytes,
     String? avatarUrl,
     String? avatarStoragePath,
+    bool clearEquippedBadge = false,
+    bool clearSelectedDormBadgeId = false,
     bool clearAvatar = false,
     bool clearDormId = false,
     bool clearPhoneNumber = false,
@@ -114,6 +160,14 @@ class UserProfile {
       displayName: displayName ?? this.displayName,
       tagline: tagline ?? this.tagline,
       role: role ?? this.role,
+      earnedBadgeIds: earnedBadgeIds ?? this.earnedBadgeIds,
+      equippedBadgeId: clearEquippedBadge
+          ? null
+          : equippedBadgeId ?? this.equippedBadgeId,
+      showDormPulseBadge: showDormPulseBadge ?? this.showDormPulseBadge,
+      selectedDormBadgeId: clearSelectedDormBadgeId
+          ? null
+          : selectedDormBadgeId ?? this.selectedDormBadgeId,
       dormId: clearDormId ? null : dormId ?? this.dormId,
       phoneNumber: clearPhoneNumber ? null : phoneNumber ?? this.phoneNumber,
       phoneLinkedAt: clearPhoneLinkedAt
@@ -129,6 +183,154 @@ class UserProfile {
           avatarFallbackSeed ?? this.avatarFallbackSeed ?? this.displayName,
     );
   }
+}
+
+class HonorBadge {
+  const HonorBadge({
+    required this.id,
+    required this.label,
+    required this.description,
+    required this.icon,
+  });
+
+  final String id;
+  final String label;
+  final String description;
+  final IconData icon;
+}
+
+class DormHonorBadge {
+  const DormHonorBadge({
+    required this.id,
+    required this.label,
+    required this.meaning,
+    required this.icon,
+  });
+
+  final String id;
+  final String label;
+  final String meaning;
+  final IconData icon;
+}
+
+const List<HonorBadge> kHonorBadgeCatalog = <HonorBadge>[
+  HonorBadge(
+    id: 'first-week',
+    label: '首周达成',
+    description: '连续完成第一周睡眠打卡。',
+    icon: Icons.military_tech_rounded,
+  ),
+  HonorBadge(
+    id: 'early-sleeper',
+    label: '早睡先锋',
+    description: '多次在目标时间前进入睡前流程。',
+    icon: Icons.rocket_launch_rounded,
+  ),
+  HonorBadge(
+    id: 'sleep-master',
+    label: '安睡大师',
+    description: '保持稳定睡眠节律并减少夜醒。',
+    icon: Icons.dark_mode_rounded,
+  ),
+  HonorBadge(
+    id: 'monthly-perfect',
+    label: '月度全勤',
+    description: '整月坚持完成睡眠记录。',
+    icon: Icons.calendar_month_rounded,
+  ),
+  HonorBadge(
+    id: 'quiet-guardian',
+    label: '安静守护者',
+    description: '持续帮助宿舍维持安静环境。',
+    icon: Icons.volume_off_rounded,
+  ),
+  HonorBadge(
+    id: 'sunrise-club',
+    label: '早起自律',
+    description: '连续多天稳定早起。',
+    icon: Icons.wb_sunny_outlined,
+  ),
+  HonorBadge(
+    id: 'exam-support',
+    label: '考试周同盟',
+    description: '考试周积极配合宿舍共同作息。',
+    icon: Icons.menu_book_rounded,
+  ),
+  HonorBadge(
+    id: 'gentle-reminder',
+    label: '温柔提醒官',
+    description: '多次发送温和提醒并获得积极反馈。',
+    icon: Icons.mark_chat_read_rounded,
+  ),
+  HonorBadge(
+    id: 'pulse-observer',
+    label: '宿舍脉搏观察员',
+    description: '持续关注宿舍状态并及时回应变化。',
+    icon: Icons.monitor_heart_rounded,
+  ),
+  HonorBadge(
+    id: 'team-star',
+    label: '合住默契星',
+    description: '长期维护舒适的共同生活节奏。',
+    icon: Icons.groups_rounded,
+  ),
+];
+
+HonorBadge? honorBadgeById(String? badgeId) {
+  if (badgeId == null || badgeId.trim().isEmpty) {
+    return null;
+  }
+  for (final HonorBadge badge in kHonorBadgeCatalog) {
+    if (badge.id == badgeId) {
+      return badge;
+    }
+  }
+  return null;
+}
+
+const List<DormHonorBadge> kDormHonorBadgeCatalog = <DormHonorBadge>[
+  DormHonorBadge(
+    id: 'no-wake-room',
+    label: '不醒人室',
+    meaning: '宿舍成员整体睡眠时间长，睡眠状态良好',
+    icon: Icons.bedtime_rounded,
+  ),
+  DormHonorBadge(
+    id: 'no-trouble-room',
+    label: '无琐事室',
+    meaning: '宿舍成员连续一周未发生冲突，关系和谐',
+    icon: Icons.handshake_rounded,
+  ),
+  DormHonorBadge(
+    id: 'no-one-home-room',
+    label: '若无其室',
+    meaning: '该宿舍该周多次存在成员未归寝情况',
+    icon: Icons.door_front_door_outlined,
+  ),
+  DormHonorBadge(
+    id: 'noisy-room',
+    label: '嘘张声室',
+    meaning: '该宿舍较吵闹',
+    icon: Icons.campaign_outlined,
+  ),
+  DormHonorBadge(
+    id: 'prison-room',
+    label: '实是囚室',
+    meaning: '该宿舍关系不和谐，住宿舍跟坐牢一样',
+    icon: Icons.heart_broken_outlined,
+  ),
+];
+
+DormHonorBadge? dormHonorBadgeById(String? badgeId) {
+  if (badgeId == null || badgeId.trim().isEmpty) {
+    return null;
+  }
+  for (final DormHonorBadge badge in kDormHonorBadgeCatalog) {
+    if (badge.id == badgeId) {
+      return badge;
+    }
+  }
+  return null;
 }
 
 class UserSettings {
@@ -562,6 +764,79 @@ class DormRulesSettings {
   }
 }
 
+class DormPendingRuleProposal {
+  const DormPendingRuleProposal({
+    required this.id,
+    required this.proposedSettings,
+    required this.proposedRules,
+    required this.proposerUid,
+    required this.proposerName,
+    required this.createdAt,
+    required this.reviewerUids,
+    required this.approvedUids,
+    this.rejectedByUid,
+    this.rejectedReason,
+    this.resolvedAt,
+  });
+
+  final String id;
+  final DormRulesSettings proposedSettings;
+  final List<DormRule> proposedRules;
+  final String proposerUid;
+  final String proposerName;
+  final DateTime createdAt;
+  final List<String> reviewerUids;
+  final List<String> approvedUids;
+  final String? rejectedByUid;
+  final String? rejectedReason;
+  final DateTime? resolvedAt;
+
+  List<String> pendingReviewerUids() {
+    return reviewerUids
+        .where((String uid) => !approvedUids.contains(uid))
+        .toList(growable: false);
+  }
+
+  bool needsReviewFrom(String uid) {
+    return reviewerUids.contains(uid) && !approvedUids.contains(uid);
+  }
+
+  DormPendingRuleProposal copyWith({
+    String? id,
+    DormRulesSettings? proposedSettings,
+    List<DormRule>? proposedRules,
+    String? proposerUid,
+    String? proposerName,
+    DateTime? createdAt,
+    List<String>? reviewerUids,
+    List<String>? approvedUids,
+    String? rejectedByUid,
+    String? rejectedReason,
+    DateTime? resolvedAt,
+    bool clearRejectedByUid = false,
+    bool clearRejectedReason = false,
+    bool clearResolvedAt = false,
+  }) {
+    return DormPendingRuleProposal(
+      id: id ?? this.id,
+      proposedSettings: proposedSettings ?? this.proposedSettings,
+      proposedRules: proposedRules ?? this.proposedRules,
+      proposerUid: proposerUid ?? this.proposerUid,
+      proposerName: proposerName ?? this.proposerName,
+      createdAt: createdAt ?? this.createdAt,
+      reviewerUids: reviewerUids ?? this.reviewerUids,
+      approvedUids: approvedUids ?? this.approvedUids,
+      rejectedByUid: clearRejectedByUid
+          ? null
+          : rejectedByUid ?? this.rejectedByUid,
+      rejectedReason: clearRejectedReason
+          ? null
+          : rejectedReason ?? this.rejectedReason,
+      resolvedAt: clearResolvedAt ? null : resolvedAt ?? this.resolvedAt,
+    );
+  }
+}
+
 class DormMember {
   const DormMember({
     required this.uid,
@@ -571,6 +846,7 @@ class DormMember {
     required this.lastActiveAt,
     required this.note,
     this.avatarUrl,
+    this.displayBadgeId,
   });
 
   final String uid;
@@ -580,6 +856,7 @@ class DormMember {
   final DateTime lastActiveAt;
   final String note;
   final String? avatarUrl;
+  final String? displayBadgeId;
 
   DormMember copyWith({
     String? uid,
@@ -589,6 +866,7 @@ class DormMember {
     DateTime? lastActiveAt,
     String? note,
     String? avatarUrl,
+    String? displayBadgeId,
   }) {
     return DormMember(
       uid: uid ?? this.uid,
@@ -598,6 +876,7 @@ class DormMember {
       lastActiveAt: lastActiveAt ?? this.lastActiveAt,
       note: note ?? this.note,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      displayBadgeId: displayBadgeId ?? this.displayBadgeId,
     );
   }
 }
@@ -716,6 +995,8 @@ class Dorm {
     ),
     this.events = const <DormEvent>[],
     this.invites = const <DormInvite>[],
+    this.pendingRuleProposal,
+    this.earnedDormBadgeIds = const <String>['no-trouble-room', 'no-wake-room'],
   });
 
   final String id;
@@ -731,6 +1012,16 @@ class Dorm {
   final DormRulesSettings rulesSettings;
   final List<DormEvent> events;
   final List<DormInvite> invites;
+  final DormPendingRuleProposal? pendingRuleProposal;
+  final List<String> earnedDormBadgeIds;
+
+  bool get hasPendingRuleProposal => pendingRuleProposal != null;
+
+  String? get latestEarnedDormBadgeId =>
+      earnedDormBadgeIds.isEmpty ? null : earnedDormBadgeIds.last;
+
+  bool hasEarnedDormBadge(String badgeId) =>
+      earnedDormBadgeIds.contains(badgeId);
 
   Dorm copyWith({
     String? id,
@@ -747,6 +1038,9 @@ class Dorm {
     DormRulesSettings? rulesSettings,
     List<DormEvent>? events,
     List<DormInvite>? invites,
+    DormPendingRuleProposal? pendingRuleProposal,
+    List<String>? earnedDormBadgeIds,
+    bool clearPendingRuleProposal = false,
   }) {
     return Dorm(
       id: id ?? this.id,
@@ -762,6 +1056,10 @@ class Dorm {
       rulesSettings: rulesSettings ?? this.rulesSettings,
       events: events ?? this.events,
       invites: invites ?? this.invites,
+      earnedDormBadgeIds: earnedDormBadgeIds ?? this.earnedDormBadgeIds,
+      pendingRuleProposal: clearPendingRuleProposal
+          ? null
+          : pendingRuleProposal ?? this.pendingRuleProposal,
     );
   }
 }
