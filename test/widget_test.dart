@@ -852,14 +852,14 @@ void main() {
     );
     expect(earlyBirdCardFinder, findsOneWidget);
     final AppCard earlyBirdCard = tester.widget<AppCard>(earlyBirdCardFinder);
-    expect(earlyBirdCard.borderRadius, BorderRadius.circular(AppRadius.lg));
+    expect(earlyBirdCard.borderRadius, BorderRadius.circular(AppRadius.md));
     expect(earlyBirdCard.padding, const EdgeInsets.all(16));
     expect(
       find.descendant(
         of: find.byKey(const ValueKey<String>('profile-badge-strip-card-0')),
         matching: find.byIcon(Icons.east_rounded),
       ),
-      findsOneWidget,
+      findsNothing,
     );
 
     await tester.tap(find.text('早睡先锋'));
