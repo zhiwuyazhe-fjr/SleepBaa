@@ -7,6 +7,7 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 
 class NotificationsPage extends StatelessWidget {
   const NotificationsPage({super.key});
@@ -16,6 +17,7 @@ class NotificationsPage extends StatelessWidget {
     final AppServices services = context.appServices;
     final NightMoodPalette palette = context.nightMoodPalette;
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('消息中心')),
       body: ListenableBuilder(
         listenable: services.notificationRepository,
@@ -45,8 +47,15 @@ class NotificationsPage extends StatelessWidget {
               .toList();
 
           return ListView(
-            padding: const EdgeInsets.all(AppSpacing.xl),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.sm,
+              AppSpacing.sm,
+              AppSpacing.sm,
+              88,
+            ),
             children: <Widget>[
+              _NotificationOverviewCard(unreadCount: unread.length),
+              const SizedBox(height: AppSpacing.sm),
               _NotificationSection(
                 title: '待处理',
                 items: unread,
@@ -100,58 +109,70 @@ class _NotificationSection extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xl),
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(title, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: AppSpacing.md),
+          SectionTitle(
+            title: title,
+            titleStyle: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
           ...items.map(
             (NotificationItem item) => Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              padding: const EdgeInsets.only(bottom: AppSpacing.xs),
               child: AppCard(
                 onTap: () => onTap(item),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: AppSpacing.sm,
+                ),
+                borderRadius: BorderRadius.circular(16),
                 color: item.isRead
                     ? AppColors.surface
-                    : palette.primarySoft.withAlpha(45),
+                    : AppColors.legacyCardSurface,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Container(
-                      width: 44,
-                      height: 44,
+                      width: 36,
+                      height: 36,
                       decoration: BoxDecoration(
-                        color: _colorForCategory(item.category).withAlpha(24),
-                        borderRadius: BorderRadius.circular(18),
+                        color: palette.primaryHighlight,
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       alignment: Alignment.center,
                       child: Icon(
                         _iconForCategory(item.category),
+                        size: 18,
                         color: _colorForCategory(item.category),
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.md),
+                    const SizedBox(width: AppSpacing.xs),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
                             _localizedTitle(item),
-                            style: Theme.of(context).textTheme.titleLarge,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
-                          const SizedBox(height: AppSpacing.xs),
+                          const SizedBox(height: 4),
                           Text(
                             _localizedBody(item),
                             style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: AppColors.textSecondary),
+                                ?.copyWith(
+                                  fontSize: 12,
+                                  color: const Color(0xFF888888),
+                                  fontWeight: FontWeight.w400,
+                                ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      color: AppColors.textSecondary.withAlpha(140),
                     ),
                   ],
                 ),
@@ -173,12 +194,7 @@ class _NotificationSection extends StatelessWidget {
   }
 
   Color _colorForCategory(NotificationCategory category) {
-    return switch (category) {
-      NotificationCategory.reminder => palette.primary,
-      NotificationCategory.session => palette.calmBlue,
-      NotificationCategory.dorm => palette.primaryDeep,
-      NotificationCategory.system => AppColors.textSecondary,
-    };
+    return palette.primary;
   }
 
   String _localizedTitle(NotificationItem item) {
@@ -202,7 +218,6 @@ class _NotificationSection extends StatelessWidget {
     final String combined = '${item.title} ${item.body}'.toLowerCase();
     return RegExp(r'[a-z]').hasMatch(combined);
   }
-
 }
 
 void _navigateFromNotification(BuildContext context, String route) {
@@ -211,6 +226,63 @@ void _navigateFromNotification(BuildContext context, String route) {
     return;
   }
   context.push(route);
+}
+
+class _NotificationOverviewCard extends StatelessWidget {
+  const _NotificationOverviewCard({required this.unreadCount});
+
+  final int unreadCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final NightMoodPalette palette = context.nightMoodPalette;
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      borderRadius: BorderRadius.circular(20),
+      color: AppColors.surface,
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: palette.primaryHighlight,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              Icons.notifications_active_rounded,
+              size: 18,
+              color: palette.primary,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  unreadCount > 0 ? '有 $unreadCount 条待处理消息' : '消息都已处理',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  unreadCount > 0 ? '建议先查看「待处理」分组' : '今晚可以专注休息了',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontSize: 12,
+                    color: const Color(0xFF888888),
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 bool _isShellRootRoute(String route) {

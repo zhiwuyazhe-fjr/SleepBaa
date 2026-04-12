@@ -1,7 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -13,6 +16,13 @@ import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_invite_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_member_status_presenter.dart';
+
+const List<String> _gentleReminderPresets = <String>[
+  '如果方便的话，今晚一起把宿舍的环境再放轻一点',
+  '被月亮绑架了？该回地球了，宿舍要关门啦～',
+];
+
+enum _GentleReminderTab { content, target }
 
 class DormPage extends StatelessWidget {
   const DormPage({super.key});
@@ -51,39 +61,51 @@ class DormPage extends StatelessWidget {
           if (dorm.id.isEmpty) {
             return const DormInvitePage();
           }
+          final UserProfile currentUser = services.authRepository.currentUser;
           final NightMoodPalette palette = context.nightMoodPalette;
-          final String currentUserId = services.authRepository.currentUser.uid;
+          final String currentUserId = currentUser.uid;
           final List<DormEventRecord> events = buildDormEventRecords(
             dorm: dorm,
             notifications: services.notificationRepository.notifications,
             palette: palette,
           );
+          final DormPendingRuleProposal? pendingProposal =
+              dorm.pendingRuleProposal;
+          final bool hasPendingRuleDot =
+              pendingProposal != null &&
+              pendingProposal.proposerUid != currentUserId &&
+              pendingProposal.needsReviewFrom(currentUserId);
           final int onlineCount = returnedDormMemberCount(dorm.members);
           final int sleepingCount = sleepingDormMemberCount(dorm.members);
+          final String? selectedDormBadgeId = currentUser.resolveDormBadgeId(
+            dorm.earnedDormBadgeIds,
+          );
+          final DormHonorBadge? dormPulseBadge = currentUser.showDormPulseBadge
+              ? dormHonorBadgeById(selectedDormBadgeId)
+              : null;
           final List<_DormHubAction> actions = <_DormHubAction>[
             _DormHubAction(
-              title: '宿舍作息约定',
-              detail: '查看详情',
+              title: '宿舍公约',
+              detail: hasPendingRuleDot ? '有新规则待确认' : '查看详情',
               icon: Icons.calendar_today_rounded,
-              onTap: () => context.push(AppRoutes.dormRules),
+              showDot: hasPendingRuleDot,
+              onTap: () => context.push(
+                hasPendingRuleDot
+                    ? '${AppRoutes.dormRules}?review=1'
+                    : AppRoutes.dormRules,
+              ),
             ),
             _DormHubAction(
               title: '静音模式',
               detail: '今晚执行',
               icon: Icons.volume_off_rounded,
-              onTap: () => _showDormToast(
-                context,
-                '今晚 23:00 后的静音提醒已经准备好了。',
-              ),
+              onTap: () => _showDormToast(context, '今晚 23:00 后的静音提醒已经准备好了。'),
             ),
             _DormHubAction(
-              title: '安静挑战',
-              detail: '参与挑战',
+              title: '宿舍勋章',
+              detail: '查看勋章',
               icon: Icons.emoji_events_rounded,
-              onTap: () => _showDormToast(
-                context,
-                '已记录本周安静挑战，明早可以回看完成情况。',
-              ),
+              onTap: () => context.push(AppRoutes.dormBadges),
             ),
             _DormHubAction(
               title: '委婉提醒',
@@ -136,10 +158,28 @@ class DormPage extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: <Widget>[
-                              Text(
-                                dorm.name,
-                                style: Theme.of(context).textTheme.displayMedium
-                                    ?.copyWith(height: 1.05),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Expanded(
+                                    child: Text(
+                                      dorm.name,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .displayMedium
+                                          ?.copyWith(height: 1.05),
+                                    ),
+                                  ),
+                                  if (dormPulseBadge != null) ...<Widget>[
+                                    const SizedBox(width: AppSpacing.sm),
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: _DormPulseBadgePill(
+                                        badge: dormPulseBadge,
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                               const SizedBox(height: AppSpacing.lg),
                               _DormHeroCard(
@@ -155,127 +195,153 @@ class DormPage extends StatelessWidget {
                       ),
                     ),
                     Positioned.fill(
-                      top: 76,
+                      top: 104,
                       child: Align(
                         alignment: Alignment.bottomCenter,
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 760),
                           child: DraggableScrollableSheet(
-                            initialChildSize: wideLayout ? 0.76 : 0.78,
-                            minChildSize: wideLayout ? 0.75 : 0.77,
+                            initialChildSize: wideLayout ? 0.72 : 0.74,
+                            minChildSize: wideLayout ? 0.7 : 0.72,
                             maxChildSize: 1,
-                            builder: (
-                              BuildContext context,
-                              ScrollController scrollController,
-                            ) {
-                              return Container(
-                                key: drawerSheetKey,
-                                decoration: BoxDecoration(
-                                  color: AppColors.surface,
-                                  borderRadius: const BorderRadius.vertical(
-                                    top: Radius.circular(44),
-                                  ),
-                                  boxShadow: AppColors.floatingShadow,
-                                ),
-                                child: ListView(
-                                  controller: scrollController,
-                                  padding: EdgeInsets.fromLTRB(
-                                    horizontalPadding,
-                                    AppSpacing.sm,
-                                    horizontalPadding,
-                                    168,
-                                  ),
-                                  children: <Widget>[
-                                    Center(
-                                      child: Container(
-                                        width: 48,
-                                        height: 5,
-                                        decoration: BoxDecoration(
-                                          color: palette.primarySoft.withAlpha(144),
-                                          borderRadius: BorderRadius.circular(999),
-                                        ),
+                            builder:
+                                (
+                                  BuildContext context,
+                                  ScrollController scrollController,
+                                ) {
+                                  return Container(
+                                    key: drawerSheetKey,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surface,
+                                      borderRadius: const BorderRadius.vertical(
+                                        top: Radius.circular(44),
                                       ),
+                                      boxShadow: AppColors.floatingShadow,
                                     ),
-                                    const SizedBox(height: AppSpacing.md),
-                                    SectionTitle(
-                                      title: '宿友动态',
-                                      actionLabel: '邀请舍友',
-                                      onAction: () =>
-                                          context.push(AppRoutes.dormInvite),
-                                    ),
-                                    const SizedBox(height: AppSpacing.md),
-                                    SizedBox(
-                                      key: roommateListKey,
-                                      height: 188,
-                                      child: ListView.separated(
-                                        scrollDirection: Axis.horizontal,
-                                        itemCount: dorm.members.length,
-                                        separatorBuilder: (_, index) =>
-                                            const SizedBox(width: AppSpacing.sm),
-                                        itemBuilder: (
-                                          BuildContext context,
-                                          int index,
-                                        ) {
-                                          final DormMember member =
-                                              dorm.members[index];
-                                          return _DormMemberCard(
-                                            member: member,
-                                            isCurrentUser: member.uid == currentUserId,
-                                          );
-                                        },
+                                    child: ListView(
+                                      controller: scrollController,
+                                      padding: EdgeInsets.fromLTRB(
+                                        horizontalPadding,
+                                        AppSpacing.sm,
+                                        horizontalPadding,
+                                        168,
                                       ),
-                                    ),
-                                    const SizedBox(height: AppSpacing.xl),
-                                    const SectionTitle(title: '智能寝室协同中心'),
-                                    const SizedBox(height: AppSpacing.md),
-                                    GridView.builder(
-                                      shrinkWrap: true,
-                                      physics: const NeverScrollableScrollPhysics(),
-                                      itemCount: actions.length,
-                                      gridDelegate:
-                                          SliverGridDelegateWithFixedCrossAxisCount(
-                                            crossAxisCount: 2,
-                                            crossAxisSpacing: AppSpacing.md,
-                                            mainAxisSpacing: AppSpacing.md,
-                                            childAspectRatio: wideLayout
-                                                ? 1.18
-                                                : 1.04,
+                                      children: <Widget>[
+                                        Center(
+                                          child: Container(
+                                            width: 48,
+                                            height: 5,
+                                            decoration: BoxDecoration(
+                                              color: palette.primarySoft
+                                                  .withAlpha(144),
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                            ),
                                           ),
-                                      itemBuilder: (
-                                        BuildContext context,
-                                        int index,
-                                      ) {
-                                        return _DormHubCard(
-                                          action: actions[index],
-                                          palette: palette,
-                                        );
-                                      },
-                                    ),
-                                    const SizedBox(height: AppSpacing.xl),
-                                    SectionTitle(
-                                      title: '寝室事件记录',
-                                      actionLabel: '查看更多',
-                                      actionKey: eventMoreKey,
-                                      onAction: () =>
-                                          context.push(AppRoutes.dormStatus),
-                                    ),
-                                    const SizedBox(height: AppSpacing.md),
-                                    ...events.map(
-                                      (DormEventRecord event) => Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: AppSpacing.sm,
                                         ),
-                                        child: _DormEventTile(
-                                          event: event,
-                                          onTap: () =>
-                                              context.push(AppRoutes.dormStatus),
+                                        const SizedBox(height: AppSpacing.md),
+                                        SectionTitle(
+                                          title: '舍友动态',
+                                          actionLabel: '邀请舍友',
+                                          onAction: () => context.push(
+                                            AppRoutes.dormInvite,
+                                          ),
                                         ),
-                                      ),
+                                        const SizedBox(height: AppSpacing.md),
+                                        SizedBox(
+                                          key: roommateListKey,
+                                          height: 188,
+                                          child: ListView.separated(
+                                            scrollDirection: Axis.horizontal,
+                                            itemCount: dorm.members.length,
+                                            separatorBuilder: (_, index) =>
+                                                const SizedBox(
+                                                  width: AppSpacing.sm,
+                                                ),
+                                            itemBuilder:
+                                                (
+                                                  BuildContext context,
+                                                  int index,
+                                                ) {
+                                                  final DormMember member =
+                                                      dorm.members[index];
+                                                  return _DormMemberCard(
+                                                    member: member,
+                                                    isCurrentUser:
+                                                        member.uid ==
+                                                        currentUserId,
+                                                    currentUserProfile:
+                                                        member.uid ==
+                                                            currentUserId
+                                                        ? services
+                                                              .authRepository
+                                                              .currentUser
+                                                        : null,
+                                                  );
+                                                },
+                                          ),
+                                        ),
+                                        const SizedBox(height: AppSpacing.xl),
+                                        const SectionTitle(title: '智能寝室协同中心'),
+                                        const SizedBox(height: AppSpacing.md),
+                                        GridView.builder(
+                                          shrinkWrap: true,
+                                          physics:
+                                              const NeverScrollableScrollPhysics(),
+                                          itemCount: actions.length,
+                                          gridDelegate:
+                                              SliverGridDelegateWithFixedCrossAxisCount(
+                                                crossAxisCount: 2,
+                                                crossAxisSpacing: AppSpacing.md,
+                                                mainAxisSpacing: AppSpacing.md,
+                                                childAspectRatio: wideLayout
+                                                    ? 1.18
+                                                    : 1.04,
+                                              ),
+                                          itemBuilder:
+                                              (
+                                                BuildContext context,
+                                                int index,
+                                              ) {
+                                                return _DormHubCard(
+                                                  action: actions[index],
+                                                  palette: palette,
+                                                );
+                                              },
+                                        ),
+                                        const SizedBox(height: AppSpacing.xl),
+                                        SectionTitle(
+                                          title: '寝室状态记录',
+                                          actionLabel: '查看更多',
+                                          actionKey: eventMoreKey,
+                                          onAction: () => context.push(
+                                            AppRoutes.dormStatus,
+                                          ),
+                                        ),
+                                        const SizedBox(height: AppSpacing.md),
+                                        ...events.map(
+                                          (DormEventRecord event) => Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: AppSpacing.sm,
+                                            ),
+                                            child: _DormEventTile(
+                                              event: event,
+                                              onActionTap:
+                                                  event.actionRoute == null
+                                                  ? null
+                                                  : () => context.push(
+                                                      event.actionRoute!,
+                                                    ),
+                                              onTap: () => context.push(
+                                                AppRoutes.dormStatus,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                              );
-                            },
+                                  );
+                                },
                           ),
                         ),
                       ),
@@ -362,6 +428,40 @@ class _DormHeroCard extends StatelessWidget {
   }
 }
 
+class _DormPulseBadgePill extends StatelessWidget {
+  const _DormPulseBadgePill({required this.badge});
+
+  final DormHonorBadge badge;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(236),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(badge.icon, size: 16, color: const Color(0xFF076B5E)),
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            badge.label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _HeroInfoPill extends StatelessWidget {
   const _HeroInfoPill({required this.label});
 
@@ -437,36 +537,48 @@ class _DormMemberCard extends StatelessWidget {
   const _DormMemberCard({
     required this.member,
     required this.isCurrentUser,
+    this.currentUserProfile,
   });
 
   final DormMember member;
   final bool isCurrentUser;
+  final UserProfile? currentUserProfile;
 
   @override
   Widget build(BuildContext context) {
     final Color presenceColor = dormPresenceSleepColor(member);
     final Color activityColor = dormActivityColor(member);
+    final Color accentColor = _memberColor(member.status);
+    final String? resolvedBadgeId =
+        currentUserProfile?.displayBadgeId ?? member.displayBadgeId;
+    final HonorBadge? badge = honorBadgeById(resolvedBadgeId);
+    final Uint8List? avatarBytes = isCurrentUser
+        ? currentUserProfile?.avatarBytes
+        : null;
+    final String? avatarUrl = isCurrentUser
+        ? currentUserProfile?.avatarUrl ?? member.avatarUrl
+        : member.avatarUrl;
+    final String fallbackSeed =
+        currentUserProfile?.avatarFallbackSeed?.trim().isNotEmpty == true
+        ? currentUserProfile!.avatarFallbackSeed!
+        : member.name;
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.sm),
       border: Border.all(color: AppColors.divider),
       boxShadow: const <BoxShadow>[],
       child: SizedBox(
         width: 136,
-        height: 160,
+        height: 172,
         child: Column(
           children: <Widget>[
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: presenceColor.withAlpha(42),
-              child: Text(
-                member.name.characters.first,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: presenceColor,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
+            _DormMemberAvatar(
+              radius: 22,
+              accentColor: accentColor,
+              avatarBytes: avatarBytes,
+              avatarUrl: avatarUrl,
+              fallbackSeed: fallbackSeed,
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.xs),
             Text(
               isCurrentUser ? '${member.name} · 你' : member.name,
               maxLines: 1,
@@ -476,9 +588,9 @@ class _DormMemberCard extends StatelessWidget {
                 context,
               ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             SizedBox(
-              height: 24,
+              height: 20,
               child: Text(
                 member.note,
                 maxLines: 1,
@@ -489,11 +601,46 @@ class _DormMemberCard extends StatelessWidget {
                 ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
               ),
             ),
+            if (badge != null) ...<Widget>[
+              const SizedBox(height: AppSpacing.xs),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xs,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF6B400).withAlpha(28),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    const Icon(
+                      Icons.star_rounded,
+                      size: 12,
+                      color: Color(0xFFF6B400),
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        badge.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: const Color(0xFF9B6A00),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm,
-                vertical: 2,
+                horizontal: AppSpacing.xs,
+                vertical: 1,
               ),
               decoration: BoxDecoration(
                 color: presenceColor.withAlpha(18),
@@ -510,8 +657,8 @@ class _DormMemberCard extends StatelessWidget {
             const SizedBox(height: 2),
             Container(
               padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm,
-                vertical: 2,
+                horizontal: AppSpacing.xs,
+                vertical: 1,
               ),
               decoration: BoxDecoration(
                 color: activityColor.withAlpha(24),
@@ -532,18 +679,91 @@ class _DormMemberCard extends StatelessWidget {
   }
 }
 
+class _DormMemberAvatar extends StatelessWidget {
+  const _DormMemberAvatar({
+    required this.radius,
+    required this.accentColor,
+    required this.fallbackSeed,
+    this.avatarBytes,
+    this.avatarUrl,
+  });
+
+  final double radius;
+  final Color accentColor;
+  final Uint8List? avatarBytes;
+  final String? avatarUrl;
+  final String fallbackSeed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: radius * 2,
+      height: radius * 2,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: accentColor.withAlpha(42),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: _buildContent(context),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
+    if (avatarBytes != null && avatarBytes!.isNotEmpty) {
+      return Image.memory(
+        avatarBytes!,
+        fit: BoxFit.cover,
+        width: radius * 2,
+        height: radius * 2,
+      );
+    }
+    if (avatarUrl != null && avatarUrl!.trim().isNotEmpty) {
+      return Image.network(
+        avatarUrl!,
+        fit: BoxFit.cover,
+        width: radius * 2,
+        height: radius * 2,
+        errorBuilder:
+            (BuildContext context, Object error, StackTrace? stackTrace) {
+              return _buildFallback(context);
+            },
+      );
+    }
+    return _buildFallback(context);
+  }
+
+  Widget _buildFallback(BuildContext context) {
+    final String fallbackText = fallbackSeed.trim().isEmpty
+        ? '?'
+        : fallbackSeed.characters.first.toUpperCase();
+    return Container(
+      color: accentColor.withAlpha(24),
+      alignment: Alignment.center,
+      child: Text(
+        fallbackText,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          color: accentColor,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
 class _DormHubAction {
   const _DormHubAction({
     required this.title,
     required this.detail,
     required this.icon,
     required this.onTap,
+    this.showDot = false,
   });
 
   final String title;
   final String detail;
   final IconData icon;
   final VoidCallback onTap;
+  final bool showDot;
 }
 
 class _DormHubCard extends StatelessWidget {
@@ -559,15 +779,30 @@ class _DormHubCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: palette.primaryHighlight,
-            ),
-            alignment: Alignment.center,
-            child: Icon(action.icon, color: palette.primaryDeep),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  color: palette.primaryHighlight,
+                ),
+                alignment: Alignment.center,
+                child: Icon(action.icon, color: palette.primaryDeep),
+              ),
+              const Spacer(),
+              if (action.showDot)
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    color: Colors.redAccent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+            ],
           ),
           const Spacer(),
           Text(
@@ -590,10 +825,15 @@ class _DormHubCard extends StatelessWidget {
 }
 
 class _DormEventTile extends StatelessWidget {
-  const _DormEventTile({required this.event, required this.onTap});
+  const _DormEventTile({
+    required this.event,
+    required this.onTap,
+    this.onActionTap,
+  });
 
   final DormEventRecord event;
   final VoidCallback onTap;
+  final VoidCallback? onActionTap;
 
   @override
   Widget build(BuildContext context) {
@@ -632,6 +872,33 @@ class _DormEventTile extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(width: AppSpacing.sm),
+          if (onActionTap != null)
+            TextButton(
+              onPressed: onActionTap,
+              style: TextButton.styleFrom(
+                foregroundColor: event.color,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: 6,
+                ),
+              ),
+              child: Text(
+                event.timeLabel,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: event.color,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            )
+          else
+            Text(
+              event.timeLabel,
+              style: Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary),
+            ),
+          const SizedBox(width: AppSpacing.xs),
           const Icon(
             Icons.chevron_right_rounded,
             color: AppColors.textSecondary,
@@ -640,6 +907,15 @@ class _DormEventTile extends StatelessWidget {
       ),
     );
   }
+}
+
+Color _memberColor(DormMemberStatus status) {
+  return switch (status) {
+    DormMemberStatus.sleeping => const Color(0xFF4458D8),
+    DormMemberStatus.quiet => const Color(0xFF2D9272),
+    DormMemberStatus.away => const Color(0xFF8A8F9F),
+    DormMemberStatus.active => const Color(0xFFF39A3C),
+  };
 }
 
 int _quietStarsFor(int noiseDb) {
@@ -672,22 +948,43 @@ Future<void> _showGentleReminderPicker({
     return;
   }
 
-  final String? targetUid = await showModalBottomSheet<String>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    builder: (BuildContext sheetContext) {
-      return _GentleReminderSheet(members: selectableMembers);
-    },
-  );
+  final _GentleReminderSelection? selection =
+      await showModalBottomSheet<_GentleReminderSelection>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (BuildContext sheetContext) {
+          final double bottomGap =
+              MediaQuery.viewPaddingOf(sheetContext).bottom + 88;
+          final double maxHeight =
+              MediaQuery.sizeOf(sheetContext).height * 0.68;
+          return Padding(
+            padding: EdgeInsets.only(bottom: bottomGap),
+            child: _GentleReminderSheet(
+              members: selectableMembers,
+              maxHeight: maxHeight,
+            ),
+          );
+        },
+      );
 
-  if (targetUid == null || targetUid.trim().isEmpty || !context.mounted) {
+  if (selection == null ||
+      selection.targetUid.trim().isEmpty ||
+      !context.mounted) {
     return;
   }
 
   try {
-    await services.dormFacade.sendGentleReminder(targetUid: targetUid);
+    await services.dormFacade.sendGentleReminder(
+      targetUid: selection.targetUid,
+      anonymous: selection.anonymous,
+      message: selection.message,
+    );
     if (context.mounted) {
-      _showDormToast(context, '已生成一条温和提醒文案，后续可以直接接入消息发送。');
+      _showDormToast(
+        context,
+        selection.anonymous ? '已匿名生成委婉提醒。' : '已按昵称实名生成委婉提醒。',
+      );
     }
   } catch (error) {
     if (context.mounted) {
@@ -705,9 +1002,10 @@ void _showDormToast(BuildContext context, String message) {
 }
 
 class _GentleReminderSheet extends StatefulWidget {
-  const _GentleReminderSheet({required this.members});
+  const _GentleReminderSheet({required this.members, required this.maxHeight});
 
   final List<DormMember> members;
+  final double maxHeight;
 
   @override
   State<_GentleReminderSheet> createState() => _GentleReminderSheetState();
@@ -715,6 +1013,249 @@ class _GentleReminderSheet extends StatefulWidget {
 
 class _GentleReminderSheetState extends State<_GentleReminderSheet> {
   String? _selectedUid;
+  bool _anonymous = true;
+  _GentleReminderTab _activeTab = _GentleReminderTab.content;
+  String? _selectedPreset;
+  late final TextEditingController _customMessageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _customMessageController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _customMessageController.dispose();
+    super.dispose();
+  }
+
+  String get _resolvedMessage {
+    final String customMessage = _customMessageController.text.trim();
+    if (customMessage.isNotEmpty) {
+      return customMessage;
+    }
+    return _selectedPreset?.trim() ?? '';
+  }
+
+  bool get _canSubmit => _selectedUid != null && _resolvedMessage.isNotEmpty;
+
+  void _selectPreset(String message) {
+    setState(() {
+      _selectedPreset = message;
+      _customMessageController.clear();
+    });
+  }
+
+  Widget _buildTabButton(
+    BuildContext context, {
+    required _GentleReminderTab tab,
+    required String label,
+  }) {
+    final bool selected = _activeTab == tab;
+    final Color highlight = Theme.of(context).colorScheme.primary;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _activeTab = tab),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: selected ? highlight : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: selected ? Colors.white : AppColors.textSecondary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContentTab(BuildContext context) {
+    final String customMessage = _customMessageController.text.trim();
+    final Color highlight = Theme.of(context).colorScheme.primary;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          '选择提醒内容',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          '先选一句更合适的表达，也可以自己写一句更贴心的话。',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: AppColors.textSecondary,
+            height: 1.5,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        ..._gentleReminderPresets.map(
+          (String message) => InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            onTap: () => _selectPreset(message),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: _selectedPreset == message && customMessage.isEmpty
+                    ? highlight.withAlpha(18)
+                    : AppColors.surfaceMuted,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(
+                  color: _selectedPreset == message && customMessage.isEmpty
+                      ? highlight
+                      : Colors.transparent,
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(
+                      _selectedPreset == message && customMessage.isEmpty
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.radio_button_off_rounded,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Text(
+                      message,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        height: 1.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        TextField(
+          controller: _customMessageController,
+          minLines: 1,
+          maxLines: 3,
+          onChanged: (String value) {
+            if (value.trim().isNotEmpty) {
+              setState(() => _selectedPreset = null);
+              return;
+            }
+            setState(() {});
+          },
+          decoration: InputDecoration(
+            hintText: 'Others……',
+            filled: true,
+            fillColor: AppColors.surfaceMuted,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.md,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(20),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTargetTab(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          '选择要提醒的舍友',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          '我们会用更温和的方式送达提醒，不会直接替你做生硬通知。',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: AppColors.textSecondary,
+            height: 1.5,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+          value: !_anonymous,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: const Text('是否使用昵称实名发送'),
+          subtitle: Text(
+            _anonymous ? '默认显示“您的舍友”' : '将显示你的昵称',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+          ),
+          onChanged: (bool? value) {
+            setState(() => _anonymous = !(value ?? false));
+          },
+        ),
+        const SizedBox(height: AppSpacing.md),
+        ...widget.members.map(
+          (DormMember member) => InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            onTap: () => setState(() => _selectedUid = member.uid),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(
+                      _selectedUid == member.uid
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.radio_button_off_rounded,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          member.name,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          member.note,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -727,54 +1268,100 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
         AppSpacing.xl,
         AppSpacing.lg,
         AppSpacing.xl,
-        AppSpacing.xl,
+        AppSpacing.lg,
       ),
       child: SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              '选择要提醒的舍友',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              '我们会用更温和的方式生成提醒文案，不会直接替你做生硬通知。',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            ...widget.members.map(
-              (DormMember member) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  _selectedUid == member.uid
-                      ? Icons.radio_button_checked_rounded
-                      : Icons.radio_button_off_rounded,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: widget.maxHeight),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  '委婉提醒',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
-                title: Text(member.name),
-                subtitle: Text(member.note),
-                onTap: () {
-                  setState(() => _selectedUid = member.uid);
-                },
-              ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  '先选内容，再选对象；两个栏目可以来回切换。',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceMuted,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      _buildTabButton(
+                        context,
+                        tab: _GentleReminderTab.content,
+                        label: '内容',
+                      ),
+                      _buildTabButton(
+                        context,
+                        tab: _GentleReminderTab.target,
+                        label: '对象',
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  child: _activeTab == _GentleReminderTab.content
+                      ? KeyedSubtree(
+                          key: const ValueKey<String>(
+                            'gentle-reminder-content',
+                          ),
+                          child: _buildContentTab(context),
+                        )
+                      : KeyedSubtree(
+                          key: const ValueKey<String>('gentle-reminder-target'),
+                          child: _buildTargetTab(context),
+                        ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                PrimaryButton(
+                  label: '发送委婉提醒',
+                  onPressed: !_canSubmit
+                      ? null
+                      : () {
+                          Navigator.of(context).pop(
+                            _GentleReminderSelection(
+                              targetUid: _selectedUid!,
+                              anonymous: _anonymous,
+                              message: _resolvedMessage,
+                            ),
+                          );
+                        },
+                ),
+              ],
             ),
-            const SizedBox(height: AppSpacing.md),
-            PrimaryButton(
-              label: '生成提醒文案',
-              onPressed: _selectedUid == null
-                  ? null
-                  : () => Navigator.of(context).pop(_selectedUid),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
+}
+
+class _GentleReminderSelection {
+  const _GentleReminderSelection({
+    required this.targetUid,
+    required this.anonymous,
+    required this.message,
+  });
+
+  final String targetUid;
+  final bool anonymous;
+  final String message;
 }

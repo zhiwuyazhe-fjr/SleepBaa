@@ -30,6 +30,10 @@ export interface ContextUserProfile {
   displayName: string;
   tagline: string;
   role: string;
+  earnedBadgeIds?: string[];
+  equippedBadgeId?: string | null;
+  showDormPulseBadge?: boolean;
+  selectedDormBadgeId?: string | null;
   dormId?: string | null;
   phoneNumber?: string | null;
   phoneLinkedAt?: string | null;
@@ -62,6 +66,7 @@ export interface ContextDormMember {
   lastActiveAt?: string;
   note?: string;
   avatarUrl?: string;
+  displayBadgeId?: string;
 }
 
 export interface ContextDormLocationAnchor {
@@ -78,6 +83,21 @@ export interface ContextDormEvent {
   title: string;
   detail: string;
   createdAt?: string;
+  actorUid?: string;
+}
+
+export interface ContextDormPendingRuleProposal {
+  id: string;
+  proposedSettings: Record<string, unknown>;
+  proposedRules: Record<string, unknown>[];
+  proposerUid: string;
+  proposerName: string;
+  createdAt: string;
+  reviewerUids: string[];
+  approvedUids: string[];
+  rejectedByUid?: string | null;
+  rejectedReason?: string | null;
+  resolvedAt?: string | null;
 }
 
 export interface ContextDorm {
@@ -95,6 +115,8 @@ export interface ContextDorm {
   invites?: Record<string, unknown>[];
   rulesSettings?: Record<string, unknown>;
   locationAnchor?: ContextDormLocationAnchor | null;
+  pendingRuleProposal?: ContextDormPendingRuleProposal | null;
+  earnedDormBadgeIds?: string[];
 }
 
 export interface ContextSleepSessionSummary {

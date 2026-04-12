@@ -92,7 +92,7 @@ class StartSleepModeCard extends StatelessWidget {
     return AppCard(
       padding: EdgeInsets.zero,
       borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: AppColors.divider),
+      border: Border.all(color: AppColors.cardBorderSubtle),
       boxShadow: AppColors.cardShadow,
       onTap: onTap,
       child: Container(
@@ -121,7 +121,7 @@ class StartSleepModeCard extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF5F5F5),
+                    color: AppColors.surfaceSubtle,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Text(

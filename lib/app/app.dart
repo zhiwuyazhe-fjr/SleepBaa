@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
@@ -94,7 +93,6 @@ class SleepDormApp extends StatelessWidget {
       colorScheme: colorScheme,
       scaffoldBackgroundColor: AppColors.background,
       textTheme: AppTextStyles.buildTextTheme(),
-      fontFamily: GoogleFonts.inter().fontFamily,
       fontFamilyFallback: AppTextStyles.cjkFallbackFonts,
       extensions: <ThemeExtension<dynamic>>[palette],
       appBarTheme: const AppBarTheme(

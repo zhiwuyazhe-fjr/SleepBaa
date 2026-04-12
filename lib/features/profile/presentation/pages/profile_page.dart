@@ -35,7 +35,8 @@ class ProfilePage extends StatelessWidget {
       builder: (BuildContext context, Widget? child) {
         final NightMoodPalette palette = context.nightMoodPalette;
         final UserProfile profile = services.authRepository.currentUser;
-        final UserSettings settings = services.settingsRepository.currentSettings;
+        final UserSettings settings =
+            services.settingsRepository.currentSettings;
         final List<SleepSession> weekly = services.sleepSessionRepository
             .recentSessions();
         final SleepReport report = services.insightsFacade.currentReport;
@@ -49,6 +50,7 @@ class ProfilePage extends StatelessWidget {
         final int pendingCount = weekly
             .where((SleepSession item) => item.summary == null)
             .length;
+        final HonorBadge? activeBadge = honorBadgeById(profile.displayBadgeId);
         final double averageSleep = completed.isEmpty
             ? 0
             : completed.fold<double>(
@@ -125,7 +127,7 @@ class ProfilePage extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
                                 Text(
-                                  '最近 7 夜睡眠趋势',
+                                  '我的连续 7 天',
                                   style: Theme.of(
                                     context,
                                   ).textTheme.headlineSmall,
@@ -193,13 +195,13 @@ class ProfilePage extends StatelessWidget {
                       Row(
                         children: <Widget>[
                           Text(
-                            '每夜睡眠时长',
+                            '7 日睡眠趋势',
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(color: AppColors.textSecondary),
                           ),
                           const Spacer(),
                           Text(
-                            '报告均值 ${report.averageSleepHours.toStringAsFixed(1)}h',
+                            '平均 ${averageSleep.toStringAsFixed(1)} 小时',
                             style: Theme.of(context).textTheme.labelLarge
                                 ?.copyWith(color: palette.primary),
                           ),
@@ -212,7 +214,7 @@ class ProfilePage extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 SectionTitle(
-                  title: '睡眠打卡日历',
+                  title: '入睡打卡日历',
                   actionLabel: '完整日历',
                   onAction: () => context.push(AppRoutes.profileCalendar),
                 ),
@@ -223,16 +225,8 @@ class ProfilePage extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        '本月记录热力预览',
+                        '本月打卡热力预览',
                         style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        '进入睡眠后会立即占位；晨间反馈完成后补全质量与时长。',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                          height: 1.45,
-                        ),
                       ),
                       const SizedBox(height: AppSpacing.md),
                       MiniCalendarGrid(
@@ -258,7 +252,7 @@ class ProfilePage extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 SectionTitle(
-                  title: '多夜趋势分析',
+                  title: '睡眠实验报告',
                   actionLabel: '查看报告',
                   onAction: () => context.push(AppRoutes.profileReport),
                 ),
@@ -311,7 +305,9 @@ class ProfilePage extends StatelessWidget {
                     children: <Widget>[
                       IconBadge(
                         icon: Icons.inventory_2_rounded,
-                        backgroundColor: palette.primaryHighlight.withAlpha(180),
+                        backgroundColor: palette.primaryHighlight.withAlpha(
+                          180,
+                        ),
                         iconColor: palette.primaryDeep,
                         borderRadius: BorderRadius.circular(AppRadius.xl),
                       ),
@@ -326,7 +322,7 @@ class ProfilePage extends StatelessWidget {
                             ),
                             const SizedBox(height: AppSpacing.xs),
                             Text(
-                              '收纳睡眠模式里记下的待办、念头与夜间灵感。',
+                              '收好睡眠模式里记下的待办、念头与夜间灵感。',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ],
@@ -344,12 +340,17 @@ class ProfilePage extends StatelessWidget {
                 Row(
                   children: <Widget>[
                     Text(
-                      '睡眠里程碑',
+                      '专属荣誉勋章',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const Spacer(),
+                    TextButton(
+                      onPressed: () => context.push(AppRoutes.profileBadges),
+                      child: const Text('查看全部'),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
                     Text(
-                      '${_unlockedBadgeCount(weekly, report)} / 4',
+                      '${profile.earnedBadgeIds.length} / ${kHonorBadgeCatalog.length}',
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: AppColors.textSecondary,
                       ),
@@ -360,34 +361,54 @@ class ProfilePage extends StatelessWidget {
                 Row(
                   children: <Widget>[
                     Expanded(
-                      child: _BadgeTile(
-                        icon: Icons.bedtime_rounded,
-                        label: '连续打卡',
-                        unlocked: weekly.isNotEmpty,
+                      child: Text(
+                        activeBadge == null
+                            ? '当前默认展示最新获得的勋章'
+                            : '当前展示：${activeBadge.label}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ),
-                    Expanded(
-                      child: _BadgeTile(
-                        icon: Icons.nightlight_round,
-                        label: '睡眠反馈',
-                        unlocked: completed.length >= 3,
-                      ),
-                    ),
-                    Expanded(
-                      child: _BadgeTile(
-                        icon: Icons.self_improvement_rounded,
-                        label: '安静夜晚',
-                        unlocked: report.calmNights >= 2,
-                      ),
-                    ),
-                    Expanded(
-                      child: _BadgeTile(
-                        icon: Icons.auto_stories_rounded,
-                        label: '梦境记录',
-                        unlocked: report.dreamEntriesCount > 0,
-                      ),
+                    TextButton(
+                      onPressed: profile.equippedBadgeId == null
+                          ? null
+                          : () async {
+                              await services.profileFacade.saveEquippedBadge(
+                                null,
+                              );
+                            },
+                      child: const Text('恢复最新获得'),
                     ),
                   ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.md,
+                  children: kHonorBadgeCatalog
+                      .map((HonorBadge badge) {
+                        final bool unlocked = profile.hasEarnedBadge(badge.id);
+                        final bool selected =
+                            profile.displayBadgeId == badge.id;
+                        return SizedBox(
+                          width: 98,
+                          child: _BadgeTile(
+                            badge: badge,
+                            unlocked: unlocked,
+                            selected: selected,
+                            onTap: !unlocked
+                                ? null
+                                : () async {
+                                    await services.profileFacade
+                                        .saveEquippedBadge(
+                                          selected ? null : badge.id,
+                                        );
+                                  },
+                          ),
+                        );
+                      })
+                      .toList(growable: false),
                 ),
               ],
             ),
@@ -397,17 +418,89 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
+  // ignore: unused_element
+  List<Widget> _buildExperimentCards(
+    BuildContext context,
+    List<SleepSession> weekly,
+  ) {
+    final int calmNights = weekly
+        .where((SleepSession item) => item.awakenings.isEmpty)
+        .length;
+    final List<_ExperimentCardData> cards = <_ExperimentCardData>[
+      _ExperimentCardData(
+        icon: Icons.coffee_rounded,
+        title: '咖啡因耐受测试',
+        insight: '过去 7 晚里，下午 3 点前停止咖啡因摄入的夜晚更稳定。',
+        status: '有效',
+        accent: context.nightMoodPalette.primary,
+      ),
+      _ExperimentCardData(
+        icon: Icons.nights_stay_rounded,
+        title: '宿舍安静观察',
+        insight: '最近 7 晚里有 $calmNights 晚没有夜醒，安静环境的帮助很明显。',
+        status: '持续跟进',
+        accent: AppColors.textSecondary,
+      ),
+    ];
+
+    return cards
+        .map(
+          (_ExperimentCardData report) => Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.md),
+            child: AppCard(
+              borderRadius: AppRadius.card,
+              border: Border.all(color: report.accent.withAlpha(70)),
+              child: Row(
+                children: <Widget>[
+                  IconBadge(
+                    icon: report.icon,
+                    backgroundColor: report.accent.withAlpha(20),
+                    iconColor: report.accent,
+                    borderRadius: BorderRadius.circular(AppRadius.xl),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          report.title,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          report.insight,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Text(
+                    report.status,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelLarge?.copyWith(color: report.accent),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        )
+        .toList();
+  }
+
   List<Widget> _buildReportCards(
     BuildContext context,
     List<SleepSession> weekly,
     SleepReport report,
   ) {
     final List<SleepSession> pending = weekly
-        .where((SleepSession session) => session.summary == null)
+        .where((SleepSession item) => item.summary == null)
         .toList(growable: false);
     final List<_InsightCardData> cards = <_InsightCardData>[
       _InsightCardData(
-        icon: Icons.query_stats_rounded,
+        icon: Icons.insights_rounded,
         title: report.title,
         detail:
             '平均睡眠 ${report.averageSleepHours.toStringAsFixed(1)}h，质量 ${report.averageSleepQuality.toStringAsFixed(1)}，恢复感 ${report.averageRestedLevel.toStringAsFixed(1)}。',
@@ -415,24 +508,22 @@ class ProfilePage extends StatelessWidget {
         accent: context.nightMoodPalette.primary,
       ),
       _InsightCardData(
-        icon: Icons.bolt_rounded,
-        title: '待补全提醒',
+        icon: Icons.task_alt_rounded,
+        title: '晨间反馈进度',
         detail: pending.isEmpty
             ? '最近的睡眠记录都已补全晨间反馈。'
             : '还有 ${pending.length} 夜等待晨间反馈，补全后会同步到日历和趋势分析里。',
         badge: pending.isEmpty ? '已完成' : '待处理',
-        accent: pending.isEmpty
-            ? const Color(0xFF2D9272)
-            : const Color(0xFFF39A3C),
+        accent: AppColors.textSecondary,
       ),
       _InsightCardData(
-        icon: Icons.lightbulb_rounded,
-        title: '本轮观察亮点',
+        icon: Icons.auto_graph_rounded,
+        title: '节律观察',
         detail: report.highlights.isEmpty
             ? '继续记录更多夜晚后，这里会总结你的睡眠节律、宿舍安静度与晨间恢复感。'
             : report.highlights.take(2).join(' '),
         badge: '多夜趋势',
-        accent: AppColors.textSecondary,
+        accent: context.nightMoodPalette.primaryDeep,
       ),
     ];
 
@@ -463,9 +554,7 @@ class ProfilePage extends StatelessWidget {
                         const SizedBox(height: AppSpacing.xs),
                         Text(
                           card.detail,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            height: 1.45,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
                     ),
@@ -491,7 +580,8 @@ class ProfilePage extends StatelessWidget {
   }) {
     final Map<DateTime, int> qualityByDay = <DateTime, int>{
       for (final SleepSession session in sessions)
-        DateUtils.dateOnly(session.startedAt): _calendarIntensityFor(session),
+        DateUtils.dateOnly(session.startedAt):
+            (session.summary?.sleepQuality ?? 0).clamp(0, 5),
     };
     final int daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
     final int leadingEmpty = DateTime(month.year, month.month, 1).weekday - 1;
@@ -504,35 +594,6 @@ class ProfilePage extends StatelessWidget {
       ...List<int>.filled(trailingEmpty, 0),
     ];
   }
-
-  int _calendarIntensityFor(SleepSession session) {
-    if (session.summary != null) {
-      return session.summary!.sleepQuality.clamp(1, 5);
-    }
-    return switch (session.status) {
-      SleepSessionStatus.active => 1,
-      SleepSessionStatus.awaitingFeedback => 1,
-      SleepSessionStatus.completed => 0,
-      SleepSessionStatus.drafted => 0,
-    };
-  }
-
-  int _unlockedBadgeCount(List<SleepSession> weekly, SleepReport report) {
-    int total = 0;
-    if (weekly.isNotEmpty) {
-      total += 1;
-    }
-    if (weekly.where((SleepSession item) => item.summary != null).length >= 3) {
-      total += 1;
-    }
-    if (report.calmNights >= 2) {
-      total += 1;
-    }
-    if (report.dreamEntriesCount > 0) {
-      total += 1;
-    }
-    return total;
-  }
 }
 
 class _WeeklyTrendChart extends StatelessWidget {
@@ -542,28 +603,13 @@ class _WeeklyTrendChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (sessions.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
-          child: Text(
-            '今晚开始进入睡眠模式后，这里会出现连续趋势。',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ),
-      );
-    }
-
     return SizedBox(
       height: 176,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: sessions.map((SleepSession session) {
-          final double hours = session.summary?.totalSleepHours ?? 1.0;
-          final double heightFactor = (hours / 9).clamp(0.22, 1.0);
-          final bool pending = session.summary == null;
+          final double hours = session.summary?.totalSleepHours ?? 0;
+          final double heightFactor = (hours / 9).clamp(0.2, 1.0);
           return Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -571,10 +617,8 @@ class _WeeklyTrendChart extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: <Widget>[
                   Text(
-                    pending ? '待补全' : '${hours.toStringAsFixed(1)}h',
+                    hours.toStringAsFixed(1),
                     style: Theme.of(context).textTheme.labelMedium,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Expanded(
@@ -584,20 +628,12 @@ class _WeeklyTrendChart extends StatelessWidget {
                         heightFactor: heightFactor,
                         child: Container(
                           decoration: BoxDecoration(
-                            color: pending
-                                ? context.nightMoodPalette.primarySoft
-                                    .withAlpha(120)
-                                : hours >= 7.5
+                            color: hours >= 7.5
                                 ? context.nightMoodPalette.primarySoft
                                 : AppColors.surfaceBorder,
                             borderRadius: const BorderRadius.vertical(
                               top: Radius.circular(28),
                             ),
-                            border: pending
-                                ? Border.all(
-                                    color: context.nightMoodPalette.primary,
-                                  )
-                                : null,
                           ),
                         ),
                       ),
@@ -614,7 +650,86 @@ class _WeeklyTrendChart extends StatelessWidget {
               ),
             ),
           );
-        }).toList(growable: false),
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _BadgeTile extends StatelessWidget {
+  const _BadgeTile({
+    required this.badge,
+    required this.unlocked,
+    required this.selected,
+    this.onTap,
+  });
+
+  final HonorBadge badge;
+  final bool unlocked;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final NightMoodPalette palette = context.nightMoodPalette;
+    return Tooltip(
+      message: badge.description,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Column(
+            children: <Widget>[
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: unlocked
+                      ? palette.primary.withAlpha(selected ? 28 : 18)
+                      : AppColors.surfaceSoft,
+                  border: Border.all(
+                    color: selected
+                        ? palette.primary
+                        : unlocked
+                        ? palette.primarySoft
+                        : AppColors.divider,
+                    width: selected ? 2.5 : 1.5,
+                  ),
+                ),
+                child: Icon(
+                  unlocked ? badge.icon : Icons.lock_rounded,
+                  color: unlocked
+                      ? palette.primary
+                      : AppColors.textSecondary.withAlpha(110),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                badge.label,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppColors.textPrimary.withAlpha(unlocked ? 255 : 120),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                selected
+                    ? '当前佩戴'
+                    : unlocked
+                    ? '点击佩戴'
+                    : '未获得',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: selected ? palette.primary : AppColors.textSecondary,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -635,67 +750,45 @@ class _StatPill extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: AppColors.surfaceMuted,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: AppRadius.pill,
       ),
-      child: Text(
-        '$label  $value',
-        style: Theme.of(context).textTheme.labelMedium,
-      ),
-    );
-  }
-}
-
-class _BadgeTile extends StatelessWidget {
-  const _BadgeTile({
-    required this.icon,
-    required this.label,
-    required this.unlocked,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool unlocked;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Container(
-            width: 68,
-            height: 68,
-            decoration: BoxDecoration(
-              color: unlocked
-                  ? context.nightMoodPalette.primarySoft
-                  : AppColors.surfaceMuted,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: unlocked
-                    ? context.nightMoodPalette.primary.withAlpha(80)
-                    : AppColors.surfaceBorder,
-              ),
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              icon,
-              color: unlocked
-                  ? context.nightMoodPalette.primaryDeep
-                  : AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
           Text(
             label,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: unlocked ? AppColors.textPrimary : AppColors.textSecondary,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class _ExperimentCardData {
+  const _ExperimentCardData({
+    required this.icon,
+    required this.title,
+    required this.insight,
+    required this.status,
+    required this.accent,
+  });
+
+  final IconData icon;
+  final String title;
+  final String insight;
+  final String status;
+  final Color accent;
 }
 
 class _InsightCardData {

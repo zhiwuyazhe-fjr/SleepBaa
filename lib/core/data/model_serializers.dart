@@ -8,6 +8,10 @@ abstract final class ModelSerializers {
       'displayName': profile.displayName,
       'tagline': profile.tagline,
       'role': profile.role,
+      'earnedBadgeIds': profile.earnedBadgeIds,
+      'equippedBadgeId': profile.equippedBadgeId,
+      'showDormPulseBadge': profile.showDormPulseBadge,
+      'selectedDormBadgeId': profile.selectedDormBadgeId,
       'dormId': profile.dormId,
       'phoneNumber': profile.phoneNumber,
       'phoneLinkedAt': profile.phoneLinkedAt?.toIso8601String(),
@@ -24,6 +28,13 @@ abstract final class ModelSerializers {
       displayName: map['displayName'] as String? ?? '',
       tagline: map['tagline'] as String? ?? '',
       role: map['role'] as String? ?? '',
+      earnedBadgeIds:
+          (map['earnedBadgeIds'] as List<dynamic>? ?? const <dynamic>[])
+              .map((dynamic item) => item as String)
+              .toList(growable: false),
+      equippedBadgeId: map['equippedBadgeId'] as String?,
+      showDormPulseBadge: map['showDormPulseBadge'] as bool? ?? true,
+      selectedDormBadgeId: map['selectedDormBadgeId'] as String?,
       dormId: map['dormId'] as String?,
       phoneNumber: map['phoneNumber'] as String?,
       phoneLinkedAt: _dateValue(map['phoneLinkedAt']),
@@ -50,20 +61,18 @@ abstract final class ModelSerializers {
   static UserSettings userSettingsFromMap(Map<String, dynamic> map) {
     return UserSettings(
       sleepGoalHours: (map['sleepGoalHours'] as num?)?.toDouble() ?? 7.5,
-      bedtimeReminderEnabled:
-          map['bedtimeReminderEnabled'] as bool? ?? true,
-      morningReminderEnabled:
-          map['morningReminderEnabled'] as bool? ?? true,
+      bedtimeReminderEnabled: map['bedtimeReminderEnabled'] as bool? ?? true,
+      morningReminderEnabled: map['morningReminderEnabled'] as bool? ?? true,
       dormAlertsEnabled: map['dormAlertsEnabled'] as bool? ?? true,
       bedtimeReminder: timeOfDayFromMap(
         map['bedtimeReminder'] as Map<String, dynamic>? ??
             <String, dynamic>{'hour': 23, 'minute': 10},
       ),
-      preferredTrackTitle:
-          map['preferredTrackTitle'] as String? ?? '深海海浪',
-      smartSuggestionsEnabled:
-          map['smartSuggestionsEnabled'] as bool? ?? true,
-      selectedNightMood: _nightMoodFromName(map['selectedNightMood'] as String?),
+      preferredTrackTitle: map['preferredTrackTitle'] as String? ?? '深海海浪',
+      smartSuggestionsEnabled: map['smartSuggestionsEnabled'] as bool? ?? true,
+      selectedNightMood: _nightMoodFromName(
+        map['selectedNightMood'] as String?,
+      ),
     );
   }
 
@@ -80,9 +89,15 @@ abstract final class ModelSerializers {
           .map(recommendationToMap)
           .toList(growable: false),
       'selectedRecommendationIds': session.selectedRecommendationIds,
-      'awakenings': session.awakenings.map(awakeningToMap).toList(growable: false),
-      'feedback': session.feedback.map(recommendationFeedbackToMap).toList(growable: false),
-      'summary': session.summary == null ? null : morningSummaryToMap(session.summary!),
+      'awakenings': session.awakenings
+          .map(awakeningToMap)
+          .toList(growable: false),
+      'feedback': session.feedback
+          .map(recommendationFeedbackToMap)
+          .toList(growable: false),
+      'summary': session.summary == null
+          ? null
+          : morningSummaryToMap(session.summary!),
       'updatedAt': session.updatedAt,
     };
   }
@@ -93,25 +108,28 @@ abstract final class ModelSerializers {
       uid: map['uid'] as String? ?? 'anon-paul',
       startedAt: _dateValue(map['startedAt']) ?? DateTime.now(),
       endedAt: _dateValue(map['endedAt']),
-      status: _sleepStatusFromName(map['status'] as String?) ??
+      status:
+          _sleepStatusFromName(map['status'] as String?) ??
           SleepSessionStatus.drafted,
       sleepModeActive: map['sleepModeActive'] as bool? ?? false,
       dormId: map['dormId'] as String?,
-      recommendations: (map['recommendations'] as List<dynamic>? ?? const <dynamic>[])
-          .map(
-            (dynamic item) => recommendationFromMap(
-              Map<String, dynamic>.from(item as Map),
-            ),
-          )
-          .toList(growable: false),
-      selectedRecommendationIds: (map['selectedRecommendationIds'] as List<dynamic>? ?? const <dynamic>[])
-          .map((dynamic item) => item.toString())
-          .toList(growable: false),
+      recommendations:
+          (map['recommendations'] as List<dynamic>? ?? const <dynamic>[])
+              .map(
+                (dynamic item) => recommendationFromMap(
+                  Map<String, dynamic>.from(item as Map),
+                ),
+              )
+              .toList(growable: false),
+      selectedRecommendationIds:
+          (map['selectedRecommendationIds'] as List<dynamic>? ??
+                  const <dynamic>[])
+              .map((dynamic item) => item.toString())
+              .toList(growable: false),
       awakenings: (map['awakenings'] as List<dynamic>? ?? const <dynamic>[])
           .map(
-            (dynamic item) => awakeningFromMap(
-              Map<String, dynamic>.from(item as Map),
-            ),
+            (dynamic item) =>
+                awakeningFromMap(Map<String, dynamic>.from(item as Map)),
           )
           .toList(growable: false),
       feedback: (map['feedback'] as List<dynamic>? ?? const <dynamic>[])
@@ -148,15 +166,19 @@ abstract final class ModelSerializers {
       id: map['id'] as String? ?? '',
       title: map['title'] as String? ?? '',
       subtitle: map['subtitle'] as String? ?? '',
-      type: _recommendationTypeFromName(map['type'] as String?) ??
+      type:
+          _recommendationTypeFromName(map['type'] as String?) ??
           RecommendationType.quickAction,
-      icon: iconDataFromMap(Map<String, dynamic>.from(map['icon'] as Map? ?? const <String, dynamic>{})),
+      icon: iconDataFromMap(
+        Map<String, dynamic>.from(
+          map['icon'] as Map? ?? const <String, dynamic>{},
+        ),
+      ),
       tags: (map['tags'] as List<dynamic>? ?? const <dynamic>[])
           .map((dynamic item) => item.toString())
           .toList(growable: false),
-      executionState: _recommendationStateFromName(
-            map['executionState'] as String?,
-          ) ??
+      executionState:
+          _recommendationStateFromName(map['executionState'] as String?) ??
           RecommendationExecutionState.idle,
       track: map['track'] == null
           ? null
@@ -289,7 +311,8 @@ abstract final class ModelSerializers {
   ) {
     return RecommendationFeedback(
       recommendationId: map['recommendationId'] as String? ?? '',
-      status: _feedbackStatusFromName(map['status'] as String?) ??
+      status:
+          _feedbackStatusFromName(map['status'] as String?) ??
           RecommendationFeedbackStatus.neutral,
       note: map['note'] as String? ?? '',
       submittedAt: _dateValue(map['submittedAt']) ?? DateTime.now(),
@@ -336,7 +359,9 @@ abstract final class ModelSerializers {
     );
   }
 
-  static Map<String, dynamic> dormRulesSettingsToMap(DormRulesSettings settings) {
+  static Map<String, dynamic> dormRulesSettingsToMap(
+    DormRulesSettings settings,
+  ) {
     return <String, dynamic>{
       'quietHours': settings.quietHours,
       'specialCase': settings.specialCase,
@@ -372,8 +397,75 @@ abstract final class ModelSerializers {
       summerTempC: (map['summerTempC'] as num?)?.toDouble() ?? 26,
       winterTempC: (map['winterTempC'] as num?)?.toDouble() ?? 22,
       ventilationWindow: map['ventilationWindow'] as String? ?? '早晨',
-      ventilationMinutes:
-          (map['ventilationMinutes'] as num?)?.toDouble() ?? 30,
+      ventilationMinutes: (map['ventilationMinutes'] as num?)?.toDouble() ?? 30,
+    );
+  }
+
+  static Map<String, dynamic> dormRuleToMap(DormRule rule) {
+    return <String, dynamic>{
+      'id': rule.id,
+      'title': rule.title,
+      'detail': rule.detail,
+    };
+  }
+
+  static DormRule dormRuleFromMap(Map<String, dynamic> map) {
+    return DormRule(
+      id: map['id'] as String? ?? '',
+      title: map['title'] as String? ?? '',
+      detail: map['detail'] as String? ?? '',
+    );
+  }
+
+  static Map<String, dynamic> dormPendingRuleProposalToMap(
+    DormPendingRuleProposal proposal,
+  ) {
+    return <String, dynamic>{
+      'id': proposal.id,
+      'proposedSettings': dormRulesSettingsToMap(proposal.proposedSettings),
+      'proposedRules': proposal.proposedRules
+          .map(dormRuleToMap)
+          .toList(growable: false),
+      'proposerUid': proposal.proposerUid,
+      'proposerName': proposal.proposerName,
+      'createdAt': proposal.createdAt.toIso8601String(),
+      'reviewerUids': proposal.reviewerUids,
+      'approvedUids': proposal.approvedUids,
+      'rejectedByUid': proposal.rejectedByUid,
+      'rejectedReason': proposal.rejectedReason,
+      'resolvedAt': proposal.resolvedAt?.toIso8601String(),
+    };
+  }
+
+  static DormPendingRuleProposal dormPendingRuleProposalFromMap(
+    Map<String, dynamic> map,
+  ) {
+    return DormPendingRuleProposal(
+      id: map['id'] as String? ?? '',
+      proposedSettings: dormRulesSettingsFromMap(
+        Map<String, dynamic>.from(
+          map['proposedSettings'] as Map? ?? const <String, dynamic>{},
+        ),
+      ),
+      proposedRules:
+          (map['proposedRules'] as List<dynamic>? ?? const <dynamic>[])
+              .map(
+                (dynamic item) =>
+                    dormRuleFromMap(Map<String, dynamic>.from(item as Map)),
+              )
+              .toList(growable: false),
+      proposerUid: map['proposerUid'] as String? ?? '',
+      proposerName: map['proposerName'] as String? ?? '',
+      createdAt: _dateValue(map['createdAt']) ?? DateTime.now(),
+      reviewerUids: (map['reviewerUids'] as List<dynamic>? ?? const <dynamic>[])
+          .map((dynamic item) => item.toString())
+          .toList(growable: false),
+      approvedUids: (map['approvedUids'] as List<dynamic>? ?? const <dynamic>[])
+          .map((dynamic item) => item.toString())
+          .toList(growable: false),
+      rejectedByUid: map['rejectedByUid'] as String?,
+      rejectedReason: map['rejectedReason'] as String?,
+      resolvedAt: _dateValue(map['resolvedAt']),
     );
   }
 
@@ -448,7 +540,8 @@ abstract final class ModelSerializers {
   ) {
     return SleepCaptureRecord(
       id: map['id'] as String? ?? '',
-      type: _sleepCaptureTypeFromName(map['type'] as String?) ??
+      type:
+          _sleepCaptureTypeFromName(map['type'] as String?) ??
           SleepCaptureType.memo,
       sessionId: map['sessionId'] as String? ?? '',
       createdAt: _dateValue(map['createdAt']) ?? DateTime.now(),
@@ -548,8 +641,7 @@ abstract final class ModelSerializers {
       userId: map['userId'] as String? ?? '',
       assistantName: map['assistantName'] as String? ?? '小眠',
       identityPrompt:
-          map['identityPrompt'] as String? ??
-          '你是小眠，一位温和、低压、不评判的情绪陪伴型睡前助手。',
+          map['identityPrompt'] as String? ?? '你是小眠，一位温和、低压、不评判的情绪陪伴型睡前助手。',
       tone: map['tone'] as String? ?? '温柔、稳定、共情',
       relationshipRole: map['relationshipRole'] as String? ?? '情绪陪伴助手',
       updatedAt: _dateValue(map['updatedAt']) ?? DateTime.now(),
@@ -575,11 +667,13 @@ abstract final class ModelSerializers {
     return AssistantMessage(
       id: map['id'] as String? ?? '',
       threadId: map['threadId'] as String? ?? '',
-      role: _assistantRoleFromName(map['role'] as String?) ??
+      role:
+          _assistantRoleFromName(map['role'] as String?) ??
           AssistantMessageRole.system,
       content: map['content'] as String? ?? '',
       createdAt: _dateValue(map['createdAt']) ?? DateTime.now(),
-      status: _assistantStatusFromName(map['status'] as String?) ??
+      status:
+          _assistantStatusFromName(map['status'] as String?) ??
           AssistantMessageStatus.complete,
       sourceMode: _assistantSourceModeFromName(map['sourceMode'] as String?),
       provider: map['provider'] as String?,

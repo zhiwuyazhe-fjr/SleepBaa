@@ -120,6 +120,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
       authRepository: _authRepository,
       settingsRepository: _settingsRepository,
       recommendationRepository: _recommendationRepository,
+      dormRepository: _dormRepository,
     );
     _sleepFacade = SleepFacade(
       experienceController: _sleepExperienceController,

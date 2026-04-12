@@ -228,6 +228,7 @@ class SleepExperienceController extends ChangeNotifier {
       status: SleepSessionStatus.awaitingFeedback,
       endedAt: DateTime.now(),
     );
+    await _syncDormStatusAfterSleepExit();
     unawaited(_completeSleepExitSideEffects(activeSession));
   }
 
@@ -271,6 +272,16 @@ class SleepExperienceController extends ChangeNotifier {
       summary: summary,
       recommendationFeedback: feedback,
     );
+    try {
+      await _dormRepository.updateCurrentUserStatus(
+        uid: _authRepository.currentUser.uid,
+        status: DormMemberStatus.quiet,
+        sleepModeActive: false,
+        note: '已完成晨间反馈',
+      );
+    } catch (_) {
+      // Dorm sync is best-effort and should not block feedback submission.
+    }
 
     final List<NotificationItem> notifications = _notificationRepository
         .notifications
@@ -283,7 +294,7 @@ class SleepExperienceController extends ChangeNotifier {
     }
   }
 
-  Future<void> _completeSleepExitSideEffects(SleepSession activeSession) async {
+  Future<void> _syncDormStatusAfterSleepExit() async {
     try {
       await _dormRepository.updateCurrentUserStatus(
         uid: _authRepository.currentUser.uid,
@@ -294,6 +305,9 @@ class SleepExperienceController extends ChangeNotifier {
     } catch (_) {
       // Dorm sync is best-effort and should not block leaving sleep mode.
     }
+  }
+
+  Future<void> _completeSleepExitSideEffects(SleepSession activeSession) async {
 
     try {
       await _notificationRepository.upsertNotification(

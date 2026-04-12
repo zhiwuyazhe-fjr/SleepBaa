@@ -251,6 +251,10 @@ function defaultUserProfile(uid: string, dormId?: string | null): JsonMap {
     displayName: `宿舍成员 ${seed}`,
     tagline: "AI 睡眠陪伴中",
     role: "宿舍睡眠优化成员",
+    earnedBadgeIds: ["first-week", "early-sleeper", "sleep-master"],
+    equippedBadgeId: null,
+    showDormPulseBadge: true,
+    selectedDormBadgeId: null,
     dormId: dormId ?? null,
     phoneNumber: null,
     phoneLinkedAt: null,
@@ -272,78 +276,6 @@ function defaultUserSettings(): JsonMap {
     preferredTrackTitle: "深海海浪",
     smartSuggestionsEnabled: true,
     selectedNightMood: null,
-    updatedAt: nowIso(),
-  };
-}
-
-function defaultInterferenceFactor(
-  type: "noise" | "light" | "phoneUsage" | "emotion",
-  title: string,
-  value: string,
-  gradeLabel: string,
-  detail: string,
-  source: string,
-  numericValue?: number,
-  score?: number,
-): JsonMap {
-  return {
-    type,
-    title,
-    value,
-    gradeLabel,
-    status: "ready",
-    detail,
-    source,
-    measuredAt: nowIso(),
-    numericValue: numericValue ?? null,
-    score: score ?? null,
-  };
-}
-
-function defaultTonightInterferenceState(): JsonMap {
-  return {
-    noise: defaultInterferenceFactor(
-      "noise",
-      "宿舍噪声",
-      "32 dB",
-      "安静",
-      "当前宿舍环境较安静，适合开始放松和准备入睡。",
-      "dorm_seed",
-      32,
-      18,
-    ),
-    light: defaultInterferenceFactor(
-      "light",
-      "灯光环境",
-      "偏暗",
-      "适宜",
-      "灯光偏柔和，对入睡干扰较低。",
-      "dorm_seed",
-      72,
-      20,
-    ),
-    phoneUsage: {
-      type: "phoneUsage",
-      title: "手机使用",
-      value: "待检测",
-      gradeLabel: "待检测",
-      status: "idle",
-      detail: "授权后可读取最近 2 小时手机使用时长。",
-      source: "android_usage_stats",
-      measuredAt: null,
-      numericValue: null,
-      score: null,
-    },
-    emotion: defaultInterferenceFactor(
-      "emotion",
-      "情绪压力",
-      "偏低",
-      "偏低",
-      "今晚先按较低压力处理，后续再补充更完整的情绪识别逻辑。",
-      "static_v1",
-      20,
-      20,
-    ),
     updatedAt: nowIso(),
   };
 }
@@ -413,6 +345,8 @@ function defaultDormDoc(dormId: string): JsonMap {
     quietLabel: "平稳",
     rulesSettings,
     rules: buildDormRules(rulesSettings),
+    pendingRuleProposal: null,
+    earnedDormBadgeIds: ["no-trouble-room", "no-wake-room"],
     updatedAt: nowIso(),
   };
 }
@@ -421,6 +355,7 @@ function defaultDormMember(
   uid: string,
   name: string,
   avatarUrl?: string | null,
+  displayBadgeId?: string | null,
 ): JsonMap {
   return {
     uid,
@@ -431,6 +366,7 @@ function defaultDormMember(
     lastActiveAt: nowIso(),
     note: "今晚已准备进入睡前流程。",
     avatarUrl: avatarUrl ?? null,
+    displayBadgeId: displayBadgeId ?? null,
   };
 }
 
@@ -449,6 +385,7 @@ function unboundDormContext(): ContextDorm {
     rules: [],
     invites: [],
     rulesSettings: defaultDormRulesSettings(),
+    earnedDormBadgeIds: [],
   };
 }
 
@@ -754,8 +691,6 @@ export interface AssistantDataRepository {
     threadId?: string,
   ): Promise<AssistantContext>;
   getBootstrapPayload(uid: string): Promise<AppBootstrapPayload>;
-  getAudioTrackCatalog(uid: string): Promise<JsonMap>;
-  saveTonightInterference(uid: string, patch: JsonMap): Promise<JsonMap>;
   diagnoseBootstrap(uid: string): Promise<JsonMap>;
   readAssistantProfile(uid: string): Promise<ContextAssistantProfile>;
   saveAssistantProfile(uid: string, patch: JsonMap): Promise<JsonMap>;
@@ -832,10 +767,21 @@ export interface AssistantDataRepository {
   renameDorm(uid: string, name: string): Promise<JsonMap>;
   leaveDorm(uid: string): Promise<JsonMap>;
   saveDormRules(uid: string, settings: JsonMap): Promise<JsonMap>;
+  approveDormRules(
+    uid: string,
+    proposalId: string,
+  ): Promise<{ dormId: string; applied: boolean; approvedAt: string }>;
+  rejectDormRules(
+    uid: string,
+    proposalId: string,
+    reason: string,
+  ): Promise<{ dormId: string; rejectedAt: string; reason: string }>;
   updateDormMemberStatus(
     uid: string,
-    patch: JsonMap,
+    payload: JsonMap,
   ): Promise<JsonMap>;
+  getAudioTrackCatalog(uid: string): Promise<JsonMap>;
+  saveTonightInterference(uid: string, patch: JsonMap): Promise<JsonMap>;
   saveDormLocationAnchor(uid: string, anchor: JsonMap): Promise<JsonMap>;
   saveDormEnvironment(uid: string, patch: JsonMap): Promise<JsonMap>;
   buildPendingSleepMemoBanner(
@@ -846,6 +792,8 @@ export interface AssistantDataRepository {
   sendGentleDormReminder(
     uid: string,
     targetUid: string,
+    anonymous?: boolean,
+    message?: string,
   ): Promise<{ targetUid: string; createdAt: string }>;
   writeAssistantThreadSummary(
     uid: string,
@@ -1001,6 +949,7 @@ export class FirestoreRepository implements AssistantDataRepository {
       orderBy: { field: "createdAt", direction: "desc" },
       limit: 10,
     });
+    const earnedDormBadgeIds = asStringArray(dormDoc.earnedDormBadgeIds);
     return {
       id: asString(dormDoc.id, resolvedDormId),
       name: asString(
@@ -1027,6 +976,7 @@ export class FirestoreRepository implements AssistantDataRepository {
           lastActiveAt: asString(value.lastActiveAt, nowIso()),
           note: asString(value.note),
           avatarUrl: asString(value.avatarUrl) || undefined,
+          displayBadgeId: asString(value.displayBadgeId) || undefined,
         } satisfies ContextDormMember;
       }),
       events: events.map((doc) => {
@@ -1037,6 +987,7 @@ export class FirestoreRepository implements AssistantDataRepository {
           title: asString(value.title, "宿舍动态"),
           detail: asString(value.detail),
           createdAt: asString(value.createdAt),
+          actorUid: asString(value.actorUid) || undefined,
         } satisfies ContextDormEvent;
       }),
       ...("rulesSettings" in dormDoc
@@ -1045,6 +996,16 @@ export class FirestoreRepository implements AssistantDataRepository {
       ...("locationAnchor" in dormDoc
         ? { locationAnchor: dormDoc.locationAnchor }
         : {}),
+      earnedDormBadgeIds:
+        earnedDormBadgeIds.length > 0
+          ? earnedDormBadgeIds
+          : ["no-trouble-room", "no-wake-room"],
+      pendingRuleProposal:
+        dormDoc.pendingRuleProposal == null
+          ? null
+          : ((asMap(
+              dormDoc.pendingRuleProposal,
+            ) as unknown) as ContextDorm["pendingRuleProposal"]),
       rules: (Array.isArray(dormDoc.rules) ? dormDoc.rules : []) as JsonMap[],
       invites: invites.map((doc) => withoutMeta(doc)),
     } as ContextDorm;
@@ -1347,6 +1308,10 @@ export class FirestoreRepository implements AssistantDataRepository {
         await this.store.merge(Collections.dormMembers, memberId, {
           name: asString(user.displayName),
           avatarUrl: asString(user.avatarUrl) || null,
+          displayBadgeId:
+            asString(user.equippedBadgeId) ||
+            asStringArray(user.earnedBadgeIds).slice(-1)[0] ||
+            null,
           lastActiveAt: nowIso(),
         });
       }
@@ -1378,6 +1343,104 @@ export class FirestoreRepository implements AssistantDataRepository {
     return withoutMeta(
       (await this.store.get(Collections.sleepSessions, sessionId)) ?? {},
     );
+  }
+
+  async updateDormMemberStatus(uid: string, payload: JsonMap): Promise<JsonMap> {
+    const user = await this.getUserProfile(uid);
+    const dormId = user.dormId ? user.dormId.trim() : "";
+    if (!dormId) {
+      throw new Error("Create or join a dorm before updating member status.");
+    }
+    const memberId = `${dormId}:${uid}`;
+    const existingMember = await this.store.get(Collections.dormMembers, memberId);
+    const nextStatus = asString(payload.status, "quiet");
+    const nextPresenceStatus = asString(
+      payload.presenceStatus,
+      asString(existingMember?.presenceStatus, "returned"),
+    );
+    const nextSleepModeActive = asBoolean(payload.sleepModeActive, false);
+    const nextNote = asString(payload.note, "已更新宿舍状态。");
+    const updatedAt = nowIso();
+    await this.store.merge(Collections.dormMembers, memberId, {
+      dormId,
+      ...(existingMember ??
+        defaultDormMember(uid, user.displayName, user.avatarUrl)),
+      uid,
+      name: user.displayName,
+      avatarUrl: user.avatarUrl ?? null,
+      status: nextStatus,
+      presenceStatus: nextPresenceStatus,
+      sleepModeActive: nextSleepModeActive,
+      note: nextNote,
+      lastActiveAt: updatedAt,
+    });
+    await this.store.set(Collections.dormEvents, randomUUID(), {
+      id: randomUUID(),
+      dormId,
+      type: "memberStatus",
+      title: "舍友更新了状态",
+      detail: nextNote,
+      actorUid: uid,
+      createdAt: updatedAt,
+    });
+    return withoutMeta((await this.store.get(Collections.dormMembers, memberId)) ?? {});
+  }
+
+  async saveTonightInterference(uid: string, patch: JsonMap): Promise<JsonMap> {
+    await this.ensureUserBootstrap(uid);
+    const currentState = (await this.getUserState(uid)) ?? ({} as UserStateDoc);
+    const currentInterference = asMap(
+      (currentState as unknown as JsonMap).tonightInterference,
+    );
+    const nextInterference = {
+      ...currentInterference,
+      ...patch,
+      updatedAt: nowIso(),
+    };
+    await this.writeUserState(uid, {
+      tonightInterference: nextInterference as UserStateDoc["tonightInterference"],
+    });
+    return nextInterference;
+  }
+
+  async saveDormLocationAnchor(uid: string, anchor: JsonMap): Promise<JsonMap> {
+    const user = await this.getUserProfile(uid);
+    const dormId = user.dormId ? user.dormId.trim() : "";
+    if (!dormId) {
+      throw new Error("Create or join a dorm before saving dorm location.");
+    }
+    await this.store.merge(Collections.dorms, dormId, {
+      locationAnchor: {
+        latitude: asNumber(anchor.latitude, 0),
+        longitude: asNumber(anchor.longitude, 0),
+        radiusMeters: asNumber(anchor.radiusMeters, 100),
+        recordedAt: asString(anchor.recordedAt, nowIso()),
+        recordedByUid: asString(anchor.recordedByUid, uid),
+      },
+      updatedAt: nowIso(),
+    });
+    return withoutMeta((await this.store.get(Collections.dorms, dormId)) ?? {});
+  }
+
+  async saveDormEnvironment(uid: string, patch: JsonMap): Promise<JsonMap> {
+    const user = await this.getUserProfile(uid);
+    const dormId = user.dormId ? user.dormId.trim() : "";
+    if (!dormId) {
+      throw new Error("Create or join a dorm before updating dorm environment.");
+    }
+    await this.store.merge(Collections.dorms, dormId, {
+      ...(Object.prototype.hasOwnProperty.call(patch, "noiseDb")
+        ? { noiseDb: asNumber(patch.noiseDb, 0) }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(patch, "lightLabel")
+        ? { lightLabel: asString(patch.lightLabel, "未设置") }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(patch, "quietLabel")
+        ? { quietLabel: asString(patch.quietLabel, "平稳") }
+        : {}),
+      updatedAt: nowIso(),
+    });
+    return withoutMeta((await this.store.get(Collections.dorms, dormId)) ?? {});
   }
 
   async getSleepSession(sessionId: string): Promise<JsonMap | null> {
@@ -1647,7 +1710,6 @@ export class FirestoreRepository implements AssistantDataRepository {
       ...defaultDormRulesSettings(),
       ...asMap(payload.rulesSettings),
     };
-    const locationAnchor = asMap(payload.locationAnchor);
     const overview = asString(
       payload.overview,
       "新宿舍已经创建，接下来可以邀请舍友加入。",
@@ -1661,11 +1723,28 @@ export class FirestoreRepository implements AssistantDataRepository {
       archivedAt: null,
       lightLabel: "适中",
       quietLabel: "可优化",
+      ...(payload.locationAnchor
+        ? {
+            locationAnchor: {
+              latitude: asNumber(asMap(payload.locationAnchor).latitude, 0),
+              longitude: asNumber(asMap(payload.locationAnchor).longitude, 0),
+              radiusMeters: asNumber(
+                asMap(payload.locationAnchor).radiusMeters,
+                100,
+              ),
+              recordedAt: asString(
+                asMap(payload.locationAnchor).recordedAt,
+                createdAt,
+              ),
+              recordedByUid: asString(
+                asMap(payload.locationAnchor).recordedByUid,
+                uid,
+              ),
+            },
+          }
+        : {}),
       rulesSettings,
       rules: buildDormRules(rulesSettings),
-      ...(Object.keys(locationAnchor).length > 0
-        ? { locationAnchor }
-        : {}),
       createdAt,
       updatedAt: createdAt,
     });
@@ -1707,27 +1786,6 @@ export class FirestoreRepository implements AssistantDataRepository {
       ...(patch as unknown as JsonMap),
       updatedAt: nowIso(),
     });
-  }
-
-  async saveTonightInterference(uid: string, patch: JsonMap): Promise<JsonMap> {
-    await this.ensureUserBootstrap(uid);
-    const currentState = asMap(
-      (await this.store.get(Collections.userState, uid)) ??
-        { tonightInterference: defaultTonightInterferenceState() },
-    );
-    const currentInterference = asMap(
-      currentState.tonightInterference ?? defaultTonightInterferenceState(),
-    );
-    const nextInterference = {
-      ...currentInterference,
-      ...patch,
-      updatedAt: nowIso(),
-    };
-    await this.store.merge(Collections.userState, uid, {
-      tonightInterference: nextInterference,
-      updatedAt: nowIso(),
-    });
-    return nextInterference;
   }
 
   async buildPendingSleepMemoBanner(
@@ -2021,124 +2079,240 @@ export class FirestoreRepository implements AssistantDataRepository {
     if (!dormId) {
       throw new Error("Create or join a dorm before updating rules.");
     }
+    const dormDoc = withoutMeta(
+      ((await this.store.get(Collections.dorms, dormId)) ??
+        defaultDormDoc(dormId)) as JsonMap,
+    );
+    if (dormDoc.pendingRuleProposal) {
+      throw new Error("There is already a pending dorm rule proposal.");
+    }
+    const members = await this.store.query(Collections.dormMembers, {
+      filters: { dormId },
+      orderBy: { field: "lastActiveAt", direction: "desc" },
+    });
     const nextSettings = {
       ...defaultDormRulesSettings(),
       ...asMap(settings),
     };
+    const proposedRules = buildDormRules(nextSettings);
+    const reviewerUids = members.map((member) => asString(member.uid)).filter(Boolean);
+    const proposerName =
+      asString(
+        members.find((member) => asString(member.uid) == uid)?.name,
+        user.displayName,
+      ) || "舍友";
+    const createdAt = nowIso();
+    const proposalId = randomUUID();
+    const proposal = {
+      id: proposalId,
+      proposedSettings: nextSettings,
+      proposedRules,
+      proposerUid: uid,
+      proposerName,
+      createdAt,
+      reviewerUids,
+      approvedUids: [uid],
+      rejectedByUid: null,
+      rejectedReason: null,
+      resolvedAt: null,
+    };
+    const pendingReviewers = reviewerUids.filter((memberUid) => memberUid && memberUid !== uid);
+    if (pendingReviewers.length === 0) {
+      await this.store.merge(Collections.dorms, dormId, {
+        rulesSettings: nextSettings,
+        rules: proposedRules,
+        pendingRuleProposal: null,
+        updatedAt: createdAt,
+      });
+      await this.store.set(Collections.dormEvents, randomUUID(), {
+        id: randomUUID(),
+        dormId,
+        type: "ruleUpdate",
+        title: "宿舍公约已更新",
+        detail: `当前作息标签：${asStringArray(nextSettings.routineTags).join("、") || "未设置"}`,
+        actorUid: uid,
+        createdAt,
+      });
+    } else {
+      await this.store.merge(Collections.dorms, dormId, {
+        pendingRuleProposal: proposal,
+        updatedAt: createdAt,
+      });
+      await this.store.set(Collections.dormEvents, randomUUID(), {
+        id: randomUUID(),
+        dormId,
+        type: "ruleUpdate",
+        title: "有新宿舍公约待确认",
+        detail: `${proposerName} 提交了新的宿舍规则，等待室友确认。`,
+        actorUid: uid,
+        createdAt,
+      });
+      await Promise.all(
+        pendingReviewers.map((targetUid) =>
+          this.store.set(Collections.notifications, `${targetUid}:dorm-rule-${proposalId}`, {
+            id: `dorm-rule-${proposalId}`,
+            category: "dorm",
+            title: "宿舍公约有新规则待确认",
+            body: `${proposerName} 更新了宿舍公约，等你确认后才会正式生效。`,
+            route: "/dorm/rules?review=1",
+            createdAt,
+            ownerUid: targetUid,
+            readAt: null,
+          }),
+        ),
+      );
+    }
+    return withoutMeta((await this.store.get(Collections.dorms, dormId)) ?? {});
+  }
+
+  async approveDormRules(
+    uid: string,
+    proposalId: string,
+  ): Promise<{ dormId: string; applied: boolean; approvedAt: string }> {
+    const user = await this.getUserProfile(uid);
+    const dormId = user.dormId ? user.dormId.trim() : "";
+    if (!dormId) {
+      throw new Error("Create or join a dorm before approving rules.");
+    }
+    const dormDoc = withoutMeta(
+      ((await this.store.get(Collections.dorms, dormId)) ??
+        defaultDormDoc(dormId)) as JsonMap,
+    );
+    const proposal = asMap(dormDoc.pendingRuleProposal);
+    if (asString(proposal.id) !== proposalId || !proposalId.trim()) {
+      throw new Error("Dorm rule proposal was not found.");
+    }
+    const reviewerUids = asStringArray(proposal.reviewerUids);
+    if (!reviewerUids.includes(uid)) {
+      throw new Error("You are not a reviewer of this dorm rule proposal.");
+    }
+    const approvedUids = new Set(asStringArray(proposal.approvedUids));
+    approvedUids.add(uid);
+    const approvedAt = nowIso();
+    const proposedSettings = {
+      ...defaultDormRulesSettings(),
+      ...asMap(proposal.proposedSettings),
+    };
+    const proposedRules = Array.isArray(proposal.proposedRules)
+      ? proposal.proposedRules.map((item) => asMap(item))
+      : buildDormRules(proposedSettings);
+    const actorName =
+      asString(
+        (
+          await this.store.get(Collections.dormMembers, `${dormId}:${uid}`)
+        )?.name,
+        user.displayName,
+      ) || "舍友";
+    const allApproved = reviewerUids.every((reviewerUid) => approvedUids.has(reviewerUid));
+    if (allApproved) {
+      await this.store.merge(Collections.dorms, dormId, {
+        rulesSettings: proposedSettings,
+        rules: proposedRules,
+        pendingRuleProposal: null,
+        updatedAt: approvedAt,
+      });
+      await this.store.set(Collections.dormEvents, randomUUID(), {
+        id: randomUUID(),
+        dormId,
+        type: "ruleUpdate",
+        title: "新宿舍公约已生效",
+        detail: "全部室友已同意，新的宿舍公约开始执行。",
+        actorUid: uid,
+        createdAt: approvedAt,
+      });
+      return { dormId, applied: true, approvedAt };
+    }
     await this.store.merge(Collections.dorms, dormId, {
-      rulesSettings: nextSettings,
-      rules: buildDormRules(nextSettings),
-      updatedAt: nowIso(),
+      pendingRuleProposal: {
+        ...proposal,
+        approvedUids: Array.from(approvedUids),
+      },
+      updatedAt: approvedAt,
     });
     await this.store.set(Collections.dormEvents, randomUUID(), {
       id: randomUUID(),
       dormId,
       type: "ruleUpdate",
-      title: "宿舍公约已更新",
-      detail: `当前作息标签：${asStringArray(nextSettings.routineTags).join("、") || "未设置"}`,
+      title: "室友已同意新公约",
+      detail: `${actorName} 已同意这次规则调整。`,
       actorUid: uid,
-      createdAt: nowIso(),
+      createdAt: approvedAt,
     });
-    return withoutMeta((await this.store.get(Collections.dorms, dormId)) ?? {});
+    return { dormId, applied: false, approvedAt };
   }
 
-  async updateDormMemberStatus(uid: string, patch: JsonMap): Promise<JsonMap> {
+  async rejectDormRules(
+    uid: string,
+    proposalId: string,
+    reason: string,
+  ): Promise<{ dormId: string; rejectedAt: string; reason: string }> {
     const user = await this.getUserProfile(uid);
     const dormId = user.dormId ? user.dormId.trim() : "";
     if (!dormId) {
-      throw new Error("Create or join a dorm before updating member status.");
+      throw new Error("Create or join a dorm before rejecting rules.");
     }
-    const targetUid = asString(patch.uid, uid);
-    const memberId = `${dormId}:${targetUid}`;
-    const existing =
-      (await this.store.get(Collections.dormMembers, memberId)) ??
-      defaultDormMember(
-        targetUid,
-        targetUid === uid ? user.displayName : "舍友",
-      );
-    const next = {
-      ...withoutMeta(existing),
-      ...(Object.prototype.hasOwnProperty.call(patch, "status")
-        ? {
-            status:
-              asString(patch.status) === "active" ? "active" : "quiet",
-          }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(patch, "presenceStatus")
-        ? {
-            presenceStatus:
-              asString(patch.presenceStatus) === "away"
-                ? "away"
-                : "returned",
-          }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(patch, "sleepModeActive")
-        ? { sleepModeActive: asBoolean(patch.sleepModeActive, false) }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(patch, "note")
-        ? { note: asString(patch.note) }
-        : {}),
-      uid: targetUid,
-      dormId,
-      lastActiveAt: nowIso(),
-      updatedAt: nowIso(),
-    };
-    await this.store.set(Collections.dormMembers, memberId, next);
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) {
+      throw new Error("Rejection reason is required.");
+    }
+    const dormDoc = withoutMeta(
+      ((await this.store.get(Collections.dorms, dormId)) ??
+        defaultDormDoc(dormId)) as JsonMap,
+    );
+    const proposal = asMap(dormDoc.pendingRuleProposal);
+    if (asString(proposal.id) !== proposalId || !proposalId.trim()) {
+      throw new Error("Dorm rule proposal was not found.");
+    }
+    const reviewerUids = asStringArray(proposal.reviewerUids);
+    if (!reviewerUids.includes(uid)) {
+      throw new Error("You are not a reviewer of this dorm rule proposal.");
+    }
+    const rejectedAt = nowIso();
+    const actorName =
+      asString(
+        (
+          await this.store.get(Collections.dormMembers, `${dormId}:${uid}`)
+        )?.name,
+        user.displayName,
+      ) || "舍友";
+    await this.store.merge(Collections.dorms, dormId, {
+      pendingRuleProposal: null,
+      updatedAt: rejectedAt,
+    });
     await this.store.set(Collections.dormEvents, randomUUID(), {
       id: randomUUID(),
       dormId,
-      type: "memberStatus",
-      title: targetUid === uid ? "你已更新状态" : "舍友更新了状态",
-      detail: asString(next.note),
-      actorUid: targetUid,
-      createdAt: nowIso(),
+      type: "ruleUpdate",
+      title: "新宿舍公约未通过",
+      detail: `${actorName} 提出异议：${trimmedReason}`,
+      actorUid: uid,
+      createdAt: rejectedAt,
     });
-    return withoutMeta((await this.store.get(Collections.dormMembers, memberId)) ?? {});
-  }
-
-  async saveDormLocationAnchor(uid: string, anchor: JsonMap): Promise<JsonMap> {
-    const user = await this.getUserProfile(uid);
-    const dormId = user.dormId ? user.dormId.trim() : "";
-    if (!dormId) {
-      throw new Error("Create or join a dorm before saving dorm location.");
+    const proposerUid = asString(proposal.proposerUid);
+    if (proposerUid && proposerUid !== uid) {
+      await this.store.set(
+        Collections.notifications,
+        `${proposerUid}:dorm-rule-rejected-${proposalId}`,
+        {
+          id: `dorm-rule-rejected-${proposalId}`,
+          category: "dorm",
+          title: "你的宿舍公约提案未通过",
+          body: `${actorName} 提出了异议：${trimmedReason}`,
+          route: "/dorm/status",
+          createdAt: rejectedAt,
+          ownerUid: proposerUid,
+          readAt: null,
+        },
+      );
     }
-    await this.store.merge(Collections.dorms, dormId, {
-      locationAnchor: {
-        latitude: asNumber(anchor.latitude, 0),
-        longitude: asNumber(anchor.longitude, 0),
-        radiusMeters: asNumber(anchor.radiusMeters, 100),
-        recordedAt: asString(anchor.recordedAt, nowIso()),
-        recordedByUid: asString(anchor.recordedByUid, uid),
-      },
-      updatedAt: nowIso(),
-    });
-    return withoutMeta((await this.store.get(Collections.dorms, dormId)) ?? {});
-  }
-
-  async saveDormEnvironment(uid: string, patch: JsonMap): Promise<JsonMap> {
-    const user = await this.getUserProfile(uid);
-    const dormId = user.dormId ? user.dormId.trim() : "";
-    if (!dormId) {
-      throw new Error("Create or join a dorm before updating dorm environment.");
-    }
-    await this.store.merge(Collections.dorms, dormId, {
-      ...(Object.prototype.hasOwnProperty.call(patch, "noiseDb")
-        ? { noiseDb: asNumber(patch.noiseDb, 0) }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(patch, "lightLabel")
-        ? { lightLabel: asString(patch.lightLabel, "未设置") }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(patch, "quietLabel")
-        ? { quietLabel: asString(patch.quietLabel, "平稳") }
-        : {}),
-      updatedAt: nowIso(),
-    });
-    return withoutMeta((await this.store.get(Collections.dorms, dormId)) ?? {});
+    return { dormId, rejectedAt, reason: trimmedReason };
   }
 
   async sendGentleDormReminder(
     uid: string,
     targetUid: string,
+    anonymous = true,
+    message = "",
   ): Promise<{ targetUid: string; createdAt: string }> {
     const user = await this.getUserProfile(uid);
     const dormId = user.dormId ? user.dormId.trim() : "";
@@ -2147,6 +2321,10 @@ export class FirestoreRepository implements AssistantDataRepository {
     }
     if (!targetUid || targetUid.trim() === uid) {
       throw new Error("Select a roommate before sending the reminder.");
+    }
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage) {
+      throw new Error("Select or enter a reminder before sending.");
     }
     const targetMember = await this.store.get(
       Collections.dormMembers,
@@ -2159,11 +2337,14 @@ export class FirestoreRepository implements AssistantDataRepository {
       (await this.store.get(Collections.dormMembers, `${dormId}:${uid}`)) ??
       defaultDormMember(uid, user.displayName, user.avatarUrl);
     const createdAt = nowIso();
+    const senderName = anonymous
+      ? "您的舍友"
+      : asString(actorMember.name, user.displayName || "舍友");
     await this.store.set(Collections.notifications, `${targetUid}:gentle-${createdAt}`, {
       id: `gentle-${createdAt}`,
       category: "dorm",
       title: "舍友提醒你稍微放轻一点",
-      body: `${asString(actorMember.name, "舍友")} 给你发来一条温和提醒：如果方便的话，今晚一起把宿舍环境再放轻一点。`,
+      body: `${senderName} 给你发来一条温和提醒：${trimmedMessage}`,
       route: "/dorm",
       createdAt,
       ownerUid: targetUid,
@@ -2791,6 +2972,9 @@ export class FirestoreRepository implements AssistantDataRepository {
           uid,
           asString(user.displayName, "宿舍成员"),
           asString(user.avatarUrl),
+          asString(user.equippedBadgeId) ||
+              asStringArray(user.earnedBadgeIds).slice(-1)[0] ||
+              null,
         ),
       });
     }
@@ -2841,6 +3025,10 @@ export class FirestoreRepository implements AssistantDataRepository {
       displayName: asString(doc.displayName, "宿舍成员"),
       tagline: asString(doc.tagline, "AI 睡眠陪伴中"),
       role: asString(doc.role, "宿舍睡眠优化成员"),
+      earnedBadgeIds: asStringArray(doc.earnedBadgeIds),
+      equippedBadgeId: asString(doc.equippedBadgeId) || null,
+      showDormPulseBadge: asBoolean(doc.showDormPulseBadge, true),
+      selectedDormBadgeId: asString(doc.selectedDormBadgeId) || null,
       dormId: dormId || null,
       phoneNumber: asString(doc.phoneNumber) || null,
       phoneLinkedAt: asString(doc.phoneLinkedAt) || null,
