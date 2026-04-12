@@ -289,24 +289,44 @@ class DormFacade extends ChangeNotifier {
     required String name,
     String? overview,
     DormRulesSettings? rulesSettings,
+    DormLocationAnchor? locationAnchor,
   }) {
     return _dormRepository.createDorm(
       name: name,
       overview: overview,
       rulesSettings: rulesSettings,
+      locationAnchor: locationAnchor,
     );
   }
 
   Future<void> updateCurrentUserStatus({
-    required DormMemberStatus status,
-    required bool sleepModeActive,
-    required String note,
+    DormMemberStatus? status,
+    DormPresenceStatus? presenceStatus,
+    bool? sleepModeActive,
+    String? note,
   }) {
     return _dormRepository.updateCurrentUserStatus(
       uid: currentUserId,
       status: status,
+      presenceStatus: presenceStatus,
       sleepModeActive: sleepModeActive,
       note: note,
+    );
+  }
+
+  Future<void> saveDormLocationAnchor(DormLocationAnchor anchor) {
+    return _dormRepository.saveDormLocationAnchor(anchor);
+  }
+
+  Future<void> updateDormEnvironment({
+    int? noiseDb,
+    String? lightLabel,
+    String? quietLabel,
+  }) {
+    return _dormRepository.updateDormEnvironment(
+      noiseDb: noiseDb,
+      lightLabel: lightLabel,
+      quietLabel: quietLabel,
     );
   }
 

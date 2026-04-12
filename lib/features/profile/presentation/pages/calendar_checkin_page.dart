@@ -46,6 +46,9 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
           final SleepSession? selectedSession = _selectedDay == null
               ? null
               : sessionMap[_selectedDay];
+          final int pendingCount = monthSessions
+              .where((SleepSession session) => session.summary == null)
+              .length;
 
           return ListView(
             padding: const EdgeInsets.all(AppSpacing.xl),
@@ -120,60 +123,38 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
                     Text('连续记录', style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      '${_buildStreak(services.sleepSessionRepository.sessions)} 天稳定入睡',
+                      '${_buildStreak(services.sleepSessionRepository.sessions)} 天连续打卡',
                       style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(color: palette.primary),
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                    const Text('选中某一天即可查看当天的入睡、夜醒和执行建议摘要。'),
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.sm,
+                      children: <Widget>[
+                        _DetailChip(
+                          label:
+                              '本月记录 ${monthSessions.length} 夜',
+                        ),
+                        _DetailChip(
+                          label: '待补全 $pendingCount 夜',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      '进入睡眠后会先占位，晨间反馈完成后会补全睡眠质量、时长和摘要。',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                        height: 1.45,
+                      ),
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
               AppCard(
-                child: selectedSession == null
-                    ? const Text('这一天还没有睡眠记录。')
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            Formatters.formatDateLabel(
-                              selectedSession.startedAt,
-                            ),
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          Wrap(
-                            spacing: AppSpacing.sm,
-                            runSpacing: AppSpacing.sm,
-                            children: <Widget>[
-                              _DetailChip(
-                                label:
-                                    '总时长 ${selectedSession.summary?.totalSleepHours.toStringAsFixed(1) ?? '--'} h',
-                              ),
-                              _DetailChip(
-                                label:
-                                    '夜醒 ${selectedSession.awakenings.length} 次',
-                              ),
-                              _DetailChip(
-                                label:
-                                    '建议 ${selectedSession.selectedRecommendationIds.length} 项',
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: AppSpacing.lg),
-                          Text(
-                            '当天摘要',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                          Text(
-                            selectedSession.summary?.note ?? '这一天还没有主观反馈。',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: AppColors.textSecondary),
-                          ),
-                        ],
-                      ),
+                child: _SelectedSessionDetail(session: selectedSession),
               ),
             ],
           );
@@ -183,22 +164,127 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
   }
 
   int _buildStreak(List<SleepSession> sessions) {
-    final List<SleepSession> ordered = List<SleepSession>.from(sessions)
-      ..sort(
-        (SleepSession a, SleepSession b) => b.startedAt.compareTo(a.startedAt),
-      );
-    int streak = 0;
-    DateTime cursor = DateUtils.dateOnly(
-      DateTime.now().subtract(const Duration(days: 1)),
-    );
-    for (final SleepSession session in ordered) {
-      final DateTime day = DateUtils.dateOnly(session.startedAt);
-      if (day == cursor) {
+    if (sessions.isEmpty) {
+      return 0;
+    }
+    final List<DateTime> uniqueDays = sessions
+        .map((SleepSession session) => DateUtils.dateOnly(session.startedAt))
+        .toSet()
+        .toList(growable: false)
+      ..sort((DateTime a, DateTime b) => b.compareTo(a));
+    int streak = 1;
+    for (int index = 1; index < uniqueDays.length; index++) {
+      final int gap = uniqueDays[index - 1].difference(uniqueDays[index]).inDays;
+      if (gap == 1) {
         streak += 1;
-        cursor = cursor.subtract(const Duration(days: 1));
+        continue;
       }
+      break;
     }
     return streak;
+  }
+}
+
+class _SelectedSessionDetail extends StatelessWidget {
+  const _SelectedSessionDetail({required this.session});
+
+  final SleepSession? session;
+
+  @override
+  Widget build(BuildContext context) {
+    if (session == null) {
+      return const Text('这一天还没有睡眠记录。');
+    }
+
+    final MorningSummary? summary = session!.summary;
+    final String stageLabel = _sessionStageLabel(session!);
+    final Color stageColor = _sessionStageColor(session!);
+    final String durationLabel = summary != null
+        ? '${summary.totalSleepHours.toStringAsFixed(1)} h'
+        : session!.endedAt == null
+        ? '进行中'
+        : '${session!.endedAt!.difference(session!.startedAt).inMinutes} min';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                Formatters.formatDateLabel(session!.startedAt),
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            _StateBadge(label: stageLabel, color: stageColor),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: <Widget>[
+            _DetailChip(label: '时长 $durationLabel'),
+            _DetailChip(label: '夜醒 ${session!.awakenings.length} 次'),
+            _DetailChip(
+              label: '建议 ${session!.selectedRecommendationIds.length} 项',
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Text(
+          '当晚摘要',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          summary?.note ??
+              (session!.status == SleepSessionStatus.active
+                  ? '已进入睡眠模式，等待本夜结束后补全反馈。'
+                  : '已退出睡眠模式，等待晨间反馈补全质量与恢复感。'),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: AppColors.textSecondary,
+            height: 1.5,
+          ),
+        ),
+        if (summary != null) ...<Widget>[
+          const SizedBox(height: AppSpacing.lg),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: <Widget>[
+              _DetailChip(label: '睡眠质量 ${summary.sleepQuality}/5'),
+              _DetailChip(label: '恢复感 ${summary.restedLevel}/5'),
+              _DetailChip(label: '夜醒统计 ${summary.awakeningsCount} 次'),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  String _sessionStageLabel(SleepSession session) {
+    if (session.summary != null || session.status == SleepSessionStatus.completed) {
+      return '已完成';
+    }
+    return switch (session.status) {
+      SleepSessionStatus.active => '进行中',
+      SleepSessionStatus.awaitingFeedback => '待补全',
+      SleepSessionStatus.completed => '已完成',
+      SleepSessionStatus.drafted => '草稿',
+    };
+  }
+
+  Color _sessionStageColor(SleepSession session) {
+    if (session.summary != null || session.status == SleepSessionStatus.completed) {
+      return const Color(0xFF2D9272);
+    }
+    return switch (session.status) {
+      SleepSessionStatus.active => const Color(0xFF4458D8),
+      SleepSessionStatus.awaitingFeedback => const Color(0xFFF39A3C),
+      SleepSessionStatus.completed => const Color(0xFF2D9272),
+      SleepSessionStatus.drafted => AppColors.textSecondary,
+    };
   }
 }
 
@@ -242,7 +328,7 @@ class _CalendarGrid extends StatelessWidget {
     final int daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
     final int leadingEmpty = DateTime(month.year, month.month, 1).weekday - 1;
     final List<Widget> cells = <Widget>[
-      for (int i = 0; i < leadingEmpty; i++) const SizedBox.shrink(),
+      for (int index = 0; index < leadingEmpty; index++) const SizedBox.shrink(),
       for (int day = 1; day <= daysInMonth; day++)
         _DayCell(
           date: DateTime(month.year, month.month, day),
@@ -282,13 +368,14 @@ class _DayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final int quality = session?.summary?.sleepQuality ?? 0;
+    final bool pending = session != null && session!.summary == null;
     final Color fill = switch (quality) {
       5 => palette.primary,
       4 => palette.primarySoft,
       3 => palette.primarySoft.withAlpha(150),
       2 => palette.primarySoft.withAlpha(90),
       1 => palette.primarySoft.withAlpha(50),
-      _ => AppColors.surfaceSoft,
+      _ => pending ? palette.primarySoft.withAlpha(72) : AppColors.surfaceSoft,
     };
     return InkWell(
       borderRadius: BorderRadius.circular(14),
@@ -297,17 +384,35 @@ class _DayCell extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? AppColors.darkSurface : fill,
           borderRadius: BorderRadius.circular(14),
+          border: pending
+              ? Border.all(color: palette.primary.withAlpha(selected ? 255 : 180))
+              : null,
         ),
         child: Center(
-          child: Text(
-            '${date.day}',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: selected
-                  ? AppColors.onDark
-                  : quality > 3
-                  ? palette.primaryDeep
-                  : AppColors.textPrimary,
-            ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Text(
+                '${date.day}',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: selected
+                      ? AppColors.onDark
+                      : quality > 3
+                      ? palette.primaryDeep
+                      : AppColors.textPrimary,
+                ),
+              ),
+              if (pending) ...<Widget>[
+                const SizedBox(height: 2),
+                Text(
+                  '待',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: selected ? AppColors.onDark : palette.primaryDeep,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),
@@ -332,6 +437,34 @@ class _DetailChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(label, style: Theme.of(context).textTheme.labelMedium),
+    );
+  }
+}
+
+class _StateBadge extends StatelessWidget {
+  const _StateBadge({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: color.withAlpha(18),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }

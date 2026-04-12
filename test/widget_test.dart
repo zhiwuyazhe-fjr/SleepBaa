@@ -139,7 +139,7 @@ void main() {
     expect(find.text('今晚你更接近哪一种心情？'), findsNothing);
   }, skip: true);
 
-  testWidgets('welcome flow can show again after skip until completion', (
+  testWidgets('welcome flow stays skipped for the same night after skip', (
     WidgetTester tester,
   ) async {
     await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
@@ -154,8 +154,8 @@ void main() {
     await tester.tap(find.byIcon(Icons.home_rounded));
     await tester.pumpAndSettle();
 
-    expect(find.byType(HomePreSleepPage), findsNothing);
-    expect(find.widgetWithText(TextButton, 'Skip'), findsOneWidget);
+    expect(find.byType(HomePreSleepPage), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Skip'), findsNothing);
   });
 
   testWidgets('bottom navigation switches between shell tabs', (
@@ -633,8 +633,8 @@ void main() {
       clock: _dayClock,
     );
 
-    await tester.ensureVisible(find.text('梦境记录'));
-    await tester.tap(find.text('梦境记录'));
+    await tester.ensureVisible(find.byIcon(Icons.auto_stories_rounded).first);
+    await tester.tap(find.byIcon(Icons.auto_stories_rounded).first);
     await tester.pumpAndSettle();
 
     expect(find.byType(DreamJournalPage), findsOneWidget);
@@ -758,6 +758,7 @@ void main() {
       clock: _dayClock,
     );
 
+    await tester.ensureVisible(find.text('查看全部'));
     await tester.tap(find.text('查看全部'));
     await tester.pumpAndSettle();
 

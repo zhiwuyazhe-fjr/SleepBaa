@@ -12,6 +12,7 @@ import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_invite_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
+import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_member_status_presenter.dart';
 
 class DormPage extends StatelessWidget {
   const DormPage({super.key});
@@ -57,12 +58,8 @@ class DormPage extends StatelessWidget {
             notifications: services.notificationRepository.notifications,
             palette: palette,
           );
-          final int onlineCount = dorm.members
-              .where((DormMember member) => member.status != DormMemberStatus.away)
-              .length;
-          final int sleepingCount = dorm.members
-              .where((DormMember member) => member.sleepModeActive)
-              .length;
+          final int onlineCount = returnedDormMemberCount(dorm.members);
+          final int sleepingCount = sleepingDormMemberCount(dorm.members);
           final List<_DormHubAction> actions = <_DormHubAction>[
             _DormHubAction(
               title: '宿舍作息约定',
@@ -447,7 +444,8 @@ class _DormMemberCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color accentColor = _memberColor(member.status);
+    final Color presenceColor = dormPresenceSleepColor(member);
+    final Color activityColor = dormActivityColor(member);
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.sm),
       border: Border.all(color: AppColors.divider),
@@ -458,12 +456,12 @@ class _DormMemberCard extends StatelessWidget {
         child: Column(
           children: <Widget>[
             CircleAvatar(
-              radius: 26,
-              backgroundColor: accentColor.withAlpha(42),
+              radius: 24,
+              backgroundColor: presenceColor.withAlpha(42),
               child: Text(
                 member.name.characters.first,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: accentColor,
+                  color: presenceColor,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -480,10 +478,10 @@ class _DormMemberCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             SizedBox(
-              height: 38,
+              height: 24,
               child: Text(
                 member.note,
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: Theme.of(
@@ -495,16 +493,34 @@ class _DormMemberCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.sm,
-                vertical: 4,
+                vertical: 2,
               ),
               decoration: BoxDecoration(
-                color: accentColor.withAlpha(24),
+                color: presenceColor.withAlpha(18),
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
-                _memberLabel(member.status),
+                dormPresenceSleepLabel(member),
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: accentColor,
+                  color: presenceColor,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: 2,
+              ),
+              decoration: BoxDecoration(
+                color: activityColor.withAlpha(24),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                dormActivityLabel(member),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: activityColor,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -624,24 +640,6 @@ class _DormEventTile extends StatelessWidget {
       ),
     );
   }
-}
-
-Color _memberColor(DormMemberStatus status) {
-  return switch (status) {
-    DormMemberStatus.sleeping => const Color(0xFF4458D8),
-    DormMemberStatus.quiet => const Color(0xFF2D9272),
-    DormMemberStatus.away => const Color(0xFF8A8F9F),
-    DormMemberStatus.active => const Color(0xFFF39A3C),
-  };
-}
-
-String _memberLabel(DormMemberStatus status) {
-  return switch (status) {
-    DormMemberStatus.sleeping => '睡眠中',
-    DormMemberStatus.quiet => '安静中',
-    DormMemberStatus.away => '暂时离开',
-    DormMemberStatus.active => '活动中',
-  };
 }
 
 int _quietStarsFor(int noiseDb) {

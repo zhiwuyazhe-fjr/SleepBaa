@@ -186,6 +186,7 @@ void main() {
               uid: 'host-user',
               name: 'Host',
               status: DormMemberStatus.quiet,
+              presenceStatus: DormPresenceStatus.returned,
               sleepModeActive: false,
               lastActiveAt: DateTime(2026, 4, 5, 22),
               note: 'Ready to sleep',

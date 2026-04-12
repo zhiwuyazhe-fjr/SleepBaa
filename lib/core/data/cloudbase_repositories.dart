@@ -139,6 +139,33 @@ IconData _iconForAction(String actionId, RecommendationType type) {
           : Icons.task_alt_rounded);
 }
 
+Map<String, AudioTrack> _remoteAudioTrackCatalog = <String, AudioTrack>{};
+
+AudioTrack? _mergeTrackWithRemoteCatalog(
+  AudioTrack? track, {
+  String? trackId,
+}) {
+  final String resolvedTrackId =
+      (trackId?.trim().isNotEmpty ?? false) ? trackId!.trim() : track?.id ?? '';
+  if (resolvedTrackId.isEmpty) {
+    return track;
+  }
+  final AudioTrack? remoteTrack = _remoteAudioTrackCatalog[resolvedTrackId];
+  if (remoteTrack == null) {
+    return track;
+  }
+  if (track == null) {
+    return remoteTrack;
+  }
+  return track.copyWith(
+    title: remoteTrack.title,
+    subtitle: remoteTrack.subtitle,
+    duration: remoteTrack.duration,
+    sourceUrl: remoteTrack.sourceUrl,
+    storageFileId: remoteTrack.storageFileId,
+  );
+}
+
 AudioTrack? _trackForAction(String actionId, String? trackId) {
   final Map<String, NightRecommendation> catalog =
       <String, NightRecommendation>{
@@ -146,18 +173,59 @@ AudioTrack? _trackForAction(String actionId, String? trackId) {
           item.id: item,
       };
   final AudioTrack? catalogTrack = catalog[actionId]?.track;
+  final AudioTrack? hydratedCatalogTrack = _mergeTrackWithRemoteCatalog(
+    catalogTrack,
+    trackId: trackId,
+  );
+  if (hydratedCatalogTrack != null) {
+    return hydratedCatalogTrack;
+  }
   if (catalogTrack != null) {
     return catalogTrack;
   }
   if (trackId == null || trackId.isEmpty) {
     return null;
   }
-  return AudioTrack(
+  return _mergeTrackWithRemoteCatalog(
+    AudioTrack(
+      id: trackId,
+      title: '\u52a9\u7720\u97f3\u9891',
+      subtitle: 'AI \u4e3a\u4f60\u63a8\u8350\u7684\u653e\u677e\u97f3\u8f68',
+      duration: const Duration(minutes: 45),
+    ),
+    trackId: trackId,
+  ) ??
+      AudioTrack(
     id: trackId,
     title: '\u52a9\u7720\u97f3\u9891',
     subtitle: 'AI \u4e3a\u4f60\u63a8\u8350\u7684\u653e\u677e\u97f3\u8f68',
     duration: const Duration(minutes: 45),
   );
+}
+
+DormMemberStatus _activityStatusFromStorage(Map<String, dynamic> map) {
+  final String rawStatus = _stringOf(map['status']);
+  if (rawStatus == DormMemberStatus.active.name) {
+    return DormMemberStatus.active;
+  }
+  return DormMemberStatus.quiet;
+}
+
+DormPresenceStatus _presenceStatusFromStorage(Map<String, dynamic> map) {
+  final String rawPresence = _stringOf(map['presenceStatus']);
+  if (rawPresence == DormPresenceStatus.away.name) {
+    return DormPresenceStatus.away;
+  }
+  final String rawStatus = _stringOf(map['status']);
+  if (rawStatus == DormMemberStatus.away.name) {
+    return DormPresenceStatus.away;
+  }
+  return DormPresenceStatus.returned;
+}
+
+bool _sleepModeFromStorage(Map<String, dynamic> map) {
+  final bool explicit = map['sleepModeActive'] as bool? ?? false;
+  return explicit || _stringOf(map['status']) == DormMemberStatus.sleeping.name;
 }
 
 NightRecommendation _recommendationFromAction(Map<String, dynamic> action) {
@@ -214,16 +282,24 @@ DormMember _dormMemberFromMap(Map<String, dynamic> map) {
   return DormMember(
     uid: _stringOf(map['uid']),
     name: _stringOf(map['name']),
-    status:
-        _firstWhereOrNull(DormMemberStatus.values, (DormMemberStatus status) {
-          return status.name == _stringOf(map['status']);
-        }) ??
-        DormMemberStatus.quiet,
-    sleepModeActive: map['sleepModeActive'] as bool? ?? false,
+    status: _activityStatusFromStorage(map),
+    presenceStatus: _presenceStatusFromStorage(map),
+    sleepModeActive: _sleepModeFromStorage(map),
     lastActiveAt: _dateOf(map['lastActiveAt']),
     note: _stringOf(map['note']),
     avatarUrl: map['avatarUrl'] as String?,
   );
+}
+
+DormLocationAnchor? _dormLocationAnchorFromMap(dynamic value) {
+  if (value is! Map) {
+    return null;
+  }
+  final Map<String, dynamic> map = Map<String, dynamic>.from(value);
+  if (!map.containsKey('latitude') || !map.containsKey('longitude')) {
+    return null;
+  }
+  return ModelSerializers.dormLocationAnchorFromMap(map);
 }
 
 DormRule _dormRuleFromMap(Map<String, dynamic> map) {
@@ -309,6 +385,7 @@ Dorm _dormFromMap(Map<String, dynamic> map, String currentUserId) {
     invites: _mapListOf(
       map['invites'],
     ).map(_dormInviteFromMap).toList(growable: false),
+    locationAnchor: _dormLocationAnchorFromMap(map['locationAnchor']),
   );
 }
 
@@ -457,6 +534,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
 
   late UserProfile _currentUser;
   bool _isAuthenticating = false;
+  bool _hasCompletedInitialAuthBootstrap = false;
   String? _lastAuthError;
 
   @override
@@ -472,6 +550,9 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
 
   @override
   bool get isAuthenticating => _isAuthenticating;
+
+  @override
+  bool get hasCompletedInitialAuthBootstrap => _hasCompletedInitialAuthBootstrap;
 
   @override
   String? get lastAuthError => _lastAuthError;
@@ -546,6 +627,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       return _currentUser;
     }
     if (!_environment.usesCloudBase) {
+      _hasCompletedInitialAuthBootstrap = true;
       return _currentUser.uid.isNotEmpty
           ? _currentUser
           : buildDefaultUserProfile();
@@ -629,6 +711,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       return _clearSessionAndReset(message: error.toString());
     } finally {
       _isAuthenticating = false;
+      _hasCompletedInitialAuthBootstrap = true;
       notifyListeners();
     }
   }
@@ -1398,6 +1481,7 @@ class CloudBaseRecommendationRepository extends ChangeNotifier
        _appApiClient = appApiClient,
        _tonightRecommendations = buildDefaultRecommendations() {
     _snapshotStore.addListener(_applySnapshot);
+    unawaited(_refreshAudioCatalog(hydrateCurrentRecommendations: true));
   }
 
   final AuthRepository _authRepository;
@@ -1426,6 +1510,7 @@ class CloudBaseRecommendationRepository extends ChangeNotifier
           },
         );
         await _snapshotStore.refresh();
+        unawaited(_refreshAudioCatalog(hydrateCurrentRecommendations: true));
         return;
       } catch (_) {
         // Fall back to local defaults below.
@@ -1437,6 +1522,7 @@ class CloudBaseRecommendationRepository extends ChangeNotifier
               item.copyWith(executionState: RecommendationExecutionState.idle),
         )
         .toList(growable: false);
+    unawaited(_refreshAudioCatalog(hydrateCurrentRecommendations: true));
     notifyListeners();
   }
 
@@ -1470,7 +1556,60 @@ class CloudBaseRecommendationRepository extends ChangeNotifier
     _tonightRecommendations = actions
         .map(_recommendationFromAction)
         .toList(growable: false);
+    if (_hasAudioRecommendations(_tonightRecommendations)) {
+      unawaited(_refreshAudioCatalog(hydrateCurrentRecommendations: true));
+    }
     notifyListeners();
+  }
+
+  bool _hasAudioRecommendations(List<NightRecommendation> items) {
+    return items.any(
+      (NightRecommendation item) => item.type == RecommendationType.audio,
+    );
+  }
+
+  Future<void> _refreshAudioCatalog({
+    required bool hydrateCurrentRecommendations,
+  }) async {
+    if (!_appApiClient.isConfigured) {
+      return;
+    }
+    try {
+      await _authRepository.ensureAuthenticated();
+      final Map<String, dynamic> payload = await _appApiClient.post(
+        '/api/media/audio-catalog',
+        body: const <String, dynamic>{},
+      );
+      final Map<String, AudioTrack> nextCatalog = <String, AudioTrack>{
+        for (final Map<String, dynamic> item in _mapListOf(payload['tracks']))
+          _stringOf(item['id']): ModelSerializers.audioTrackFromMap(item),
+      }..removeWhere(
+        (String key, AudioTrack value) =>
+            key.isEmpty || (value.sourceUrl?.trim().isEmpty ?? true),
+      );
+      if (nextCatalog.isEmpty) {
+        return;
+      }
+      _remoteAudioTrackCatalog = nextCatalog;
+      if (!hydrateCurrentRecommendations) {
+        return;
+      }
+      _tonightRecommendations = _tonightRecommendations
+          .map((NightRecommendation item) {
+            final AudioTrack? track = _mergeTrackWithRemoteCatalog(
+              item.track,
+              trackId: item.track?.id,
+            );
+            if (track == item.track) {
+              return item;
+            }
+            return item.copyWith(track: track);
+          })
+          .toList(growable: false);
+      notifyListeners();
+    } catch (_) {
+      // Audio catalog hydration is best-effort and should not block the page.
+    }
   }
 
   @override
@@ -2146,6 +2285,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
     required String name,
     String? overview,
     DormRulesSettings? rulesSettings,
+    DormLocationAnchor? locationAnchor,
   }) async {
     if (_appApiClient.isConfigured) {
       try {
@@ -2158,6 +2298,10 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
             if (rulesSettings != null)
               'rulesSettings': ModelSerializers.dormRulesSettingsToMap(
                 rulesSettings,
+              ),
+            if (locationAnchor != null)
+              'locationAnchor': ModelSerializers.dormLocationAnchorToMap(
+                locationAnchor,
               ),
           },
         );
@@ -2185,6 +2329,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
           uid: _authRepository.currentUser.uid,
           name: _authRepository.currentUser.displayName,
           status: DormMemberStatus.quiet,
+          presenceStatus: DormPresenceStatus.returned,
           sleepModeActive: false,
           lastActiveAt: now,
           note:
@@ -2205,6 +2350,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
         ),
       ],
       invites: const <DormInvite>[],
+      locationAnchor: locationAnchor,
     );
     _emitCurrentState();
     notifyListeners();
@@ -2213,12 +2359,46 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
   @override
   Future<void> updateCurrentUserStatus({
     required String uid,
-    required DormMemberStatus status,
-    required bool sleepModeActive,
-    required String note,
+    DormMemberStatus? status,
+    DormPresenceStatus? presenceStatus,
+    bool? sleepModeActive,
+    String? note,
   }) async {
     if (_currentDorm.id.isEmpty) {
       return;
+    }
+    final DormMember? currentMember = _firstWhereOrNull(
+      _currentDorm.members,
+      (DormMember member) => member.uid == uid,
+    );
+    if (currentMember == null) {
+      return;
+    }
+    final String nextNote = note ?? currentMember.note;
+    if (_appApiClient.isConfigured) {
+      try {
+        final Map<String, dynamic> body = <String, dynamic>{'uid': uid};
+        if (status != null) {
+          body['status'] = status.name;
+        }
+        if (presenceStatus != null) {
+          body['presenceStatus'] = presenceStatus.name;
+        }
+        if (sleepModeActive != null) {
+          body['sleepModeActive'] = sleepModeActive;
+        }
+        if (note != null) {
+          body['note'] = note;
+        }
+        await _appApiClient.post(
+          '/api/dorm/member/status',
+          body: body,
+        );
+        await _snapshotStore.refresh();
+        return;
+      } catch (_) {
+        // Fall back to local state when the backend is unavailable.
+      }
     }
     _currentDorm = _currentDorm.copyWith(
       members: _currentDorm.members
@@ -2227,10 +2407,11 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
               return member;
             }
             return member.copyWith(
-              status: status,
-              sleepModeActive: sleepModeActive,
+              status: status ?? member.status,
+              presenceStatus: presenceStatus ?? member.presenceStatus,
+              sleepModeActive: sleepModeActive ?? member.sleepModeActive,
               lastActiveAt: DateTime.now(),
-              note: note,
+              note: nextNote,
             );
           })
           .toList(growable: false),
@@ -2241,12 +2422,74 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
           title: uid == _authRepository.currentUser.uid
               ? '\u4f60\u5df2\u66f4\u65b0\u72b6\u6001'
               : '\u820d\u53cb\u66f4\u65b0\u4e86\u72b6\u6001',
-          detail: note,
+          detail: nextNote,
           createdAt: DateTime.now(),
           actorUid: uid,
         ),
         ..._currentDorm.events,
       ],
+    );
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  @override
+  Future<void> saveDormLocationAnchor(DormLocationAnchor anchor) async {
+    if (_currentDorm.id.isEmpty) {
+      return;
+    }
+    if (_appApiClient.isConfigured) {
+      try {
+        await _appApiClient.post(
+          '/api/dorm/location-anchor',
+          body: ModelSerializers.dormLocationAnchorToMap(anchor),
+        );
+        await _snapshotStore.refresh();
+        return;
+      } catch (_) {
+        // Fall back to local state when the backend is unavailable.
+      }
+    }
+    _currentDorm = _currentDorm.copyWith(locationAnchor: anchor);
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  @override
+  Future<void> updateDormEnvironment({
+    int? noiseDb,
+    String? lightLabel,
+    String? quietLabel,
+  }) async {
+    if (_currentDorm.id.isEmpty) {
+      return;
+    }
+    if (_appApiClient.isConfigured) {
+      try {
+        await _appApiClient.post(
+          '/api/dorm/environment',
+          body: <String, dynamic>{
+            ...?noiseDb == null
+                ? null
+                : <String, dynamic>{'noiseDb': noiseDb},
+            ...?lightLabel == null
+                ? null
+                : <String, dynamic>{'lightLabel': lightLabel},
+            ...?quietLabel == null
+                ? null
+                : <String, dynamic>{'quietLabel': quietLabel},
+          },
+        );
+        await _snapshotStore.refresh();
+        return;
+      } catch (_) {
+        // Fall back to local state when the backend is unavailable.
+      }
+    }
+    _currentDorm = _currentDorm.copyWith(
+      noiseDb: noiseDb,
+      lightLabel: lightLabel,
+      quietLabel: quietLabel,
     );
     _emitCurrentState();
     notifyListeners();
@@ -2353,6 +2596,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
                 uid: _authRepository.currentUser.uid,
                 name: _authRepository.currentUser.displayName,
                 status: DormMemberStatus.quiet,
+                presenceStatus: DormPresenceStatus.returned,
                 sleepModeActive: false,
                 lastActiveAt: DateTime.now(),
                 note:

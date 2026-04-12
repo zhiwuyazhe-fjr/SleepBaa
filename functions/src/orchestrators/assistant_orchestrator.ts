@@ -42,6 +42,7 @@ function buildEmptyUserState(): UserStateDoc {
       lastUpdatedAt: nowIso(),
     },
     tonightPlan: null,
+    tonightInterference: null,
     feedbackLoop: null,
     updatedAt: nowIso(),
   };

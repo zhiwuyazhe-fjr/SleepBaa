@@ -75,7 +75,6 @@ class _AssistantFabState extends State<AssistantFab>
                 clipBehavior: Clip.none,
                 alignment: Alignment.center,
                 children: <Widget>[
-                  // Glow ring
                   Container(
                     width: 74 + (pulse * 14),
                     height: 74 + (pulse * 14),
@@ -95,9 +94,7 @@ class _AssistantFabState extends State<AssistantFab>
                   ),
                   if (!hasMoodAvatar)
                     Container(
-                      key: const ValueKey<String>(
-                        'assistant-fab-default-shell',
-                      ),
+                      key: const ValueKey<String>('assistant-fab-default-shell'),
                       width: 72,
                       height: 72,
                       decoration: BoxDecoration(

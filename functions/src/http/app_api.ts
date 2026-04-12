@@ -794,6 +794,45 @@ export function createAppApiServer() {
   );
 
   app.post(
+    "/api/dorm/member/status",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      response.json(
+        await repo.updateDormMemberStatus(
+          request.authContext!.uid,
+          asMap(request.body),
+        ),
+      );
+    }),
+  );
+
+  app.post(
+    "/api/dorm/location-anchor",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      response.json(
+        await repo.saveDormLocationAnchor(
+          request.authContext!.uid,
+          asMap(request.body),
+        ),
+      );
+    }),
+  );
+
+  app.post(
+    "/api/dorm/environment",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      response.json(
+        await repo.saveDormEnvironment(
+          request.authContext!.uid,
+          asMap(request.body),
+        ),
+      );
+    }),
+  );
+
+  app.post(
     "/api/dorm/leave",
     asyncRoute(async (request, response) => {
       const repo = createRepositoryFromEnv();
@@ -823,6 +862,27 @@ export function createAppApiServer() {
         await repo.sendGentleDormReminder(
           request.authContext!.uid,
           asString(asMap(request.body).targetUid),
+        ),
+      );
+    }),
+  );
+
+  app.post(
+    "/api/media/audio-catalog",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      response.json(await repo.getAudioTrackCatalog(request.authContext!.uid));
+    }),
+  );
+
+  app.post(
+    "/api/interference/tonight",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      response.json(
+        await repo.saveTonightInterference(
+          request.authContext!.uid,
+          asMap(request.body),
         ),
       );
     }),

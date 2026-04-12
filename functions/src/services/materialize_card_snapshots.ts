@@ -63,22 +63,6 @@ function buildHomePreSleepSnapshot(
       },
       priority: 0,
     });
-    for (const factor of userState.tonightPlan.topFactors) {
-      cards.push({
-        id: `factor-${factor.key}`,
-        type: "interference_factor",
-        title: factor.label,
-        subtitle: factor.evidence,
-        metric: `${factor.score}/100`,
-        chipLabel: "干扰因子",
-        actionRoute: "/analysis/interference_factors",
-        payload: {
-          factorKey: factor.key,
-          sourceRefs: factor.sourceRefs,
-        },
-        priority: factor.score,
-      });
-    }
     for (const action of userState.tonightPlan.recommendedActions) {
       cards.push({
         id: `action-${action.id}`,
@@ -98,6 +82,9 @@ function buildHomePreSleepSnapshot(
       });
     }
   }
+
+  cards.push(...buildInterferenceFactorCards(userState));
+
   return {
     surfaceId: "home_pre_sleep",
     version: buildVersion(),
@@ -106,11 +93,56 @@ function buildHomePreSleepSnapshot(
     cards,
     sourceRefs: [
       "user_state.tonightPlan",
+      "user_state.tonightInterference",
       "dorms",
       "sleep_sessions",
       "dream_entries",
     ],
   };
+}
+
+function buildInterferenceFactorCards(userState: UserStateDoc): CardSnapshotCard[] {
+  const state = userState.tonightInterference;
+  if (!state) {
+    return (userState.tonightPlan?.topFactors ?? []).map((factor) => ({
+      id: `factor-${factor.key}`,
+      type: "interference_factor",
+      title: factor.label,
+      subtitle: factor.evidence,
+      metric: `${factor.score}/100`,
+      chipLabel: "干扰因子",
+      actionRoute: "/analysis/interference_factors",
+      payload: {
+        factorKey: factor.key,
+        sourceRefs: factor.sourceRefs,
+      },
+      priority: factor.score,
+    }));
+  }
+
+  const factors = [
+    { key: "noise", value: state.noise },
+    { key: "light", value: state.light },
+    { key: "phoneUsage", value: state.phoneUsage },
+    { key: "emotion", value: state.emotion },
+  ];
+
+  return factors.map(({ key, value }) => ({
+    id: `factor-${key}`,
+    type: "interference_factor",
+    title: value.title,
+    subtitle: value.detail,
+    metric: value.value,
+    chipLabel: "干扰因子",
+    actionRoute: "/analysis/interference_factors",
+    payload: {
+      factorKey: key,
+      status: value.status,
+      source: value.source,
+      measuredAt: value.measuredAt ?? null,
+    },
+    priority: Number(value.score ?? 0),
+  }));
 }
 
 function buildSleepModeSnapshot(userState: UserStateDoc): CardSnapshotDoc {
@@ -123,10 +155,9 @@ function buildSleepModeSnapshot(userState: UserStateDoc): CardSnapshotDoc {
       {
         id: "sleep-mode-status",
         type: "session_status",
-        title: userState.activeSessionId
-          ? "睡眠模式已开启"
-          : "尚未进入睡眠模式",
-        subtitle: "AI 助手会持续记录今晚的关键状态，方便明早做反馈回顾。",
+        title: userState.activeSessionId ? "睡眠模式已开启" : "尚未进入睡眠模式",
+        subtitle:
+          "AI 助手会持续记录今晚的关键状态，方便明早做反馈回顾。",
         metric: userState.activeSessionId ? "进行中" : "未开始",
         chipLabel: "睡眠会话",
         actionRoute: "/home/post_sleep",

@@ -59,13 +59,22 @@ class _DormInvitePageState extends State<DormInvitePage> {
     setState(() => _isBusy = true);
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     try {
+      final DormLocationAnchor? locationAnchor = await services
+          .dormPresenceSyncController
+          .captureCurrentLocationAnchor(requestPermission: true);
       await services.dormFacade.createDorm(
         name: dormName,
         overview: _overviewController.text.trim().isEmpty
             ? null
             : _overviewController.text.trim(),
         rulesSettings: defaults,
+        locationAnchor: locationAnchor,
       );
+      if (locationAnchor != null) {
+        await services.dormPresenceSyncController.persistDormLocationAnchor(
+          locationAnchor,
+        );
+      }
       final DormInvite invite = await services.dormFacade.createInvite();
       if (!mounted) {
         return;

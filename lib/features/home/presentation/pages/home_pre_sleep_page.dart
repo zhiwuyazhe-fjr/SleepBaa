@@ -7,6 +7,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/home_metric_card.dart';
 import 'package:sleep_dorm_app/core/widgets/quick_action_icon_button.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
@@ -32,6 +33,40 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
     }
   }
 
+  Future<void> _detectFactor(InterferenceFactorType type) async {
+    final AppServices services = context.appServices;
+    try {
+      await services.interferenceProbeController.detectFactor(type);
+      if (!mounted) {
+        return;
+      }
+      final InterferenceFactorSnapshot snapshot = services
+          .interferenceProbeController
+          .currentState
+          .factorOf(type);
+      if (snapshot.status == InterferenceFactorStatus.denied) {
+        await notifyPassiveToast(context, message: snapshot.detail);
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await notifyPassiveToast(context, message: '这次检测没成功，稍后再试一次吧。');
+    }
+  }
+
+  String _metricValue(InterferenceFactorSnapshot snapshot) {
+    return switch (snapshot.status) {
+      InterferenceFactorStatus.measuring => '检测中...',
+      InterferenceFactorStatus.denied => '去授权',
+      InterferenceFactorStatus.unavailable => snapshot.gradeLabel,
+      InterferenceFactorStatus.unsupported => snapshot.gradeLabel,
+      InterferenceFactorStatus.error => '重试一下',
+      InterferenceFactorStatus.idle => snapshot.value,
+      InterferenceFactorStatus.ready => snapshot.value,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
@@ -44,15 +79,17 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
           services.recommendationRepository,
           services.audioPlaybackController,
           services.sleepCaptureRepository,
+          services.interferenceProbeController,
         ]),
         builder: (BuildContext context, Widget? child) {
           final UserProfile profile = services.authRepository.currentUser;
           final Dorm dorm = services.dormRepository.currentDorm;
           final List<NightRecommendation> recommendations =
               services.recommendationRepository.tonightRecommendations;
-          final int unread = services.notificationRepository
-              .unreadNotifications()
-              .length;
+          final TonightInterferenceState interference =
+              services.interferenceProbeController.currentState;
+          final int unread =
+              services.notificationRepository.unreadNotifications().length;
           final PendingSleepMemoBanner? pendingBanner =
               services.sleepCaptureRepository.pendingSleepMemoBanner;
           final bool showExpandedBanner =
@@ -63,10 +100,10 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                 const NightRecommendation(
                   id: 'thought-clean',
                   title: '睡前思绪清理',
-                  subtitle: '记录一下今天最想放下的一件事',
+                  subtitle: '记下一件今晚最想放下的事，让脑子先轻一点',
                   type: RecommendationType.quickAction,
                   icon: Icons.edit_note_rounded,
-                  tags: <String>['5 min', '情绪干预'],
+                  tags: <String>['5 min', '情绪整理'],
                   executionState: RecommendationExecutionState.idle,
                 ),
               ];
@@ -114,14 +151,19 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                 const SizedBox(width: AppSpacing.md),
                                 _NotificationBell(
                                   unread: unread,
-                                  onTap: () => context.push(AppRoutes.notifications),
+                                  onTap: () =>
+                                      context.push(AppRoutes.notifications),
                                 ),
                               ],
                             ),
                             const SizedBox(height: AppSpacing.md),
                             HomeHeroPair(
                               left: SleepRiskCard(
-                                riskLabel: dorm.noiseDb <= 35 ? '偏低' : '中等',
+                                riskLabel: dorm.noiseDb <= 35
+                                    ? '偏低'
+                                    : dorm.noiseDb <= 50
+                                    ? '中等'
+                                    : '偏高',
                                 primaryValue: '${dorm.noiseDb} dB',
                               ),
                               right: StartSleepModeCard(
@@ -162,13 +204,15 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                               children: <Widget>[
                                 QuickActionIconButton(
                                   icon: Icons.auto_stories_rounded,
-                                  label: '梦记一刻',
-                                  onTap: () => context.push(AppRoutes.dreamJournal),
+                                  label: '梦记一则',
+                                  onTap: () =>
+                                      context.push(AppRoutes.dreamJournal),
                                 ),
                                 QuickActionIconButton(
                                   icon: Icons.calendar_month_rounded,
                                   label: '打卡日历',
-                                  onTap: () => context.push(AppRoutes.profileCalendar),
+                                  onTap: () =>
+                                      context.push(AppRoutes.profileCalendar),
                                 ),
                                 QuickActionIconButton(
                                   icon: Icons.menu_book_rounded,
@@ -212,7 +256,10 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                   child: HomeMetricCard(
                                     icon: Icons.volume_up_outlined,
                                     label: '宿舍噪声',
-                                    value: '${dorm.noiseDb} dB',
+                                    value: _metricValue(interference.noise),
+                                    onTap: () => _detectFactor(
+                                      InterferenceFactorType.noise,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: AppSpacing.md),
@@ -220,30 +267,48 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                   child: HomeMetricCard(
                                     icon: Icons.lightbulb_outline_rounded,
                                     label: '灯光环境',
-                                    value: dorm.lightLabel,
+                                    value: _metricValue(interference.light),
+                                    onTap: () => _detectFactor(
+                                      InterferenceFactorType.light,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                             const SizedBox(height: AppSpacing.md),
-                            const Row(
+                            Row(
                               children: <Widget>[
                                 Expanded(
                                   child: HomeMetricCard(
                                     icon: Icons.smartphone_rounded,
                                     label: '手机使用',
-                                    value: '45 分钟',
+                                    value: _metricValue(interference.phoneUsage),
+                                    onTap: () => _detectFactor(
+                                      InterferenceFactorType.phoneUsage,
+                                    ),
                                   ),
                                 ),
-                                SizedBox(width: AppSpacing.md),
+                                const SizedBox(width: AppSpacing.md),
                                 Expanded(
                                   child: HomeMetricCard(
                                     icon: Icons.favorite_border_rounded,
                                     label: '情绪压力',
-                                    value: '低强度',
+                                    value: _metricValue(interference.emotion),
+                                    onTap: () => _detectFactor(
+                                      InterferenceFactorType.emotion,
+                                    ),
                                   ),
                                 ),
                               ],
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            Text(
+                              '点一下卡片就能更新对应结果，详情页会自动补测噪声、灯光和近 1 小时手机使用。',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: AppColors.textSecondary,
+                                    height: 1.45,
+                                  ),
                             ),
                             const SizedBox(height: AppSpacing.xl),
                             SectionTitle(
@@ -280,7 +345,9 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                       return;
                                     }
                                     await services.sleepExperienceController
-                                        .handleRecommendationTap(recommendation);
+                                        .handleRecommendationTap(
+                                          recommendation,
+                                        );
                                   },
                                 ),
                               ),
@@ -423,7 +490,7 @@ class _SleepMemoBanner extends StatelessWidget {
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
-                          expanded ? '点击任意位置返回主页。' : banner.subtitle,
+                          expanded ? '轻点任意空白处，就能回到首页。' : banner.subtitle,
                           style: Theme.of(context).textTheme.labelMedium
                               ?.copyWith(
                                 color: AppColors.onDark.withAlpha(190),
@@ -501,7 +568,7 @@ class _MemoGroupCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(AppRadius.lg),
                 ),
                 child: Text(
-                  '事记${entry.key + 1}：${entry.value}',
+                  '事项 ${entry.key + 1}：${entry.value}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppColors.onDark.withAlpha(220),
                     height: 1.5,
@@ -523,7 +590,7 @@ String _greetingFor(DateTime now) {
     return '早上好';
   }
   if (hour >= 11 && hour <= 17) {
-    return '中午好';
+    return '下午好';
   }
   return '晚上好';
 }

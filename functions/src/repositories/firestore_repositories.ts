@@ -85,7 +85,35 @@ const Collections = {
   dormMembers: "dorm_members",
   dormEvents: "dorm_events",
   dormInvites: "dorm_invites",
+  audioTracks: "audio_tracks",
 } as const;
+
+const AUDIO_TRACK_CATALOG = [
+  {
+    id: "deep-ocean",
+    title: "深海海浪",
+    subtitle: "低刺激白噪音 · 45 分钟",
+    durationSeconds: 45 * 60,
+    fileIdEnv: "SLEEP_AUDIO_DEEP_OCEAN_FILE_ID",
+    urlEnv: "SLEEP_AUDIO_DEEP_OCEAN_URL",
+  },
+  {
+    id: "rain-mist",
+    title: "雨夜薄雾",
+    subtitle: "细密雨声背景 · 30 分钟",
+    durationSeconds: 30 * 60,
+    fileIdEnv: "SLEEP_AUDIO_RAIN_MIST_FILE_ID",
+    urlEnv: "SLEEP_AUDIO_RAIN_MIST_URL",
+  },
+  {
+    id: "midnight-breeze",
+    title: "午夜微风",
+    subtitle: "轻风包裹感 · 25 分钟",
+    durationSeconds: 25 * 60,
+    fileIdEnv: "SLEEP_AUDIO_MIDNIGHT_BREEZE_FILE_ID",
+    urlEnv: "SLEEP_AUDIO_MIDNIGHT_BREEZE_URL",
+  },
+] as const;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -248,6 +276,78 @@ function defaultUserSettings(): JsonMap {
   };
 }
 
+function defaultInterferenceFactor(
+  type: "noise" | "light" | "phoneUsage" | "emotion",
+  title: string,
+  value: string,
+  gradeLabel: string,
+  detail: string,
+  source: string,
+  numericValue?: number,
+  score?: number,
+): JsonMap {
+  return {
+    type,
+    title,
+    value,
+    gradeLabel,
+    status: "ready",
+    detail,
+    source,
+    measuredAt: nowIso(),
+    numericValue: numericValue ?? null,
+    score: score ?? null,
+  };
+}
+
+function defaultTonightInterferenceState(): JsonMap {
+  return {
+    noise: defaultInterferenceFactor(
+      "noise",
+      "宿舍噪声",
+      "32 dB",
+      "安静",
+      "当前宿舍环境较安静，适合开始放松和准备入睡。",
+      "dorm_seed",
+      32,
+      18,
+    ),
+    light: defaultInterferenceFactor(
+      "light",
+      "灯光环境",
+      "偏暗",
+      "适宜",
+      "灯光偏柔和，对入睡干扰较低。",
+      "dorm_seed",
+      72,
+      20,
+    ),
+    phoneUsage: {
+      type: "phoneUsage",
+      title: "手机使用",
+      value: "待检测",
+      gradeLabel: "待检测",
+      status: "idle",
+      detail: "授权后可读取近 1 小时手机使用时长。",
+      source: "android_usage_stats",
+      measuredAt: null,
+      numericValue: null,
+      score: null,
+    },
+    emotion: defaultInterferenceFactor(
+      "emotion",
+      "情绪压力",
+      "偏低",
+      "偏低",
+      "今晚先按较低压力处理，后续再补充更完整的情绪识别逻辑。",
+      "static_v1",
+      20,
+      20,
+    ),
+    updatedAt: nowIso(),
+  };
+}
+
 function defaultAssistantProfile(userId: string): JsonMap {
   return {
     userId,
@@ -326,6 +426,7 @@ function defaultDormMember(
     uid,
     name,
     status: "quiet",
+    presenceStatus: "returned",
     sleepModeActive: false,
     lastActiveAt: nowIso(),
     note: "今晚已准备进入睡前流程。",
@@ -653,6 +754,8 @@ export interface AssistantDataRepository {
     threadId?: string,
   ): Promise<AssistantContext>;
   getBootstrapPayload(uid: string): Promise<AppBootstrapPayload>;
+  getAudioTrackCatalog(uid: string): Promise<JsonMap>;
+  saveTonightInterference(uid: string, patch: JsonMap): Promise<JsonMap>;
   diagnoseBootstrap(uid: string): Promise<JsonMap>;
   readAssistantProfile(uid: string): Promise<ContextAssistantProfile>;
   saveAssistantProfile(uid: string, patch: JsonMap): Promise<JsonMap>;
@@ -729,6 +832,12 @@ export interface AssistantDataRepository {
   renameDorm(uid: string, name: string): Promise<JsonMap>;
   leaveDorm(uid: string): Promise<JsonMap>;
   saveDormRules(uid: string, settings: JsonMap): Promise<JsonMap>;
+  updateDormMemberStatus(
+    uid: string,
+    patch: JsonMap,
+  ): Promise<JsonMap>;
+  saveDormLocationAnchor(uid: string, anchor: JsonMap): Promise<JsonMap>;
+  saveDormEnvironment(uid: string, patch: JsonMap): Promise<JsonMap>;
   buildPendingSleepMemoBanner(
     uid: string,
     sessionId: string,
@@ -760,6 +869,73 @@ export class FirestoreRepository implements AssistantDataRepository {
 
   async getUserSettings(uid: string): Promise<ContextUserSettings> {
     return this.readUserSettings(uid);
+  }
+
+  async getAudioTrackCatalog(_uid: string): Promise<JsonMap> {
+    const collectionTracks = await this.store.query(Collections.audioTracks, {
+      filters: { enabled: true },
+      orderBy: { field: "sortOrder", direction: "asc" },
+      limit: 50,
+    });
+    const remoteTracks = await Promise.all(
+      collectionTracks.map(async (doc) => {
+        const value = withoutMeta(doc);
+        const storageFileId = asString(value.storageFileId).trim();
+        let sourceUrl = asString(value.sourceUrl).trim();
+        if (!sourceUrl && storageFileId && this.fileStorage) {
+          try {
+            sourceUrl = await this.fileStorage.getTemporaryUrl(storageFileId);
+          } catch (error) {
+            console.warn(
+              `[repo] failed to resolve temp audio url for ${asString(value.id)}:`,
+              error,
+            );
+          }
+        }
+        return {
+          id: asString(value.id),
+          title: asString(value.title, "助眠音频"),
+          subtitle: asString(value.subtitle, "CloudBase 音频资源"),
+          durationSeconds: asNumber(value.durationSeconds, 0),
+          storageFileId: storageFileId || null,
+          sourceUrl: sourceUrl || null,
+          tags: Array.isArray(value.tags) ? value.tags : [],
+          sortOrder: asNumber(value.sortOrder, 0),
+        };
+      }),
+    );
+    const filteredRemoteTracks = remoteTracks.filter(
+      (item) => item.id.length > 0 && item.sourceUrl,
+    );
+    if (filteredRemoteTracks.length > 0) {
+      return { tracks: filteredRemoteTracks };
+    }
+
+    const tracks = await Promise.all(
+      AUDIO_TRACK_CATALOG.map(async (track) => {
+        const storageFileId = asString(process.env[track.fileIdEnv]).trim();
+        let sourceUrl = asString(process.env[track.urlEnv]).trim();
+        if (!sourceUrl && storageFileId && this.fileStorage) {
+          try {
+            sourceUrl = await this.fileStorage.getTemporaryUrl(storageFileId);
+          } catch (error) {
+            console.warn(
+              `[repo] failed to resolve temp audio url for ${track.id}:`,
+              error,
+            );
+          }
+        }
+        return {
+          id: track.id,
+          title: track.title,
+          subtitle: track.subtitle,
+          durationSeconds: track.durationSeconds,
+          storageFileId: storageFileId || null,
+          sourceUrl: sourceUrl || null,
+        };
+      }),
+    );
+    return { tracks };
   }
 
   async readAssistantProfile(uid: string): Promise<ContextAssistantProfile> {
@@ -842,7 +1018,10 @@ export class FirestoreRepository implements AssistantDataRepository {
           uid: asString(value.uid),
           name: asString(value.name, "舍友"),
           status: asString(value.status, "quiet"),
+          presenceStatus: asString(value.presenceStatus, "returned"),
           sleepModeActive: asBoolean(value.sleepModeActive, false),
+          lastActiveAt: asString(value.lastActiveAt, nowIso()),
+          note: asString(value.note),
           avatarUrl: asString(value.avatarUrl) || undefined,
         } satisfies ContextDormMember;
       }),
@@ -858,6 +1037,9 @@ export class FirestoreRepository implements AssistantDataRepository {
       }),
       ...("rulesSettings" in dormDoc
         ? { rulesSettings: dormDoc.rulesSettings }
+        : {}),
+      ...("locationAnchor" in dormDoc
+        ? { locationAnchor: dormDoc.locationAnchor }
         : {}),
       rules: (Array.isArray(dormDoc.rules) ? dormDoc.rules : []) as JsonMap[],
       invites: invites.map((doc) => withoutMeta(doc)),
@@ -1461,6 +1643,7 @@ export class FirestoreRepository implements AssistantDataRepository {
       ...defaultDormRulesSettings(),
       ...asMap(payload.rulesSettings),
     };
+    const locationAnchor = asMap(payload.locationAnchor);
     const overview = asString(
       payload.overview,
       "新宿舍已经创建，接下来可以邀请舍友加入。",
@@ -1476,6 +1659,9 @@ export class FirestoreRepository implements AssistantDataRepository {
       quietLabel: "可优化",
       rulesSettings,
       rules: buildDormRules(rulesSettings),
+      ...(Object.keys(locationAnchor).length > 0
+        ? { locationAnchor }
+        : {}),
       createdAt,
       updatedAt: createdAt,
     });
@@ -1517,6 +1703,27 @@ export class FirestoreRepository implements AssistantDataRepository {
       ...(patch as unknown as JsonMap),
       updatedAt: nowIso(),
     });
+  }
+
+  async saveTonightInterference(uid: string, patch: JsonMap): Promise<JsonMap> {
+    await this.ensureUserBootstrap(uid);
+    const currentState = asMap(
+      (await this.store.get(Collections.userState, uid)) ??
+        { tonightInterference: defaultTonightInterferenceState() },
+    );
+    const currentInterference = asMap(
+      currentState.tonightInterference ?? defaultTonightInterferenceState(),
+    );
+    const nextInterference = {
+      ...currentInterference,
+      ...patch,
+      updatedAt: nowIso(),
+    };
+    await this.store.merge(Collections.userState, uid, {
+      tonightInterference: nextInterference,
+      updatedAt: nowIso(),
+    });
+    return nextInterference;
   }
 
   async buildPendingSleepMemoBanner(
@@ -1827,6 +2034,100 @@ export class FirestoreRepository implements AssistantDataRepository {
       detail: `当前作息标签：${asStringArray(nextSettings.routineTags).join("、") || "未设置"}`,
       actorUid: uid,
       createdAt: nowIso(),
+    });
+    return withoutMeta((await this.store.get(Collections.dorms, dormId)) ?? {});
+  }
+
+  async updateDormMemberStatus(uid: string, patch: JsonMap): Promise<JsonMap> {
+    const user = await this.getUserProfile(uid);
+    const dormId = user.dormId ? user.dormId.trim() : "";
+    if (!dormId) {
+      throw new Error("Create or join a dorm before updating member status.");
+    }
+    const targetUid = asString(patch.uid, uid);
+    const memberId = `${dormId}:${targetUid}`;
+    const existing =
+      (await this.store.get(Collections.dormMembers, memberId)) ??
+      defaultDormMember(
+        targetUid,
+        targetUid === uid ? user.displayName : "舍友",
+      );
+    const next = {
+      ...withoutMeta(existing),
+      ...(Object.prototype.hasOwnProperty.call(patch, "status")
+        ? {
+            status:
+              asString(patch.status) === "active" ? "active" : "quiet",
+          }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(patch, "presenceStatus")
+        ? {
+            presenceStatus:
+              asString(patch.presenceStatus) === "away"
+                ? "away"
+                : "returned",
+          }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(patch, "sleepModeActive")
+        ? { sleepModeActive: asBoolean(patch.sleepModeActive, false) }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(patch, "note")
+        ? { note: asString(patch.note) }
+        : {}),
+      uid: targetUid,
+      dormId,
+      lastActiveAt: nowIso(),
+      updatedAt: nowIso(),
+    };
+    await this.store.set(Collections.dormMembers, memberId, next);
+    await this.store.set(Collections.dormEvents, randomUUID(), {
+      id: randomUUID(),
+      dormId,
+      type: "memberStatus",
+      title: targetUid === uid ? "你已更新状态" : "舍友更新了状态",
+      detail: asString(next.note),
+      actorUid: targetUid,
+      createdAt: nowIso(),
+    });
+    return withoutMeta((await this.store.get(Collections.dormMembers, memberId)) ?? {});
+  }
+
+  async saveDormLocationAnchor(uid: string, anchor: JsonMap): Promise<JsonMap> {
+    const user = await this.getUserProfile(uid);
+    const dormId = user.dormId ? user.dormId.trim() : "";
+    if (!dormId) {
+      throw new Error("Create or join a dorm before saving dorm location.");
+    }
+    await this.store.merge(Collections.dorms, dormId, {
+      locationAnchor: {
+        latitude: asNumber(anchor.latitude, 0),
+        longitude: asNumber(anchor.longitude, 0),
+        radiusMeters: asNumber(anchor.radiusMeters, 100),
+        recordedAt: asString(anchor.recordedAt, nowIso()),
+        recordedByUid: asString(anchor.recordedByUid, uid),
+      },
+      updatedAt: nowIso(),
+    });
+    return withoutMeta((await this.store.get(Collections.dorms, dormId)) ?? {});
+  }
+
+  async saveDormEnvironment(uid: string, patch: JsonMap): Promise<JsonMap> {
+    const user = await this.getUserProfile(uid);
+    const dormId = user.dormId ? user.dormId.trim() : "";
+    if (!dormId) {
+      throw new Error("Create or join a dorm before updating dorm environment.");
+    }
+    await this.store.merge(Collections.dorms, dormId, {
+      ...(Object.prototype.hasOwnProperty.call(patch, "noiseDb")
+        ? { noiseDb: asNumber(patch.noiseDb, 0) }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(patch, "lightLabel")
+        ? { lightLabel: asString(patch.lightLabel, "未设置") }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(patch, "quietLabel")
+        ? { quietLabel: asString(patch.quietLabel, "平稳") }
+        : {}),
+      updatedAt: nowIso(),
     });
     return withoutMeta((await this.store.get(Collections.dorms, dormId)) ?? {});
   }

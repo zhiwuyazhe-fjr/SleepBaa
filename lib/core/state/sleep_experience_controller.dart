@@ -105,7 +105,7 @@ class SleepExperienceController extends ChangeNotifier {
     );
     await _dormRepository.updateCurrentUserStatus(
       uid: _authRepository.currentUser.uid,
-      status: DormMemberStatus.sleeping,
+      status: DormMemberStatus.quiet,
       sleepModeActive: true,
       note: '已进入睡眠模式',
     );
