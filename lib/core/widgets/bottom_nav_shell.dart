@@ -6,6 +6,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
+import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
 
 class BottomNavShell extends StatefulWidget {
   const BottomNavShell({super.key, required this.navigationShell});
@@ -71,10 +72,11 @@ class _BottomNavShellState extends State<BottomNavShell> {
             children: <Widget>[
               Positioned.fill(child: widget.navigationShell),
               if (!hideShellChrome)
-                Positioned(
-                  right: AppSpacing.xl,
-                  bottom: 124,
-                  child: const SafeArea(top: false, child: AssistantFab()),
+                Positioned.fill(
+                  child: SafeArea(
+                    top: false,
+                    child: AssistantFabDock(child: const AssistantFab()),
+                  ),
                 ),
               if (!hideShellChrome)
                 Positioned(
@@ -107,7 +109,9 @@ class _BottomNavShellState extends State<BottomNavShell> {
                               index == widget.navigationShell.currentIndex;
                           return Expanded(
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
                               child: _NavPillButton(
                                 item: item,
                                 selected: selected,
@@ -181,7 +185,7 @@ class _NavPillButton extends StatelessWidget {
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
-        color: selected ? const Color(0xFF1A1A1A) : Colors.transparent,
+        color: selected ? AppColors.darkPill : Colors.transparent,
         borderRadius: BorderRadius.circular(20),
       ),
       child: InkWell(
@@ -197,14 +201,14 @@ class _NavPillButton extends StatelessWidget {
             children: <Widget>[
               Icon(
                 item.icon,
-                color: selected ? AppColors.onDark : const Color(0xFFA0A0A0),
+                color: selected ? AppColors.onDark : AppColors.textHint,
                 size: 20,
               ),
               const SizedBox(height: 2),
               Text(
                 item.label,
                 style: textTheme.labelSmall?.copyWith(
-                  color: selected ? AppColors.onDark : const Color(0xFFA0A0A0),
+                  color: selected ? AppColors.onDark : AppColors.textHint,
                   fontWeight: FontWeight.w400,
                 ),
               ),

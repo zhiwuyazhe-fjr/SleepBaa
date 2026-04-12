@@ -10,6 +10,7 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
+import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/core/widgets/status_chip.dart';
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.dart';
@@ -78,7 +79,7 @@ class HomePostSleepPage extends StatelessWidget {
                             label: session == null
                                 ? '刚刚进入睡眠模式'
                                 : '已运行 ${(DateTime.now().difference(session.startedAt).inMinutes).clamp(1, 240)} 分钟',
-                            backgroundColor: const Color(0x14FFFFFF),
+                            backgroundColor: AppColors.darkBorder,
                             foregroundColor: AppColors.onDark,
                             borderColor: AppColors.darkBorder,
                             showDot: true,
@@ -86,14 +87,14 @@ class HomePostSleepPage extends StatelessWidget {
                           ),
                           StatusChip(
                             label: '宿舍 ${dorm.quietLabel}',
-                            backgroundColor: const Color(0x14FFFFFF),
+                            backgroundColor: AppColors.darkBorder,
                             foregroundColor: AppColors.onDark,
                             borderColor: AppColors.darkBorder,
                             icon: Icons.volume_off_rounded,
                           ),
                           const StatusChip(
                             label: 'AI 守护中',
-                            backgroundColor: Color(0x14FFFFFF),
+                            backgroundColor: AppColors.darkBorder,
                             foregroundColor: AppColors.onDark,
                             borderColor: AppColors.darkBorder,
                             icon: Icons.security_rounded,
@@ -159,7 +160,8 @@ class HomePostSleepPage extends StatelessWidget {
                             title: '晨间反馈',
                             subtitle: '醒来后逐条反馈昨晚建议',
                             icon: Icons.wb_sunny_rounded,
-                            onTap: () => context.push(AppRoutes.feedbackMorning),
+                            onTap: () =>
+                                context.push(AppRoutes.feedbackMorning),
                           ),
                         ],
                       ),
@@ -170,12 +172,15 @@ class HomePostSleepPage extends StatelessWidget {
                         foregroundColor: AppColors.onDark,
                         borderColor: AppColors.darkBorder,
                         onPressed: () async {
-                          final bool shouldExit =
-                              await _showSleepExitDialog(context, palette);
+                          final bool shouldExit = await _showSleepExitDialog(
+                            context,
+                            palette,
+                          );
                           if (!shouldExit) {
                             return;
                           }
-                          await services.sleepExperienceController.exitSleepMode();
+                          await services.sleepExperienceController
+                              .exitSleepMode();
                           if (context.mounted) {
                             context.go(AppRoutes.homePreSleep);
                           }
@@ -185,10 +190,11 @@ class HomePostSleepPage extends StatelessWidget {
                   ),
                 ),
               ),
-              Positioned(
-                right: AppSpacing.xl,
-                bottom: 110,
-                child: const SafeArea(top: false, child: AssistantFab()),
+              Positioned.fill(
+                child: SafeArea(
+                  top: false,
+                  child: AssistantFabDock(child: const AssistantFab()),
+                ),
               ),
             ],
           );
@@ -208,79 +214,85 @@ Future<bool> _showSleepExitDialog(
     barrierLabel: 'sleep-exit-confirm',
     barrierColor: Colors.black.withAlpha(70),
     transitionDuration: const Duration(milliseconds: 220),
-    pageBuilder: (
-      BuildContext context,
-      Animation<double> animation,
-      Animation<double> secondaryAnimation,
-    ) {
-      return Material(
-        color: Colors.transparent,
-        child: Stack(
-          children: <Widget>[
-            Positioned.fill(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: const SizedBox.expand(),
-              ),
-            ),
-            Center(
-              child: Container(
-                width: 420,
-                margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                decoration: BoxDecoration(
-                  color: AppColors.darkCard.withAlpha(248),
-                  borderRadius: AppRadius.cardLarge,
-                  border: Border.all(color: AppColors.darkBorder),
-                  boxShadow: AppColors.floatingShadow,
+    pageBuilder:
+        (
+          BuildContext context,
+          Animation<double> animation,
+          Animation<double> secondaryAnimation,
+        ) {
+          return Material(
+            color: Colors.transparent,
+            child: Stack(
+              children: <Widget>[
+                Positioned.fill(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: const SizedBox.expand(),
+                  ),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      '完成晨间反馈会更有帮助',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(color: AppColors.onDark),
+                Center(
+                  child: Container(
+                    width: 420,
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.xl,
                     ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      '明早完成晨间反馈后，我会根据你今晚的情况继续优化建议，让后面的睡眠干预更贴近你的节奏。',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.onDark.withAlpha(180),
-                        height: 1.55,
-                      ),
+                    padding: const EdgeInsets.all(AppSpacing.xl),
+                    decoration: BoxDecoration(
+                      color: AppColors.darkCard.withAlpha(248),
+                      borderRadius: AppRadius.cardLarge,
+                      border: Border.all(color: AppColors.darkBorder),
+                      boxShadow: AppColors.floatingShadow,
                     ),
-                    const SizedBox(height: AppSpacing.xl),
-                    Row(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Expanded(
-                          child: PrimaryButton(
-                            label: '返回',
-                            variant: PrimaryButtonVariant.ghost,
-                            foregroundColor: AppColors.onDark,
-                            borderColor: AppColors.darkBorder,
-                            onPressed: () => Navigator.of(context).pop(false),
-                          ),
+                        Text(
+                          '完成晨间反馈会更有帮助',
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(color: AppColors.onDark),
                         ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: PrimaryButton(
-                            label: '退出',
-                            foregroundColor: Colors.white,
-                            onPressed: () => Navigator.of(context).pop(true),
-                          ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          '明早完成晨间反馈后，我会根据你今晚的情况继续优化建议，让后面的睡眠干预更贴近你的节奏。',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: AppColors.onDark.withAlpha(180),
+                                height: 1.55,
+                              ),
+                        ),
+                        const SizedBox(height: AppSpacing.xl),
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: PrimaryButton(
+                                label: '返回',
+                                variant: PrimaryButtonVariant.ghost,
+                                foregroundColor: AppColors.onDark,
+                                borderColor: AppColors.darkBorder,
+                                onPressed: () =>
+                                    Navigator.of(context).pop(false),
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: PrimaryButton(
+                                label: '退出',
+                                foregroundColor: Colors.white,
+                                onPressed: () =>
+                                    Navigator.of(context).pop(true),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
-      );
-    },
+          );
+        },
     transitionBuilder:
         (
           BuildContext context,

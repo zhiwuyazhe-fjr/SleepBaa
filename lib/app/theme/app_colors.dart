@@ -11,6 +11,9 @@ abstract final class AppColors {
   static const Color textPrimary = Color(0xFF2F3336);
   static const Color textSecondary = Color(0xFF5B6063);
   static const Color textMuted = Color(0xFF57606B);
+  static const Color textStrong = Color(0xFF1A1A1A);
+  static const Color textHint = Color(0xFFA0A0A0);
+  static const Color textSubtle = Color(0xFF888888);
 
   static const Color primary = Color(0xFF00697A);
   static const Color primarySoft = Color(0xFF8EDDF2);
@@ -21,9 +24,19 @@ abstract final class AppColors {
   static const Color darkBackground = Color(0xFF0C0E10);
   static const Color darkCard = Color(0xFF0B192E);
   static const Color darkSurface = Color(0xFF1A1C1E);
+  static const Color darkPill = Color(0xFF1A1A1A);
   static const Color darkGlass = Color(0x0AFFFFFF);
   static const Color darkBorder = Color(0x14FFFFFF);
   static const Color onDark = Color(0xFFF9F9FB);
+
+  static const Color surfaceSubtle = Color(0xFFF5F5F5);
+  static const Color metricCardSurface = AppColors.surface;
+  static const Color legacyCardSurface = Color(0xFFF2F2F2);
+  static const Color cardBorderSubtle = AppColors.divider;
+
+  static const Color assistantFabShellStart = Color(0xFF2B3240);
+  static const Color assistantFabShellEnd = Color(0xFF121417);
+  static const Color assistantFabShadow = Color(0x66000000);
 
   static const Color success = Color(0xFF4F8B6F);
   static const Color warning = Color(0xFFAD7A36);
