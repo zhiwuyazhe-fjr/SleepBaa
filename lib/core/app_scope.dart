@@ -101,6 +101,7 @@ class _AppScopeState extends State<AppScope> {
       authRepository: _authRepository,
       settingsRepository: _settingsRepository,
       recommendationRepository: _recommendationRepository,
+      dormRepository: _dormRepository,
     );
     _sleepFacade = SleepFacade(
       experienceController: _sleepExperienceController,

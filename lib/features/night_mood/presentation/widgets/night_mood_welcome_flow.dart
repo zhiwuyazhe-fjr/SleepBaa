@@ -216,9 +216,9 @@ extension on NightMood {
 
   String get welcomeCopy {
     return switch (this) {
-      NightMood.happy => '今晚延续这份好状态，帮你更轻松地进入休息节奏。',
-      NightMood.sad => '今晚会给你更安静、更柔和的陪伴，让你慢慢缓下来。',
-      NightMood.calm => '今晚就顺着这份稳定，慢慢进入睡眠。',
+      NightMood.happy => '今晚延续这份好状态\n帮你更轻松地进入休息节奏',
+      NightMood.sad => '今晚会给你更安静更柔和的陪伴\n让你慢慢缓下来',
+      NightMood.calm => '今晚就顺着这份稳定\n慢慢进入睡眠',
     };
   }
 
@@ -277,14 +277,12 @@ class _SelectionStep extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double mediaTop = MediaQuery.paddingOf(context).top;
-        final double topCardHeight = math.max(
-          metrics.topCardMinHeight,
-          constraints.maxHeight * 0.525,
+        final double topCardHeight = constraints.maxHeight * 0.525;
+        final double avatarSize = math.min(
+          topCardHeight * 0.66,
+          constraints.maxWidth * 0.72,
         );
-        final bool useTwoLineTitle = constraints.maxWidth < 370;
-        final String title = useTwoLineTitle
-            ? '今晚你更接近\n哪一种心情？'
-            : '今晚你更接近哪一种心情？';
+        const String title = '今晚你更接近\n哪一种心情';
 
         return SafeArea(
           top: false,
@@ -303,32 +301,40 @@ class _SelectionStep extends StatelessWidget {
                     bottom: Radius.circular(40),
                   ),
                 ),
-                child: Column(
+                child: Stack(
+                  fit: StackFit.expand,
                   children: <Widget>[
-                    const _FlowProgressIndicator(activeStep: 1),
-                    const Spacer(),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 420),
-                      switchInCurve: Curves.easeOutBack,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder:
-                          (Widget child, Animation<double> animation) {
-                            return ScaleTransition(
-                              scale: Tween<double>(
-                                begin: 0.86,
-                                end: 1,
-                              ).animate(animation),
-                              child: child,
-                            );
-                          },
-                      child: MoodAvatar(
-                        key: ValueKey<NightMood>(selectedMood),
-                        mood: selectedMood,
-                        size: metrics.avatarSize,
-                        fillColor: palette.welcomeFaceColor,
+                    Align(
+                      alignment: Alignment.topCenter,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: const _FlowProgressIndicator(activeStep: 1),
                       ),
                     ),
-                    SizedBox(height: metrics.avatarBottomSpacing),
+                    Align(
+                      alignment: Alignment.center,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 420),
+                        switchInCurve: Curves.easeOutBack,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder:
+                            (Widget child, Animation<double> animation) {
+                              return ScaleTransition(
+                                scale: Tween<double>(
+                                  begin: 0.86,
+                                  end: 1,
+                                ).animate(animation),
+                                child: child,
+                              );
+                            },
+                        child: MoodAvatar(
+                          key: ValueKey<NightMood>(selectedMood),
+                          mood: selectedMood,
+                          size: avatarSize,
+                          fillColor: palette.welcomeFaceColor,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -460,8 +466,8 @@ class _ReasonsStep extends StatelessWidget {
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 260),
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 18,
+                                  horizontal: 14,
+                                  vertical: 16,
                                 ),
                                 decoration: BoxDecoration(
                                   color: isSelected
@@ -482,7 +488,7 @@ class _ReasonsStep extends StatelessWidget {
                                         color: isSelected
                                             ? palette.welcomeTextOnAccent
                                             : Colors.white,
-                                        fontSize: 16,
+                                        fontSize: 15,
                                         fontWeight: isSelected
                                             ? FontWeight.w700
                                             : FontWeight.w500,
@@ -507,6 +513,7 @@ class _ReasonsStep extends StatelessWidget {
                   ? null
                   : () => onNext(),
               padding: metrics.bottomActionPadding,
+              buttonSpacing: 22,
               secondaryLabel: '返回',
               onSecondaryPressed: isSubmitting ? null : () => onBack(),
             ),
@@ -579,7 +586,7 @@ class _WelcomeStep extends StatelessWidget {
                         color: palette.welcomeTextOnAccent,
                         fontSize: metrics.welcomeTitleFontSize,
                         height: 1.1,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -613,6 +620,7 @@ class _WelcomeStep extends StatelessWidget {
               primaryTextColor: Colors.black,
               onPrimaryPressed: isSubmitting ? null : () => onEnter(),
               padding: metrics.bottomActionPadding,
+              buttonSpacing: 22,
               secondaryLabel: '返回',
               onSecondaryPressed: isSubmitting ? null : () => onBack(),
             ),
@@ -701,8 +709,8 @@ class _MoodSelector extends StatelessWidget {
                                     : Colors.white70,
                                 fontSize: 14,
                                 fontWeight: isSelected
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
                               ),
                             ),
                           ),
@@ -728,6 +736,7 @@ class _BottomActionBar extends StatelessWidget {
     required this.primaryTextColor,
     required this.onPrimaryPressed,
     this.padding = const EdgeInsets.fromLTRB(24, 24, 24, 30),
+    this.buttonSpacing = 16,
     this.secondaryLabel,
     this.onSecondaryPressed,
   });
@@ -737,6 +746,7 @@ class _BottomActionBar extends StatelessWidget {
   final Color primaryTextColor;
   final AsyncVoidCallback? onPrimaryPressed;
   final EdgeInsetsGeometry padding;
+  final double buttonSpacing;
   final String? secondaryLabel;
   final AsyncVoidCallback? onSecondaryPressed;
 
@@ -760,17 +770,17 @@ class _BottomActionBar extends StatelessWidget {
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.white,
                       textStyle: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                     child: Text(secondaryLabel!),
                   ),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: buttonSpacing),
           Expanded(
             child: SizedBox(
-              height: 64,
+              height: 52,
               child: FilledButton(
                 onPressed: onPrimaryPressed == null
                     ? null
@@ -787,8 +797,8 @@ class _BottomActionBar extends StatelessWidget {
                   disabledForegroundColor: primaryTextColor.withAlpha(153),
                   shape: const StadiumBorder(),
                   textStyle: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 child: Text(primaryLabel),

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:sleep_dorm_app/core/backend/assistant_reply_gateway.dart';
 import 'package:sleep_dorm_app/core/data/cloudbase_repositories.dart';
+import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/state/audio_playback_controller.dart';
@@ -12,9 +13,11 @@ class ProfileFacade extends ChangeNotifier {
     required AuthRepository authRepository,
     required UserSettingsRepository settingsRepository,
     RecommendationRepository? recommendationRepository,
+    DormRepository? dormRepository,
   }) : _authRepository = authRepository,
        _settingsRepository = settingsRepository,
-       _recommendationRepository = recommendationRepository {
+       _recommendationRepository = recommendationRepository,
+       _dormRepository = dormRepository {
     _authRepository.addListener(notifyListeners);
     _settingsRepository.addListener(notifyListeners);
   }
@@ -22,6 +25,7 @@ class ProfileFacade extends ChangeNotifier {
   final AuthRepository _authRepository;
   final UserSettingsRepository _settingsRepository;
   final RecommendationRepository? _recommendationRepository;
+  final DormRepository? _dormRepository;
 
   UserProfile get currentUser => _authRepository.currentUser;
   UserSettings get currentSettings => _settingsRepository.currentSettings;
@@ -56,8 +60,49 @@ class ProfileFacade extends ChangeNotifier {
       );
       await _settingsRepository.saveSettings(settings);
     }
+    _syncDormProfileIfNeeded();
     if (_shouldRefreshRecommendations(previousSettings, settings)) {
       await _recommendationRepository?.resetForTonight();
+    }
+  }
+
+  Future<void> saveEquippedBadge(String? badgeId) async {
+    final String? normalizedBadgeId = badgeId?.trim().isEmpty == true
+        ? null
+        : badgeId?.trim();
+    if (normalizedBadgeId != null &&
+        !currentUser.earnedBadgeIds.contains(normalizedBadgeId)) {
+      return;
+    }
+    await _authRepository.updateBadgePreferences(
+      earnedBadgeIds: currentUser.earnedBadgeIds,
+      equippedBadgeId: normalizedBadgeId,
+      clearEquippedBadge: normalizedBadgeId == null,
+    );
+    _syncDormProfileIfNeeded();
+  }
+
+  Future<void> setDormPulseBadgeVisibility(bool visible) async {
+    await _authRepository.updateDormBadgeVisibility(
+      showDormPulseBadge: visible,
+    );
+    _syncDormProfileIfNeeded();
+  }
+
+  Future<void> saveDormBadgeSelection(String? badgeId) async {
+    final String? normalizedBadgeId = badgeId?.trim().isEmpty == true
+        ? null
+        : badgeId?.trim();
+    await _authRepository.updateDormBadgeSelection(
+      selectedDormBadgeId: normalizedBadgeId,
+      clearSelectedDormBadgeId: normalizedBadgeId == null,
+    );
+    _syncDormProfileIfNeeded();
+  }
+
+  void _syncDormProfileIfNeeded() {
+    if (_dormRepository case final InMemoryDormRepository dormRepository) {
+      dormRepository.syncCurrentUserProfile(_authRepository.currentUser);
     }
   }
 
@@ -73,11 +118,12 @@ class ProfileFacade extends ChangeNotifier {
   Future<void> updateAvatar({
     required String? avatarPath,
     required Uint8List? avatarBytes,
-  }) {
-    return _authRepository.updateAvatar(
+  }) async {
+    await _authRepository.updateAvatar(
       avatarPath: avatarPath,
       avatarBytes: avatarBytes,
     );
+    _syncDormProfileIfNeeded();
   }
 
   Future<PhoneVerificationChallenge> sendPhoneVerificationCode(
@@ -314,6 +360,12 @@ class DormFacade extends ChangeNotifier {
     return _dormRepository.saveRules(settings);
   }
 
+  Future<void> approvePendingRules() => _dormRepository.approvePendingRules();
+
+  Future<void> rejectPendingRules({required String reason}) {
+    return _dormRepository.rejectPendingRules(reason: reason);
+  }
+
   Future<DormInvite> createInvite() => _dormRepository.createInvite();
 
   Future<void> acceptInvite(String inviteCode) {
@@ -324,8 +376,16 @@ class DormFacade extends ChangeNotifier {
 
   Future<void> leaveDorm() => _dormRepository.leaveDorm();
 
-  Future<void> sendGentleReminder({required String targetUid}) {
-    return _dormRepository.sendGentleReminder(targetUid: targetUid);
+  Future<void> sendGentleReminder({
+    required String targetUid,
+    bool anonymous = true,
+    required String message,
+  }) {
+    return _dormRepository.sendGentleReminder(
+      targetUid: targetUid,
+      anonymous: anonymous,
+      message: message,
+    );
   }
 
   @override
@@ -580,7 +640,7 @@ class AssistantFacade extends ChangeNotifier {
           status: AssistantMessageStatus.error,
           sourceMode: AssistantReplySourceMode.error,
           errorMessage: error.toString(),
-          );
+        );
       }
     }
   }
@@ -682,7 +742,9 @@ class AssistantFacade extends ChangeNotifier {
     final List<AssistantMessage> existingMessages = _assistantRepository
         .messagesForThread(threadId);
     final String nextMessageId = assistantMessageId ?? defaultMessageId;
-    if (existingMessages.any((AssistantMessage item) => item.id == nextMessageId)) {
+    if (existingMessages.any(
+      (AssistantMessage item) => item.id == nextMessageId,
+    )) {
       await _assistantRepository.updateAssistantMessage(
         threadId: threadId,
         messageId: nextMessageId,

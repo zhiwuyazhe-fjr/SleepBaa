@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -16,8 +17,18 @@ void main() {
   test(
     'cloudbase auth repository reroutes registered phones away from signup send-code',
     () async {
-      final CloudBaseAuthRepository repository = _buildRepository(
+      final CloudBaseAuthRepository repository = _buildHarness(
         MockClient((http.Request request) async {
+          if (request.url.path == '/auth/v1/user/me') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'sub': 'tester',
+                'name': 'Tester',
+                'phone_number': '+86 13800138000',
+              }),
+              200,
+            );
+          }
           final Map<String, dynamic> body =
               jsonDecode(request.body) as Map<String, dynamic>;
           expect(request.url.path, '/auth/v1/verification');
@@ -32,7 +43,7 @@ void main() {
             200,
           );
         }),
-      );
+      ).repository;
 
       await expectLater(
         repository.sendPhoneVerificationCode(
@@ -55,8 +66,18 @@ void main() {
   test(
     'cloudbase auth repository reroutes unknown phones away from login send-code',
     () async {
-      final CloudBaseAuthRepository repository = _buildRepository(
+      final CloudBaseAuthRepository repository = _buildHarness(
         MockClient((http.Request request) async {
+          if (request.url.path == '/auth/v1/user/me') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'sub': 'tester',
+                'name': 'Tester',
+                'phone_number': '+86 13900139000',
+              }),
+              200,
+            );
+          }
           final Map<String, dynamic> body =
               jsonDecode(request.body) as Map<String, dynamic>;
           expect(request.url.path, '/auth/v1/verification');
@@ -71,7 +92,7 @@ void main() {
             200,
           );
         }),
-      );
+      ).repository;
 
       await expectLater(
         repository.sendPhoneVerificationCode(
@@ -90,14 +111,92 @@ void main() {
       expect(repository.lastAuthError, '未找到该手机号，请先注册。');
     },
   );
+
+  test(
+    'cloudbase auth repository keeps dorm badge visibility off after queued snapshot refresh',
+    () async {
+      final Completer<void> firstBootstrapCompleter = Completer<void>();
+      int bootstrapCount = 0;
+      final _AuthHarness harness = _buildHarness(
+        MockClient((http.Request request) async {
+          if (request.url.path == '/auth/v1/user/me') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'sub': 'tester',
+                'name': 'Tester',
+                'phone_number': '+86 13800138000',
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/app/bootstrap') {
+            bootstrapCount += 1;
+            if (bootstrapCount == 1) {
+              await firstBootstrapCompleter.future;
+              return http.Response(
+                jsonEncode(<String, dynamic>{
+                  'user': <String, dynamic>{
+                    'uid': 'tester',
+                    'displayName': 'Tester',
+                    'tagline': 'tagline',
+                    'role': 'role',
+                    'showDormPulseBadge': true,
+                  },
+                }),
+                200,
+              );
+            }
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'user': <String, dynamic>{
+                  'uid': 'tester',
+                  'displayName': 'Tester',
+                  'tagline': 'tagline',
+                  'role': 'role',
+                  'showDormPulseBadge': false,
+                },
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/profile/save') {
+            final Map<String, dynamic> body =
+                jsonDecode(request.body) as Map<String, dynamic>;
+            expect(
+              (body['profile'] as Map<String, dynamic>)['showDormPulseBadge'],
+              isFalse,
+            );
+            return http.Response(
+              jsonEncode(<String, dynamic>{'ok': true}),
+              200,
+            );
+          }
+          throw StateError('Unexpected path: ${request.url.path}');
+        }),
+      );
+      final CloudBaseAuthRepository repository = harness.repository;
+      final Future<void> backgroundRefresh = harness.snapshotStore.refresh();
+      final Future<void> saveFuture = repository.updateDormBadgeVisibility(
+        showDormPulseBadge: false,
+      );
+
+      firstBootstrapCompleter.complete();
+      await backgroundRefresh;
+      await saveFuture;
+
+      expect(bootstrapCount, greaterThanOrEqualTo(2));
+      expect(repository.currentUser.showDormPulseBadge, isFalse);
+    },
+  );
 }
 
-CloudBaseAuthRepository _buildRepository(http.Client httpClient) {
+_AuthHarness _buildHarness(http.Client httpClient) {
   const AppEnvironment environment = AppEnvironment(
     target: AppBackendTarget.production,
     appIdPrefix: 'com.dormsleep.app',
     cloudbaseEnvId: 'demo-env',
     cloudbaseAuthBaseUrl: 'https://example.com',
+    cloudbaseAppApiBaseUrl: 'https://example.com',
     cloudbasePublishableKey: 'publishable-key',
     cloudbaseClientId: 'demo-env',
   );
@@ -110,21 +209,39 @@ CloudBaseAuthRepository _buildRepository(http.Client httpClient) {
     environment: environment,
     sessionStore: sessionStore,
     authClient: authClient,
+    httpClient: httpClient,
   );
   final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
     appApiClient: appApiClient,
   );
-  return CloudBaseAuthRepository(
-    environment: environment,
-    authClient: authClient,
-    appApiClient: appApiClient,
-    sessionStore: sessionStore,
+  return _AuthHarness(
+    repository: CloudBaseAuthRepository(
+      environment: environment,
+      authClient: authClient,
+      appApiClient: appApiClient,
+      sessionStore: sessionStore,
+      snapshotStore: snapshotStore,
+    ),
     snapshotStore: snapshotStore,
   );
 }
 
+class _AuthHarness {
+  const _AuthHarness({required this.repository, required this.snapshotStore});
+
+  final CloudBaseAuthRepository repository;
+  final CloudBaseSnapshotStore snapshotStore;
+}
+
 class _FakeSessionStore extends CloudBaseSessionStore {
-  _FakeSessionStore();
+  _FakeSessionStore()
+    : _session = CloudBaseSession(
+        accessToken: 'test-access-token',
+        refreshToken: 'test-refresh-token',
+        subject: 'tester',
+        expiresAt: DateTime.now().add(const Duration(hours: 1)),
+        deviceId: 'test-device-id',
+      );
 
   CloudBaseSession? _session;
 

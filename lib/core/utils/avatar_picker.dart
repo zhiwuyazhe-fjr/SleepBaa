@@ -6,7 +6,7 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 
 Future<void> pickAndSaveAvatar(BuildContext context) async {
-  final authRepository = context.appServices.authRepository;
+  final profileFacade = context.appServices.profileFacade;
   final ImagePicker picker = ImagePicker();
   final XFile? image = await picker.pickImage(
     source: ImageSource.gallery,
@@ -19,7 +19,7 @@ Future<void> pickAndSaveAvatar(BuildContext context) async {
 
   try {
     final Uint8List bytes = await image.readAsBytes();
-    await authRepository.updateAvatar(
+    await profileFacade.updateAvatar(
       avatarPath: image.path,
       avatarBytes: bytes,
     );

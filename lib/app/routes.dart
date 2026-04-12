@@ -47,7 +47,9 @@ abstract final class AppRoutes {
   static const String dormRules = '/dorm/rules';
   static const String dormInvite = '/dorm/invite';
   static const String dormStatus = '/dorm/status';
+  static const String dormBadges = '/dorm/badges';
   static const String profile = '/profile';
+  static const String profileBadges = '/profile/badges';
   static const String profileReport = '/profile/report';
   static const String profileCalendar = '/profile/calendar';
   static const String profileSettings = '/profile/settings';
@@ -168,8 +170,9 @@ GoRouter createRouter({
       ),
       GoRoute(
         path: AppRoutes.dormRules,
-        builder: (BuildContext context, GoRouterState state) =>
-            const DormRulesPage(),
+        builder: (BuildContext context, GoRouterState state) => DormRulesPage(
+          showReviewOverlayOnOpen: state.uri.queryParameters['review'] == '1',
+        ),
       ),
       GoRoute(
         path: AppRoutes.dormInvite,
@@ -180,6 +183,16 @@ GoRouter createRouter({
         path: AppRoutes.dormStatus,
         builder: (BuildContext context, GoRouterState state) =>
             const DormStatusPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.dormBadges,
+        builder: (BuildContext context, GoRouterState state) =>
+            const HonorBadgesPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.profileBadges,
+        builder: (BuildContext context, GoRouterState state) =>
+            const PersonalBadgesPage(),
       ),
       GoRoute(
         path: AppRoutes.profileReport,
