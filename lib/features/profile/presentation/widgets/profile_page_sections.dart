@@ -129,6 +129,7 @@ class ProfileDataCarousel extends StatefulWidget {
 
 class _ProfileDataCarouselState extends State<ProfileDataCarousel> {
   late final PageController _controller;
+  int _currentPage = 0;
 
   @override
   void initState() {
@@ -144,26 +145,57 @@ class _ProfileDataCarouselState extends State<ProfileDataCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 1.9,
-      child: PageView(
-        controller: _controller,
-        padEnds: false,
-        children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.only(right: AppSpacing.sm),
-            child: _SleepQualityCard(sessions: widget.sessions),
+    return Column(
+      children: <Widget>[
+        AspectRatio(
+          key: const ValueKey<String>('profile-data-carousel'),
+          aspectRatio: 1.62,
+          child: PageView(
+            controller: _controller,
+            padEnds: false,
+            onPageChanged: (int index) {
+              setState(() {
+                _currentPage = index;
+              });
+            },
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.only(right: AppSpacing.sm),
+                child: _SleepQualityCard(sessions: widget.sessions),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: AppSpacing.sm),
+                child: _SleepDurationCard(sessions: widget.sessions),
+              ),
+              _CheckInHeatmapCard(
+                heatmapValues: widget.heatmapValues,
+                onTap: widget.onHeatmapTap,
+              ),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: AppSpacing.sm),
-            child: _SleepDurationCard(sessions: widget.sessions),
-          ),
-          _CheckInHeatmapCard(
-            heatmapValues: widget.heatmapValues,
-            onTap: widget.onHeatmapTap,
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          key: const ValueKey<String>('profile-carousel-indicators'),
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List<Widget>.generate(3, (int index) {
+            final bool active = index == _currentPage;
+            return AnimatedContainer(
+              key: ValueKey<String>('profile-carousel-dot-$index'),
+              duration: const Duration(milliseconds: 180),
+              margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xxs),
+              width: active ? 18 : 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: active
+                    ? context.nightMoodPalette.primary
+                    : AppColors.surfaceBorder,
+                borderRadius: BorderRadius.circular(AppRadius.xl),
+              ),
+            );
+          }),
+        ),
+      ],
     );
   }
 }
@@ -195,8 +227,8 @@ class ProfileInsightBlock extends StatelessWidget {
         LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
             final double cardHeight = math.max(
-              148,
-              constraints.maxWidth * 0.42,
+              156,
+              constraints.maxWidth * 0.44,
             );
             return SizedBox(
               height: cardHeight,
@@ -204,16 +236,18 @@ class ProfileInsightBlock extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   Expanded(
-                    flex: 3,
                     child: _ReportInsightCard(
+                      key: const ValueKey<String>('profile-report-card'),
                       report: report,
                       onTap: onReportTap,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
-                    flex: 2,
                     child: Column(
+                      key: const ValueKey<String>(
+                        'profile-insight-side-column',
+                      ),
                       children: <Widget>[
                         Expanded(
                           child: _MiniInsightCard(
@@ -264,6 +298,7 @@ class ProfileSettingsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
+      key: const ValueKey<String>('profile-settings-card'),
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: Column(
@@ -273,7 +308,6 @@ class ProfileSettingsCard extends StatelessWidget {
             title: '设置',
             onTap: onSettingsTap,
           ),
-          const Divider(height: 1, indent: 64, endIndent: 24),
           _ProfileMenuRow(
             icon: Icons.help_outline_rounded,
             title: '常见问题',
@@ -553,7 +587,11 @@ class _CheckInHeatmapCard extends StatelessWidget {
 }
 
 class _ReportInsightCard extends StatelessWidget {
-  const _ReportInsightCard({required this.report, required this.onTap});
+  const _ReportInsightCard({
+    super.key,
+    required this.report,
+    required this.onTap,
+  });
 
   final SleepReport report;
   final VoidCallback onTap;
@@ -589,30 +627,23 @@ class _ReportInsightCard extends StatelessWidget {
           ),
           const Spacer(),
           Container(
+            width: double.infinity,
             padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
+              horizontal: AppSpacing.sm,
               vertical: AppSpacing.sm,
             ),
             decoration: BoxDecoration(
               color: palette.primaryHighlight,
               borderRadius: BorderRadius.circular(AppRadius.xl),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Icon(
-                  Icons.science_outlined,
-                  size: 18,
-                  color: palette.primaryDeep,
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Text(
-                  '查看本周结论',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(color: palette.primaryDeep),
-                ),
-              ],
+            child: Text(
+              '查看本周结论',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(color: palette.primaryDeep),
             ),
           ),
         ],

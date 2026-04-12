@@ -724,6 +724,51 @@ void main() {
     expect(find.text('本月打卡热力'), findsOneWidget);
   });
 
+  testWidgets(
+    'profile uses larger carousel with indicators and balanced insight row',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profile,
+        clock: _dayClock,
+      );
+
+      expect(
+        tester
+            .getSize(
+              find.byKey(const ValueKey<String>('profile-data-carousel')),
+            )
+            .height,
+        greaterThan(190),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('profile-carousel-indicators')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('profile-settings-card')),
+          matching: find.byType(Divider),
+        ),
+        findsNothing,
+      );
+
+      final double reportWidth = tester
+          .getSize(find.byKey(const ValueKey<String>('profile-report-card')))
+          .width;
+      final double sideWidth = tester
+          .getSize(
+            find.byKey(const ValueKey<String>('profile-insight-side-column')),
+          )
+          .width;
+
+      expect((reportWidth - sideWidth).abs(), lessThan(28));
+    },
+  );
+
   testWidgets('profile dream card opens dream journal page', (
     WidgetTester tester,
   ) async {
@@ -780,6 +825,30 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('勋章详情'), findsOneWidget);
+  });
+
+  testWidgets('profile faq entry opens styled faq page', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    await tester.ensureVisible(find.text('常见问题'));
+    await tester.tap(find.text('常见问题'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('帮助主题'), findsOneWidget);
+    expect(find.text('常见问题速览'), findsOneWidget);
+    expect(find.text('常见问题内容将继续补充'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('常见问题内容将继续补充'));
+    await tester.tap(find.text('常见问题内容将继续补充'));
+    await tester.pump();
+
+    expect(find.text('FAQ 正在整理中'), findsOneWidget);
   });
 
   testWidgets('post sleep page hides shell navigation', (
