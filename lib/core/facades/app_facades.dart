@@ -379,10 +379,12 @@ class DormFacade extends ChangeNotifier {
   Future<void> sendGentleReminder({
     required String targetUid,
     bool anonymous = true,
+    required String message,
   }) {
     return _dormRepository.sendGentleReminder(
       targetUid: targetUid,
       anonymous: anonymous,
+      message: message,
     );
   }
 

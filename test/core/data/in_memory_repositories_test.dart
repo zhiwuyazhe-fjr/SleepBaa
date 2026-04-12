@@ -382,12 +382,14 @@ void main() {
       await repository.sendGentleReminder(
         targetUid: 'roommate-a',
         anonymous: true,
+        message: '如果方便的话，今晚一起把宿舍的环境再放轻一点',
       );
       expect(repository.currentDorm.events.first.detail, contains('您的舍友'));
 
       await repository.sendGentleReminder(
         targetUid: 'roommate-a',
         anonymous: false,
+        message: '被月亮绑架了？该回地球了，宿舍要关门啦～',
       );
       expect(repository.currentDorm.events.first.detail, contains('Paul'));
     },

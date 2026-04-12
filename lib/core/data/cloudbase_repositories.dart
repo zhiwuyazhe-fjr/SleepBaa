@@ -2770,8 +2770,12 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
   Future<void> sendGentleReminder({
     required String targetUid,
     bool anonymous = true,
+    required String message,
   }) async {
-    if (_currentDorm.id.isEmpty || targetUid.trim().isEmpty) {
+    final String trimmedMessage = message.trim();
+    if (_currentDorm.id.isEmpty ||
+        targetUid.trim().isEmpty ||
+        trimmedMessage.isEmpty) {
       return;
     }
     if (_appApiClient.isConfigured) {
@@ -2782,6 +2786,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
           body: <String, dynamic>{
             'targetUid': targetUid.trim(),
             'anonymous': anonymous,
+            'message': trimmedMessage,
           },
         );
         await _snapshotStore.refresh();
@@ -2807,7 +2812,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
           type: DormEventType.notification,
           title: '\u5df2\u53d1\u9001\u59d4\u5a49\u63d0\u9192',
           detail:
-              '\u5df2\u7531 $senderName \u5411 ${target.name} \u53d1\u9001\u4e00\u6761\u7ad9\u5185\u63d0\u9192\u3002',
+              '\u5df2\u7531 $senderName \u5411 ${target.name} \u53d1\u9001\u4e00\u6761\u7ad9\u5185\u63d0\u9192\uff1a$trimmedMessage',
           createdAt: DateTime.now(),
           actorUid: _authRepository.currentUser.uid,
         ),

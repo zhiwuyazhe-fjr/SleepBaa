@@ -1407,12 +1407,14 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
   Future<void> sendGentleReminder({
     required String targetUid,
     bool anonymous = true,
+    required String message,
   }) async {
+    final String trimmedMessage = message.trim();
     final DormMember? target = _currentDorm.members
         .where((DormMember member) => member.uid == targetUid)
         .cast<DormMember?>()
         .firstWhere((DormMember? item) => item != null, orElse: () => null);
-    if (target == null) {
+    if (target == null || trimmedMessage.isEmpty) {
       return;
     }
     final String senderName = anonymous ? '您的舍友' : _currentUserLabel();
@@ -1422,7 +1424,7 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
           id: IdGenerator.next('dorm-event'),
           type: DormEventType.notification,
           title: '已发送委婉提醒',
-          detail: '已由 $senderName 向 ${target.name} 发送一条温和的休息提醒。',
+          detail: '已由 $senderName 向 ${target.name} 发送一条温和的休息提醒：$trimmedMessage',
           createdAt: DateTime.now(),
           actorUid: _currentUserId,
         ),

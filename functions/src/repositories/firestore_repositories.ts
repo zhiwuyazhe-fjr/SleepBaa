@@ -760,6 +760,7 @@ export interface AssistantDataRepository {
     uid: string,
     targetUid: string,
     anonymous?: boolean,
+    message?: string,
   ): Promise<{ targetUid: string; createdAt: string }>;
   writeAssistantThreadSummary(
     uid: string,
@@ -2121,6 +2122,7 @@ export class FirestoreRepository implements AssistantDataRepository {
     uid: string,
     targetUid: string,
     anonymous = true,
+    message = "",
   ): Promise<{ targetUid: string; createdAt: string }> {
     const user = await this.getUserProfile(uid);
     const dormId = user.dormId ? user.dormId.trim() : "";
@@ -2129,6 +2131,10 @@ export class FirestoreRepository implements AssistantDataRepository {
     }
     if (!targetUid || targetUid.trim() === uid) {
       throw new Error("Select a roommate before sending the reminder.");
+    }
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage) {
+      throw new Error("Select or enter a reminder before sending.");
     }
     const targetMember = await this.store.get(
       Collections.dormMembers,
@@ -2148,7 +2154,7 @@ export class FirestoreRepository implements AssistantDataRepository {
       id: `gentle-${createdAt}`,
       category: "dorm",
       title: "舍友提醒你稍微放轻一点",
-      body: `${senderName} 给你发来一条温和提醒：如果方便的话，今晚一起把宿舍环境再放轻一点。`,
+      body: `${senderName} 给你发来一条温和提醒：${trimmedMessage}`,
       route: "/dorm",
       createdAt,
       ownerUid: targetUid,

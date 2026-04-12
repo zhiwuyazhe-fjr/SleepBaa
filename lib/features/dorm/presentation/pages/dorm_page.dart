@@ -16,6 +16,13 @@ import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_invite_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 
+const List<String> _gentleReminderPresets = <String>[
+  '如果方便的话，今晚一起把宿舍的环境再放轻一点',
+  '被月亮绑架了？该回地球了，宿舍要关门啦～',
+];
+
+enum _GentleReminderTab { content, target }
+
 class DormPage extends StatelessWidget {
   const DormPage({super.key});
 
@@ -939,6 +946,7 @@ Future<void> _showGentleReminderPicker({
     await services.dormFacade.sendGentleReminder(
       targetUid: selection.targetUid,
       anonymous: selection.anonymous,
+      message: selection.message,
     );
     if (context.mounted) {
       _showDormToast(
@@ -974,6 +982,248 @@ class _GentleReminderSheet extends StatefulWidget {
 class _GentleReminderSheetState extends State<_GentleReminderSheet> {
   String? _selectedUid;
   bool _anonymous = true;
+  _GentleReminderTab _activeTab = _GentleReminderTab.content;
+  String? _selectedPreset;
+  late final TextEditingController _customMessageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _customMessageController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _customMessageController.dispose();
+    super.dispose();
+  }
+
+  String get _resolvedMessage {
+    final String customMessage = _customMessageController.text.trim();
+    if (customMessage.isNotEmpty) {
+      return customMessage;
+    }
+    return _selectedPreset?.trim() ?? '';
+  }
+
+  bool get _canSubmit => _selectedUid != null && _resolvedMessage.isNotEmpty;
+
+  void _selectPreset(String message) {
+    setState(() {
+      _selectedPreset = message;
+      _customMessageController.clear();
+    });
+  }
+
+  Widget _buildTabButton(
+    BuildContext context, {
+    required _GentleReminderTab tab,
+    required String label,
+  }) {
+    final bool selected = _activeTab == tab;
+    final Color highlight = Theme.of(context).colorScheme.primary;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _activeTab = tab),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: selected ? highlight : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: selected ? Colors.white : AppColors.textSecondary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContentTab(BuildContext context) {
+    final String customMessage = _customMessageController.text.trim();
+    final Color highlight = Theme.of(context).colorScheme.primary;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          '选择提醒内容',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          '先选一句更合适的表达，也可以自己写一句更贴心的话。',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: AppColors.textSecondary,
+            height: 1.5,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        ..._gentleReminderPresets.map(
+          (String message) => InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            onTap: () => _selectPreset(message),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: _selectedPreset == message && customMessage.isEmpty
+                    ? highlight.withAlpha(18)
+                    : AppColors.surfaceMuted,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(
+                  color: _selectedPreset == message && customMessage.isEmpty
+                      ? highlight
+                      : Colors.transparent,
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(
+                      _selectedPreset == message && customMessage.isEmpty
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.radio_button_off_rounded,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Text(
+                      message,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        height: 1.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        TextField(
+          controller: _customMessageController,
+          minLines: 1,
+          maxLines: 3,
+          onChanged: (String value) {
+            if (value.trim().isNotEmpty) {
+              setState(() => _selectedPreset = null);
+              return;
+            }
+            setState(() {});
+          },
+          decoration: InputDecoration(
+            hintText: 'Others……',
+            filled: true,
+            fillColor: AppColors.surfaceMuted,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.md,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(20),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTargetTab(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          '选择要提醒的舍友',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          '我们会用更温和的方式送达提醒，不会直接替你做生硬通知。',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: AppColors.textSecondary,
+            height: 1.5,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+          value: !_anonymous,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: const Text('是否使用昵称实名发送'),
+          subtitle: Text(
+            _anonymous ? '默认显示“您的舍友”' : '将显示你的昵称',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+          ),
+          onChanged: (bool? value) {
+            setState(() => _anonymous = !(value ?? false));
+          },
+        ),
+        const SizedBox(height: AppSpacing.md),
+        ...widget.members.map(
+          (DormMember member) => InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            onTap: () => setState(() => _selectedUid = member.uid),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(
+                      _selectedUid == member.uid
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.radio_button_off_rounded,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          member.name,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          member.note,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -998,96 +1248,67 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  '选择要提醒的舍友',
+                  '委婉提醒',
                   style: Theme.of(
                     context,
                   ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  '我们会用更温和的方式生成提醒文案，不会直接替你做生硬通知。',
+                  '先选内容，再选对象；两个栏目可以来回切换。',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppColors.textSecondary,
                     height: 1.5,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  visualDensity: const VisualDensity(
-                    horizontal: -2,
-                    vertical: -2,
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceMuted,
+                    borderRadius: BorderRadius.circular(999),
                   ),
-                  value: !_anonymous,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  title: const Text('是否使用昵称实名发送'),
-                  subtitle: Text(
-                    _anonymous ? '默认显示“您的舍友”' : '将显示你的昵称',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                  child: Row(
+                    children: <Widget>[
+                      _buildTabButton(
+                        context,
+                        tab: _GentleReminderTab.content,
+                        label: '内容',
+                      ),
+                      _buildTabButton(
+                        context,
+                        tab: _GentleReminderTab.target,
+                        label: '对象',
+                      ),
+                    ],
                   ),
-                  onChanged: (bool? value) {
-                    setState(() => _anonymous = !(value ?? false));
-                  },
                 ),
                 const SizedBox(height: AppSpacing.md),
-                ...widget.members.map(
-                  (DormMember member) => InkWell(
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
-                    onTap: () => setState(() => _selectedUid = member.uid),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Icon(
-                              _selectedUid == member.uid
-                                  ? Icons.radio_button_checked_rounded
-                                  : Icons.radio_button_off_rounded,
-                            ),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  child: _activeTab == _GentleReminderTab.content
+                      ? KeyedSubtree(
+                          key: const ValueKey<String>(
+                            'gentle-reminder-content',
                           ),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  member.name,
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  member.note,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: AppColors.textSecondary,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                          child: _buildContentTab(context),
+                        )
+                      : KeyedSubtree(
+                          key: const ValueKey<String>('gentle-reminder-target'),
+                          child: _buildTargetTab(context),
+                        ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 PrimaryButton(
-                  label: '生成提醒文案',
-                  onPressed: _selectedUid == null
+                  label: '发送委婉提醒',
+                  onPressed: !_canSubmit
                       ? null
                       : () {
                           Navigator.of(context).pop(
                             _GentleReminderSelection(
                               targetUid: _selectedUid!,
                               anonymous: _anonymous,
+                              message: _resolvedMessage,
                             ),
                           );
                         },
@@ -1105,8 +1326,10 @@ class _GentleReminderSelection {
   const _GentleReminderSelection({
     required this.targetUid,
     required this.anonymous,
+    required this.message,
   });
 
   final String targetUid;
   final bool anonymous;
+  final String message;
 }

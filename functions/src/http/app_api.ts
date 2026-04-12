@@ -866,6 +866,7 @@ export function createAppApiServer() {
           request.authContext!.uid,
           asString(asMap(request.body).targetUid),
           asMap(request.body).anonymous === false ? false : true,
+          asString(asMap(request.body).message),
         ),
       );
     }),

@@ -187,6 +187,7 @@ abstract interface class DormRepository implements Listenable {
   Future<void> sendGentleReminder({
     required String targetUid,
     bool anonymous = true,
+    required String message,
   });
 }
 
