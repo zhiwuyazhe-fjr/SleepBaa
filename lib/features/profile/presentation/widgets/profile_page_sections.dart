@@ -134,7 +134,7 @@ class _ProfileDataCarouselState extends State<ProfileDataCarousel> {
   @override
   void initState() {
     super.initState();
-    _controller = PageController(viewportFraction: 0.9);
+    _controller = PageController(viewportFraction: 1);
   }
 
   @override
@@ -151,29 +151,20 @@ class _ProfileDataCarouselState extends State<ProfileDataCarousel> {
           key: const ValueKey<String>('profile-data-carousel'),
           aspectRatio: 1.62,
           child: PageView(
-            clipBehavior: Clip.none,
             controller: _controller,
-            padEnds: true,
+            padEnds: false,
             onPageChanged: (int index) {
               setState(() {
                 _currentPage = index;
               });
             },
             children: <Widget>[
-              for (final Widget card in <Widget>[
-                _SleepQualityCard(sessions: widget.sessions),
-                _SleepDurationCard(sessions: widget.sessions),
-                _CheckInHeatmapCard(
-                  heatmapValues: widget.heatmapValues,
-                  onTap: widget.onHeatmapTap,
-                ),
-              ])
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.xs,
-                  ),
-                  child: card,
-                ),
+              _SleepQualityCard(sessions: widget.sessions),
+              _SleepDurationCard(sessions: widget.sessions),
+              _CheckInHeatmapCard(
+                heatmapValues: widget.heatmapValues,
+                onTap: widget.onHeatmapTap,
+              ),
             ],
           ),
         ),
@@ -790,56 +781,50 @@ class _BadgePreviewItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
-    final Color cardBackground = badge.unlocked
-        ? palette.primaryHighlight.withAlpha(110)
-        : AppColors.background;
-    final Color cardBorder = badge.unlocked
-        ? palette.primarySoft
-        : AppColors.surfaceBorder;
-
-    return AppCard(
-      onTap: onTap,
-      color: cardBackground,
-      border: Border.all(color: cardBorder),
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.xs,
-        vertical: AppSpacing.sm,
-      ),
-      boxShadow: const <BoxShadow>[],
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: badge.unlocked
-                  ? Colors.white.withAlpha(208)
-                  : AppColors.surfaceSoft,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              badge.icon,
-              size: 20,
-              color: badge.unlocked ? palette.primaryDeep : AppColors.textHint,
-            ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
+          child: Column(
+            children: <Widget>[
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: badge.unlocked
+                      ? palette.primaryHighlight
+                      : AppColors.surfaceSoft,
+                  border: Border.all(
+                    color: badge.unlocked
+                        ? palette.primarySoft
+                        : AppColors.surfaceBorder,
+                    width: 2,
+                  ),
+                ),
+                child: Icon(
+                  badge.icon,
+                  color: badge.unlocked
+                      ? palette.primaryDeep
+                      : AppColors.textHint,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                badge.title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: badge.unlocked
+                      ? AppColors.textPrimary
+                      : AppColors.textHint,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            badge.title,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: badge.unlocked
-                  ? AppColors.textPrimary
-                  : AppColors.textHint,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -3,10 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sleep_dorm_app/app/app.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
 import 'package:sleep_dorm_app/core/widgets/bottom_nav_shell.dart';
@@ -744,14 +746,13 @@ void main() {
             .height,
         greaterThan(190),
       );
-      expect(
-        tester
-            .getSize(
-              find.byKey(const ValueKey<String>('profile-data-carousel')),
-            )
-            .width,
-        greaterThan(350),
-      );
+      final double carouselWidth = tester
+          .getSize(find.byKey(const ValueKey<String>('profile-data-carousel')))
+          .width;
+      final double settingsWidth = tester
+          .getSize(find.byKey(const ValueKey<String>('profile-settings-card')))
+          .width;
+      expect((carouselWidth - settingsWidth).abs(), lessThan(2));
       expect(
         find.byKey(const ValueKey<String>('profile-carousel-indicators')),
         findsOneWidget,
@@ -828,6 +829,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('勋章图鉴'), findsOneWidget);
+
+    final Finder earlyBirdCardFinder = find.ancestor(
+      of: find.text('早睡先锋'),
+      matching: find.byType(AppCard),
+    );
+    expect(earlyBirdCardFinder, findsOneWidget);
+    final AppCard earlyBirdCard = tester.widget<AppCard>(earlyBirdCardFinder);
+    expect(earlyBirdCard.borderRadius, BorderRadius.circular(AppRadius.lg));
+    expect(earlyBirdCard.padding, const EdgeInsets.all(16));
 
     await tester.tap(find.text('早睡先锋'));
     await tester.pumpAndSettle();

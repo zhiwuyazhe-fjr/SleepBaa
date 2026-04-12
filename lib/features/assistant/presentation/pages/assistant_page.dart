@@ -544,6 +544,7 @@ class _AssistantPageState extends State<AssistantPage> {
                     curve: Curves.easeOutCubic,
                     padding: EdgeInsets.fromLTRB(
                       AppSpacing.lg,
+                      
                       keyboardVisible ? 0 : AppSpacing.sm,
                       AppSpacing.lg,
                       keyboardVisible ? AppSpacing.sm : AppSpacing.lg,

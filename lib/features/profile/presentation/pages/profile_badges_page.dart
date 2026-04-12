@@ -26,33 +26,35 @@ class ProfileBadgesPage extends StatelessWidget {
           separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
           itemBuilder: (BuildContext context, int index) {
             final ProfileBadgeMeta badge = ProfileBadges.all[index];
+            final bool unlocked = badge.unlocked;
             return AppCard(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              borderRadius: AppRadius.cardLarge,
-              border: Border.all(color: AppColors.divider),
+              padding: const EdgeInsets.all(16),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              color: unlocked
+                  ? palette.primaryHighlight.withAlpha(110)
+                  : AppColors.surface,
+              border: Border.all(
+                color: unlocked ? palette.primarySoft : AppColors.surfaceBorder,
+              ),
               boxShadow: const <BoxShadow>[],
               onTap: () =>
                   context.push(AppRoutes.profileBadgeDetailPath(badge.id)),
               child: Row(
                 children: <Widget>[
                   Container(
-                    width: 60,
-                    height: 60,
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: badge.unlocked
-                          ? palette.primaryHighlight
+                      color: unlocked
+                          ? Colors.white.withAlpha(208)
                           : AppColors.surfaceSoft,
-                      border: Border.all(
-                        color: badge.unlocked
-                            ? palette.primarySoft
-                            : AppColors.surfaceBorder,
-                        width: 2,
-                      ),
+                      shape: BoxShape.circle,
                     ),
+                    alignment: Alignment.center,
                     child: Icon(
                       badge.icon,
-                      color: badge.unlocked
+                      size: 20,
+                      color: unlocked
                           ? palette.primaryDeep
                           : AppColors.textHint,
                     ),
@@ -66,6 +68,9 @@ class ProfileBadgesPage extends StatelessWidget {
                           badge.title,
                           style: textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
+                            color: unlocked
+                                ? AppColors.textPrimary
+                                : AppColors.textSecondary,
                           ),
                         ),
                         const SizedBox(height: AppSpacing.xs),
