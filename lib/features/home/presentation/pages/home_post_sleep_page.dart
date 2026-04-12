@@ -26,6 +26,7 @@ class HomePostSleepPage extends StatelessWidget {
         listenable: Listenable.merge(<Listenable>[
           services.audioPlaybackController,
           services.dormRepository,
+          services.recommendationRepository,
           services.sleepSessionRepository,
         ]),
         builder: (BuildContext context, Widget? child) {
@@ -33,6 +34,15 @@ class HomePostSleepPage extends StatelessWidget {
           final SleepSession? session =
               services.sleepSessionRepository.activeSession;
           final Dorm dorm = services.dormRepository.currentDorm;
+          final NightRecommendation? audioRecommendation = services
+              .recommendationRepository
+              .tonightRecommendations
+              .cast<NightRecommendation?>()
+              .firstWhere(
+                (NightRecommendation? item) =>
+                    item?.type == RecommendationType.audio,
+                orElse: () => null,
+              );
           return Stack(
             children: <Widget>[
               SafeArea(
@@ -102,27 +112,15 @@ class HomePostSleepPage extends StatelessWidget {
                       ),
                       const SizedBox(height: AppSpacing.xxl),
                       SessionAudioCard(
-                        track: services.audioPlaybackController.currentTrack,
+                        track:
+                            services.audioPlaybackController.currentTrack ??
+                            audioRecommendation?.track,
                         playbackState:
                             services.audioPlaybackController.playbackState,
                         position: services.audioPlaybackController.position,
                         onToggle: () async {
-                          final AudioTrack? track =
-                              services.audioPlaybackController.currentTrack ??
-                              services
-                                  .recommendationRepository
-                                  .tonightRecommendations
-                                  .where(
-                                    (NightRecommendation item) =>
-                                        item.track != null,
-                                  )
-                                  .first
-                                  .track;
-                          if (track != null) {
-                            await services.audioPlaybackController.toggleTrack(
-                              track,
-                            );
-                          }
+                          await services.sleepExperienceController
+                              .toggleSleepAudio();
                         },
                       ),
                       const SizedBox(height: AppSpacing.xl),

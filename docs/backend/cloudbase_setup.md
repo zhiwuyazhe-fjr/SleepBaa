@@ -195,7 +195,7 @@ curl -X POST https://<你的-app-api-域名>/api/media/audio-catalog \
 
 - 首页点击“宿舍噪声”会申请麦克风权限并更新结果
 - 首页点击“灯光环境”会申请前摄权限并更新结果
-- 首页点击“手机使用”会跳到 Usage Access 授权页并回读近 1 小时使用时长
+- 首页点击“手机使用”会跳到 Usage Access 授权页并回读近 2 小时使用时长
 - 详情页首次进入会自动检测噪声、灯光和手机使用
 - 检测结果会通过 `/api/interference/tonight` 写回
 

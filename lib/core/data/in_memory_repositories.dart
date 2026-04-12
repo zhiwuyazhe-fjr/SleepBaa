@@ -482,6 +482,27 @@ class InMemoryRecommendationRepository extends ChangeNotifier
   }
 
   @override
+  Future<void> refreshAudioCatalog() async {}
+
+  @override
+  Future<AudioTrack?> resolvePlayableTrack({
+    NightRecommendation? recommendation,
+    bool forceRefresh = false,
+  }) async {
+    final AudioTrack? directTrack = recommendation?.track;
+    if (directTrack != null) {
+      return directTrack;
+    }
+    try {
+      return _tonightRecommendations
+          .firstWhere((NightRecommendation item) => item.track != null)
+          .track;
+    } on StateError {
+      return null;
+    }
+  }
+
+  @override
   Future<void> setRecommendationState(
     String recommendationId,
     RecommendationExecutionState state,
@@ -489,14 +510,12 @@ class InMemoryRecommendationRepository extends ChangeNotifier
     _tonightRecommendations = _tonightRecommendations.map((
       NightRecommendation item,
     ) {
+      if (item.type == RecommendationType.audio &&
+          item.id != recommendationId &&
+          state == RecommendationExecutionState.playing) {
+        return item.copyWith(executionState: RecommendationExecutionState.idle);
+      }
       if (item.id != recommendationId) {
-        if (item.type == RecommendationType.audio &&
-            item.executionState == RecommendationExecutionState.playing &&
-            state != RecommendationExecutionState.playing) {
-          return item.copyWith(
-            executionState: RecommendationExecutionState.selected,
-          );
-        }
         return item;
       }
       return item.copyWith(executionState: state);
@@ -1164,6 +1183,13 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
         ..._currentDorm.events,
       ],
     );
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  @override
+  void hydrateCurrentDormLocationAnchor(DormLocationAnchor anchor) {
+    _currentDorm = _currentDorm.copyWith(locationAnchor: anchor);
     _emitCurrentState();
     notifyListeners();
   }

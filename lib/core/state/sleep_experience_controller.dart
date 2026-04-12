@@ -57,20 +57,37 @@ class SleepExperienceController extends ChangeNotifier {
     if (_settingsRepository.currentSettings.selectedNightMood != null) {
       await _recommendationRepository.resetForTonight();
     }
+    await _recommendationRepository.refreshAudioCatalog();
   }
 
   Future<void> handleRecommendationTap(
     NightRecommendation recommendation,
   ) async {
-    if (recommendation.type == RecommendationType.audio &&
-        recommendation.track != null) {
-      await _audioPlaybackController.toggleTrack(recommendation.track!);
+    if (recommendation.type == RecommendationType.audio) {
+      final bool shouldPause =
+          recommendation.executionState == RecommendationExecutionState.playing;
       await _recommendationRepository.setRecommendationState(
         recommendation.id,
-        _audioPlaybackController.isPlaying
-            ? RecommendationExecutionState.playing
-            : RecommendationExecutionState.selected,
+        shouldPause
+            ? RecommendationExecutionState.idle
+            : RecommendationExecutionState.playing,
       );
+      if (shouldPause) {
+        try {
+          if (_audioPlaybackController.isPlaying) {
+            await _audioPlaybackController.pause();
+          } else {
+            await _audioPlaybackController.stop();
+          }
+        } catch (_) {
+          await _recommendationRepository.setRecommendationState(
+            recommendation.id,
+            RecommendationExecutionState.playing,
+          );
+        }
+        return;
+      }
+      unawaited(_startRecommendationAudio(recommendation));
       return;
     }
 
@@ -83,6 +100,94 @@ class SleepExperienceController extends ChangeNotifier {
       recommendation.id,
       nextState,
     );
+  }
+
+  Future<void> toggleSleepAudio({
+    NightRecommendation? recommendation,
+  }) async {
+    final AudioTrack? currentTrack = _audioPlaybackController.currentTrack;
+    final bool hasCurrentSourceUrl =
+        currentTrack?.sourceUrl?.trim().isNotEmpty ?? false;
+    final bool hasCurrentAssetPath =
+        currentTrack?.assetPath?.trim().isNotEmpty ?? false;
+    if (currentTrack != null &&
+        (hasCurrentSourceUrl || hasCurrentAssetPath)) {
+      try {
+        await _audioPlaybackController.toggleTrack(currentTrack);
+        return;
+      } catch (_) {
+        // Fall through to refresh and resolve a new playable track.
+      }
+    }
+
+    AudioTrack? resolvedTrack = await _recommendationRepository.resolvePlayableTrack(
+      recommendation: recommendation,
+    );
+    if (resolvedTrack == null) {
+      return;
+    }
+    try {
+      await _audioPlaybackController.toggleTrack(resolvedTrack);
+    } catch (_) {
+      resolvedTrack = await _recommendationRepository.resolvePlayableTrack(
+        recommendation: recommendation,
+        forceRefresh: true,
+      );
+      if (resolvedTrack == null) {
+        return;
+      }
+      await _audioPlaybackController.toggleTrack(resolvedTrack);
+    }
+  }
+
+  Future<void> _startRecommendationAudio(
+    NightRecommendation recommendation,
+  ) async {
+    try {
+      AudioTrack? resolvedTrack = await _recommendationRepository.resolvePlayableTrack(
+        recommendation: recommendation,
+      );
+      if (resolvedTrack == null) {
+        throw StateError('No playable track available.');
+      }
+      await _playResolvedTrack(resolvedTrack);
+    } catch (_) {
+      try {
+        final AudioTrack? resolvedTrack = await _recommendationRepository
+            .resolvePlayableTrack(
+              recommendation: recommendation,
+              forceRefresh: true,
+            );
+        if (resolvedTrack == null) {
+          throw StateError('No playable track available after refresh.');
+        }
+        await _playResolvedTrack(resolvedTrack);
+      } catch (_) {
+        await _recommendationRepository.setRecommendationState(
+          recommendation.id,
+          RecommendationExecutionState.idle,
+        );
+      }
+    }
+  }
+
+  Future<void> _playResolvedTrack(AudioTrack track) async {
+    final AudioTrack? currentTrack = _audioPlaybackController.currentTrack;
+    final bool isSameTrack = currentTrack?.id == track.id;
+    if (isSameTrack) {
+      switch (_audioPlaybackController.playbackState) {
+        case PlaybackState.playing:
+          return;
+        case PlaybackState.paused:
+          await _audioPlaybackController.resume();
+          return;
+        case PlaybackState.completed:
+        case PlaybackState.stopped:
+          await _audioPlaybackController.play(track);
+          return;
+      }
+    }
+    await _audioPlaybackController.play(track);
   }
 
   Future<void> enterSleepMode() async {

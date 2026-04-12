@@ -328,7 +328,7 @@ function defaultTonightInterferenceState(): JsonMap {
       value: "待检测",
       gradeLabel: "待检测",
       status: "idle",
-      detail: "授权后可读取近 1 小时手机使用时长。",
+      detail: "授权后可读取最近 2 小时手机使用时长。",
       source: "android_usage_stats",
       measuredAt: null,
       numericValue: null,
@@ -872,11 +872,15 @@ export class FirestoreRepository implements AssistantDataRepository {
   }
 
   async getAudioTrackCatalog(_uid: string): Promise<JsonMap> {
-    const collectionTracks = await this.store.query(Collections.audioTracks, {
-      filters: { enabled: true },
-      orderBy: { field: "sortOrder", direction: "asc" },
+    const collectionTracks = (await this.store.query(Collections.audioTracks, {
       limit: 50,
-    });
+    }))
+      .filter((doc) => asBoolean(withoutMeta(doc).enabled, false))
+      .sort((a, b) => {
+        const left = asNumber(withoutMeta(a).sortOrder, 0);
+        const right = asNumber(withoutMeta(b).sortOrder, 0);
+        return left - right;
+      });
     const remoteTracks = await Promise.all(
       collectionTracks.map(async (doc) => {
         const value = withoutMeta(doc);

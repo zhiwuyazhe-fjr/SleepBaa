@@ -86,7 +86,7 @@ export function rankInterferenceFactors(
       score: phoneUsageScore,
       evidence:
         interference?.phoneUsage?.detail ??
-        "近 1 小时手机使用尚未更新，默认按中等干扰纳入今晚判断。",
+        "最近 2 小时手机使用尚未更新，默认按中等干扰纳入今晚判断。",
       sourceRefs: ["user_state.tonightInterference.phoneUsage"],
     },
     {

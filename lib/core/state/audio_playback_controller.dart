@@ -62,8 +62,16 @@ class AudioPlaybackController extends ChangeNotifier {
     _position = Duration.zero;
     _playbackState = PlaybackState.paused;
     notifyListeners();
-    await _engine.setTrack(track);
-    await _engine.play();
+    try {
+      await _engine.setTrack(track);
+      await _engine.play();
+    } catch (_) {
+      _currentTrack = null;
+      _playbackState = PlaybackState.stopped;
+      _position = Duration.zero;
+      notifyListeners();
+      rethrow;
+    }
   }
 
   Future<void> pause() async {

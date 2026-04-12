@@ -303,7 +303,7 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                             ),
                             const SizedBox(height: AppSpacing.sm),
                             Text(
-                              '点一下卡片就能更新对应结果，详情页会自动补测噪声、灯光和近 1 小时手机使用。',
+                              '点一下卡片就能更新对应结果，详情页会自动补测噪声、灯光和手机使用。',
                               style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(
                                     color: AppColors.textSecondary,

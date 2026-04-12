@@ -28,7 +28,7 @@ class MainActivity : FlutterActivity() {
                     openUsageStatsSettings()
                     result.success(null)
                 }
-                "getLastHourUsageMinutes" -> {
+                "getLastTwoHoursUsageMinutes" -> {
                     if (!hasUsageStatsPermission()) {
                         result.error(
                             "permission_denied",
@@ -37,7 +37,7 @@ class MainActivity : FlutterActivity() {
                         )
                         return@setMethodCallHandler
                     }
-                    result.success(readLastHourUsageMinutes())
+                    result.success(readLastTwoHoursUsageMinutes())
                 }
                 else -> result.notImplemented()
             }
@@ -84,11 +84,11 @@ class MainActivity : FlutterActivity() {
         )
     }
 
-    private fun readLastHourUsageMinutes(): Int {
+    private fun readLastTwoHoursUsageMinutes(): Int {
         val usageStatsManager =
             getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val endTime = System.currentTimeMillis()
-        val startTime = endTime - 60L * 60L * 1000L
+        val startTime = endTime - 2L * 60L * 60L * 1000L
         val aggregate = usageStatsManager.queryAndAggregateUsageStats(
             startTime,
             endTime,

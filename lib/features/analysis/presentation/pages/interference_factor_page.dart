@@ -77,7 +77,7 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       Text(
-                        '进页后我已经帮你自动检查宿舍噪声、灯光环境和近 1 小时手机使用；如果你刚调整过环境，也可以单独再测一次。',
+                        '进页后我已经帮你自动检查宿舍噪声、灯光环境和手机使用；如果你刚调整过环境，也可以单独再测一次。',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: AppColors.textSecondary,
                           height: 1.55,

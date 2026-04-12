@@ -179,6 +179,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
   Future<void> _bootstrapExperience() async {
     try {
       await _sleepExperienceController.bootstrap();
+      await _dormPresenceSyncController.restoreCachedLocationAnchor();
       await _dormPresenceSyncController.syncPresenceFromCurrentLocation();
     } catch (_) {
       // Auth and callable failures are surfaced through repository state so
@@ -319,6 +320,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
     _dreamFacade.dispose();
     _notificationFacade.dispose();
     _dormFacade.dispose();
+    _dormPresenceSyncController.dispose();
     _sleepFacade.dispose();
     _profileFacade.dispose();
     _interferenceProbeController.dispose();

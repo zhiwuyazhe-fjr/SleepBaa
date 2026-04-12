@@ -43,13 +43,38 @@ void main() {
     expect(controller.currentTrack, isNull);
     controller.dispose();
   });
+
+  test('audio controller resets to stopped when loading a track fails', () async {
+    final _FakeAudioPlaybackEngine engine = _FakeAudioPlaybackEngine(
+      failOnSetTrack: true,
+    );
+    final AudioPlaybackController controller = AudioPlaybackController(
+      engine: engine,
+    );
+    const AudioTrack track = AudioTrack(
+      id: 'broken-audio',
+      title: 'Broken audio',
+      subtitle: 'Will fail on load',
+      duration: Duration(minutes: 5),
+      sourceUrl: 'https://example.com/audio/broken.wav',
+    );
+
+    await expectLater(controller.play(track), throwsA(isA<StateError>()));
+    expect(controller.playbackState, PlaybackState.stopped);
+    expect(controller.currentTrack, isNull);
+    expect(controller.position, Duration.zero);
+    controller.dispose();
+  });
 }
 
 class _FakeAudioPlaybackEngine implements AudioPlaybackEngine {
+  _FakeAudioPlaybackEngine({this.failOnSetTrack = false});
+
   final StreamController<Duration> _positionController =
       StreamController<Duration>.broadcast();
   final StreamController<AudioEngineState> _stateController =
       StreamController<AudioEngineState>.broadcast();
+  final bool failOnSetTrack;
 
   String? loadedSource;
   AudioEngineState _lastState = const AudioEngineState(
@@ -65,6 +90,9 @@ class _FakeAudioPlaybackEngine implements AudioPlaybackEngine {
 
   @override
   Future<void> setTrack(AudioTrack track) async {
+    if (failOnSetTrack) {
+      throw StateError('failed to load track');
+    }
     loadedSource = track.sourceUrl ?? track.assetPath;
     _emitState(
       const AudioEngineState(

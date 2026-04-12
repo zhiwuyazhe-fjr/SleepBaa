@@ -208,8 +208,11 @@ class _SettingsPageState extends State<SettingsPage> {
     await notifyPassiveToast(context, message: '已退出登录。');
   }
 
-  String _locationSummary(Dorm dorm) {
-    final DormLocationAnchor? anchor = dorm.locationAnchor;
+  String _locationSummary(
+    Dorm dorm, {
+    DormLocationAnchor? effectiveAnchor,
+  }) {
+    final DormLocationAnchor? anchor = effectiveAnchor ?? dorm.locationAnchor;
     if (dorm.id.isEmpty) {
       return '加入宿舍后可记录宿舍坐标，用于自动判断“已返 / 未返”。';
     }

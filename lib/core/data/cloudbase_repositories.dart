@@ -141,6 +141,22 @@ IconData _iconForAction(String actionId, RecommendationType type) {
 
 Map<String, AudioTrack> _remoteAudioTrackCatalog = <String, AudioTrack>{};
 
+AudioTrack? _firstRemoteAudioTrack() {
+  if (_remoteAudioTrackCatalog.isEmpty) {
+    return null;
+  }
+  return _remoteAudioTrackCatalog.values.first;
+}
+
+bool _isPlayableTrack(AudioTrack? track) {
+  if (track == null) {
+    return false;
+  }
+  final String assetPath = track.assetPath?.trim() ?? '';
+  final String sourceUrl = track.sourceUrl?.trim() ?? '';
+  return assetPath.isNotEmpty || sourceUrl.isNotEmpty;
+}
+
 AudioTrack? _mergeTrackWithRemoteCatalog(
   AudioTrack? track, {
   String? trackId,
@@ -166,6 +182,37 @@ AudioTrack? _mergeTrackWithRemoteCatalog(
   );
 }
 
+AudioTrack? _resolveTrackWithRemoteFallback(
+  AudioTrack? track, {
+  String? trackId,
+}) {
+  final AudioTrack? hydratedTrack = _mergeTrackWithRemoteCatalog(
+    track,
+    trackId: trackId,
+  );
+  if (_isPlayableTrack(hydratedTrack)) {
+    return hydratedTrack;
+  }
+  if (_isPlayableTrack(track)) {
+    return track;
+  }
+  final AudioTrack? fallbackTrack = _firstRemoteAudioTrack();
+  if (fallbackTrack == null) {
+    return hydratedTrack ?? track;
+  }
+  if (hydratedTrack == null) {
+    return fallbackTrack;
+  }
+  return hydratedTrack.copyWith(
+    id: fallbackTrack.id,
+    title: fallbackTrack.title,
+    subtitle: fallbackTrack.subtitle,
+    duration: fallbackTrack.duration,
+    sourceUrl: fallbackTrack.sourceUrl,
+    storageFileId: fallbackTrack.storageFileId,
+  );
+}
+
 AudioTrack? _trackForAction(String actionId, String? trackId) {
   final Map<String, NightRecommendation> catalog =
       <String, NightRecommendation>{
@@ -173,7 +220,7 @@ AudioTrack? _trackForAction(String actionId, String? trackId) {
           item.id: item,
       };
   final AudioTrack? catalogTrack = catalog[actionId]?.track;
-  final AudioTrack? hydratedCatalogTrack = _mergeTrackWithRemoteCatalog(
+  final AudioTrack? hydratedCatalogTrack = _resolveTrackWithRemoteFallback(
     catalogTrack,
     trackId: trackId,
   );
@@ -184,9 +231,9 @@ AudioTrack? _trackForAction(String actionId, String? trackId) {
     return catalogTrack;
   }
   if (trackId == null || trackId.isEmpty) {
-    return null;
+    return _firstRemoteAudioTrack();
   }
-  return _mergeTrackWithRemoteCatalog(
+  return _resolveTrackWithRemoteFallback(
     AudioTrack(
       id: trackId,
       title: '\u52a9\u7720\u97f3\u9891',
@@ -1527,12 +1574,40 @@ class CloudBaseRecommendationRepository extends ChangeNotifier
   }
 
   @override
+  Future<void> refreshAudioCatalog() async {
+    await _refreshAudioCatalog(hydrateCurrentRecommendations: true);
+  }
+
+  @override
+  Future<AudioTrack?> resolvePlayableTrack({
+    NightRecommendation? recommendation,
+    bool forceRefresh = false,
+  }) async {
+    AudioTrack? resolvedTrack = _resolveTrackFromRecommendation(recommendation);
+    if (!forceRefresh && _isPlayableTrack(resolvedTrack)) {
+      return resolvedTrack;
+    }
+    if (_appApiClient.isConfigured) {
+      await _refreshAudioCatalog(hydrateCurrentRecommendations: true);
+      resolvedTrack = _resolveTrackFromRecommendation(recommendation);
+    }
+    return resolvedTrack;
+  }
+
+  @override
   Future<void> setRecommendationState(
     String recommendationId,
     RecommendationExecutionState state,
   ) async {
     _tonightRecommendations = _tonightRecommendations
         .map((NightRecommendation item) {
+          if (item.type == RecommendationType.audio &&
+              item.id != recommendationId &&
+              state == RecommendationExecutionState.playing) {
+            return item.copyWith(
+              executionState: RecommendationExecutionState.idle,
+            );
+          }
           if (item.id != recommendationId) {
             return item;
           }
@@ -1568,6 +1643,41 @@ class CloudBaseRecommendationRepository extends ChangeNotifier
     );
   }
 
+  AudioTrack? _resolveTrackFromRecommendation(NightRecommendation? recommendation) {
+    if (recommendation != null) {
+      return _resolveTrackWithRemoteFallback(
+        recommendation.track,
+        trackId: recommendation.track?.id,
+      );
+    }
+    final NightRecommendation? fallbackRecommendation = _firstWhereOrNull(
+      _tonightRecommendations,
+      (NightRecommendation item) => item.type == RecommendationType.audio,
+    );
+    return _resolveTrackWithRemoteFallback(
+      fallbackRecommendation?.track,
+      trackId: fallbackRecommendation?.track?.id,
+    );
+  }
+
+  void _hydrateRecommendationsWithRemoteCatalog() {
+    _tonightRecommendations = _tonightRecommendations
+        .map((NightRecommendation item) {
+          if (item.type != RecommendationType.audio) {
+            return item;
+          }
+          final AudioTrack? track = _resolveTrackWithRemoteFallback(
+            item.track,
+            trackId: item.track?.id,
+          );
+          if (track == item.track) {
+            return item;
+          }
+          return item.copyWith(track: track);
+        })
+        .toList(growable: false);
+  }
+
   Future<void> _refreshAudioCatalog({
     required bool hydrateCurrentRecommendations,
   }) async {
@@ -1594,18 +1704,7 @@ class CloudBaseRecommendationRepository extends ChangeNotifier
       if (!hydrateCurrentRecommendations) {
         return;
       }
-      _tonightRecommendations = _tonightRecommendations
-          .map((NightRecommendation item) {
-            final AudioTrack? track = _mergeTrackWithRemoteCatalog(
-              item.track,
-              trackId: item.track?.id,
-            );
-            if (track == item.track) {
-              return item;
-            }
-            return item.copyWith(track: track);
-          })
-          .toList(growable: false);
+      _hydrateRecommendationsWithRemoteCatalog();
       notifyListeners();
     } catch (_) {
       // Audio catalog hydration is best-effort and should not block the page.
@@ -2429,6 +2528,16 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
         ..._currentDorm.events,
       ],
     );
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  @override
+  void hydrateCurrentDormLocationAnchor(DormLocationAnchor anchor) {
+    if (_currentDorm.id.isEmpty) {
+      return;
+    }
+    _currentDorm = _currentDorm.copyWith(locationAnchor: anchor);
     _emitCurrentState();
     notifyListeners();
   }

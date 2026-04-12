@@ -512,7 +512,7 @@ test(
               value: "22 分钟",
               gradeLabel: "适中",
               status: "ready",
-              detail: "近 1 小时手机使用还算克制。",
+              detail: "最近 2 小时手机使用还算克制。",
               source: "android_usage_stats",
               measuredAt: "2026-04-12T12:05:00.000Z",
               numericValue: 22,

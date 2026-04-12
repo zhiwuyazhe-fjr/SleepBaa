@@ -87,6 +87,11 @@ abstract interface class UserSettingsRepository implements Listenable {
 abstract interface class RecommendationRepository implements Listenable {
   List<NightRecommendation> get tonightRecommendations;
   Future<void> resetForTonight();
+  Future<void> refreshAudioCatalog();
+  Future<AudioTrack?> resolvePlayableTrack({
+    NightRecommendation? recommendation,
+    bool forceRefresh = false,
+  });
   Future<void> setRecommendationState(
     String recommendationId,
     RecommendationExecutionState state,
@@ -170,6 +175,7 @@ abstract interface class DormRepository implements Listenable {
     bool? sleepModeActive,
     String? note,
   });
+  void hydrateCurrentDormLocationAnchor(DormLocationAnchor anchor);
   Future<void> saveDormLocationAnchor(DormLocationAnchor anchor);
   Future<void> updateDormEnvironment({
     int? noiseDb,

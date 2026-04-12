@@ -402,7 +402,7 @@ class InterferenceProbeController extends ChangeNotifier {
           value: '未授权',
           gradeLabel: '未授权',
           status: InterferenceFactorStatus.denied,
-          detail: '先打开“使用情况访问权限”，我才能读取近 1 小时手机使用时长。',
+          detail: '先打开“使用情况访问权限”，我才能读取最近 2 小时手机使用时长。',
           source: 'usage_stats_permission',
           measuredAt: DateTime.now(),
         ),
@@ -419,13 +419,13 @@ class InterferenceProbeController extends ChangeNotifier {
         status: InterferenceFactorStatus.measuring,
         value: '检测中...',
         gradeLabel: '检测中',
-        detail: '小眠正在读取近 1 小时的手机使用情况。',
+        detail: '小眠正在读取最近 2 小时的手机使用情况。',
         measuredAt: DateTime.now(),
       ),
     );
 
     try {
-      final int minutes = await _usageStatsGateway.readLastHourUsageMinutes();
+      final int minutes = await _usageStatsGateway.readLastTwoHoursUsageMinutes();
       final _ProbeGrade grade = _phoneUsageGrade(minutes);
       final InterferenceFactorSnapshot factor = InterferenceFactorSnapshot(
         type: InterferenceFactorType.phoneUsage,
@@ -462,7 +462,7 @@ class InterferenceProbeController extends ChangeNotifier {
           value: '检测失败',
           gradeLabel: '检测失败',
           status: InterferenceFactorStatus.error,
-          detail: '这次没能读到近 1 小时使用时长，稍后再试一次。',
+          detail: '这次没能读到最近 2 小时使用时长，稍后再试一次。',
           source: 'android_usage_stats',
           measuredAt: DateTime.now(),
         ),
@@ -552,7 +552,7 @@ class InterferenceProbeController extends ChangeNotifier {
         value: '待检测',
         gradeLabel: '待检测',
         status: InterferenceFactorStatus.idle,
-        detail: '授权后可读取近 1 小时手机使用时长。',
+        detail: '授权后可读取最近 2 小时手机使用时长。',
         source: 'android_usage_stats',
       ),
       emotion: _defaultEmotionSnapshot(),
@@ -705,27 +705,27 @@ class InterferenceProbeController extends ChangeNotifier {
   }
 
   static _ProbeGrade _phoneUsageGrade(int minutes) {
-    if (minutes <= 10) {
+    if (minutes <= 20) {
       return const _ProbeGrade(
         label: '很少',
         valueLabel: '很少',
-        detail: '近 1 小时手机使用很少，屏幕刺激对今晚影响较低。',
+        detail: '最近 2 小时手机使用很少，屏幕刺激对今晚影响较低。',
         score: 14,
       );
     }
-    if (minutes <= 25) {
+    if (minutes <= 50) {
       return const _ProbeGrade(
         label: '适中',
         valueLabel: '适中',
-        detail: '手机使用还算克制，再往下收一收会更稳一点。',
+        detail: '最近 2 小时手机使用还算克制，再往下收一收会更稳一点。',
         score: 34,
       );
     }
-    if (minutes <= 45) {
+    if (minutes <= 90) {
       return const _ProbeGrade(
         label: '偏多',
         valueLabel: '偏多',
-        detail: '近 1 小时手机使用有点久，可能会拖慢睡意。',
+        detail: '最近 2 小时手机使用有点久，可能会拖慢睡意。',
         score: 62,
       );
     }
@@ -761,9 +761,9 @@ class AndroidUsageStatsGateway {
     await _channel.invokeMethod<void>('openPermissionSettings');
   }
 
-  Future<int> readLastHourUsageMinutes() async {
+  Future<int> readLastTwoHoursUsageMinutes() async {
     final int? minutes = await _channel.invokeMethod<int>(
-      'getLastHourUsageMinutes',
+      'getLastTwoHoursUsageMinutes',
     );
     return minutes ?? 0;
   }
