@@ -128,13 +128,15 @@ class ProfileDataCarousel extends StatefulWidget {
 }
 
 class _ProfileDataCarouselState extends State<ProfileDataCarousel> {
+  static const double _carouselViewportFraction = 0.955;
+
   late final PageController _controller;
   int _currentPage = 0;
 
   @override
   void initState() {
     super.initState();
-    _controller = PageController(viewportFraction: 1);
+    _controller = PageController(viewportFraction: _carouselViewportFraction);
   }
 
   @override
@@ -151,8 +153,9 @@ class _ProfileDataCarouselState extends State<ProfileDataCarousel> {
           key: const ValueKey<String>('profile-data-carousel'),
           aspectRatio: 1.62,
           child: PageView(
+            clipBehavior: Clip.none,
             controller: _controller,
-            padEnds: false,
+            padEnds: true,
             onPageChanged: (int index) {
               setState(() {
                 _currentPage = index;

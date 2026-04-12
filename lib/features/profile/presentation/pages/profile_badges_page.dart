@@ -64,10 +64,10 @@ class ProfileBadgesPage extends StatelessWidget {
               subtitleStyle: textTheme.bodyMedium?.copyWith(
                 color: AppColors.textSecondary,
               ),
-              trailing: const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.textHint,
-              ),
+              trailingIcon: Icons.east_rounded,
+              trailingForegroundColor: unlocked
+                  ? palette.primaryDeep
+                  : AppColors.textPrimary,
             );
           },
         ),

@@ -752,7 +752,19 @@ void main() {
       final double settingsWidth = tester
           .getSize(find.byKey(const ValueKey<String>('profile-settings-card')))
           .width;
-      expect((carouselWidth - settingsWidth).abs(), lessThan(2));
+      final Finder firstCarouselCard = find.ancestor(
+        of: find.text('睡眠质量(分)'),
+        matching: find.byType(AppCard),
+      );
+      final double firstCardWidth = tester.getSize(firstCarouselCard).width;
+      final PageView pageView = tester.widget<PageView>(find.byType(PageView));
+      final PageController pageController = pageView.controller!;
+
+      expect((firstCardWidth - settingsWidth).abs(), lessThan(2));
+      expect(carouselWidth - firstCardWidth, greaterThan(10));
+      expect(pageView.clipBehavior, Clip.none);
+      expect(pageView.padEnds, isTrue);
+      expect(pageController.viewportFraction, lessThan(1));
       expect(
         find.byKey(const ValueKey<String>('profile-carousel-indicators')),
         findsOneWidget,
@@ -842,6 +854,13 @@ void main() {
     final AppCard earlyBirdCard = tester.widget<AppCard>(earlyBirdCardFinder);
     expect(earlyBirdCard.borderRadius, BorderRadius.circular(AppRadius.lg));
     expect(earlyBirdCard.padding, const EdgeInsets.all(16));
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('profile-badge-strip-card-0')),
+        matching: find.byIcon(Icons.east_rounded),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('早睡先锋'));
     await tester.pumpAndSettle();
