@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/home_metric_card.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
@@ -9,10 +10,8 @@ import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 class ProfileFaqPage extends StatelessWidget {
   const ProfileFaqPage({super.key});
 
-  void _showComingSoon(BuildContext context) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('FAQ 正在整理中')));
+  Future<void> _showComingSoon(BuildContext context) {
+    return notifyPassiveToast(context, message: 'FAQ 正在整理中');
   }
 
   @override
@@ -81,6 +80,7 @@ class ProfileFaqPage extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.lg),
             AppCard(
+              onTap: () => _showComingSoon(context),
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(20),
               padding: const EdgeInsets.all(AppSpacing.md),

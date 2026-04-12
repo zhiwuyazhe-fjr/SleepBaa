@@ -745,6 +745,14 @@ void main() {
         greaterThan(190),
       );
       expect(
+        tester
+            .getSize(
+              find.byKey(const ValueKey<String>('profile-data-carousel')),
+            )
+            .width,
+        greaterThan(350),
+      );
+      expect(
         find.byKey(const ValueKey<String>('profile-carousel-indicators')),
         findsOneWidget,
       );
@@ -844,11 +852,38 @@ void main() {
     expect(find.text('常见问题速览'), findsOneWidget);
     expect(find.text('常见问题内容将继续补充'), findsOneWidget);
 
+    await tester.tap(find.text('常见问题速览'));
+    await tester.pump();
+
+    expect(find.text('FAQ 正在整理中'), findsOneWidget);
+
     await tester.ensureVisible(find.text('常见问题内容将继续补充'));
     await tester.tap(find.text('常见问题内容将继续补充'));
     await tester.pump();
 
     expect(find.text('FAQ 正在整理中'), findsOneWidget);
+  });
+
+  testWidgets('profile report placeholder uses passive toast feedback', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    await tester.ensureVisible(find.text('实验报告'));
+    await tester.tap(find.text('实验报告'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('本页将逐步补全'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('报告页待补全'));
+    await tester.tap(find.text('报告页待补全'));
+    await tester.pump();
+
+    expect(find.text('睡眠报告 正在整理中'), findsOneWidget);
   });
 
   testWidgets('post sleep page hides shell navigation', (

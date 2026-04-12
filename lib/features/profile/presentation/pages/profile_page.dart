@@ -36,49 +36,66 @@ class ProfilePage extends StatelessWidget {
           backgroundColor: AppColors.background,
           body: SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl,
-                AppSpacing.sm,
-                AppSpacing.xl,
-                128,
-              ),
+              padding: const EdgeInsets.fromLTRB(0, AppSpacing.sm, 0, 128),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  ProfileHeaderSection(
-                    profile: profile,
-                    onAvatarTap: () => pickAndSaveAvatar(context),
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                  const ProfileQuoteCard(quote: '每天都是成长和积极改变的新机会。'),
-                  const SizedBox(height: AppSpacing.xl),
-                  ProfileDataCarousel(
-                    sessions: weekly,
-                    heatmapValues: _buildMonthPreviewIntensity(
-                      month: currentMonth,
-                      sessions: monthSessions,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.xl,
                     ),
-                    onHeatmapTap: () => context.push(AppRoutes.profileCalendar),
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                  ProfileInsightBlock(
-                    report: report,
-                    badges: ProfileBadges.all,
-                    onReportTap: () => context.push(AppRoutes.profileReport),
-                    onDreamTap: () => context.push(AppRoutes.dreamJournal),
-                    onThoughtTap: () =>
-                        context.push(AppRoutes.profileThoughtVault),
-                    onBadgeOverviewTap: () =>
-                        context.push(AppRoutes.profileBadges),
-                    onBadgeTap: (ProfileBadgeMeta badge) => context.push(
-                      AppRoutes.profileBadgeDetailPath(badge.id),
+                    child: ProfileHeaderSection(
+                      profile: profile,
+                      onAvatarTap: () => pickAndSaveAvatar(context),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xl),
-                  ProfileSettingsCard(
-                    onSettingsTap: () =>
-                        context.push(AppRoutes.profileSettings),
-                    onFaqTap: () => context.push(AppRoutes.profileFaq),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+                    child: ProfileQuoteCard(quote: '每天都是成长和积极改变的新机会。'),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  Padding(
+                    padding: const EdgeInsets.only(left: AppSpacing.xl),
+                    child: ProfileDataCarousel(
+                      sessions: weekly,
+                      heatmapValues: _buildMonthPreviewIntensity(
+                        month: currentMonth,
+                        sessions: monthSessions,
+                      ),
+                      onHeatmapTap: () =>
+                          context.push(AppRoutes.profileCalendar),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.xl,
+                    ),
+                    child: ProfileInsightBlock(
+                      report: report,
+                      badges: ProfileBadges.all,
+                      onReportTap: () => context.push(AppRoutes.profileReport),
+                      onDreamTap: () => context.push(AppRoutes.dreamJournal),
+                      onThoughtTap: () =>
+                          context.push(AppRoutes.profileThoughtVault),
+                      onBadgeOverviewTap: () =>
+                          context.push(AppRoutes.profileBadges),
+                      onBadgeTap: (ProfileBadgeMeta badge) => context.push(
+                        AppRoutes.profileBadgeDetailPath(badge.id),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.xl,
+                    ),
+                    child: ProfileSettingsCard(
+                      onSettingsTap: () =>
+                          context.push(AppRoutes.profileSettings),
+                      onFaqTap: () => context.push(AppRoutes.profileFaq),
+                    ),
                   ),
                 ],
               ),

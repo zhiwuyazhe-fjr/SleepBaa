@@ -44,7 +44,7 @@ class _BadgeDetailContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         AppCard(
-          borderRadius: AppRadius.card,
+          borderRadius: AppRadius.cardLarge,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[

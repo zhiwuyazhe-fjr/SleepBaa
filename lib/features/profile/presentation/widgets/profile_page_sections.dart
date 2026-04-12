@@ -80,7 +80,7 @@ class ProfileQuoteCard extends StatelessWidget {
     final NightMoodPalette palette = context.nightMoodPalette;
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.lg),
-      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderRadius: BorderRadius.circular(AppRadius.lg),
       color: palette.primarySoft,
       child: Row(
         children: <Widget>[
@@ -151,6 +151,7 @@ class _ProfileDataCarouselState extends State<ProfileDataCarousel> {
           key: const ValueKey<String>('profile-data-carousel'),
           aspectRatio: 1.62,
           child: PageView(
+            clipBehavior: Clip.none,
             controller: _controller,
             padEnds: false,
             onPageChanged: (int index) {
@@ -614,7 +615,7 @@ class _ReportInsightCard extends StatelessWidget {
             '实验报告',
             style: Theme.of(
               context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
@@ -683,9 +684,11 @@ class _MiniInsightCard extends StatelessWidget {
               children: <Widget>[
                 Text(
                   title,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: AppSpacing.xxs),
                 Text(
@@ -721,7 +724,13 @@ class _BadgePreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      borderRadius: BorderRadius.circular(AppRadius.md),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.sm,
+      ),
+      borderRadius: BorderRadius.circular(AppRadius.lg),
       onTap: onOverviewTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -749,7 +758,7 @@ class _BadgePreviewCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
           Row(
             children: <Widget>[
               for (int index = 0; index < badges.length; index++) ...<Widget>[
@@ -785,12 +794,12 @@ class _BadgePreviewItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.sm),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
           child: Column(
             children: <Widget>[
               Container(
-                width: 54,
-                height: 54,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: badge.unlocked

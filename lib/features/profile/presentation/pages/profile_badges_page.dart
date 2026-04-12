@@ -5,6 +5,7 @@ import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/features/profile/data/profile_badges.dart';
 
 class ProfileBadgesPage extends StatelessWidget {
@@ -25,72 +26,64 @@ class ProfileBadgesPage extends StatelessWidget {
           separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
           itemBuilder: (BuildContext context, int index) {
             final ProfileBadgeMeta badge = ProfileBadges.all[index];
-            return Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: AppRadius.card,
-                onTap: () =>
-                    context.push(AppRoutes.profileBadgeDetailPath(badge.id)),
-                child: Ink(
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: AppRadius.card,
-                    boxShadow: AppColors.cardShadow,
+            return AppCard(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              borderRadius: AppRadius.cardLarge,
+              border: Border.all(color: AppColors.divider),
+              boxShadow: const <BoxShadow>[],
+              onTap: () =>
+                  context.push(AppRoutes.profileBadgeDetailPath(badge.id)),
+              child: Row(
+                children: <Widget>[
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: badge.unlocked
+                          ? palette.primaryHighlight
+                          : AppColors.surfaceSoft,
+                      border: Border.all(
+                        color: badge.unlocked
+                            ? palette.primarySoft
+                            : AppColors.surfaceBorder,
+                        width: 2,
+                      ),
+                    ),
+                    child: Icon(
+                      badge.icon,
+                      color: badge.unlocked
+                          ? palette.primaryDeep
+                          : AppColors.textHint,
+                    ),
                   ),
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  child: Row(
-                    children: <Widget>[
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: badge.unlocked
-                              ? palette.primaryHighlight
-                              : AppColors.surfaceSoft,
-                          border: Border.all(
-                            color: badge.unlocked
-                                ? palette.primarySoft
-                                : AppColors.surfaceBorder,
-                            width: 2,
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          badge.title,
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                        child: Icon(
-                          badge.icon,
-                          color: badge.unlocked
-                              ? palette.primaryDeep
-                              : AppColors.textHint,
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          badge.summary,
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              badge.title,
-                              style: textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(
-                              badge.summary,
-                              style: textTheme.bodyMedium?.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        color: AppColors.textHint,
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+                  const SizedBox(width: AppSpacing.md),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.textHint,
+                  ),
+                ],
               ),
             );
           },
