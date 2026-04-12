@@ -679,7 +679,7 @@ void main() {
     expect(find.byKey(DormStatusPage.timelineKey), findsOneWidget);
   });
 
-  testWidgets('profile page shows a full-width month preview grid', (
+  testWidgets('profile page shows redesigned modules', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -691,14 +691,40 @@ void main() {
       clock: _dayClock,
     );
 
-    expect(find.byKey(ProfilePage.monthPreviewGridKey), findsOneWidget);
-    expect(
-      tester.getSize(find.byKey(ProfilePage.monthPreviewGridKey)).width,
-      greaterThan(250),
-    );
+    expect(find.text('每天都是成长和积极改变的新机会。'), findsOneWidget);
+    expect(find.text('睡眠质量(分)'), findsOneWidget);
+    expect(find.text('实验报告'), findsOneWidget);
+    expect(find.text('梦记'), findsOneWidget);
+    expect(find.text('事记仓库'), findsOneWidget);
+    expect(find.text('我的勋章'), findsOneWidget);
+    expect(find.text('设置'), findsOneWidget);
+    expect(find.text('常见问题'), findsOneWidget);
   });
 
-  testWidgets('profile dream journal entry opens dream journal page', (
+  testWidgets('profile carousel reveals duration and heatmap cards', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    await tester.drag(find.text('睡眠质量(分)'), const Offset(-280, 0));
+    await tester.pumpAndSettle();
+
+    expect(find.text('睡眠时长(小时)'), findsOneWidget);
+
+    await tester.drag(find.text('睡眠时长(小时)'), const Offset(-280, 0));
+    await tester.pumpAndSettle();
+
+    expect(find.text('本月打卡热力'), findsOneWidget);
+  });
+
+  testWidgets('profile dream card opens dream journal page', (
     WidgetTester tester,
   ) async {
     await _pumpApp(
@@ -707,11 +733,53 @@ void main() {
       clock: _dayClock,
     );
 
-    await tester.ensureVisible(find.text('梦境记录'));
-    await tester.tap(find.text('梦境记录'));
+    await tester.ensureVisible(find.text('梦记'));
+    await tester.tap(find.text('梦记'));
     await tester.pumpAndSettle();
 
     expect(find.byType(DreamJournalPage), findsOneWidget);
+  });
+
+  testWidgets('profile heatmap card opens calendar page', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    await tester.drag(find.text('睡眠质量(分)'), const Offset(-560, 0));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('本月打卡热力'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CalendarCheckinPage), findsOneWidget);
+  });
+
+  testWidgets('profile badge card opens overview and detail pages', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    await tester.ensureVisible(find.text('我的勋章'));
+    await tester.tap(find.text('我的勋章'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('勋章图鉴'), findsOneWidget);
+
+    await tester.tap(find.text('早睡先锋'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('勋章详情'), findsOneWidget);
   });
 
   testWidgets('post sleep page hides shell navigation', (
@@ -833,7 +901,8 @@ void main() {
       clock: _dayClock,
     );
 
-    await tester.tap(find.text('查看全部'));
+    await tester.ensureVisible(find.text('查看全部').first);
+    await tester.tap(find.text('查看全部').first);
     await tester.pumpAndSettle();
 
     expect(find.byType(MicroInterventionTaskPage), findsOneWidget);

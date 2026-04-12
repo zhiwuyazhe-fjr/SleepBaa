@@ -19,7 +19,10 @@ import 'package:sleep_dorm_app/features/logs/presentation/pages/night_awakening_
 import 'package:sleep_dorm_app/features/night_mood/presentation/pages/night_welcome_gate_page.dart';
 import 'package:sleep_dorm_app/features/notifications/presentation/pages/notifications_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/calendar_checkin_page.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_badge_detail_page.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_badges_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_edit_page.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_faq_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/settings_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/sleep_report_page.dart';
@@ -49,12 +52,18 @@ abstract final class AppRoutes {
   static const String profileCalendar = '/profile/calendar';
   static const String profileSettings = '/profile/settings';
   static const String profileEdit = '/profile/settings/edit';
+  static const String profileFaq = '/profile/faq';
+  static const String profileBadges = '/profile/badges';
+  static const String profileBadgeDetail = '/profile/badges/:badgeId';
   static const String profileThoughtVault = '/profile/thought_vault';
   static const String profileThoughtDetail = '/profile/thought_detail';
   static const String notifications = '/notifications';
   static const String assistant = '/assistant';
   static const String assistantHistory = '/assistant/history';
   static const String authPhone = '/auth/phone';
+
+  static String profileBadgeDetailPath(String badgeId) =>
+      '$profileBadges/$badgeId';
 }
 
 GoRouter createRouter({
@@ -191,6 +200,23 @@ GoRouter createRouter({
         path: AppRoutes.profileEdit,
         builder: (BuildContext context, GoRouterState state) =>
             const ProfileEditPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.profileFaq,
+        builder: (BuildContext context, GoRouterState state) =>
+            const ProfileFaqPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.profileBadges,
+        builder: (BuildContext context, GoRouterState state) =>
+            const ProfileBadgesPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.profileBadgeDetail,
+        builder: (BuildContext context, GoRouterState state) {
+          final String badgeId = state.pathParameters['badgeId']!;
+          return ProfileBadgeDetailPage(badgeId: badgeId);
+        },
       ),
       GoRoute(
         path: AppRoutes.profileThoughtVault,
