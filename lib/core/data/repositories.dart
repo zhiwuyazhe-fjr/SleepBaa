@@ -38,6 +38,11 @@ abstract interface class AuthRepository implements Listenable {
     String? equippedBadgeId,
     bool clearEquippedBadge = false,
   });
+  Future<void> updateDormBadgeVisibility({required bool showDormPulseBadge});
+  Future<void> updateDormBadgeSelection({
+    String? selectedDormBadgeId,
+    bool clearSelectedDormBadgeId = false,
+  });
   Future<void> updateAvatar({
     required String? avatarPath,
     required Uint8List? avatarBytes,

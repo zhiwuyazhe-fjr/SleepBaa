@@ -82,6 +82,24 @@ class ProfileFacade extends ChangeNotifier {
     _syncDormProfileIfNeeded();
   }
 
+  Future<void> setDormPulseBadgeVisibility(bool visible) async {
+    await _authRepository.updateDormBadgeVisibility(
+      showDormPulseBadge: visible,
+    );
+    _syncDormProfileIfNeeded();
+  }
+
+  Future<void> saveDormBadgeSelection(String? badgeId) async {
+    final String? normalizedBadgeId = badgeId?.trim().isEmpty == true
+        ? null
+        : badgeId?.trim();
+    await _authRepository.updateDormBadgeSelection(
+      selectedDormBadgeId: normalizedBadgeId,
+      clearSelectedDormBadgeId: normalizedBadgeId == null,
+    );
+    _syncDormProfileIfNeeded();
+  }
+
   void _syncDormProfileIfNeeded() {
     if (_dormRepository case final InMemoryDormRepository dormRepository) {
       dormRepository.syncCurrentUserProfile(_authRepository.currentUser);
@@ -620,7 +638,7 @@ class AssistantFacade extends ChangeNotifier {
           status: AssistantMessageStatus.error,
           sourceMode: AssistantReplySourceMode.error,
           errorMessage: error.toString(),
-          );
+        );
       }
     }
   }
@@ -722,7 +740,9 @@ class AssistantFacade extends ChangeNotifier {
     final List<AssistantMessage> existingMessages = _assistantRepository
         .messagesForThread(threadId);
     final String nextMessageId = assistantMessageId ?? defaultMessageId;
-    if (existingMessages.any((AssistantMessage item) => item.id == nextMessageId)) {
+    if (existingMessages.any(
+      (AssistantMessage item) => item.id == nextMessageId,
+    )) {
       await _assistantRepository.updateAssistantMessage(
         threadId: threadId,
         messageId: nextMessageId,

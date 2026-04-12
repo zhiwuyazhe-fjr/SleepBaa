@@ -40,6 +40,33 @@ void main() {
   });
 
   test(
+    'auth repository persists dorm pulse badge visibility locally',
+    () async {
+      final InMemoryAuthRepository repository = InMemoryAuthRepository();
+
+      expect(repository.currentUser.showDormPulseBadge, isTrue);
+
+      await repository.updateDormBadgeVisibility(showDormPulseBadge: false);
+
+      expect(repository.currentUser.showDormPulseBadge, isFalse);
+    },
+  );
+
+  test('auth repository persists selected dorm badge locally', () async {
+    final InMemoryAuthRepository repository = InMemoryAuthRepository();
+
+    await repository.updateDormBadgeSelection(
+      selectedDormBadgeId: 'no-trouble-room',
+    );
+
+    expect(repository.currentUser.selectedDormBadgeId, 'no-trouble-room');
+
+    await repository.updateDormBadgeSelection(clearSelectedDormBadgeId: true);
+
+    expect(repository.currentUser.selectedDormBadgeId, isNull);
+  });
+
+  test(
     'auth repository supports password login after phone registration',
     () async {
       final InMemoryAuthRepository repository = InMemoryAuthRepository();
@@ -240,46 +267,62 @@ void main() {
     },
   );
 
-  test('dorm rules create a pending proposal before all roommates agree', () async {
-    final InMemoryDormRepository repository = InMemoryDormRepository(
-      currentUserId: 'host-user',
-      initialDorm: buildDefaultDorm('host-user').copyWith(
-        members: <DormMember>[
-          DormMember(
-            uid: 'host-user',
-            name: 'Host',
-            status: DormMemberStatus.quiet,
-            sleepModeActive: false,
-            lastActiveAt: DateTime(2026, 4, 5, 22),
-            note: 'Ready to sleep',
-          ),
-          DormMember(
-            uid: 'roommate-a',
-            name: 'Roommate A',
-            status: DormMemberStatus.quiet,
-            sleepModeActive: false,
-            lastActiveAt: DateTime(2026, 4, 5, 21, 50),
-            note: 'Reading',
-          ),
-        ],
-      ),
-    );
+  test('default dorm exposes the latest earned dorm badge', () {
+    final Dorm dorm = buildDefaultDorm('tester');
 
-    await repository.saveRules(
-      repository.currentDorm.rulesSettings.copyWith(
-        quietHours: '22:30 - 07:00',
-        routineTags: const <String>['考试周', '夜猫子'],
-      ),
-    );
-
-    final DormPendingRuleProposal? proposal =
-        repository.currentDorm.pendingRuleProposal;
-    expect(proposal, isNotNull);
-    expect(proposal!.proposerUid, 'host-user');
-    expect(proposal.approvedUids, contains('host-user'));
-    expect(proposal.pendingReviewerUids(), contains('roommate-a'));
-    expect(repository.currentDorm.rulesSettings.quietHours, isNot('22:30 - 07:00'));
+    expect(dorm.earnedDormBadgeIds, <String>[
+      'no-trouble-room',
+      'no-wake-room',
+    ]);
+    expect(dorm.latestEarnedDormBadgeId, 'no-wake-room');
   });
+
+  test(
+    'dorm rules create a pending proposal before all roommates agree',
+    () async {
+      final InMemoryDormRepository repository = InMemoryDormRepository(
+        currentUserId: 'host-user',
+        initialDorm: buildDefaultDorm('host-user').copyWith(
+          members: <DormMember>[
+            DormMember(
+              uid: 'host-user',
+              name: 'Host',
+              status: DormMemberStatus.quiet,
+              sleepModeActive: false,
+              lastActiveAt: DateTime(2026, 4, 5, 22),
+              note: 'Ready to sleep',
+            ),
+            DormMember(
+              uid: 'roommate-a',
+              name: 'Roommate A',
+              status: DormMemberStatus.quiet,
+              sleepModeActive: false,
+              lastActiveAt: DateTime(2026, 4, 5, 21, 50),
+              note: 'Reading',
+            ),
+          ],
+        ),
+      );
+
+      await repository.saveRules(
+        repository.currentDorm.rulesSettings.copyWith(
+          quietHours: '22:30 - 07:00',
+          routineTags: const <String>['考试周', '夜猫子'],
+        ),
+      );
+
+      final DormPendingRuleProposal? proposal =
+          repository.currentDorm.pendingRuleProposal;
+      expect(proposal, isNotNull);
+      expect(proposal!.proposerUid, 'host-user');
+      expect(proposal.approvedUids, contains('host-user'));
+      expect(proposal.pendingReviewerUids(), contains('roommate-a'));
+      expect(
+        repository.currentDorm.rulesSettings.quietHours,
+        isNot('22:30 - 07:00'),
+      );
+    },
+  );
 
   test('rejecting a pending dorm rule keeps the existing rules', () async {
     final Dorm initialDorm = buildDefaultDorm('host-user').copyWith(
@@ -329,23 +372,26 @@ void main() {
     );
   });
 
-  test('dorm gentle reminder switches between anonymous and nickname modes', () async {
-    final InMemoryDormRepository repository = InMemoryDormRepository(
-      currentUserId: 'anon-paul',
-    );
+  test(
+    'dorm gentle reminder switches between anonymous and nickname modes',
+    () async {
+      final InMemoryDormRepository repository = InMemoryDormRepository(
+        currentUserId: 'anon-paul',
+      );
 
-    await repository.sendGentleReminder(
-      targetUid: 'roommate-a',
-      anonymous: true,
-    );
-    expect(repository.currentDorm.events.first.detail, contains('您的舍友'));
+      await repository.sendGentleReminder(
+        targetUid: 'roommate-a',
+        anonymous: true,
+      );
+      expect(repository.currentDorm.events.first.detail, contains('您的舍友'));
 
-    await repository.sendGentleReminder(
-      targetUid: 'roommate-a',
-      anonymous: false,
-    );
-    expect(repository.currentDorm.events.first.detail, contains('Paul'));
-  });
+      await repository.sendGentleReminder(
+        targetUid: 'roommate-a',
+        anonymous: false,
+      );
+      expect(repository.currentDorm.events.first.detail, contains('Paul'));
+    },
+  );
 
   test('updating current user status marks the member as sleeping', () async {
     final InMemoryDormRepository repository = InMemoryDormRepository(

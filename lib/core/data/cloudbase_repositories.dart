@@ -288,6 +288,10 @@ Dorm _dormFromMap(Map<String, dynamic> map, String currentUserId) {
   if (_stringOf(map['id']).isEmpty) {
     return _unboundDorm();
   }
+  final List<String> earnedDormBadgeIds =
+      (map['earnedDormBadgeIds'] as List<dynamic>? ?? const <dynamic>[])
+          .map((dynamic item) => item.toString())
+          .toList(growable: false);
   return Dorm(
     id: _stringOf(map['id']),
     name: _stringOf(map['name'], '\u5bbf\u820d'),
@@ -317,6 +321,9 @@ Dorm _dormFromMap(Map<String, dynamic> map, String currentUserId) {
     invites: _mapListOf(
       map['invites'],
     ).map(_dormInviteFromMap).toList(growable: false),
+    earnedDormBadgeIds: earnedDormBadgeIds.isEmpty
+        ? const <String>['no-trouble-room', 'no-wake-room']
+        : earnedDormBadgeIds,
     pendingRuleProposal: _dormPendingRuleProposalFromMap(
       map['pendingRuleProposal'],
     ),
@@ -354,7 +361,9 @@ PendingSleepMemoBanner? _pendingSleepMemoBannerFromUserState(
   Map<String, dynamic> userState,
 ) {
   final Map<String, dynamic> sleepCapture = _mapOf(userState['sleepCapture']);
-  final Map<String, dynamic> pending = _mapOf(sleepCapture['pendingMemoBanner']);
+  final Map<String, dynamic> pending = _mapOf(
+    sleepCapture['pendingMemoBanner'],
+  );
   if (pending.isEmpty) {
     return null;
   }
@@ -424,9 +433,9 @@ class _SnapshotData {
       dreams: _mapListOf(
         root['dreamEntries'],
       ).map(ModelSerializers.dreamEntryFromMap).toList(growable: false),
-      sleepCaptureRecords: _mapListOf(root['sleepCaptureRecords'])
-          .map(ModelSerializers.sleepCaptureRecordFromMap)
-          .toList(growable: false),
+      sleepCaptureRecords: _mapListOf(
+        root['sleepCaptureRecords'],
+      ).map(ModelSerializers.sleepCaptureRecordFromMap).toList(growable: false),
       pendingSleepMemoBanner: _pendingSleepMemoBannerFromUserState(
         _mapOf(root['userState']),
       ),
@@ -693,11 +702,15 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     String? equippedBadgeId,
     bool clearEquippedBadge = false,
   }) async {
-    final UserProfile next = (await ensureAuthenticated()).copyWith(
-      earnedBadgeIds: earnedBadgeIds,
-      equippedBadgeId: equippedBadgeId,
-      clearEquippedBadge: clearEquippedBadge,
-    );
+    final UserProfile next =
+        (_currentUser.uid.isNotEmpty
+                ? _currentUser
+                : await ensureAuthenticated())
+            .copyWith(
+              earnedBadgeIds: earnedBadgeIds,
+              equippedBadgeId: equippedBadgeId,
+              clearEquippedBadge: clearEquippedBadge,
+            );
     _currentUser = next;
     notifyListeners();
     if (_appApiClient.isConfigured) {
@@ -712,7 +725,85 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           },
         );
         await _snapshotStore.refresh();
-        _syncFromSnapshot();
+        _currentUser = _currentUser.copyWith(
+          earnedBadgeIds: next.earnedBadgeIds,
+          equippedBadgeId: next.equippedBadgeId,
+          clearEquippedBadge: next.equippedBadgeId == null,
+        );
+        notifyListeners();
+      } catch (error) {
+        _lastAuthError = error.toString();
+        notifyListeners();
+        rethrow;
+      }
+    }
+  }
+
+  @override
+  Future<void> updateDormBadgeVisibility({
+    required bool showDormPulseBadge,
+  }) async {
+    final UserProfile next =
+        (_currentUser.uid.isNotEmpty
+                ? _currentUser
+                : await ensureAuthenticated())
+            .copyWith(showDormPulseBadge: showDormPulseBadge);
+    _currentUser = next;
+    notifyListeners();
+    if (_appApiClient.isConfigured) {
+      try {
+        await _appApiClient.post(
+          '/api/profile/save',
+          body: <String, dynamic>{
+            'profile': <String, dynamic>{
+              'showDormPulseBadge': next.showDormPulseBadge,
+            },
+          },
+        );
+        await _snapshotStore.refresh();
+        _currentUser = _currentUser.copyWith(
+          showDormPulseBadge: next.showDormPulseBadge,
+        );
+        notifyListeners();
+      } catch (error) {
+        _lastAuthError = error.toString();
+        notifyListeners();
+        rethrow;
+      }
+    }
+  }
+
+  @override
+  Future<void> updateDormBadgeSelection({
+    String? selectedDormBadgeId,
+    bool clearSelectedDormBadgeId = false,
+  }) async {
+    final UserProfile next =
+        (_currentUser.uid.isNotEmpty
+                ? _currentUser
+                : await ensureAuthenticated())
+            .copyWith(
+              selectedDormBadgeId: selectedDormBadgeId,
+              clearSelectedDormBadgeId: clearSelectedDormBadgeId,
+            );
+    _currentUser = next;
+    notifyListeners();
+    if (_appApiClient.isConfigured) {
+      try {
+        await _appApiClient.post(
+          '/api/profile/save',
+          body: <String, dynamic>{
+            'profile': <String, dynamic>{
+              'selectedDormBadgeId': next.selectedDormBadgeId,
+            },
+          },
+        );
+        await _snapshotStore.refresh();
+        _currentUser = _currentUser.copyWith(
+          selectedDormBadgeId: next.selectedDormBadgeId,
+          clearSelectedDormBadgeId: next.selectedDormBadgeId == null,
+        );
+        notifyListeners();
       } catch (error) {
         _lastAuthError = error.toString();
         notifyListeners();
@@ -1306,6 +1397,13 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   }
 
   void _syncFromSnapshot() {
+    if (_snapshotStore.isRefreshing || !_snapshotStore.hasPayload) {
+      return;
+    }
+    final Map<String, dynamic> root = _snapshotStore.payload['data'] is Map
+        ? Map<String, dynamic>.from(_snapshotStore.payload['data'] as Map)
+        : _snapshotStore.payload;
+    final Map<String, dynamic> rawUser = _mapOf(root['user']);
     final _SnapshotData snapshot = _SnapshotData.fromPayload(
       _snapshotStore.payload,
       _currentUser.uid,
@@ -1320,6 +1418,24 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       displayName: snapshot.user.displayName,
       tagline: snapshot.user.tagline,
       role: snapshot.user.role,
+      earnedBadgeIds: rawUser.containsKey('earnedBadgeIds')
+          ? snapshot.user.earnedBadgeIds
+          : _currentUser.earnedBadgeIds,
+      equippedBadgeId: rawUser.containsKey('equippedBadgeId')
+          ? snapshot.user.equippedBadgeId
+          : _currentUser.equippedBadgeId,
+      clearEquippedBadge:
+          rawUser.containsKey('equippedBadgeId') &&
+          snapshot.user.equippedBadgeId == null,
+      showDormPulseBadge: rawUser.containsKey('showDormPulseBadge')
+          ? snapshot.user.showDormPulseBadge
+          : _currentUser.showDormPulseBadge,
+      selectedDormBadgeId: rawUser.containsKey('selectedDormBadgeId')
+          ? snapshot.user.selectedDormBadgeId
+          : _currentUser.selectedDormBadgeId,
+      clearSelectedDormBadgeId:
+          rawUser.containsKey('selectedDormBadgeId') &&
+          snapshot.user.selectedDormBadgeId == null,
       dormId: snapshot.user.dormId,
       phoneNumber: snapshotPhone?.trim().isNotEmpty == true
           ? snapshotPhone
@@ -1807,25 +1923,25 @@ class CloudBaseSleepCaptureRepository extends ChangeNotifier
 
   @override
   List<SleepCaptureRecord> recordsByType(SleepCaptureType type) {
-    final List<SleepCaptureRecord> matches = _records
-        .where((SleepCaptureRecord item) => item.type == type)
-        .toList()
-      ..sort(
-        (SleepCaptureRecord a, SleepCaptureRecord b) =>
-            b.createdAt.compareTo(a.createdAt),
-      );
+    final List<SleepCaptureRecord> matches =
+        _records.where((SleepCaptureRecord item) => item.type == type).toList()
+          ..sort(
+            (SleepCaptureRecord a, SleepCaptureRecord b) =>
+                b.createdAt.compareTo(a.createdAt),
+          );
     return List<SleepCaptureRecord>.unmodifiable(matches);
   }
 
   @override
   List<SleepCaptureRecord> recordsForSession(String sessionId) {
-    final List<SleepCaptureRecord> matches = _records
-        .where((SleepCaptureRecord item) => item.sessionId == sessionId)
-        .toList()
-      ..sort(
-        (SleepCaptureRecord a, SleepCaptureRecord b) =>
-            b.createdAt.compareTo(a.createdAt),
-      );
+    final List<SleepCaptureRecord> matches =
+        _records
+            .where((SleepCaptureRecord item) => item.sessionId == sessionId)
+            .toList()
+          ..sort(
+            (SleepCaptureRecord a, SleepCaptureRecord b) =>
+                b.createdAt.compareTo(a.createdAt),
+          );
     return List<SleepCaptureRecord>.unmodifiable(matches);
   }
 
@@ -1846,9 +1962,10 @@ class CloudBaseSleepCaptureRepository extends ChangeNotifier
       type: type,
       sessionId: sessionId,
       createdAt: now,
-      title: title ?? _buildTitle(type: type, now: now, content: normalizedContent),
-      outline:
-          outline ?? _buildOutline(type: type, content: normalizedContent),
+      title:
+          title ??
+          _buildTitle(type: type, now: now, content: normalizedContent),
+      outline: outline ?? _buildOutline(type: type, content: normalizedContent),
       content: normalizedContent,
     );
     _upsertLocalRecord(localRecord);
@@ -2405,9 +2522,10 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
       }
     }
     final DormPendingRuleProposal nextProposal = proposal.copyWith(
-      approvedUids: <String>{...proposal.approvedUids, currentUserId}.toList(
-        growable: false,
-      ),
+      approvedUids: <String>{
+        ...proposal.approvedUids,
+        currentUserId,
+      }.toList(growable: false),
     );
     if (_isProposalFullyApproved(nextProposal)) {
       _currentDorm = _currentDorm.copyWith(

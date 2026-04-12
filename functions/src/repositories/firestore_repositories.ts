@@ -225,6 +225,8 @@ function defaultUserProfile(uid: string, dormId?: string | null): JsonMap {
     role: "宿舍睡眠优化成员",
     earnedBadgeIds: ["first-week", "early-sleeper", "sleep-master"],
     equippedBadgeId: null,
+    showDormPulseBadge: true,
+    selectedDormBadgeId: null,
     dormId: dormId ?? null,
     phoneNumber: null,
     phoneLinkedAt: null,
@@ -316,6 +318,7 @@ function defaultDormDoc(dormId: string): JsonMap {
     rulesSettings,
     rules: buildDormRules(rulesSettings),
     pendingRuleProposal: null,
+    earnedDormBadgeIds: ["no-trouble-room", "no-wake-room"],
     updatedAt: nowIso(),
   };
 }
@@ -353,6 +356,7 @@ function unboundDormContext(): ContextDorm {
     rules: [],
     invites: [],
     rulesSettings: defaultDormRulesSettings(),
+    earnedDormBadgeIds: [],
   };
 }
 
@@ -840,6 +844,7 @@ export class FirestoreRepository implements AssistantDataRepository {
       orderBy: { field: "createdAt", direction: "desc" },
       limit: 10,
     });
+    const earnedDormBadgeIds = asStringArray(dormDoc.earnedDormBadgeIds);
     return {
       id: asString(dormDoc.id, resolvedDormId),
       name: asString(
@@ -882,6 +887,10 @@ export class FirestoreRepository implements AssistantDataRepository {
       ...("rulesSettings" in dormDoc
         ? { rulesSettings: dormDoc.rulesSettings }
         : {}),
+      earnedDormBadgeIds:
+        earnedDormBadgeIds.length > 0
+          ? earnedDormBadgeIds
+          : ["no-trouble-room", "no-wake-room"],
       pendingRuleProposal:
         dormDoc.pendingRuleProposal == null
           ? null
@@ -2820,6 +2829,10 @@ export class FirestoreRepository implements AssistantDataRepository {
       displayName: asString(doc.displayName, "宿舍成员"),
       tagline: asString(doc.tagline, "AI 睡眠陪伴中"),
       role: asString(doc.role, "宿舍睡眠优化成员"),
+      earnedBadgeIds: asStringArray(doc.earnedBadgeIds),
+      equippedBadgeId: asString(doc.equippedBadgeId) || null,
+      showDormPulseBadge: asBoolean(doc.showDormPulseBadge, true),
+      selectedDormBadgeId: asString(doc.selectedDormBadgeId) || null,
       dormId: dormId || null,
       phoneNumber: asString(doc.phoneNumber) || null,
       phoneLinkedAt: asString(doc.phoneLinkedAt) || null,

@@ -32,6 +32,8 @@ export interface ContextUserProfile {
   role: string;
   earnedBadgeIds?: string[];
   equippedBadgeId?: string | null;
+  showDormPulseBadge?: boolean;
+  selectedDormBadgeId?: string | null;
   dormId?: string | null;
   phoneNumber?: string | null;
   phoneLinkedAt?: string | null;
@@ -104,6 +106,7 @@ export interface ContextDorm {
   invites?: Record<string, unknown>[];
   rulesSettings?: Record<string, unknown>;
   pendingRuleProposal?: ContextDormPendingRuleProposal | null;
+  earnedDormBadgeIds?: string[];
 }
 
 export interface ContextSleepSessionSummary {

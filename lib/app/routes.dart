@@ -20,6 +20,7 @@ import 'package:sleep_dorm_app/features/night_mood/presentation/pages/night_welc
 import 'package:sleep_dorm_app/features/notifications/presentation/pages/notifications_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/calendar_checkin_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/honor_badges_page.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/personal_badges_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_edit_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/settings_page.dart';
@@ -45,6 +46,7 @@ abstract final class AppRoutes {
   static const String dormRules = '/dorm/rules';
   static const String dormInvite = '/dorm/invite';
   static const String dormStatus = '/dorm/status';
+  static const String dormBadges = '/dorm/badges';
   static const String profile = '/profile';
   static const String profileBadges = '/profile/badges';
   static const String profileReport = '/profile/report';
@@ -161,11 +163,9 @@ GoRouter createRouter({
       ),
       GoRoute(
         path: AppRoutes.dormRules,
-        builder: (BuildContext context, GoRouterState state) =>
-            DormRulesPage(
-              showReviewOverlayOnOpen:
-                  state.uri.queryParameters['review'] == '1',
-            ),
+        builder: (BuildContext context, GoRouterState state) => DormRulesPage(
+          showReviewOverlayOnOpen: state.uri.queryParameters['review'] == '1',
+        ),
       ),
       GoRoute(
         path: AppRoutes.dormInvite,
@@ -178,9 +178,14 @@ GoRouter createRouter({
             const DormStatusPage(),
       ),
       GoRoute(
-        path: AppRoutes.profileBadges,
+        path: AppRoutes.dormBadges,
         builder: (BuildContext context, GoRouterState state) =>
             const HonorBadgesPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.profileBadges,
+        builder: (BuildContext context, GoRouterState state) =>
+            const PersonalBadgesPage(),
       ),
       GoRoute(
         path: AppRoutes.profileReport,

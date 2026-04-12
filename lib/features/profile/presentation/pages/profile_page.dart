@@ -25,12 +25,12 @@ class ProfilePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     return ListenableBuilder(
-        listenable: Listenable.merge(<Listenable>[
-          services.authRepository,
-          services.settingsRepository,
-          services.sleepSessionRepository,
-          services.sleepCaptureRepository,
-        ]),
+      listenable: Listenable.merge(<Listenable>[
+        services.authRepository,
+        services.settingsRepository,
+        services.sleepSessionRepository,
+        services.sleepCaptureRepository,
+      ]),
       builder: (BuildContext context, Widget? child) {
         final NightMoodPalette palette = context.nightMoodPalette;
         final UserProfile profile = services.authRepository.currentUser;
@@ -279,7 +279,9 @@ class ProfilePage extends StatelessWidget {
                     children: <Widget>[
                       IconBadge(
                         icon: Icons.inventory_2_rounded,
-                        backgroundColor: palette.primaryHighlight.withAlpha(180),
+                        backgroundColor: palette.primaryHighlight.withAlpha(
+                          180,
+                        ),
                         iconColor: palette.primaryDeep,
                         borderRadius: BorderRadius.circular(AppRadius.xl),
                       ),
@@ -311,7 +313,10 @@ class ProfilePage extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xl),
                 Row(
                   children: <Widget>[
-                    Text('荣誉勋章', style: Theme.of(context).textTheme.titleLarge),
+                    Text(
+                      '专属荣誉勋章',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                     const Spacer(),
                     TextButton(
                       onPressed: () => context.push(AppRoutes.profileBadges),
@@ -355,25 +360,29 @@ class ProfilePage extends StatelessWidget {
                 Wrap(
                   spacing: AppSpacing.sm,
                   runSpacing: AppSpacing.md,
-                  children: kHonorBadgeCatalog.map((HonorBadge badge) {
-                    final bool unlocked = profile.hasEarnedBadge(badge.id);
-                    final bool selected = profile.displayBadgeId == badge.id;
-                    return SizedBox(
-                      width: 98,
-                      child: _BadgeTile(
-                        badge: badge,
-                        unlocked: unlocked,
-                        selected: selected,
-                        onTap: !unlocked
-                            ? null
-                            : () async {
-                                await services.profileFacade.saveEquippedBadge(
-                                  selected ? null : badge.id,
-                                );
-                              },
-                      ),
-                    );
-                  }).toList(growable: false),
+                  children: kHonorBadgeCatalog
+                      .map((HonorBadge badge) {
+                        final bool unlocked = profile.hasEarnedBadge(badge.id);
+                        final bool selected =
+                            profile.displayBadgeId == badge.id;
+                        return SizedBox(
+                          width: 98,
+                          child: _BadgeTile(
+                            badge: badge,
+                            unlocked: unlocked,
+                            selected: selected,
+                            onTap: !unlocked
+                                ? null
+                                : () async {
+                                    await services.profileFacade
+                                        .saveEquippedBadge(
+                                          selected ? null : badge.id,
+                                        );
+                                  },
+                          ),
+                        );
+                      })
+                      .toList(growable: false),
                 ),
               ],
             ),
@@ -603,9 +612,7 @@ class _BadgeTile extends StatelessWidget {
                     : '未获得',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: selected
-                      ? palette.primary
-                      : AppColors.textSecondary,
+                  color: selected ? palette.primary : AppColors.textSecondary,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                 ),
               ),

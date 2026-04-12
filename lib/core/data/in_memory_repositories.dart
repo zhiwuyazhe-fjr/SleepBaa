@@ -14,12 +14,9 @@ UserProfile buildDefaultUserProfile() {
     displayName: 'Paul',
     tagline: 'Dorm Sleep Explorer',
     role: '宿舍睡眠优化实验成员',
-    earnedBadgeIds: <String>[
-      'first-week',
-      'early-sleeper',
-      'sleep-master',
-    ],
+    earnedBadgeIds: <String>['first-week', 'early-sleeper', 'sleep-master'],
     dormId: 'dorm-204',
+    showDormPulseBadge: true,
     phoneNumber: null,
     phoneLinkedAt: null,
     avatarFallbackSeed: 'Paul',
@@ -127,6 +124,7 @@ Dorm buildDefaultDorm(String currentUserId) {
       ),
     ],
     invites: const <DormInvite>[],
+    earnedDormBadgeIds: <String>['no-trouble-room', 'no-wake-room'],
   );
 }
 
@@ -252,6 +250,28 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
       earnedBadgeIds: earnedBadgeIds,
       equippedBadgeId: equippedBadgeId,
       clearEquippedBadge: clearEquippedBadge,
+    );
+    notifyListeners();
+  }
+
+  @override
+  Future<void> updateDormBadgeVisibility({
+    required bool showDormPulseBadge,
+  }) async {
+    _currentUser = _currentUser.copyWith(
+      showDormPulseBadge: showDormPulseBadge,
+    );
+    notifyListeners();
+  }
+
+  @override
+  Future<void> updateDormBadgeSelection({
+    String? selectedDormBadgeId,
+    bool clearSelectedDormBadgeId = false,
+  }) async {
+    _currentUser = _currentUser.copyWith(
+      selectedDormBadgeId: selectedDormBadgeId,
+      clearSelectedDormBadgeId: clearSelectedDormBadgeId,
     );
     notifyListeners();
   }
@@ -759,25 +779,25 @@ class InMemorySleepCaptureRepository extends ChangeNotifier
 
   @override
   List<SleepCaptureRecord> recordsByType(SleepCaptureType type) {
-    final List<SleepCaptureRecord> matches = _records
-        .where((SleepCaptureRecord item) => item.type == type)
-        .toList()
-      ..sort(
-        (SleepCaptureRecord a, SleepCaptureRecord b) =>
-            b.createdAt.compareTo(a.createdAt),
-      );
+    final List<SleepCaptureRecord> matches =
+        _records.where((SleepCaptureRecord item) => item.type == type).toList()
+          ..sort(
+            (SleepCaptureRecord a, SleepCaptureRecord b) =>
+                b.createdAt.compareTo(a.createdAt),
+          );
     return List<SleepCaptureRecord>.unmodifiable(matches);
   }
 
   @override
   List<SleepCaptureRecord> recordsForSession(String sessionId) {
-    final List<SleepCaptureRecord> matches = _records
-        .where((SleepCaptureRecord item) => item.sessionId == sessionId)
-        .toList()
-      ..sort(
-        (SleepCaptureRecord a, SleepCaptureRecord b) =>
-            b.createdAt.compareTo(a.createdAt),
-      );
+    final List<SleepCaptureRecord> matches =
+        _records
+            .where((SleepCaptureRecord item) => item.sessionId == sessionId)
+            .toList()
+          ..sort(
+            (SleepCaptureRecord a, SleepCaptureRecord b) =>
+                b.createdAt.compareTo(a.createdAt),
+          );
     return List<SleepCaptureRecord>.unmodifiable(matches);
   }
 
@@ -798,7 +818,9 @@ class InMemorySleepCaptureRepository extends ChangeNotifier
       type: type,
       sessionId: sessionId,
       createdAt: now,
-      title: title ?? _buildTitle(type: type, now: now, content: normalizedContent),
+      title:
+          title ??
+          _buildTitle(type: type, now: now, content: normalizedContent),
       outline: outline ?? _buildOutline(type: type, content: normalizedContent),
       content: normalizedContent,
     );
@@ -882,7 +904,9 @@ class InMemorySleepCaptureRepository extends ChangeNotifier
         .where((String item) => item.isNotEmpty)
         .toList();
     if (fragments.isEmpty) {
-      return type == SleepCaptureType.dream ? '记录了一段尚待补充的梦境片段。' : '记录了一段待整理的夜间事记。';
+      return type == SleepCaptureType.dream
+          ? '记录了一段尚待补充的梦境片段。'
+          : '记录了一段待整理的夜间事记。';
     }
     final String lead = fragments.first;
     if (type == SleepCaptureType.dream) {
@@ -1198,9 +1222,10 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
     }
     final DateTime now = DateTime.now();
     final DormPendingRuleProposal nextProposal = proposal.copyWith(
-      approvedUids: <String>{...proposal.approvedUids, _currentUserId}.toList(
-        growable: false,
-      ),
+      approvedUids: <String>{
+        ...proposal.approvedUids,
+        _currentUserId,
+      }.toList(growable: false),
     );
     if (_isProposalFullyApproved(nextProposal)) {
       _currentDorm = _currentDorm.copyWith(

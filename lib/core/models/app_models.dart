@@ -70,6 +70,8 @@ class UserProfile {
     required this.role,
     this.earnedBadgeIds = const <String>[],
     this.equippedBadgeId,
+    this.showDormPulseBadge = true,
+    this.selectedDormBadgeId,
     this.dormId,
     this.phoneNumber,
     this.phoneLinkedAt,
@@ -86,6 +88,8 @@ class UserProfile {
   final String role;
   final List<String> earnedBadgeIds;
   final String? equippedBadgeId;
+  final bool showDormPulseBadge;
+  final String? selectedDormBadgeId;
   final String? dormId;
   final String? phoneNumber;
   final DateTime? phoneLinkedAt;
@@ -110,6 +114,23 @@ class UserProfile {
 
   bool hasEarnedBadge(String badgeId) => earnedBadgeIds.contains(badgeId);
 
+  String? resolveDormBadgeId(Iterable<String> earnedDormBadgeIds) {
+    final String? normalizedSelected = selectedDormBadgeId?.trim();
+    if (normalizedSelected != null &&
+        normalizedSelected.isNotEmpty &&
+        earnedDormBadgeIds.contains(normalizedSelected)) {
+      return normalizedSelected;
+    }
+    if (earnedDormBadgeIds is List<String>) {
+      return earnedDormBadgeIds.isEmpty ? null : earnedDormBadgeIds.last;
+    }
+    String? latestBadgeId;
+    for (final String badgeId in earnedDormBadgeIds) {
+      latestBadgeId = badgeId;
+    }
+    return latestBadgeId;
+  }
+
   UserProfile copyWith({
     String? uid,
     String? displayName,
@@ -117,6 +138,8 @@ class UserProfile {
     String? role,
     List<String>? earnedBadgeIds,
     String? equippedBadgeId,
+    bool? showDormPulseBadge,
+    String? selectedDormBadgeId,
     String? dormId,
     String? phoneNumber,
     DateTime? phoneLinkedAt,
@@ -125,6 +148,7 @@ class UserProfile {
     String? avatarUrl,
     String? avatarStoragePath,
     bool clearEquippedBadge = false,
+    bool clearSelectedDormBadgeId = false,
     bool clearAvatar = false,
     bool clearDormId = false,
     bool clearPhoneNumber = false,
@@ -140,6 +164,10 @@ class UserProfile {
       equippedBadgeId: clearEquippedBadge
           ? null
           : equippedBadgeId ?? this.equippedBadgeId,
+      showDormPulseBadge: showDormPulseBadge ?? this.showDormPulseBadge,
+      selectedDormBadgeId: clearSelectedDormBadgeId
+          ? null
+          : selectedDormBadgeId ?? this.selectedDormBadgeId,
       dormId: clearDormId ? null : dormId ?? this.dormId,
       phoneNumber: clearPhoneNumber ? null : phoneNumber ?? this.phoneNumber,
       phoneLinkedAt: clearPhoneLinkedAt
@@ -168,6 +196,20 @@ class HonorBadge {
   final String id;
   final String label;
   final String description;
+  final IconData icon;
+}
+
+class DormHonorBadge {
+  const DormHonorBadge({
+    required this.id,
+    required this.label,
+    required this.meaning,
+    required this.icon,
+  });
+
+  final String id;
+  final String label;
+  final String meaning;
   final IconData icon;
 }
 
@@ -239,6 +281,51 @@ HonorBadge? honorBadgeById(String? badgeId) {
     return null;
   }
   for (final HonorBadge badge in kHonorBadgeCatalog) {
+    if (badge.id == badgeId) {
+      return badge;
+    }
+  }
+  return null;
+}
+
+const List<DormHonorBadge> kDormHonorBadgeCatalog = <DormHonorBadge>[
+  DormHonorBadge(
+    id: 'no-wake-room',
+    label: '不醒人室',
+    meaning: '宿舍成员整体睡眠时间长，睡眠状态良好',
+    icon: Icons.bedtime_rounded,
+  ),
+  DormHonorBadge(
+    id: 'no-trouble-room',
+    label: '无琐事室',
+    meaning: '宿舍成员连续一周未发生冲突，关系和谐',
+    icon: Icons.handshake_rounded,
+  ),
+  DormHonorBadge(
+    id: 'no-one-home-room',
+    label: '若无其室',
+    meaning: '该宿舍该周多次存在成员未归寝情况',
+    icon: Icons.door_front_door_outlined,
+  ),
+  DormHonorBadge(
+    id: 'noisy-room',
+    label: '嘘张声室',
+    meaning: '该宿舍较吵闹',
+    icon: Icons.campaign_outlined,
+  ),
+  DormHonorBadge(
+    id: 'prison-room',
+    label: '实是囚室',
+    meaning: '该宿舍关系不和谐，住宿舍跟坐牢一样',
+    icon: Icons.heart_broken_outlined,
+  ),
+];
+
+DormHonorBadge? dormHonorBadgeById(String? badgeId) {
+  if (badgeId == null || badgeId.trim().isEmpty) {
+    return null;
+  }
+  for (final DormHonorBadge badge in kDormHonorBadgeCatalog) {
     if (badge.id == badgeId) {
       return badge;
     }
@@ -909,6 +996,7 @@ class Dorm {
     this.events = const <DormEvent>[],
     this.invites = const <DormInvite>[],
     this.pendingRuleProposal,
+    this.earnedDormBadgeIds = const <String>['no-trouble-room', 'no-wake-room'],
   });
 
   final String id;
@@ -925,8 +1013,15 @@ class Dorm {
   final List<DormEvent> events;
   final List<DormInvite> invites;
   final DormPendingRuleProposal? pendingRuleProposal;
+  final List<String> earnedDormBadgeIds;
 
   bool get hasPendingRuleProposal => pendingRuleProposal != null;
+
+  String? get latestEarnedDormBadgeId =>
+      earnedDormBadgeIds.isEmpty ? null : earnedDormBadgeIds.last;
+
+  bool hasEarnedDormBadge(String badgeId) =>
+      earnedDormBadgeIds.contains(badgeId);
 
   Dorm copyWith({
     String? id,
@@ -944,6 +1039,7 @@ class Dorm {
     List<DormEvent>? events,
     List<DormInvite>? invites,
     DormPendingRuleProposal? pendingRuleProposal,
+    List<String>? earnedDormBadgeIds,
     bool clearPendingRuleProposal = false,
   }) {
     return Dorm(
@@ -960,6 +1056,7 @@ class Dorm {
       rulesSettings: rulesSettings ?? this.rulesSettings,
       events: events ?? this.events,
       invites: invites ?? this.invites,
+      earnedDormBadgeIds: earnedDormBadgeIds ?? this.earnedDormBadgeIds,
       pendingRuleProposal: clearPendingRuleProposal
           ? null
           : pendingRuleProposal ?? this.pendingRuleProposal,
