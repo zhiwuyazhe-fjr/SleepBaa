@@ -14,7 +14,7 @@ class AppStripCard extends StatelessWidget {
     this.onTap,
     this.padding = const EdgeInsets.all(16),
     this.backgroundColor = AppColors.surface,
-    this.borderColor = AppColors.surfaceBorder,
+    this.borderColor,
     this.borderRadius,
     this.boxShadow = const <BoxShadow>[],
     this.titleStyle,
@@ -28,7 +28,7 @@ class AppStripCard extends StatelessWidget {
   final VoidCallback? onTap;
   final EdgeInsetsGeometry padding;
   final Color backgroundColor;
-  final Color borderColor;
+  final Color? borderColor;
   final BorderRadius? borderRadius;
   final List<BoxShadow> boxShadow;
   final TextStyle? titleStyle;
@@ -43,7 +43,7 @@ class AppStripCard extends StatelessWidget {
       padding: padding,
       color: backgroundColor,
       borderRadius: borderRadius ?? AppRadius.stripCard,
-      border: Border.all(color: borderColor),
+      border: borderColor == null ? null : Border.all(color: borderColor!),
       boxShadow: boxShadow,
       child: Row(
         children: <Widget>[

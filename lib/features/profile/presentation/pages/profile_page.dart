@@ -55,19 +55,13 @@ class ProfilePage extends StatelessWidget {
                     child: ProfileQuoteCard(quote: '每天都是成长和积极改变的新机会。'),
                   ),
                   const SizedBox(height: AppSpacing.xl),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.xl,
+                  ProfileDataCarousel(
+                    sessions: weekly,
+                    heatmapValues: _buildMonthPreviewIntensity(
+                      month: currentMonth,
+                      sessions: monthSessions,
                     ),
-                    child: ProfileDataCarousel(
-                      sessions: weekly,
-                      heatmapValues: _buildMonthPreviewIntensity(
-                        month: currentMonth,
-                        sessions: monthSessions,
-                      ),
-                      onHeatmapTap: () =>
-                          context.push(AppRoutes.profileCalendar),
-                    ),
+                    onHeatmapTap: () => context.push(AppRoutes.profileCalendar),
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   Padding(

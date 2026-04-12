@@ -7,7 +7,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
-import 'package:sleep_dorm_app/core/widgets/app_strip_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_menu_group_card.dart';
 import 'package:sleep_dorm_app/core/widgets/user_avatar.dart';
 import 'package:sleep_dorm_app/features/profile/data/profile_badges.dart';
 
@@ -305,62 +305,28 @@ class ProfileSettingsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
 
-    return Column(
-      key: const ValueKey<String>('profile-settings-card'),
-      children: <Widget>[
-        AppStripCard(
-          onTap: onSettingsTap,
-          leading: _MenuLeadingIcon(
-            icon: Icons.settings_outlined,
-            palette: palette,
-          ),
+    return AppMenuGroupCard(
+      cardKey: const ValueKey<String>('profile-settings-card'),
+      items: <AppMenuGroupCardItem>[
+        AppMenuGroupCardItem(
+          icon: Icons.settings_outlined,
+          iconColor: palette.primaryDeep,
           title: '设置',
           titleStyle: Theme.of(
             context,
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-          trailing: const Icon(
-            Icons.chevron_right_rounded,
-            color: AppColors.textHint,
-          ),
+          onTap: onSettingsTap,
         ),
-        const SizedBox(height: AppSpacing.sm),
-        AppStripCard(
-          onTap: onFaqTap,
-          leading: _MenuLeadingIcon(
-            icon: Icons.help_outline_rounded,
-            palette: palette,
-          ),
+        AppMenuGroupCardItem(
+          icon: Icons.help_outline_rounded,
+          iconColor: palette.primaryDeep,
           title: '常见问题',
           titleStyle: Theme.of(
             context,
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-          trailing: const Icon(
-            Icons.chevron_right_rounded,
-            color: AppColors.textHint,
-          ),
+          onTap: onFaqTap,
         ),
       ],
-    );
-  }
-}
-
-class _MenuLeadingIcon extends StatelessWidget {
-  const _MenuLeadingIcon({required this.icon, required this.palette});
-
-  final IconData icon;
-  final NightMoodPalette palette;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        shape: BoxShape.circle,
-      ),
-      alignment: Alignment.center,
-      child: Icon(icon, color: palette.primaryDeep),
     );
   }
 }

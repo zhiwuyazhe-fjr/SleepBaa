@@ -33,9 +33,6 @@ class ProfileBadgesPage extends StatelessWidget {
               backgroundColor: unlocked
                   ? palette.primaryHighlight.withAlpha(110)
                   : AppColors.surface,
-              borderColor: unlocked
-                  ? palette.primarySoft
-                  : AppColors.surfaceBorder,
               boxShadow: const <BoxShadow>[],
               leading: Container(
                 width: 40,

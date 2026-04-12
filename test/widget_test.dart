@@ -760,7 +760,7 @@ void main() {
       final PageView pageView = tester.widget<PageView>(find.byType(PageView));
       final PageController pageController = pageView.controller!;
 
-      expect(settingsWidth - firstCardWidth, greaterThan(20));
+      expect((firstCardWidth - settingsWidth).abs(), lessThan(2));
       expect(carouselWidth - firstCardWidth, greaterThan(20));
       expect(pageView.clipBehavior, Clip.none);
       expect(pageView.padEnds, isTrue);
@@ -821,9 +821,13 @@ void main() {
     final AppCard qualityCard = tester.widget<AppCard>(
       find.ancestor(of: find.text('睡眠质量(分)'), matching: find.byType(AppCard)),
     );
+    final AppCard settingsCard = tester.widget<AppCard>(
+      find.byKey(const ValueKey<String>('profile-settings-card')),
+    );
 
     expect(reportCard.borderRadius, BorderRadius.circular(AppRadius.md));
     expect(qualityCard.borderRadius, BorderRadius.circular(AppRadius.md));
+    expect(settingsCard.borderRadius, BorderRadius.circular(AppRadius.md));
   });
 
   testWidgets('profile dream card opens dream journal page', (
@@ -890,6 +894,7 @@ void main() {
     final AppCard earlyBirdCard = tester.widget<AppCard>(earlyBirdCardFinder);
     expect(earlyBirdCard.borderRadius, BorderRadius.circular(AppRadius.md));
     expect(earlyBirdCard.padding, const EdgeInsets.all(16));
+    expect(earlyBirdCard.border, isNull);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey<String>('profile-badge-strip-card-0')),
