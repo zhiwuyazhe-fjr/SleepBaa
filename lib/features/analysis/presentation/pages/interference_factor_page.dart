@@ -54,8 +54,6 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
           builder: (BuildContext context, Widget? child) {
             final TonightInterferenceState state =
                 services.interferenceProbeController.currentState;
-            final bool cloudReady =
-                services.interferenceProbeController.usesCloudBasePersistence;
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(
@@ -77,33 +75,10 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       Text(
-                        '进页后我已经帮你自动检查宿舍噪声、灯光环境和手机使用；如果你刚调整过环境，也可以单独再测一次。',
+                        '进入后小眠已经再次帮你检测啦',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: AppColors.textSecondary,
                           height: 1.55,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.md,
-                          vertical: AppSpacing.sm,
-                        ),
-                        decoration: BoxDecoration(
-                          color: cloudReady
-                              ? palette.primarySoft.withAlpha(26)
-                              : AppColors.surfaceMuted,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          cloudReady
-                              ? '当前结果会同步到 CloudBase'
-                              : '当前结果先保存在本机，尚未写入云端',
-                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: cloudReady
-                                ? palette.primaryDeep
-                                : AppColors.textSecondary,
-                          ),
                         ),
                       ),
                     ],

@@ -226,16 +226,6 @@ class _SettingsPageState extends State<SettingsPage> {
         '${recordedAt.minute.toString().padLeft(2, '0')}。';
   }
 
-  String _cloudSyncSummary(AppServices services) {
-    if (!services.environment.usesCloudBase) {
-      return '当前为本地演示环境，设置、定位和今晚检测结果不会写入云端。';
-    }
-    if (!services.environment.hasCloudBaseAppApi) {
-      return '当前 CloudBase App API 未配置完成，数据暂时只会保存在本机，未写入云端。';
-    }
-    return '当前已连接 CloudBase，宿舍位置、云端音频目录和今晚影响因素会同步到云端。';
-  }
-
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
@@ -411,14 +401,6 @@ class _SettingsPageState extends State<SettingsPage> {
                             : '当前手机号：$displayedPhone',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        _cloudSyncSummary(services),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                          height: 1.5,
-                        ),
-                      ),
                       const SizedBox(height: AppSpacing.lg),
                       PrimaryButton(
                         label: '退出登录',
@@ -457,39 +439,52 @@ class _SettingsPageState extends State<SettingsPage> {
                           onPressed: () => context.push(AppRoutes.dormInvite),
                         )
                       else
-                        Wrap(
-                          spacing: AppSpacing.sm,
-                          runSpacing: AppSpacing.sm,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: <Widget>[
-                            PrimaryButton(
-                              label: '编辑宿舍名称',
-                              expand: false,
-                              variant: PrimaryButtonVariant.soft,
-                              icon: Icons.edit_rounded,
-                              onPressed: () => _renameDorm(services, dorm),
+                            Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: PrimaryButton(
+                                    label: '编辑宿舍名称',
+                                    variant: PrimaryButtonVariant.soft,
+                                    icon: Icons.edit_rounded,
+                                    onPressed: () => _renameDorm(services, dorm),
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: PrimaryButton(
+                                    label: _isSavingDormAnchor ? '记录中...' : '重新记录位置',
+                                    variant: PrimaryButtonVariant.soft,
+                                    icon: Icons.my_location_rounded,
+                                    onPressed: _isSavingDormAnchor
+                                        ? null
+                                        : () => _refreshDormLocation(services),
+                                  ),
+                                ),
+                              ],
                             ),
-                            PrimaryButton(
-                              label: _isSavingDormAnchor ? '记录中...' : '重新记录位置',
-                              expand: false,
-                              variant: PrimaryButtonVariant.soft,
-                              icon: Icons.my_location_rounded,
-                              onPressed: _isSavingDormAnchor
-                                  ? null
-                                  : () => _refreshDormLocation(services),
-                            ),
-                            PrimaryButton(
-                              label: '邀请舍友',
-                              expand: false,
-                              variant: PrimaryButtonVariant.soft,
-                              icon: Icons.group_add_rounded,
-                              onPressed: () => context.push(AppRoutes.dormInvite),
-                            ),
-                            PrimaryButton(
-                              label: '退出宿舍',
-                              expand: false,
-                              variant: PrimaryButtonVariant.ghost,
-                              icon: Icons.logout_rounded,
-                              onPressed: () => _leaveDorm(services),
+                            const SizedBox(height: AppSpacing.sm),
+                            Wrap(
+                              spacing: AppSpacing.sm,
+                              runSpacing: AppSpacing.sm,
+                              children: <Widget>[
+                                PrimaryButton(
+                                  label: '邀请舍友',
+                                  expand: false,
+                                  variant: PrimaryButtonVariant.soft,
+                                  icon: Icons.group_add_rounded,
+                                  onPressed: () => context.push(AppRoutes.dormInvite),
+                                ),
+                                PrimaryButton(
+                                  label: '退出宿舍',
+                                  expand: false,
+                                  variant: PrimaryButtonVariant.ghost,
+                                  icon: Icons.logout_rounded,
+                                  onPressed: () => _leaveDorm(services),
+                                ),
+                              ],
                             ),
                           ],
                         ),
