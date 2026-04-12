@@ -56,7 +56,9 @@ class ProfilePage extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   Padding(
-                    padding: const EdgeInsets.only(left: AppSpacing.xl),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                    ),
                     child: ProfileDataCarousel(
                       sessions: weekly,
                       heatmapValues: _buildMonthPreviewIntensity(
