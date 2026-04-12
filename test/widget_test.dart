@@ -3,10 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sleep_dorm_app/app/app.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
 import 'package:sleep_dorm_app/core/widgets/bottom_nav_shell.dart';
@@ -679,7 +681,7 @@ void main() {
     expect(find.byKey(DormStatusPage.timelineKey), findsOneWidget);
   });
 
-  testWidgets('profile page shows a full-width month preview grid', (
+  testWidgets('profile page shows redesigned modules', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -691,14 +693,144 @@ void main() {
       clock: _dayClock,
     );
 
-    expect(find.byKey(ProfilePage.monthPreviewGridKey), findsOneWidget);
-    expect(
-      tester.getSize(find.byKey(ProfilePage.monthPreviewGridKey)).width,
-      greaterThan(250),
-    );
+    expect(find.text('每天都是成长和积极改变的新机会。'), findsOneWidget);
+    expect(find.text('睡眠质量(分)'), findsOneWidget);
+    expect(find.text('实验报告'), findsOneWidget);
+    expect(find.text('梦记'), findsOneWidget);
+    expect(find.text('事记仓库'), findsOneWidget);
+    expect(find.text('我的勋章'), findsOneWidget);
+    expect(find.text('设置'), findsOneWidget);
+    expect(find.text('常见问题'), findsOneWidget);
   });
 
-  testWidgets('profile dream journal entry opens dream journal page', (
+  testWidgets('profile carousel reveals duration and heatmap cards', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    await tester.drag(find.text('睡眠质量(分)'), const Offset(-280, 0));
+    await tester.pumpAndSettle();
+
+    expect(find.text('睡眠时长(小时)'), findsOneWidget);
+
+    await tester.drag(find.text('睡眠时长(小时)'), const Offset(-280, 0));
+    await tester.pumpAndSettle();
+
+    expect(find.text('本月打卡热力'), findsOneWidget);
+  });
+
+  testWidgets(
+    'profile uses larger carousel with indicators and balanced insight row',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profile,
+        clock: _dayClock,
+      );
+
+      expect(
+        tester
+            .getSize(
+              find.byKey(const ValueKey<String>('profile-data-carousel')),
+            )
+            .height,
+        greaterThan(190),
+      );
+      final double carouselWidth = tester
+          .getSize(find.byKey(const ValueKey<String>('profile-data-carousel')))
+          .width;
+      final double settingsWidth = tester
+          .getSize(find.byKey(const ValueKey<String>('profile-settings-card')))
+          .width;
+      final Finder firstCarouselCard = find.ancestor(
+        of: find.text('睡眠质量(分)'),
+        matching: find.byType(AppCard),
+      );
+      final double firstCardWidth = tester.getSize(firstCarouselCard).width;
+      final PageView pageView = tester.widget<PageView>(find.byType(PageView));
+      final PageController pageController = pageView.controller!;
+
+      expect((firstCardWidth - settingsWidth).abs(), lessThan(2));
+      expect(carouselWidth - firstCardWidth, greaterThan(20));
+      expect(pageView.clipBehavior, Clip.none);
+      expect(pageView.padEnds, isTrue);
+      expect(pageController.viewportFraction, lessThan(0.94));
+      expect(
+        find.byKey(const ValueKey<String>('profile-carousel-indicators')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('profile-settings-card')),
+          matching: find.byType(Divider),
+        ),
+        findsNothing,
+      );
+
+      final double reportWidth = tester
+          .getSize(find.byKey(const ValueKey<String>('profile-report-card')))
+          .width;
+      final double sideWidth = tester
+          .getSize(
+            find.byKey(const ValueKey<String>('profile-insight-side-column')),
+          )
+          .width;
+
+      expect((reportWidth - sideWidth).abs(), lessThan(28));
+    },
+  );
+
+  testWidgets('home and profile cards use a unified rectangular radius', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+    );
+
+    final AppCard startSleepCard = tester.widget<AppCard>(
+      find.ancestor(of: find.text('开启睡眠模式'), matching: find.byType(AppCard)),
+    );
+    final AppCard actionCard = tester.widget<AppCard>(
+      find.ancestor(of: find.text('睡前放松音频'), matching: find.byType(AppCard)),
+    );
+
+    expect(startSleepCard.borderRadius, BorderRadius.circular(AppRadius.md));
+    expect(actionCard.borderRadius, BorderRadius.circular(AppRadius.md));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    final AppCard reportCard = tester.widget<AppCard>(
+      find.ancestor(of: find.text('实验报告'), matching: find.byType(AppCard)),
+    );
+    final AppCard qualityCard = tester.widget<AppCard>(
+      find.ancestor(of: find.text('睡眠质量(分)'), matching: find.byType(AppCard)),
+    );
+    final AppCard settingsCard = tester.widget<AppCard>(
+      find.byKey(const ValueKey<String>('profile-settings-card')),
+    );
+
+    expect(reportCard.borderRadius, BorderRadius.circular(AppRadius.md));
+    expect(qualityCard.borderRadius, BorderRadius.circular(AppRadius.md));
+    expect(settingsCard.borderRadius, BorderRadius.circular(AppRadius.md));
+  });
+
+  testWidgets('profile dream card opens dream journal page', (
     WidgetTester tester,
   ) async {
     await _pumpApp(
@@ -707,11 +839,125 @@ void main() {
       clock: _dayClock,
     );
 
-    await tester.ensureVisible(find.text('梦境记录'));
-    await tester.tap(find.text('梦境记录'));
+    await tester.ensureVisible(find.text('梦记'));
+    await tester.tap(find.text('梦记'));
     await tester.pumpAndSettle();
 
     expect(find.byType(DreamJournalPage), findsOneWidget);
+  });
+
+  testWidgets('profile heatmap card opens calendar page', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    await tester.drag(find.text('睡眠质量(分)'), const Offset(-560, 0));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('本月打卡热力'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CalendarCheckinPage), findsOneWidget);
+  });
+
+  testWidgets('profile badge card opens overview and detail pages', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    await tester.ensureVisible(find.text('我的勋章'));
+    await tester.tap(find.text('我的勋章'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('勋章图鉴'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('profile-badge-strip-card-0')),
+      findsOneWidget,
+    );
+
+    final Finder earlyBirdCardFinder = find.ancestor(
+      of: find.text('早睡先锋'),
+      matching: find.byType(AppCard),
+    );
+    expect(earlyBirdCardFinder, findsOneWidget);
+    final AppCard earlyBirdCard = tester.widget<AppCard>(earlyBirdCardFinder);
+    expect(earlyBirdCard.borderRadius, BorderRadius.circular(AppRadius.md));
+    expect(earlyBirdCard.padding, const EdgeInsets.all(16));
+    expect(earlyBirdCard.border, isNull);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('profile-badge-strip-card-0')),
+        matching: find.byIcon(Icons.east_rounded),
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(find.text('早睡先锋'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('勋章详情'), findsOneWidget);
+  });
+
+  testWidgets('profile faq entry opens styled faq page', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    await tester.ensureVisible(find.text('常见问题'));
+    await tester.tap(find.text('常见问题'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('帮助主题'), findsOneWidget);
+    expect(find.text('常见问题速览'), findsOneWidget);
+    expect(find.text('常见问题内容将继续补充'), findsOneWidget);
+
+    await tester.tap(find.text('常见问题速览'));
+    await tester.pump();
+
+    expect(find.text('FAQ 正在整理中'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('常见问题内容将继续补充'));
+    await tester.tap(find.text('常见问题内容将继续补充'));
+    await tester.pump();
+
+    expect(find.text('FAQ 正在整理中'), findsOneWidget);
+  });
+
+  testWidgets('profile report placeholder uses passive toast feedback', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    await tester.ensureVisible(find.text('实验报告'));
+    await tester.tap(find.text('实验报告'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('本页将逐步补全'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('报告页待补全'));
+    await tester.tap(find.text('报告页待补全'));
+    await tester.pump();
+
+    expect(find.text('睡眠报告 正在整理中'), findsOneWidget);
   });
 
   testWidgets('post sleep page hides shell navigation', (
@@ -833,7 +1079,8 @@ void main() {
       clock: _dayClock,
     );
 
-    await tester.tap(find.text('查看全部'));
+    await tester.ensureVisible(find.text('查看全部').first);
+    await tester.tap(find.text('查看全部').first);
     await tester.pumpAndSettle();
 
     expect(find.byType(MicroInterventionTaskPage), findsOneWidget);

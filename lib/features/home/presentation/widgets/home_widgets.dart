@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -25,12 +26,12 @@ class SleepRiskCard extends StatelessWidget {
     final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       padding: EdgeInsets.zero,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: AppRadius.surfacePrimary,
       boxShadow: AppColors.floatingShadow,
       child: Container(
         height: 120,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: AppRadius.surfacePrimary,
           gradient: LinearGradient(
             begin: Alignment.bottomCenter,
             end: Alignment.topCenter,
@@ -91,7 +92,7 @@ class StartSleepModeCard extends StatelessWidget {
     final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       padding: EdgeInsets.zero,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: AppRadius.surfacePrimary,
       border: Border.all(color: AppColors.cardBorderSubtle),
       boxShadow: AppColors.cardShadow,
       onTap: onTap,
@@ -122,7 +123,7 @@ class StartSleepModeCard extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: AppColors.surfaceSubtle,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: AppRadius.surfaceSecondary,
                   ),
                   child: Text(
                     isAudioReady ? '音频已同步' : '轻触进入',
@@ -212,6 +213,7 @@ class HomeActionCard extends StatelessWidget {
 
     return AppCard(
       padding: EdgeInsets.zero,
+      borderRadius: AppRadius.stripCard,
       color: _isAudio ? palette.welcomeAccentColor : AppColors.surface,
       border: _isAudio ? null : Border.all(color: AppColors.divider),
       child: Container(
@@ -351,6 +353,7 @@ class SupportToolCard extends StatelessWidget {
     final palette = context.nightMoodPalette;
     return AppCard(
       color: AppColors.darkGlass,
+      borderRadius: AppRadius.surfacePrimary,
       border: Border.all(color: AppColors.darkBorder),
       boxShadow: const <BoxShadow>[],
       onTap: onTap,
@@ -407,6 +410,7 @@ class SessionAudioCard extends StatelessWidget {
     return AppCard(
       padding: EdgeInsets.zero,
       color: palette.primarySoft.withAlpha(10),
+      borderRadius: AppRadius.surfacePrimary,
       border: Border.all(color: palette.primarySoft.withAlpha(28)),
       boxShadow: const <BoxShadow>[],
       child: Padding(

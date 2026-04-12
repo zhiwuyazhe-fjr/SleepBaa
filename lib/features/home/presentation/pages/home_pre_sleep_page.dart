@@ -486,7 +486,7 @@ class _MemoGroupCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: Colors.white.withAlpha(14),
-        borderRadius: BorderRadius.circular(AppRadius.xl),
+        borderRadius: AppRadius.surfacePrimary,
         border: Border.all(color: Colors.white.withAlpha(20)),
       ),
       child: Column(
@@ -510,7 +510,7 @@ class _MemoGroupCard extends StatelessWidget {
                 padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
                   color: AppColors.darkCard.withAlpha(170),
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  borderRadius: AppRadius.surfaceSecondary,
                 ),
                 child: Text(
                   '事记${entry.key + 1}：${entry.value}',
