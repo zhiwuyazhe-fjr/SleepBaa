@@ -157,12 +157,10 @@ bool _isPlayableTrack(AudioTrack? track) {
   return assetPath.isNotEmpty || sourceUrl.isNotEmpty;
 }
 
-AudioTrack? _mergeTrackWithRemoteCatalog(
-  AudioTrack? track, {
-  String? trackId,
-}) {
-  final String resolvedTrackId =
-      (trackId?.trim().isNotEmpty ?? false) ? trackId!.trim() : track?.id ?? '';
+AudioTrack? _mergeTrackWithRemoteCatalog(AudioTrack? track, {String? trackId}) {
+  final String resolvedTrackId = (trackId?.trim().isNotEmpty ?? false)
+      ? trackId!.trim()
+      : track?.id ?? '';
   if (resolvedTrackId.isEmpty) {
     return track;
   }
@@ -234,20 +232,20 @@ AudioTrack? _trackForAction(String actionId, String? trackId) {
     return _firstRemoteAudioTrack();
   }
   return _resolveTrackWithRemoteFallback(
-    AudioTrack(
-      id: trackId,
-      title: '\u52a9\u7720\u97f3\u9891',
-      subtitle: 'AI \u4e3a\u4f60\u63a8\u8350\u7684\u653e\u677e\u97f3\u8f68',
-      duration: const Duration(minutes: 45),
-    ),
-    trackId: trackId,
-  ) ??
+        AudioTrack(
+          id: trackId,
+          title: '\u52a9\u7720\u97f3\u9891',
+          subtitle: 'AI \u4e3a\u4f60\u63a8\u8350\u7684\u653e\u677e\u97f3\u8f68',
+          duration: const Duration(minutes: 45),
+        ),
+        trackId: trackId,
+      ) ??
       AudioTrack(
-    id: trackId,
-    title: '\u52a9\u7720\u97f3\u9891',
-    subtitle: 'AI \u4e3a\u4f60\u63a8\u8350\u7684\u653e\u677e\u97f3\u8f68',
-    duration: const Duration(minutes: 45),
-  );
+        id: trackId,
+        title: '\u52a9\u7720\u97f3\u9891',
+        subtitle: 'AI \u4e3a\u4f60\u63a8\u8350\u7684\u653e\u677e\u97f3\u8f68',
+        duration: const Duration(minutes: 45),
+      );
 }
 
 DormMemberStatus _activityStatusFromStorage(Map<String, dynamic> map) {
@@ -619,7 +617,8 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   bool get isAuthenticating => _isAuthenticating;
 
   @override
-  bool get hasCompletedInitialAuthBootstrap => _hasCompletedInitialAuthBootstrap;
+  bool get hasCompletedInitialAuthBootstrap =>
+      _hasCompletedInitialAuthBootstrap;
 
   @override
   String? get lastAuthError => _lastAuthError;
@@ -1804,7 +1803,9 @@ class CloudBaseRecommendationRepository extends ChangeNotifier
     );
   }
 
-  AudioTrack? _resolveTrackFromRecommendation(NightRecommendation? recommendation) {
+  AudioTrack? _resolveTrackFromRecommendation(
+    NightRecommendation? recommendation,
+  ) {
     if (recommendation != null) {
       return _resolveTrackWithRemoteFallback(
         recommendation.track,
@@ -1851,13 +1852,16 @@ class CloudBaseRecommendationRepository extends ChangeNotifier
         '/api/media/audio-catalog',
         body: const <String, dynamic>{},
       );
-      final Map<String, AudioTrack> nextCatalog = <String, AudioTrack>{
-        for (final Map<String, dynamic> item in _mapListOf(payload['tracks']))
-          _stringOf(item['id']): ModelSerializers.audioTrackFromMap(item),
-      }..removeWhere(
-        (String key, AudioTrack value) =>
-            key.isEmpty || (value.sourceUrl?.trim().isEmpty ?? true),
-      );
+      final Map<String, AudioTrack> nextCatalog =
+          <String, AudioTrack>{
+            for (final Map<String, dynamic> item in _mapListOf(
+              payload['tracks'],
+            ))
+              _stringOf(item['id']): ModelSerializers.audioTrackFromMap(item),
+          }..removeWhere(
+            (String key, AudioTrack value) =>
+                key.isEmpty || (value.sourceUrl?.trim().isEmpty ?? true),
+          );
       if (nextCatalog.isEmpty) {
         return;
       }
@@ -1879,6 +1883,15 @@ class CloudBaseRecommendationRepository extends ChangeNotifier
   }
 }
 
+class _SerializedRemoteSyncQueue {
+  Future<void> _tail = Future<void>.value();
+
+  void enqueue(Future<void> Function() task) {
+    final Future<void> next = _tail.then((_) => task());
+    _tail = next.catchError((Object error, StackTrace stackTrace) {});
+  }
+}
+
 class CloudBaseSleepSessionRepository extends ChangeNotifier
     implements SleepSessionRepository {
   CloudBaseSleepSessionRepository({
@@ -1894,8 +1907,11 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
   final AuthRepository _authRepository;
   final CloudBaseSnapshotStore _snapshotStore;
   final CloudBaseAppApiClient _appApiClient;
+  final _SerializedRemoteSyncQueue _remoteSyncQueue =
+      _SerializedRemoteSyncQueue();
 
   List<SleepSession> _sessions = const <SleepSession>[];
+  int _latestRemoteSyncId = 0;
 
   @override
   SleepSession? get activeSession {
@@ -1956,32 +1972,9 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
       return existing;
     }
 
-    final UserProfile user = await _authRepository.ensureAuthenticated();
-    if (_appApiClient.isConfigured) {
-      try {
-        await _appApiClient.post(
-          '/api/sleep/enter',
-          body: <String, dynamic>{
-            'dormId': dormId,
-            'recommendationSnapshot': recommendationSnapshot
-                .map(ModelSerializers.recommendationToMap)
-                .toList(growable: false),
-            'selectedRecommendationIds': recommendationSnapshot
-                .where(
-                  (NightRecommendation item) =>
-                      item.executionState != RecommendationExecutionState.idle,
-                )
-                .map((NightRecommendation item) => item.id)
-                .toList(growable: false),
-          },
-        );
-        await _snapshotStore.refresh();
-        return activeSession ?? _sessions.last;
-      } catch (_) {
-        // Fall back to local session creation.
-      }
-    }
-
+    final UserProfile user = _authRepository.currentUser.uid.isNotEmpty
+        ? _authRepository.currentUser
+        : await _authRepository.ensureAuthenticated();
     final DateTime now = DateTime.now();
     final SleepSession session = SleepSession(
       id: IdGenerator.next('session'),
@@ -2005,6 +1998,9 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
       updatedAt: now,
     );
     _upsertLocalSession(session);
+    if (_appApiClient.isConfigured) {
+      _enqueueSessionSync(session: session, path: '/api/sleep/enter');
+    }
     return session;
   }
 
@@ -2036,19 +2032,34 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
     if (!_appApiClient.isConfigured) {
       return;
     }
-    try {
-      await _appApiClient.post(
-        session.status == SleepSessionStatus.active
-            ? '/api/sleep/enter'
-            : '/api/sleep/exit',
-        body: <String, dynamic>{
-          'session': ModelSerializers.sleepSessionToMap(session),
-        },
-      );
-      await _snapshotStore.refresh();
-    } catch (_) {
-      // Keep local state if network sync fails.
-    }
+    _enqueueSessionSync(
+      session: session,
+      path: session.status == SleepSessionStatus.active
+          ? '/api/sleep/enter'
+          : '/api/sleep/exit',
+    );
+  }
+
+  void _enqueueSessionSync({
+    required SleepSession session,
+    required String path,
+  }) {
+    final int syncId = ++_latestRemoteSyncId;
+    final Map<String, dynamic> body = <String, dynamic>{
+      'session': ModelSerializers.sleepSessionToMap(session),
+    };
+    _remoteSyncQueue.enqueue(() async {
+      try {
+        await _appApiClient.post(path, body: body);
+        if (syncId == _latestRemoteSyncId) {
+          await _snapshotStore.refresh();
+        }
+      } catch (error) {
+        debugPrint(
+          'CloudBase sleep session sync failed for ${session.id}: $error',
+        );
+      }
+    });
   }
 
   void _upsertLocalSession(SleepSession session) {
@@ -2515,6 +2526,8 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
   final AuthRepository _authRepository;
   final CloudBaseSnapshotStore _snapshotStore;
   final CloudBaseAppApiClient _appApiClient;
+  final _SerializedRemoteSyncQueue _statusSyncQueue =
+      _SerializedRemoteSyncQueue();
   final StreamController<Dorm> _dormController =
       StreamController<Dorm>.broadcast();
   final StreamController<List<DormMember>> _membersController =
@@ -2525,6 +2538,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
       StreamController<List<DormEvent>>.broadcast();
 
   Dorm _currentDorm;
+  int _latestStatusSyncId = 0;
 
   @override
   Dorm get currentDorm => _currentDorm;
@@ -2669,29 +2683,35 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
     _emitCurrentState();
     notifyListeners();
     if (_appApiClient.isConfigured) {
-      try {
-        final Map<String, dynamic> body = <String, dynamic>{'uid': uid};
-        if (status != null) {
-          body['status'] = status.name;
-        }
-        if (presenceStatus != null) {
-          body['presenceStatus'] = presenceStatus.name;
-        }
-        if (sleepModeActive != null) {
-          body['sleepModeActive'] = sleepModeActive;
-        }
-        if (note != null) {
-          body['note'] = note;
-        }
-        await _appApiClient.post(
-          '/api/dorm/member/status',
-          body: body,
-        );
-        await _snapshotStore.refresh();
-      } catch (_) {
-        // Keep the optimistic local dorm state when remote sync fails.
+      final Map<String, dynamic> body = <String, dynamic>{'uid': uid};
+      if (status != null) {
+        body['status'] = status.name;
       }
+      if (presenceStatus != null) {
+        body['presenceStatus'] = presenceStatus.name;
+      }
+      if (sleepModeActive != null) {
+        body['sleepModeActive'] = sleepModeActive;
+      }
+      if (note != null) {
+        body['note'] = note;
+      }
+      _enqueueStatusSync(body);
     }
+  }
+
+  void _enqueueStatusSync(Map<String, dynamic> body) {
+    final int syncId = ++_latestStatusSyncId;
+    _statusSyncQueue.enqueue(() async {
+      try {
+        await _appApiClient.post('/api/dorm/member/status', body: body);
+        if (syncId == _latestStatusSyncId) {
+          await _snapshotStore.refresh();
+        }
+      } catch (error) {
+        debugPrint('CloudBase dorm status sync failed: $error');
+      }
+    });
   }
 
   @override
@@ -2740,9 +2760,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
         await _appApiClient.post(
           '/api/dorm/environment',
           body: <String, dynamic>{
-            ...?noiseDb == null
-                ? null
-                : <String, dynamic>{'noiseDb': noiseDb},
+            ...?noiseDb == null ? null : <String, dynamic>{'noiseDb': noiseDb},
             ...?lightLabel == null
                 ? null
                 : <String, dynamic>{'lightLabel': lightLabel},
