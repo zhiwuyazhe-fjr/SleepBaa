@@ -55,12 +55,6 @@ class NightWelcomeController extends ChangeNotifier {
       return;
     }
     _isHomeVisible = isVisible;
-
-    if (!isVisible &&
-        _dismissedNightKey == currentNightKey &&
-        _completedNightKey != currentNightKey) {
-      _dismissedNightKey = null;
-    }
     notifyListeners();
   }
 

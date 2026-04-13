@@ -447,3 +447,142 @@ test(
     });
   },
 );
+
+test(
+  "dorm location anchor and tonight interference persist through bootstrap",
+  { concurrency: false },
+  async () => {
+    await withLocalAppApiServer(async ({ baseUrl, uid }) => {
+      const createResponse = await fetch(`${baseUrl}/api/dorm/create`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-debug-uid": uid,
+        },
+        body: JSON.stringify({
+          name: "梅苑 204",
+          locationAnchor: {
+            latitude: 30.1234,
+            longitude: 120.5678,
+            radiusMeters: 100,
+            recordedAt: "2026-04-12T12:00:00.000Z",
+            recordedByUid: uid,
+          },
+        }),
+      });
+      assert.equal(createResponse.status, 200);
+
+      const environmentResponse = await fetch(`${baseUrl}/api/dorm/environment`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-debug-uid": uid,
+        },
+        body: JSON.stringify({
+          noiseDb: 43,
+          lightLabel: "偏亮",
+        }),
+      });
+      assert.equal(environmentResponse.status, 200);
+
+      const interferenceResponse = await fetch(
+        `${baseUrl}/api/interference/tonight`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-debug-uid": uid,
+          },
+          body: JSON.stringify({
+            noise: {
+              type: "noise",
+              title: "宿舍噪声",
+              value: "43 dB",
+              gradeLabel: "轻微",
+              status: "ready",
+              detail: "当前宿舍还有一点生活声，但整体还可以接受。",
+              source: "microphone",
+              measuredAt: "2026-04-12T12:05:00.000Z",
+              numericValue: 43,
+              score: 36,
+            },
+            phoneUsage: {
+              type: "phoneUsage",
+              title: "手机使用",
+              value: "22 分钟",
+              gradeLabel: "适中",
+              status: "ready",
+              detail: "最近 2 小时手机使用还算克制。",
+              source: "android_usage_stats",
+              measuredAt: "2026-04-12T12:05:00.000Z",
+              numericValue: 22,
+              score: 34,
+            },
+          }),
+        },
+      );
+      assert.equal(interferenceResponse.status, 200);
+
+      const bootstrapResponse = await fetch(`${baseUrl}/api/app/bootstrap`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-debug-uid": uid,
+        },
+        body: JSON.stringify({}),
+      });
+      assert.equal(bootstrapResponse.status, 200);
+
+      const bootstrapPayload = await bootstrapResponse.json();
+      assert.equal(bootstrapPayload.data.dorm.locationAnchor.latitude, 30.1234);
+      assert.equal(bootstrapPayload.data.dorm.lightLabel, "偏亮");
+      assert.equal(
+        bootstrapPayload.data.userState.tonightInterference.noise.value,
+        "43 dB",
+      );
+      assert.equal(
+        bootstrapPayload.data.userState.tonightInterference.phoneUsage.value,
+        "22 分钟",
+      );
+    });
+  },
+);
+
+test(
+  "audio catalog falls back to env configured urls when collection is empty",
+  { concurrency: false },
+  async () => {
+    const originalDeepOceanUrl = process.env.SLEEP_AUDIO_DEEP_OCEAN_URL;
+    process.env.SLEEP_AUDIO_DEEP_OCEAN_URL =
+      "https://example.com/audio/deep-ocean.mp3";
+
+    try {
+      await withLocalAppApiServer(async ({ baseUrl, uid }) => {
+        const response = await fetch(`${baseUrl}/api/media/audio-catalog`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-debug-uid": uid,
+          },
+          body: JSON.stringify({}),
+        });
+
+        assert.equal(response.status, 200);
+        const payload = await response.json();
+        assert.ok(Array.isArray(payload.tracks));
+        assert.ok(payload.tracks.length >= 1);
+        assert.equal(payload.tracks[0].id, "deep-ocean");
+        assert.equal(
+          payload.tracks[0].sourceUrl,
+          "https://example.com/audio/deep-ocean.mp3",
+        );
+      });
+    } finally {
+      if (originalDeepOceanUrl === undefined) {
+        delete process.env.SLEEP_AUDIO_DEEP_OCEAN_URL;
+      } else {
+        process.env.SLEEP_AUDIO_DEEP_OCEAN_URL = originalDeepOceanUrl;
+      }
+    }
+  },
+);

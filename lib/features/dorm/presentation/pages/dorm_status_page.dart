@@ -9,6 +9,7 @@ import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
+import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_member_status_presenter.dart';
 
 class DormStatusPage extends StatelessWidget {
   const DormStatusPage({super.key});
@@ -36,14 +37,8 @@ class DormStatusPage extends StatelessWidget {
               notifications: services.notificationRepository.notifications,
               palette: palette,
             );
-            final int onlineCount = dorm.members
-                .where(
-                  (DormMember member) => member.status != DormMemberStatus.away,
-                )
-                .length;
-            final int sleepingCount = dorm.members
-                .where((DormMember member) => member.sleepModeActive)
-                .length;
+            final int onlineCount = returnedDormMemberCount(dorm.members);
+            final int sleepingCount = sleepingDormMemberCount(dorm.members);
 
             return SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(
@@ -143,16 +138,14 @@ class DormStatusPage extends StatelessWidget {
                               height: 44,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: _memberColor(
-                                  member.status,
-                                ).withAlpha(24),
+                                color: dormPresenceSleepColor(member).withAlpha(24),
                               ),
                               alignment: Alignment.center,
                               child: Text(
                                 member.name.characters.first,
                                 style: Theme.of(context).textTheme.titleMedium
                                     ?.copyWith(
-                                      color: _memberColor(member.status),
+                                      color: dormPresenceSleepColor(member),
                                       fontWeight: FontWeight.w800,
                                     ),
                               ),
@@ -182,25 +175,53 @@ class DormStatusPage extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: AppSpacing.md),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.sm,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _memberColor(
-                                  member.status,
-                                ).withAlpha(18),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                _memberLabel(member.status),
-                                style: Theme.of(context).textTheme.labelSmall
-                                    ?.copyWith(
-                                      color: _memberColor(member.status),
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                              ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: <Widget>[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.sm,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: dormPresenceSleepColor(member)
+                                        .withAlpha(18),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    dormPresenceSleepLabel(member),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          color: dormPresenceSleepColor(member),
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                  ),
+                                ),
+                                const SizedBox(height: AppSpacing.xs),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.sm,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        dormActivityColor(member).withAlpha(18),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    dormActivityLabel(member),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          color: dormActivityColor(member),
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -364,20 +385,3 @@ class _EnvironmentRow extends StatelessWidget {
   }
 }
 
-Color _memberColor(DormMemberStatus status) {
-  return switch (status) {
-    DormMemberStatus.sleeping => const Color(0xFF44B9D7),
-    DormMemberStatus.quiet => const Color(0xFF38C89D),
-    DormMemberStatus.away => const Color(0xFF3B3F46),
-    DormMemberStatus.active => const Color(0xFFF5A53A),
-  };
-}
-
-String _memberLabel(DormMemberStatus status) {
-  return switch (status) {
-    DormMemberStatus.sleeping => 'SLEEPING',
-    DormMemberStatus.quiet => 'QUIET',
-    DormMemberStatus.away => 'AWAY',
-    DormMemberStatus.active => 'ACTIVE',
-  };
-}

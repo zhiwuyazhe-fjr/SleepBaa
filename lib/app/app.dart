@@ -125,15 +125,16 @@ class _CloudBaseAuthGate extends StatelessWidget {
     if (!environment.usesCloudBase) {
       return child;
     }
+    if (!authRepository.hasCompletedInitialAuthBootstrap) {
+      return const _AuthLoadingPage();
+    }
     if (authRepository.hasVerifiedPhoneIdentity == true) {
       return child;
     }
-    return Stack(
-      children: <Widget>[
-        const PhoneAuthPage(),
-        if (authRepository.isAuthenticating == true) const _AuthLoadingPage(),
-      ],
-    );
+    if (authRepository.isAuthenticating == true) {
+      return const _AuthLoadingPage();
+    }
+    return const PhoneAuthPage();
   }
 }
 

@@ -6,7 +6,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/avatar_picker.dart';
-import 'package:sleep_dorm_app/features/profile/data/profile_badges.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/widgets/profile_badge_support.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/widgets/profile_page_sections.dart';
 
 class ProfilePage extends StatelessWidget {
@@ -18,7 +18,6 @@ class ProfilePage extends StatelessWidget {
     return ListenableBuilder(
       listenable: Listenable.merge(<Listenable>[
         services.authRepository,
-        services.settingsRepository,
         services.sleepSessionRepository,
         services.insightsFacade,
       ]),
@@ -31,6 +30,8 @@ class ProfilePage extends StatelessWidget {
         final List<SleepSession> monthSessions = services.sleepSessionRepository
             .sessionsForMonth(currentMonth);
         final SleepReport report = services.insightsFacade.currentReport;
+        final List<ProfileBadgeStatusData> previewBadges =
+            buildProfileBadgePreview(profile);
 
         return Scaffold(
           backgroundColor: AppColors.background,
@@ -70,16 +71,18 @@ class ProfilePage extends StatelessWidget {
                     ),
                     child: ProfileInsightBlock(
                       report: report,
-                      badges: ProfileBadges.all,
+                      badges: previewBadges,
                       onReportTap: () => context.push(AppRoutes.profileReport),
                       onDreamTap: () => context.push(AppRoutes.dreamJournal),
                       onThoughtTap: () =>
                           context.push(AppRoutes.profileThoughtVault),
                       onBadgeOverviewTap: () =>
                           context.push(AppRoutes.profileBadges),
-                      onBadgeTap: (ProfileBadgeMeta badge) => context.push(
-                        AppRoutes.profileBadgeDetailPath(badge.id),
-                      ),
+                      onBadgeTap: (ProfileBadgeStatusData badge) =>
+                          showProfileBadgeDetailsSheet(
+                            context,
+                            badge: badge.badge,
+                          ),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xl),

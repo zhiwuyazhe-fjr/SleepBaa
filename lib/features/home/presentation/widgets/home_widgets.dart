@@ -207,15 +207,28 @@ class HomeActionCard extends StatelessWidget {
     final palette = context.nightMoodPalette;
     final bool selected =
         recommendation.executionState != RecommendationExecutionState.idle;
-    final Color foreground = _isAudio
+    final bool highlight = selected;
+    final Color cardColor = highlight
+        ? palette.welcomeAccentColor
+        : AppColors.surface;
+    final Color foreground = highlight
         ? palette.welcomeTextOnAccent
         : AppColors.textPrimary;
+    final Color borderColor = highlight
+        ? palette.primary.withAlpha(84)
+        : AppColors.divider;
+    final Color chipBackground = highlight
+        ? Colors.white.withAlpha(170)
+        : AppColors.background;
+    final Color chipForeground = highlight
+        ? palette.welcomeTextOnAccent
+        : AppColors.textSecondary;
 
     return AppCard(
       padding: EdgeInsets.zero,
       borderRadius: AppRadius.stripCard,
-      color: _isAudio ? palette.welcomeAccentColor : AppColors.surface,
-      border: _isAudio ? null : Border.all(color: AppColors.divider),
+      color: cardColor,
+      border: _isAudio ? null : Border.all(color: borderColor),
       child: Container(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -225,7 +238,7 @@ class HomeActionCard extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: _isAudio
+                color: highlight
                     ? Colors.white.withAlpha(208)
                     : AppColors.background,
                 shape: BoxShape.circle,
@@ -234,7 +247,9 @@ class HomeActionCard extends StatelessWidget {
               child: Icon(
                 recommendation.icon,
                 size: 20,
-                color: _isAudio ? palette.welcomeTextOnAccent : palette.primary,
+                color: highlight
+                    ? palette.welcomeTextOnAccent
+                    : palette.primary,
               ),
             ),
             const SizedBox(width: AppSpacing.md),
@@ -265,18 +280,14 @@ class HomeActionCard extends StatelessWidget {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: _isAudio
-                                  ? Colors.white.withAlpha(170)
-                                  : AppColors.background,
+                              color: chipBackground,
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
                               tag,
                               style: Theme.of(context).textTheme.labelSmall
                                   ?.copyWith(
-                                    color: _isAudio
-                                        ? palette.welcomeTextOnAccent
-                                        : AppColors.textSecondary,
+                                    color: chipForeground,
                                     fontWeight: FontWeight.w400,
                                   ),
                             ),
@@ -295,25 +306,19 @@ class HomeActionCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: _isAudio
+                  color: highlight
                       ? Colors.white.withAlpha(220)
                       : AppColors.background,
                   shape: BoxShape.circle,
-                  border: !_isAudio
-                      ? Border.all(
-                          color: selected
-                              ? palette.primary
-                              : AppColors.surfaceBorder,
-                        )
-                      : null,
+                  border: Border.all(
+                    color: highlight ? palette.primary : AppColors.surfaceBorder,
+                  ),
                 ),
                 alignment: Alignment.center,
                 child: Icon(
                   _trailingIcon(selected),
                   size: 22,
-                  color: _isAudio
-                      ? palette.welcomeTextOnAccent
-                      : (selected ? palette.primary : foreground),
+                  color: highlight ? palette.welcomeTextOnAccent : palette.primary,
                 ),
               ),
             ),

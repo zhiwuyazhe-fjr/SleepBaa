@@ -15,6 +15,7 @@ import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_invite_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
+import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_member_status_presenter.dart';
 
 const List<String> _gentleReminderPresets = <String>[
   '如果方便的话，今晚一起把宿舍的环境再放轻一点',
@@ -74,14 +75,8 @@ class DormPage extends StatelessWidget {
               pendingProposal != null &&
               pendingProposal.proposerUid != currentUserId &&
               pendingProposal.needsReviewFrom(currentUserId);
-          final int onlineCount = dorm.members
-              .where(
-                (DormMember member) => member.status != DormMemberStatus.away,
-              )
-              .length;
-          final int sleepingCount = dorm.members
-              .where((DormMember member) => member.sleepModeActive)
-              .length;
+          final int onlineCount = returnedDormMemberCount(dorm.members);
+          final int sleepingCount = sleepingDormMemberCount(dorm.members);
           final String? selectedDormBadgeId = currentUser.resolveDormBadgeId(
             dorm.earnedDormBadgeIds,
           );
@@ -200,7 +195,7 @@ class DormPage extends StatelessWidget {
                       ),
                     ),
                     Positioned.fill(
-                      top: 112,
+                      top: 104,
                       child: Align(
                         alignment: Alignment.bottomCenter,
                         child: ConstrainedBox(
@@ -551,6 +546,8 @@ class _DormMemberCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Color presenceColor = dormPresenceSleepColor(member);
+    final Color activityColor = dormActivityColor(member);
     final Color accentColor = _memberColor(member.status);
     final String? resolvedBadgeId =
         currentUserProfile?.displayBadgeId ?? member.displayBadgeId;
@@ -571,17 +568,17 @@ class _DormMemberCard extends StatelessWidget {
       boxShadow: const <BoxShadow>[],
       child: SizedBox(
         width: 136,
-        height: 154,
+        height: 172,
         child: Column(
           children: <Widget>[
             _DormMemberAvatar(
-              radius: 26,
+              radius: 22,
               accentColor: accentColor,
               avatarBytes: avatarBytes,
               avatarUrl: avatarUrl,
               fallbackSeed: fallbackSeed,
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.xs),
             Text(
               isCurrentUser ? '${member.name} · 你' : member.name,
               maxLines: 1,
@@ -591,12 +588,12 @@ class _DormMemberCard extends StatelessWidget {
                 context,
               ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             SizedBox(
-              height: 34,
+              height: 20,
               child: Text(
                 member.note,
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: Theme.of(
@@ -608,8 +605,8 @@ class _DormMemberCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs),
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: 4,
+                  horizontal: AppSpacing.xs,
+                  vertical: 2,
                 ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF6B400).withAlpha(28),
@@ -620,7 +617,7 @@ class _DormMemberCard extends StatelessWidget {
                   children: <Widget>[
                     const Icon(
                       Icons.star_rounded,
-                      size: 14,
+                      size: 12,
                       color: Color(0xFFF6B400),
                     ),
                     const SizedBox(width: 4),
@@ -640,6 +637,41 @@ class _DormMemberCard extends StatelessWidget {
               ),
             ],
             const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.xs,
+                vertical: 1,
+              ),
+              decoration: BoxDecoration(
+                color: presenceColor.withAlpha(18),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                dormPresenceSleepLabel(member),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: presenceColor,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.xs,
+                vertical: 1,
+              ),
+              decoration: BoxDecoration(
+                color: activityColor.withAlpha(24),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                dormActivityLabel(member),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: activityColor,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
           ],
         ),
       ),

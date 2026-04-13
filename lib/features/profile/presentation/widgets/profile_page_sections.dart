@@ -9,7 +9,7 @@ import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_menu_group_card.dart';
 import 'package:sleep_dorm_app/core/widgets/user_avatar.dart';
-import 'package:sleep_dorm_app/features/profile/data/profile_badges.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/widgets/profile_badge_support.dart';
 
 class ProfileHeaderSection extends StatelessWidget {
   const ProfileHeaderSection({
@@ -219,12 +219,12 @@ class ProfileInsightBlock extends StatelessWidget {
   });
 
   final SleepReport report;
-  final List<ProfileBadgeMeta> badges;
+  final List<ProfileBadgeStatusData> badges;
   final VoidCallback onReportTap;
   final VoidCallback onDreamTap;
   final VoidCallback onThoughtTap;
   final VoidCallback onBadgeOverviewTap;
-  final ValueChanged<ProfileBadgeMeta> onBadgeTap;
+  final ValueChanged<ProfileBadgeStatusData> onBadgeTap;
 
   @override
   Widget build(BuildContext context) {
@@ -728,9 +728,9 @@ class _BadgePreviewCard extends StatelessWidget {
     required this.onBadgeTap,
   });
 
-  final List<ProfileBadgeMeta> badges;
+  final List<ProfileBadgeStatusData> badges;
   final VoidCallback onOverviewTap;
-  final ValueChanged<ProfileBadgeMeta> onBadgeTap;
+  final ValueChanged<ProfileBadgeStatusData> onBadgeTap;
 
   @override
   Widget build(BuildContext context) {
@@ -776,6 +776,7 @@ class _BadgePreviewCard extends StatelessWidget {
                 Expanded(
                   child: _BadgePreviewItem(
                     badge: badges[index],
+                    index: index,
                     onTap: () => onBadgeTap(badges[index]),
                   ),
                 ),
@@ -791,15 +792,21 @@ class _BadgePreviewCard extends StatelessWidget {
 }
 
 class _BadgePreviewItem extends StatelessWidget {
-  const _BadgePreviewItem({required this.badge, required this.onTap});
+  const _BadgePreviewItem({
+    required this.badge,
+    required this.index,
+    required this.onTap,
+  });
 
-  final ProfileBadgeMeta badge;
+  final ProfileBadgeStatusData badge;
+  final int index;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
     return Material(
+      key: ValueKey<String>('profile-badge-preview-slot-$index'),
       color: Colors.transparent,
       child: InkWell(
         borderRadius: AppRadius.surfaceSecondary,
@@ -814,17 +821,21 @@ class _BadgePreviewItem extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: badge.unlocked
-                      ? palette.primaryHighlight
+                      ? badge.selected
+                          ? palette.primaryHighlight
+                          : palette.primary.withAlpha(20)
                       : AppColors.surfaceSoft,
                   border: Border.all(
-                    color: badge.unlocked
+                    color: badge.selected
+                        ? palette.primary
+                        : badge.unlocked
                         ? palette.primarySoft
                         : AppColors.surfaceBorder,
-                    width: 2,
+                    width: badge.selected ? 2.5 : 2,
                   ),
                 ),
                 child: Icon(
-                  badge.icon,
+                  badge.unlocked ? badge.badge.icon : Icons.lock_rounded,
                   color: badge.unlocked
                       ? palette.primaryDeep
                       : AppColors.textHint,
@@ -832,13 +843,15 @@ class _BadgePreviewItem extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                badge.title,
+                badge.badge.label,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: badge.unlocked
                       ? AppColors.textPrimary
                       : AppColors.textHint,
                 ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

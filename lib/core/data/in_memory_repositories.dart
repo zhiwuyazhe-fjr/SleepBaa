@@ -82,6 +82,7 @@ Dorm buildDefaultDorm(String currentUserId) {
         uid: currentUserId,
         name: 'Paul',
         status: DormMemberStatus.quiet,
+        presenceStatus: DormPresenceStatus.returned,
         sleepModeActive: false,
         lastActiveAt: DateTime.now().subtract(const Duration(minutes: 22)),
         note: '准备做睡前放松。',
@@ -90,7 +91,8 @@ Dorm buildDefaultDorm(String currentUserId) {
       DormMember(
         uid: 'roommate-a',
         name: '林淯',
-        status: DormMemberStatus.sleeping,
+        status: DormMemberStatus.quiet,
+        presenceStatus: DormPresenceStatus.returned,
         sleepModeActive: true,
         lastActiveAt: DateTime.now().subtract(const Duration(minutes: 12)),
         note: '已开启睡眠模式。',
@@ -100,6 +102,7 @@ Dorm buildDefaultDorm(String currentUserId) {
         uid: 'roommate-b',
         name: '阿哲',
         status: DormMemberStatus.active,
+        presenceStatus: DormPresenceStatus.away,
         sleepModeActive: false,
         lastActiveAt: DateTime.now().subtract(const Duration(minutes: 6)),
         note: '正在收拾桌面，预计 10 分钟后安静下来。',
@@ -124,6 +127,13 @@ Dorm buildDefaultDorm(String currentUserId) {
       ),
     ],
     invites: const <DormInvite>[],
+    locationAnchor: DormLocationAnchor(
+      latitude: 31.2304,
+      longitude: 121.4737,
+      radiusMeters: 100,
+      recordedAt: DateTime.now().subtract(const Duration(days: 2)),
+      recordedByUid: currentUserId,
+    ),
     earnedDormBadgeIds: <String>['no-trouble-room', 'no-wake-room'],
   );
 }
@@ -143,6 +153,36 @@ List<NightRecommendation> buildDefaultRecommendations() {
         title: '深海海浪',
         subtitle: '低刺激白噪音 · 45 分钟',
         duration: Duration(minutes: 45),
+      ),
+    ),
+    NightRecommendation(
+      id: 'audio-rain',
+      title: '夜雨白噪音',
+      subtitle: '用连续雨声盖掉零碎杂音，适合容易被环境声打断的夜晚。',
+      type: RecommendationType.audio,
+      icon: Icons.water_drop_rounded,
+      tags: const <String>['20 分钟', '雨声'],
+      executionState: RecommendationExecutionState.idle,
+      track: const AudioTrack(
+        id: 'rain-mist',
+        title: '雨夜薄雾',
+        subtitle: '细密雨声背景 · 30 分钟',
+        duration: Duration(minutes: 30),
+      ),
+    ),
+    NightRecommendation(
+      id: 'audio-breeze',
+      title: '午夜微风',
+      subtitle: '轻柔风声与低频底噪混合，更适合需要长时间陪伴的入睡阶段。',
+      type: RecommendationType.audio,
+      icon: Icons.air_rounded,
+      tags: const <String>['25 分钟', '轻风'],
+      executionState: RecommendationExecutionState.idle,
+      track: const AudioTrack(
+        id: 'midnight-breeze',
+        title: '午夜微风',
+        subtitle: '轻风包裹感 · 25 分钟',
+        duration: Duration(minutes: 25),
       ),
     ),
     NightRecommendation(
@@ -200,6 +240,9 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
 
   @override
   bool get isAuthenticating => false;
+
+  @override
+  bool get hasCompletedInitialAuthBootstrap => true;
 
   @override
   String? get lastAuthError => null;
@@ -481,6 +524,27 @@ class InMemoryRecommendationRepository extends ChangeNotifier
   }
 
   @override
+  Future<void> refreshAudioCatalog() async {}
+
+  @override
+  Future<AudioTrack?> resolvePlayableTrack({
+    NightRecommendation? recommendation,
+    bool forceRefresh = false,
+  }) async {
+    final AudioTrack? directTrack = recommendation?.track;
+    if (directTrack != null) {
+      return directTrack;
+    }
+    try {
+      return _tonightRecommendations
+          .firstWhere((NightRecommendation item) => item.track != null)
+          .track;
+    } on StateError {
+      return null;
+    }
+  }
+
+  @override
   Future<void> setRecommendationState(
     String recommendationId,
     RecommendationExecutionState state,
@@ -488,14 +552,12 @@ class InMemoryRecommendationRepository extends ChangeNotifier
     _tonightRecommendations = _tonightRecommendations.map((
       NightRecommendation item,
     ) {
+      if (item.type == RecommendationType.audio &&
+          item.id != recommendationId &&
+          state == RecommendationExecutionState.playing) {
+        return item.copyWith(executionState: RecommendationExecutionState.idle);
+      }
       if (item.id != recommendationId) {
-        if (item.type == RecommendationType.audio &&
-            item.executionState == RecommendationExecutionState.playing &&
-            state != RecommendationExecutionState.playing) {
-          return item.copyWith(
-            executionState: RecommendationExecutionState.selected,
-          );
-        }
         return item;
       }
       return item.copyWith(executionState: state);
@@ -1083,6 +1145,7 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
     required String name,
     String? overview,
     DormRulesSettings? rulesSettings,
+    DormLocationAnchor? locationAnchor,
   }) async {
     final DormRulesSettings nextRules =
         rulesSettings ?? buildDefaultDormRulesSettings();
@@ -1101,6 +1164,7 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
           uid: _currentUserId,
           name: _currentUserId == 'anon-paul' ? 'Paul' : '我',
           status: DormMemberStatus.quiet,
+          presenceStatus: DormPresenceStatus.returned,
           sleepModeActive: false,
           lastActiveAt: now,
           note: '已创建宿舍，等待邀请舍友加入。',
@@ -1118,6 +1182,7 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
         ),
       ],
       invites: const <DormInvite>[],
+      locationAnchor: locationAnchor,
     );
     _emitCurrentState();
     notifyListeners();
@@ -1126,20 +1191,30 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
   @override
   Future<void> updateCurrentUserStatus({
     required String uid,
-    required DormMemberStatus status,
-    required bool sleepModeActive,
-    required String note,
+    DormMemberStatus? status,
+    DormPresenceStatus? presenceStatus,
+    bool? sleepModeActive,
+    String? note,
   }) async {
+    final DormMember? existingMember = _currentDorm.members.cast<DormMember?>().firstWhere(
+      (DormMember? member) => member?.uid == uid,
+      orElse: () => null,
+    );
+    if (existingMember == null) {
+      return;
+    }
+    final String nextNote = note ?? existingMember.note;
     _currentDorm = _currentDorm.copyWith(
       members: _currentDorm.members.map((DormMember member) {
         if (member.uid != uid) {
           return member;
         }
         return member.copyWith(
-          status: status,
-          sleepModeActive: sleepModeActive,
+          status: status ?? member.status,
+          presenceStatus: presenceStatus ?? member.presenceStatus,
+          sleepModeActive: sleepModeActive ?? member.sleepModeActive,
           lastActiveAt: DateTime.now(),
-          note: note,
+          note: nextNote,
         );
       }).toList(),
       events: <DormEvent>[
@@ -1147,12 +1222,41 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
           id: IdGenerator.next('dorm-event'),
           type: DormEventType.memberStatus,
           title: uid == _currentUserId ? '你已更新状态' : '室友更新了状态',
-          detail: note,
+          detail: nextNote,
           createdAt: DateTime.now(),
           actorUid: uid,
         ),
         ..._currentDorm.events,
       ],
+    );
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  @override
+  void hydrateCurrentDormLocationAnchor(DormLocationAnchor anchor) {
+    _currentDorm = _currentDorm.copyWith(locationAnchor: anchor);
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  @override
+  Future<void> saveDormLocationAnchor(DormLocationAnchor anchor) async {
+    _currentDorm = _currentDorm.copyWith(locationAnchor: anchor);
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  @override
+  Future<void> updateDormEnvironment({
+    int? noiseDb,
+    String? lightLabel,
+    String? quietLabel,
+  }) async {
+    _currentDorm = _currentDorm.copyWith(
+      noiseDb: noiseDb,
+      lightLabel: lightLabel,
+      quietLabel: quietLabel,
     );
     _emitCurrentState();
     notifyListeners();
@@ -1352,6 +1456,7 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
                 uid: _currentUserId,
                 name: _currentUserId == 'anon-paul' ? 'Paul' : '新室友',
                 status: DormMemberStatus.quiet,
+                presenceStatus: DormPresenceStatus.returned,
                 sleepModeActive: false,
                 lastActiveAt: DateTime.now(),
                 note: '通过邀请码加入宿舍。',

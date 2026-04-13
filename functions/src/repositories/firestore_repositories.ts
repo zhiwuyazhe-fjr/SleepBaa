@@ -85,7 +85,35 @@ const Collections = {
   dormMembers: "dorm_members",
   dormEvents: "dorm_events",
   dormInvites: "dorm_invites",
+  audioTracks: "audio_tracks",
 } as const;
+
+const AUDIO_TRACK_CATALOG = [
+  {
+    id: "deep-ocean",
+    title: "深海海浪",
+    subtitle: "低刺激白噪音 · 45 分钟",
+    durationSeconds: 45 * 60,
+    fileIdEnv: "SLEEP_AUDIO_DEEP_OCEAN_FILE_ID",
+    urlEnv: "SLEEP_AUDIO_DEEP_OCEAN_URL",
+  },
+  {
+    id: "rain-mist",
+    title: "雨夜薄雾",
+    subtitle: "细密雨声背景 · 30 分钟",
+    durationSeconds: 30 * 60,
+    fileIdEnv: "SLEEP_AUDIO_RAIN_MIST_FILE_ID",
+    urlEnv: "SLEEP_AUDIO_RAIN_MIST_URL",
+  },
+  {
+    id: "midnight-breeze",
+    title: "午夜微风",
+    subtitle: "轻风包裹感 · 25 分钟",
+    durationSeconds: 25 * 60,
+    fileIdEnv: "SLEEP_AUDIO_MIDNIGHT_BREEZE_FILE_ID",
+    urlEnv: "SLEEP_AUDIO_MIDNIGHT_BREEZE_URL",
+  },
+] as const;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -333,6 +361,7 @@ function defaultDormMember(
     uid,
     name,
     status: "quiet",
+    presenceStatus: "returned",
     sleepModeActive: false,
     lastActiveAt: nowIso(),
     note: "今晚已准备进入睡前流程。",
@@ -751,6 +780,10 @@ export interface AssistantDataRepository {
     uid: string,
     payload: JsonMap,
   ): Promise<JsonMap>;
+  getAudioTrackCatalog(uid: string): Promise<JsonMap>;
+  saveTonightInterference(uid: string, patch: JsonMap): Promise<JsonMap>;
+  saveDormLocationAnchor(uid: string, anchor: JsonMap): Promise<JsonMap>;
+  saveDormEnvironment(uid: string, patch: JsonMap): Promise<JsonMap>;
   buildPendingSleepMemoBanner(
     uid: string,
     sessionId: string,
@@ -784,6 +817,77 @@ export class FirestoreRepository implements AssistantDataRepository {
 
   async getUserSettings(uid: string): Promise<ContextUserSettings> {
     return this.readUserSettings(uid);
+  }
+
+  async getAudioTrackCatalog(_uid: string): Promise<JsonMap> {
+    const collectionTracks = (await this.store.query(Collections.audioTracks, {
+      limit: 50,
+    }))
+      .filter((doc) => asBoolean(withoutMeta(doc).enabled, false))
+      .sort((a, b) => {
+        const left = asNumber(withoutMeta(a).sortOrder, 0);
+        const right = asNumber(withoutMeta(b).sortOrder, 0);
+        return left - right;
+      });
+    const remoteTracks = await Promise.all(
+      collectionTracks.map(async (doc) => {
+        const value = withoutMeta(doc);
+        const storageFileId = asString(value.storageFileId).trim();
+        let sourceUrl = asString(value.sourceUrl).trim();
+        if (!sourceUrl && storageFileId && this.fileStorage) {
+          try {
+            sourceUrl = await this.fileStorage.getTemporaryUrl(storageFileId);
+          } catch (error) {
+            console.warn(
+              `[repo] failed to resolve temp audio url for ${asString(value.id)}:`,
+              error,
+            );
+          }
+        }
+        return {
+          id: asString(value.id),
+          title: asString(value.title, "助眠音频"),
+          subtitle: asString(value.subtitle, "CloudBase 音频资源"),
+          durationSeconds: asNumber(value.durationSeconds, 0),
+          storageFileId: storageFileId || null,
+          sourceUrl: sourceUrl || null,
+          tags: Array.isArray(value.tags) ? value.tags : [],
+          sortOrder: asNumber(value.sortOrder, 0),
+        };
+      }),
+    );
+    const filteredRemoteTracks = remoteTracks.filter(
+      (item) => item.id.length > 0 && item.sourceUrl,
+    );
+    if (filteredRemoteTracks.length > 0) {
+      return { tracks: filteredRemoteTracks };
+    }
+
+    const tracks = await Promise.all(
+      AUDIO_TRACK_CATALOG.map(async (track) => {
+        const storageFileId = asString(process.env[track.fileIdEnv]).trim();
+        let sourceUrl = asString(process.env[track.urlEnv]).trim();
+        if (!sourceUrl && storageFileId && this.fileStorage) {
+          try {
+            sourceUrl = await this.fileStorage.getTemporaryUrl(storageFileId);
+          } catch (error) {
+            console.warn(
+              `[repo] failed to resolve temp audio url for ${track.id}:`,
+              error,
+            );
+          }
+        }
+        return {
+          id: track.id,
+          title: track.title,
+          subtitle: track.subtitle,
+          durationSeconds: track.durationSeconds,
+          storageFileId: storageFileId || null,
+          sourceUrl: sourceUrl || null,
+        };
+      }),
+    );
+    return { tracks };
   }
 
   async readAssistantProfile(uid: string): Promise<ContextAssistantProfile> {
@@ -867,8 +971,9 @@ export class FirestoreRepository implements AssistantDataRepository {
           uid: asString(value.uid),
           name: asString(value.name, "舍友"),
           status: asString(value.status, "quiet"),
+          presenceStatus: asString(value.presenceStatus, "returned"),
           sleepModeActive: asBoolean(value.sleepModeActive, false),
-          lastActiveAt: asString(value.lastActiveAt),
+          lastActiveAt: asString(value.lastActiveAt, nowIso()),
           note: asString(value.note),
           avatarUrl: asString(value.avatarUrl) || undefined,
           displayBadgeId: asString(value.displayBadgeId) || undefined,
@@ -887,6 +992,9 @@ export class FirestoreRepository implements AssistantDataRepository {
       }),
       ...("rulesSettings" in dormDoc
         ? { rulesSettings: dormDoc.rulesSettings }
+        : {}),
+      ...("locationAnchor" in dormDoc
+        ? { locationAnchor: dormDoc.locationAnchor }
         : {}),
       earnedDormBadgeIds:
         earnedDormBadgeIds.length > 0
@@ -1246,6 +1354,10 @@ export class FirestoreRepository implements AssistantDataRepository {
     const memberId = `${dormId}:${uid}`;
     const existingMember = await this.store.get(Collections.dormMembers, memberId);
     const nextStatus = asString(payload.status, "quiet");
+    const nextPresenceStatus = asString(
+      payload.presenceStatus,
+      asString(existingMember?.presenceStatus, "returned"),
+    );
     const nextSleepModeActive = asBoolean(payload.sleepModeActive, false);
     const nextNote = asString(payload.note, "已更新宿舍状态。");
     const updatedAt = nowIso();
@@ -1257,6 +1369,7 @@ export class FirestoreRepository implements AssistantDataRepository {
       name: user.displayName,
       avatarUrl: user.avatarUrl ?? null,
       status: nextStatus,
+      presenceStatus: nextPresenceStatus,
       sleepModeActive: nextSleepModeActive,
       note: nextNote,
       lastActiveAt: updatedAt,
@@ -1271,6 +1384,63 @@ export class FirestoreRepository implements AssistantDataRepository {
       createdAt: updatedAt,
     });
     return withoutMeta((await this.store.get(Collections.dormMembers, memberId)) ?? {});
+  }
+
+  async saveTonightInterference(uid: string, patch: JsonMap): Promise<JsonMap> {
+    await this.ensureUserBootstrap(uid);
+    const currentState = (await this.getUserState(uid)) ?? ({} as UserStateDoc);
+    const currentInterference = asMap(
+      (currentState as unknown as JsonMap).tonightInterference,
+    );
+    const nextInterference = {
+      ...currentInterference,
+      ...patch,
+      updatedAt: nowIso(),
+    };
+    await this.writeUserState(uid, {
+      tonightInterference: nextInterference as UserStateDoc["tonightInterference"],
+    });
+    return nextInterference;
+  }
+
+  async saveDormLocationAnchor(uid: string, anchor: JsonMap): Promise<JsonMap> {
+    const user = await this.getUserProfile(uid);
+    const dormId = user.dormId ? user.dormId.trim() : "";
+    if (!dormId) {
+      throw new Error("Create or join a dorm before saving dorm location.");
+    }
+    await this.store.merge(Collections.dorms, dormId, {
+      locationAnchor: {
+        latitude: asNumber(anchor.latitude, 0),
+        longitude: asNumber(anchor.longitude, 0),
+        radiusMeters: asNumber(anchor.radiusMeters, 100),
+        recordedAt: asString(anchor.recordedAt, nowIso()),
+        recordedByUid: asString(anchor.recordedByUid, uid),
+      },
+      updatedAt: nowIso(),
+    });
+    return withoutMeta((await this.store.get(Collections.dorms, dormId)) ?? {});
+  }
+
+  async saveDormEnvironment(uid: string, patch: JsonMap): Promise<JsonMap> {
+    const user = await this.getUserProfile(uid);
+    const dormId = user.dormId ? user.dormId.trim() : "";
+    if (!dormId) {
+      throw new Error("Create or join a dorm before updating dorm environment.");
+    }
+    await this.store.merge(Collections.dorms, dormId, {
+      ...(Object.prototype.hasOwnProperty.call(patch, "noiseDb")
+        ? { noiseDb: asNumber(patch.noiseDb, 0) }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(patch, "lightLabel")
+        ? { lightLabel: asString(patch.lightLabel, "未设置") }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(patch, "quietLabel")
+        ? { quietLabel: asString(patch.quietLabel, "平稳") }
+        : {}),
+      updatedAt: nowIso(),
+    });
+    return withoutMeta((await this.store.get(Collections.dorms, dormId)) ?? {});
   }
 
   async getSleepSession(sessionId: string): Promise<JsonMap | null> {
@@ -1553,6 +1723,26 @@ export class FirestoreRepository implements AssistantDataRepository {
       archivedAt: null,
       lightLabel: "适中",
       quietLabel: "可优化",
+      ...(payload.locationAnchor
+        ? {
+            locationAnchor: {
+              latitude: asNumber(asMap(payload.locationAnchor).latitude, 0),
+              longitude: asNumber(asMap(payload.locationAnchor).longitude, 0),
+              radiusMeters: asNumber(
+                asMap(payload.locationAnchor).radiusMeters,
+                100,
+              ),
+              recordedAt: asString(
+                asMap(payload.locationAnchor).recordedAt,
+                createdAt,
+              ),
+              recordedByUid: asString(
+                asMap(payload.locationAnchor).recordedByUid,
+                uid,
+              ),
+            },
+          }
+        : {}),
       rulesSettings,
       rules: buildDormRules(rulesSettings),
       createdAt,

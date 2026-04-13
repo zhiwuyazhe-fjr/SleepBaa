@@ -18,6 +18,8 @@ enum NotificationCategory { reminder, session, dorm, system }
 
 enum DormMemberStatus { sleeping, quiet, away, active }
 
+enum DormPresenceStatus { returned, away }
+
 enum DormEventType { memberStatus, ruleUpdate, notification, invite, system }
 
 enum DormInviteStatus { pending, accepted, expired, revoked }
@@ -25,6 +27,18 @@ enum DormInviteStatus { pending, accepted, expired, revoked }
 enum DormStatus { active, archived }
 
 enum PlaybackState { stopped, playing, paused, completed }
+
+enum InterferenceFactorType { noise, light, phoneUsage, emotion }
+
+enum InterferenceFactorStatus {
+  idle,
+  measuring,
+  ready,
+  denied,
+  unavailable,
+  unsupported,
+  error,
+}
 
 enum SleepCaptureType { dream, memo }
 
@@ -389,24 +403,36 @@ class AudioTrack {
     required this.title,
     required this.subtitle,
     required this.duration,
+    this.assetPath,
+    this.sourceUrl,
+    this.storageFileId,
   });
 
   final String id;
   final String title;
   final String subtitle;
   final Duration duration;
+  final String? assetPath;
+  final String? sourceUrl;
+  final String? storageFileId;
 
   AudioTrack copyWith({
     String? id,
     String? title,
     String? subtitle,
     Duration? duration,
+    String? assetPath,
+    String? sourceUrl,
+    String? storageFileId,
   }) {
     return AudioTrack(
       id: id ?? this.id,
       title: title ?? this.title,
       subtitle: subtitle ?? this.subtitle,
       duration: duration ?? this.duration,
+      assetPath: assetPath ?? this.assetPath,
+      sourceUrl: sourceUrl ?? this.sourceUrl,
+      storageFileId: storageFileId ?? this.storageFileId,
     );
   }
 }
@@ -842,6 +868,7 @@ class DormMember {
     required this.uid,
     required this.name,
     required this.status,
+    required this.presenceStatus,
     required this.sleepModeActive,
     required this.lastActiveAt,
     required this.note,
@@ -852,6 +879,7 @@ class DormMember {
   final String uid;
   final String name;
   final DormMemberStatus status;
+  final DormPresenceStatus presenceStatus;
   final bool sleepModeActive;
   final DateTime lastActiveAt;
   final String note;
@@ -862,6 +890,7 @@ class DormMember {
     String? uid,
     String? name,
     DormMemberStatus? status,
+    DormPresenceStatus? presenceStatus,
     bool? sleepModeActive,
     DateTime? lastActiveAt,
     String? note,
@@ -872,11 +901,44 @@ class DormMember {
       uid: uid ?? this.uid,
       name: name ?? this.name,
       status: status ?? this.status,
+      presenceStatus: presenceStatus ?? this.presenceStatus,
       sleepModeActive: sleepModeActive ?? this.sleepModeActive,
       lastActiveAt: lastActiveAt ?? this.lastActiveAt,
       note: note ?? this.note,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       displayBadgeId: displayBadgeId ?? this.displayBadgeId,
+    );
+  }
+}
+
+class DormLocationAnchor {
+  const DormLocationAnchor({
+    required this.latitude,
+    required this.longitude,
+    required this.radiusMeters,
+    required this.recordedAt,
+    required this.recordedByUid,
+  });
+
+  final double latitude;
+  final double longitude;
+  final double radiusMeters;
+  final DateTime recordedAt;
+  final String recordedByUid;
+
+  DormLocationAnchor copyWith({
+    double? latitude,
+    double? longitude,
+    double? radiusMeters,
+    DateTime? recordedAt,
+    String? recordedByUid,
+  }) {
+    return DormLocationAnchor(
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      radiusMeters: radiusMeters ?? this.radiusMeters,
+      recordedAt: recordedAt ?? this.recordedAt,
+      recordedByUid: recordedByUid ?? this.recordedByUid,
     );
   }
 }
@@ -977,6 +1039,7 @@ class Dorm {
     required this.members,
     this.status = DormStatus.active,
     this.archivedAt,
+    this.locationAnchor,
     this.rulesSettings = const DormRulesSettings(
       quietHours: '23:00 - 07:00',
       specialCase: '如果有临时讨论或紧急情况，请提前在宿舍群里说明。',
@@ -1009,6 +1072,7 @@ class Dorm {
   final List<DormMember> members;
   final DormStatus status;
   final DateTime? archivedAt;
+  final DormLocationAnchor? locationAnchor;
   final DormRulesSettings rulesSettings;
   final List<DormEvent> events;
   final List<DormInvite> invites;
@@ -1035,6 +1099,8 @@ class Dorm {
     DormStatus? status,
     DateTime? archivedAt,
     bool clearArchivedAt = false,
+    DormLocationAnchor? locationAnchor,
+    bool clearLocationAnchor = false,
     DormRulesSettings? rulesSettings,
     List<DormEvent>? events,
     List<DormInvite>? invites,
@@ -1053,6 +1119,9 @@ class Dorm {
       members: members ?? this.members,
       status: status ?? this.status,
       archivedAt: clearArchivedAt ? null : archivedAt ?? this.archivedAt,
+      locationAnchor: clearLocationAnchor
+          ? null
+          : locationAnchor ?? this.locationAnchor,
       rulesSettings: rulesSettings ?? this.rulesSettings,
       events: events ?? this.events,
       invites: invites ?? this.invites,
@@ -1232,6 +1301,122 @@ class SleepReport {
       dreamEntriesCount: dreamEntriesCount ?? this.dreamEntriesCount,
       highlights: highlights ?? this.highlights,
       generatedAt: generatedAt ?? this.generatedAt,
+    );
+  }
+}
+
+class InterferenceFactorSnapshot {
+  const InterferenceFactorSnapshot({
+    required this.type,
+    required this.title,
+    required this.value,
+    required this.gradeLabel,
+    required this.status,
+    required this.detail,
+    required this.source,
+    this.measuredAt,
+    this.numericValue,
+    this.score,
+  });
+
+  final InterferenceFactorType type;
+  final String title;
+  final String value;
+  final String gradeLabel;
+  final InterferenceFactorStatus status;
+  final String detail;
+  final String source;
+  final DateTime? measuredAt;
+  final double? numericValue;
+  final int? score;
+
+  bool get isFresh {
+    if (measuredAt == null) {
+      return false;
+    }
+    return DateTime.now().difference(measuredAt!) <
+        const Duration(minutes: 15);
+  }
+
+  InterferenceFactorSnapshot copyWith({
+    InterferenceFactorType? type,
+    String? title,
+    String? value,
+    String? gradeLabel,
+    InterferenceFactorStatus? status,
+    String? detail,
+    String? source,
+    DateTime? measuredAt,
+    bool clearMeasuredAt = false,
+    double? numericValue,
+    bool clearNumericValue = false,
+    int? score,
+    bool clearScore = false,
+  }) {
+    return InterferenceFactorSnapshot(
+      type: type ?? this.type,
+      title: title ?? this.title,
+      value: value ?? this.value,
+      gradeLabel: gradeLabel ?? this.gradeLabel,
+      status: status ?? this.status,
+      detail: detail ?? this.detail,
+      source: source ?? this.source,
+      measuredAt: clearMeasuredAt ? null : measuredAt ?? this.measuredAt,
+      numericValue: clearNumericValue ? null : numericValue ?? this.numericValue,
+      score: clearScore ? null : score ?? this.score,
+    );
+  }
+}
+
+class TonightInterferenceState {
+  const TonightInterferenceState({
+    required this.noise,
+    required this.light,
+    required this.phoneUsage,
+    required this.emotion,
+    required this.updatedAt,
+  });
+
+  final InterferenceFactorSnapshot noise;
+  final InterferenceFactorSnapshot light;
+  final InterferenceFactorSnapshot phoneUsage;
+  final InterferenceFactorSnapshot emotion;
+  final DateTime updatedAt;
+
+  InterferenceFactorSnapshot factorOf(InterferenceFactorType type) {
+    return switch (type) {
+      InterferenceFactorType.noise => noise,
+      InterferenceFactorType.light => light,
+      InterferenceFactorType.phoneUsage => phoneUsage,
+      InterferenceFactorType.emotion => emotion,
+    };
+  }
+
+  List<InterferenceFactorSnapshot> get factors =>
+      <InterferenceFactorSnapshot>[noise, light, phoneUsage, emotion];
+
+  TonightInterferenceState replaceFactor(InterferenceFactorSnapshot factor) {
+    return switch (factor.type) {
+      InterferenceFactorType.noise => copyWith(noise: factor),
+      InterferenceFactorType.light => copyWith(light: factor),
+      InterferenceFactorType.phoneUsage => copyWith(phoneUsage: factor),
+      InterferenceFactorType.emotion => copyWith(emotion: factor),
+    };
+  }
+
+  TonightInterferenceState copyWith({
+    InterferenceFactorSnapshot? noise,
+    InterferenceFactorSnapshot? light,
+    InterferenceFactorSnapshot? phoneUsage,
+    InterferenceFactorSnapshot? emotion,
+    DateTime? updatedAt,
+  }) {
+    return TonightInterferenceState(
+      noise: noise ?? this.noise,
+      light: light ?? this.light,
+      phoneUsage: phoneUsage ?? this.phoneUsage,
+      emotion: emotion ?? this.emotion,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/core/backend/assistant_reply_gateway.dart';
@@ -14,6 +16,8 @@ import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/notifications/unified_notification.dart';
 import 'package:sleep_dorm_app/core/state/audio_playback_controller.dart';
+import 'package:sleep_dorm_app/core/state/dorm_presence_sync_controller.dart';
+import 'package:sleep_dorm_app/core/state/interference_probe_controller.dart';
 import 'package:sleep_dorm_app/core/state/night_welcome_controller.dart';
 import 'package:sleep_dorm_app/core/state/sleep_experience_controller.dart';
 
@@ -44,7 +48,7 @@ class AppScope extends StatefulWidget {
   State<AppScope> createState() => _AppScopeState();
 }
 
-class _AppScopeState extends State<AppScope> {
+class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
   late final AuthRepository _authRepository;
   late final UserSettingsRepository _settingsRepository;
   late final RecommendationRepository _recommendationRepository;
@@ -59,6 +63,8 @@ class _AppScopeState extends State<AppScope> {
   late final UnifiedNotificationDispatcher _unifiedNotificationDispatcher;
   late final PassiveToastNotificationChannel _passiveToastNotificationChannel;
   late final AudioPlaybackController _audioPlaybackController;
+  late final DormPresenceSyncController _dormPresenceSyncController;
+  late final InterferenceProbeController _interferenceProbeController;
   late final SleepExperienceController _sleepExperienceController;
   late final NightWelcomeController _nightWelcomeController;
   late final ProfileFacade _profileFacade;
@@ -71,15 +77,28 @@ class _AppScopeState extends State<AppScope> {
   late final AssistantReplyGateway _assistantReplyGateway;
   late final AppServices _services;
   CloudBaseSnapshotStore? _cloudBaseSnapshotStore;
+  CloudBaseAppApiClient? _cloudBaseAppApiClient;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _buildRepositories();
     _passiveToastNotificationChannel = PassiveToastNotificationChannel();
     _unifiedNotificationDispatcher = UnifiedNotificationDispatcher();
     _unifiedNotificationDispatcher.register(_passiveToastNotificationChannel);
     _audioPlaybackController = AudioPlaybackController();
+    _dormPresenceSyncController = DormPresenceSyncController(
+      authRepository: _authRepository,
+      dormRepository: _dormRepository,
+    );
+    _interferenceProbeController = InterferenceProbeController(
+      authRepository: _authRepository,
+      dormRepository: _dormRepository,
+      environment: widget.environment,
+      appApiClient: _cloudBaseAppApiClient,
+      snapshotStore: _cloudBaseSnapshotStore,
+    );
     _nightWelcomeController = NightWelcomeController(
       clock: widget.clock ?? DateTime.now,
       showInDebugOutsideNight:
@@ -143,6 +162,8 @@ class _AppScopeState extends State<AppScope> {
       assistantRepository: _assistantRepository,
       notificationApi: _unifiedNotificationDispatcher,
       audioPlaybackController: _audioPlaybackController,
+      dormPresenceSyncController: _dormPresenceSyncController,
+      interferenceProbeController: _interferenceProbeController,
       sleepExperienceController: _sleepExperienceController,
       nightWelcomeController: _nightWelcomeController,
       profileFacade: _profileFacade,
@@ -159,6 +180,8 @@ class _AppScopeState extends State<AppScope> {
   Future<void> _bootstrapExperience() async {
     try {
       await _sleepExperienceController.bootstrap();
+      await _dormPresenceSyncController.restoreCachedLocationAnchor();
+      await _dormPresenceSyncController.syncPresenceFromCurrentLocation();
     } catch (_) {
       // Auth and callable failures are surfaced through repository state so
       // the app can keep rendering while settings diagnostics explain the
@@ -177,6 +200,7 @@ class _AppScopeState extends State<AppScope> {
         sessionStore: sessionStore,
         authClient: authClient,
       );
+      _cloudBaseAppApiClient = appApiClient;
       final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
         appApiClient: appApiClient,
       );
@@ -278,18 +302,29 @@ class _AppScopeState extends State<AppScope> {
       dormRepository: _dormRepository,
       dreamRepository: _dreamRepository,
     );
+    _cloudBaseAppApiClient = null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_dormPresenceSyncController.syncPresenceFromCurrentLocation());
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _passiveToastNotificationChannel.dispose();
     _assistantFacade.dispose();
     _insightsFacade.dispose();
     _dreamFacade.dispose();
     _notificationFacade.dispose();
     _dormFacade.dispose();
+    _dormPresenceSyncController.dispose();
     _sleepFacade.dispose();
     _profileFacade.dispose();
+    _interferenceProbeController.dispose();
     _sleepExperienceController.dispose();
     _nightWelcomeController.dispose();
     _audioPlaybackController.dispose();
@@ -348,6 +383,8 @@ class AppServices {
     required this.assistantRepository,
     required this.notificationApi,
     required this.audioPlaybackController,
+    required this.dormPresenceSyncController,
+    required this.interferenceProbeController,
     required this.sleepExperienceController,
     required this.nightWelcomeController,
     required this.profileFacade,
@@ -373,6 +410,8 @@ class AppServices {
   final AssistantRepository assistantRepository;
   final UnifiedNotificationApi notificationApi;
   final AudioPlaybackController audioPlaybackController;
+  final DormPresenceSyncController dormPresenceSyncController;
+  final InterferenceProbeController interferenceProbeController;
   final SleepExperienceController sleepExperienceController;
   final NightWelcomeController nightWelcomeController;
   final ProfileFacade profileFacade;

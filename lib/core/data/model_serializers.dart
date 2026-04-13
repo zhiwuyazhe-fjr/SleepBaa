@@ -192,6 +192,9 @@ abstract final class ModelSerializers {
       'title': track.title,
       'subtitle': track.subtitle,
       'durationSeconds': track.duration.inSeconds,
+      'assetPath': track.assetPath,
+      'sourceUrl': track.sourceUrl,
+      'storageFileId': track.storageFileId,
     };
   }
 
@@ -201,6 +204,94 @@ abstract final class ModelSerializers {
       title: map['title'] as String? ?? '',
       subtitle: map['subtitle'] as String? ?? '',
       duration: Duration(seconds: map['durationSeconds'] as int? ?? 0),
+      assetPath: map['assetPath'] as String?,
+      sourceUrl: map['sourceUrl'] as String?,
+      storageFileId: map['storageFileId'] as String?,
+    );
+  }
+
+  static Map<String, dynamic> interferenceFactorSnapshotToMap(
+    InterferenceFactorSnapshot factor,
+  ) {
+    return <String, dynamic>{
+      'type': factor.type.name,
+      'title': factor.title,
+      'value': factor.value,
+      'gradeLabel': factor.gradeLabel,
+      'status': factor.status.name,
+      'detail': factor.detail,
+      'source': factor.source,
+      'measuredAt': factor.measuredAt?.toIso8601String(),
+      'numericValue': factor.numericValue,
+      'score': factor.score,
+    };
+  }
+
+  static InterferenceFactorSnapshot interferenceFactorSnapshotFromMap(
+    Map<String, dynamic> map,
+  ) {
+    final String typeName = map['type'] as String? ?? '';
+    final String statusName = map['status'] as String? ?? '';
+    return InterferenceFactorSnapshot(
+      type: InterferenceFactorType.values.firstWhere(
+        (InterferenceFactorType value) => value.name == typeName,
+        orElse: () => InterferenceFactorType.noise,
+      ),
+      title: map['title'] as String? ?? '',
+      value: map['value'] as String? ?? '--',
+      gradeLabel: map['gradeLabel'] as String? ?? '待检测',
+      status: InterferenceFactorStatus.values.firstWhere(
+        (InterferenceFactorStatus value) => value.name == statusName,
+        orElse: () => InterferenceFactorStatus.idle,
+      ),
+      detail: map['detail'] as String? ?? '',
+      source: map['source'] as String? ?? '',
+      measuredAt: map['measuredAt'] == null
+          ? null
+          : DateTime.tryParse(map['measuredAt'] as String? ?? ''),
+      numericValue: (map['numericValue'] as num?)?.toDouble(),
+      score: (map['score'] as num?)?.toInt(),
+    );
+  }
+
+  static Map<String, dynamic> tonightInterferenceStateToMap(
+    TonightInterferenceState state,
+  ) {
+    return <String, dynamic>{
+      'noise': interferenceFactorSnapshotToMap(state.noise),
+      'light': interferenceFactorSnapshotToMap(state.light),
+      'phoneUsage': interferenceFactorSnapshotToMap(state.phoneUsage),
+      'emotion': interferenceFactorSnapshotToMap(state.emotion),
+      'updatedAt': state.updatedAt.toIso8601String(),
+    };
+  }
+
+  static TonightInterferenceState tonightInterferenceStateFromMap(
+    Map<String, dynamic> map, {
+    required TonightInterferenceState fallback,
+  }) {
+    InterferenceFactorSnapshot parseFactor(
+      String key,
+      InterferenceFactorSnapshot fallbackFactor,
+    ) {
+      final dynamic rawValue = map[key];
+      if (rawValue is Map) {
+        return interferenceFactorSnapshotFromMap(
+          Map<String, dynamic>.from(rawValue),
+        );
+      }
+      return fallbackFactor;
+    }
+
+    return TonightInterferenceState(
+      noise: parseFactor('noise', fallback.noise),
+      light: parseFactor('light', fallback.light),
+      phoneUsage: parseFactor('phoneUsage', fallback.phoneUsage),
+      emotion: parseFactor('emotion', fallback.emotion),
+      updatedAt: map['updatedAt'] == null
+          ? fallback.updatedAt
+          : DateTime.tryParse(map['updatedAt'] as String? ?? '') ??
+                fallback.updatedAt,
     );
   }
 
@@ -403,6 +494,30 @@ abstract final class ModelSerializers {
       createdAt: _dateValue(map['createdAt']) ?? DateTime.now(),
       emotionLabel: map['emotionLabel'] as String?,
       sessionId: map['sessionId'] as String?,
+    );
+  }
+
+  static Map<String, dynamic> dormLocationAnchorToMap(
+    DormLocationAnchor anchor,
+  ) {
+    return <String, dynamic>{
+      'latitude': anchor.latitude,
+      'longitude': anchor.longitude,
+      'radiusMeters': anchor.radiusMeters,
+      'recordedAt': anchor.recordedAt.toIso8601String(),
+      'recordedByUid': anchor.recordedByUid,
+    };
+  }
+
+  static DormLocationAnchor dormLocationAnchorFromMap(
+    Map<String, dynamic> map,
+  ) {
+    return DormLocationAnchor(
+      latitude: (map['latitude'] as num?)?.toDouble() ?? 0,
+      longitude: (map['longitude'] as num?)?.toDouble() ?? 0,
+      radiusMeters: (map['radiusMeters'] as num?)?.toDouble() ?? 100,
+      recordedAt: _dateValue(map['recordedAt']) ?? DateTime.now(),
+      recordedByUid: map['recordedByUid'] as String? ?? '',
     );
   }
 

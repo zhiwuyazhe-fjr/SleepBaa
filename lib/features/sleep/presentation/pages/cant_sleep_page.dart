@@ -25,15 +25,31 @@ class _CantSleepPageState extends State<CantSleepPage> {
     return Scaffold(
       backgroundColor: AppColors.darkBackground,
       body: ListenableBuilder(
-        listenable: services.audioPlaybackController,
+        listenable: Listenable.merge(<Listenable>[
+          services.audioPlaybackController,
+          services.recommendationRepository,
+        ]),
         builder: (BuildContext context, Widget? child) {
           final NightMoodPalette palette = context.nightMoodPalette;
           final _SleepBlockPlan plan = _plans[_selectedCause]!;
+          final NightRecommendation? audioRecommendation = services
+              .recommendationRepository
+              .tonightRecommendations
+              .cast<NightRecommendation?>()
+              .firstWhere(
+                (NightRecommendation? item) =>
+                    item?.type == RecommendationType.audio,
+                orElse: () => null,
+              );
           final AudioTrack track =
               services.audioPlaybackController.currentTrack ??
-              services.recommendationRepository.tonightRecommendations
-                  .firstWhere((NightRecommendation item) => item.track != null)
-                  .track!;
+              audioRecommendation?.track ??
+              const AudioTrack(
+                id: 'sleep-audio',
+                title: '助眠音频',
+                subtitle: '云端音频准备好后就能继续播放',
+                duration: Duration(minutes: 45),
+              );
 
           return Stack(
             children: <Widget>[
@@ -238,8 +254,10 @@ class _CantSleepPageState extends State<CantSleepPage> {
                                       : '继续播放',
                                   foregroundColor: Colors.white,
                                   onPressed: () async {
-                                    await services.audioPlaybackController
-                                        .toggleTrack(track);
+                                    await services.sleepExperienceController
+                                        .toggleSleepAudio(
+                                          recommendation: audioRecommendation,
+                                        );
                                   },
                                 ),
                               ),

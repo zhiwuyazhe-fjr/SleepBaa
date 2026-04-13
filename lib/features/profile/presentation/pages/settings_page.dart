@@ -22,6 +22,7 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   String? _boundUid;
   bool _isSavingSettings = false;
+  bool _isSavingDormAnchor = false;
   double _sleepGoalHours = 7.5;
   bool _bedtimeReminderEnabled = true;
   bool _morningReminderEnabled = true;
@@ -58,7 +59,7 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) {
         return;
       }
-      await notifyPassiveToast(context, message: '设置已保存');
+      await notifyPassiveToast(context, message: '睡眠设置已保存。');
     } catch (error) {
       if (!mounted) {
         return;
@@ -82,35 +83,17 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _bedtimeReminder = result);
   }
 
-  Future<void> _renameDorm(AppServices services, Dorm dorm) async {
-    final TextEditingController controller = TextEditingController(
-      text: dorm.name,
-    );
-    final String? nextName = await showDialog<String>(
+  Future<String?> _promptDormName(String initialName) {
+    return showDialog<String>(
       context: context,
       builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('编辑宿舍名称'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(hintText: '输入新的宿舍名称'),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(controller.text.trim()),
-              child: const Text('保存'),
-            ),
-          ],
-        );
+        return _DormNameDialog(initialName: initialName);
       },
     );
-    controller.dispose();
+  }
+
+  Future<void> _renameDorm(AppServices services, Dorm dorm) async {
+    final String? nextName = await _promptDormName(dorm.name);
     if (nextName == null || nextName.isEmpty) {
       return;
     }
@@ -118,7 +101,50 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!mounted) {
       return;
     }
-    await notifyPassiveToast(context, message: '宿舍名称已更新');
+    await notifyPassiveToast(context, message: '宿舍名称已更新。');
+  }
+
+  Future<void> _refreshDormLocation(AppServices services) async {
+    setState(() => _isSavingDormAnchor = true);
+    try {
+      final DormLocationAnchor? anchor = await services
+          .dormPresenceSyncController
+          .captureCurrentLocationAnchor(requestPermission: true);
+      if (anchor == null) {
+        if (!mounted) {
+          return;
+        }
+        await notifyPassiveToast(
+          context,
+          message: '未能获取定位，请检查定位权限和系统定位开关。',
+        );
+        return;
+      }
+      await services.dormPresenceSyncController.persistDormLocationAnchor(
+        anchor,
+      );
+      if (!mounted) {
+        return;
+      }
+      final bool usesCloudPersistence =
+          services.environment.usesCloudBase &&
+          services.environment.hasCloudBaseAppApi;
+      await notifyPassiveToast(
+        context,
+        message: usesCloudPersistence
+            ? '宿舍位置已重新记录，并会在下次打开 App 时继续沿用。'
+            : '宿舍位置已记录到本机，但当前未写入云端。',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await notifyPassiveToast(context, message: '记录宿舍位置失败：$error');
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingDormAnchor = false);
+      }
+    }
   }
 
   Future<void> _leaveDorm(AppServices services) async {
@@ -127,7 +153,7 @@ class _SettingsPageState extends State<SettingsPage> {
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('退出宿舍'),
-          content: const Text('退出后将离开当前宿舍空间，最后一位成员退出时宿舍会自动归档。'),
+          content: const Text('退出后将离开当前宿舍空间。若你是最后一位成员，宿舍会自动归档。'),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -148,7 +174,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!mounted) {
       return;
     }
-    await notifyPassiveToast(context, message: '已退出当前宿舍');
+    await notifyPassiveToast(context, message: '你已退出当前宿舍。');
   }
 
   Future<void> _signOut(AppServices services) async {
@@ -157,7 +183,7 @@ class _SettingsPageState extends State<SettingsPage> {
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('退出登录'),
-          content: const Text('退出后会清除当前登录状态，需要重新通过手机号验证码登录或注册。'),
+          content: const Text('退出后将清除当前登录状态，需要重新完成登录。'),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -179,7 +205,25 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
     context.go(AppRoutes.authPhone);
-    await notifyPassiveToast(context, message: '已退出登录');
+    await notifyPassiveToast(context, message: '已退出登录。');
+  }
+
+  String _locationSummary(
+    Dorm dorm, {
+    DormLocationAnchor? effectiveAnchor,
+  }) {
+    final DormLocationAnchor? anchor = effectiveAnchor ?? dorm.locationAnchor;
+    if (dorm.id.isEmpty) {
+      return '加入宿舍后可记录宿舍坐标，用于自动判断“已返 / 未返”。';
+    }
+    if (anchor == null) {
+      return '暂未配置自动回宿判断。点击下方按钮记录当前宿舍位置。';
+    }
+    final DateTime recordedAt = anchor.recordedAt.toLocal();
+    return '已记录宿舍坐标，判定半径 ${anchor.radiusMeters.toStringAsFixed(0)}m。'
+        ' 上次记录于 ${recordedAt.month}/${recordedAt.day} '
+        '${recordedAt.hour.toString().padLeft(2, '0')}:'
+        '${recordedAt.minute.toString().padLeft(2, '0')}。';
   }
 
   @override
@@ -228,7 +272,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             _ProfileLine(
                               label: '昵称',
                               value: profile.displayName.isEmpty
-                                  ? '未设置'
+                                  ? '暂未设置'
                                   : profile.displayName,
                             ),
                             const SizedBox(height: AppSpacing.sm),
@@ -241,7 +285,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             const SizedBox(height: AppSpacing.sm),
                             _ProfileLine(
                               label: '角色',
-                              value: profile.role.isEmpty ? '未设置' : profile.role,
+                              value: profile.role.isEmpty ? '暂未设置' : profile.role,
                             ),
                           ],
                         ),
@@ -353,43 +397,18 @@ class _SettingsPageState extends State<SettingsPage> {
                     children: <Widget>[
                       Text(
                         displayedPhone.isEmpty
-                            ? '当前尚未显示手机号'
+                            ? '当前未显示手机号'
                             : '当前手机号：$displayedPhone',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        services.environment.usesCloudBase
-                            ? '可以从这里重新进入手机号登录 / 验证流程，或安全退出当前账号。'
-                            : '当前为本地演示环境。',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                          height: 1.5,
-                        ),
+                      const SizedBox(height: AppSpacing.lg),
+                      PrimaryButton(
+                        label: '退出登录',
+                        expand: false,
+                        variant: PrimaryButtonVariant.ghost,
+                        icon: Icons.logout_rounded,
+                        onPressed: () => _signOut(services),
                       ),
-                      if (services.environment.usesCloudBase) ...<Widget>[
-                        const SizedBox(height: AppSpacing.lg),
-                        Wrap(
-                          spacing: AppSpacing.sm,
-                          runSpacing: AppSpacing.sm,
-                          children: <Widget>[
-                            PrimaryButton(
-                              label: '手机号登录与验证',
-                              expand: false,
-                              variant: PrimaryButtonVariant.soft,
-                              icon: Icons.verified_user_rounded,
-                              onPressed: () => context.push(AppRoutes.authPhone),
-                            ),
-                            PrimaryButton(
-                              label: '退出登录',
-                              expand: false,
-                              variant: PrimaryButtonVariant.ghost,
-                              icon: Icons.logout_rounded,
-                              onPressed: () => _signOut(services),
-                            ),
-                          ],
-                        ),
-                      ],
                     ],
                   ),
                 ),
@@ -406,9 +425,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       Text(
-                        dorm.id.isEmpty
-                            ? '先创建宿舍或输入邀请码加入宿舍。'
-                            : '可以在这里编辑宿舍名称、邀请舍友，或者退出当前宿舍。',
+                        _locationSummary(dorm),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppColors.textSecondary,
                           height: 1.5,
@@ -422,31 +439,52 @@ class _SettingsPageState extends State<SettingsPage> {
                           onPressed: () => context.push(AppRoutes.dormInvite),
                         )
                       else
-                        Wrap(
-                          spacing: AppSpacing.sm,
-                          runSpacing: AppSpacing.sm,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: <Widget>[
-                            PrimaryButton(
-                              label: '编辑宿舍名称',
-                              expand: false,
-                              variant: PrimaryButtonVariant.soft,
-                              icon: Icons.edit_rounded,
-                              onPressed: () => _renameDorm(services, dorm),
+                            Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: PrimaryButton(
+                                    label: '编辑宿舍名称',
+                                    variant: PrimaryButtonVariant.soft,
+                                    icon: Icons.edit_rounded,
+                                    onPressed: () => _renameDorm(services, dorm),
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: PrimaryButton(
+                                    label: _isSavingDormAnchor ? '记录中...' : '重新记录位置',
+                                    variant: PrimaryButtonVariant.soft,
+                                    icon: Icons.my_location_rounded,
+                                    onPressed: _isSavingDormAnchor
+                                        ? null
+                                        : () => _refreshDormLocation(services),
+                                  ),
+                                ),
+                              ],
                             ),
-                            PrimaryButton(
-                              label: '邀请舍友',
-                              expand: false,
-                              variant: PrimaryButtonVariant.soft,
-                              icon: Icons.group_add_rounded,
-                              onPressed: () =>
-                                  context.push(AppRoutes.dormInvite),
-                            ),
-                            PrimaryButton(
-                              label: '退出宿舍',
-                              expand: false,
-                              variant: PrimaryButtonVariant.ghost,
-                              icon: Icons.logout_rounded,
-                              onPressed: () => _leaveDorm(services),
+                            const SizedBox(height: AppSpacing.sm),
+                            Wrap(
+                              spacing: AppSpacing.sm,
+                              runSpacing: AppSpacing.sm,
+                              children: <Widget>[
+                                PrimaryButton(
+                                  label: '邀请舍友',
+                                  expand: false,
+                                  variant: PrimaryButtonVariant.soft,
+                                  icon: Icons.group_add_rounded,
+                                  onPressed: () => context.push(AppRoutes.dormInvite),
+                                ),
+                                PrimaryButton(
+                                  label: '退出宿舍',
+                                  expand: false,
+                                  variant: PrimaryButtonVariant.ghost,
+                                  icon: Icons.logout_rounded,
+                                  onPressed: () => _leaveDorm(services),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -458,6 +496,45 @@ class _SettingsPageState extends State<SettingsPage> {
           },
         ),
       ),
+    );
+  }
+}
+
+class _DormNameDialog extends StatefulWidget {
+  const _DormNameDialog({required this.initialName});
+
+  final String initialName;
+
+  @override
+  State<_DormNameDialog> createState() => _DormNameDialogState();
+}
+
+class _DormNameDialogState extends State<_DormNameDialog> {
+  late String _value = widget.initialName;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('编辑宿舍名称'),
+      content: TextFormField(
+        initialValue: widget.initialName,
+        autofocus: true,
+        decoration: const InputDecoration(hintText: '输入新的宿舍名称'),
+        onChanged: (String value) => _value = value,
+        onFieldSubmitted: (String value) {
+          Navigator.of(context).pop(value.trim());
+        },
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_value.trim()),
+          child: const Text('保存'),
+        ),
+      ],
     );
   }
 }

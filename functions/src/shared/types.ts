@@ -61,11 +61,20 @@ export interface ContextDormMember {
   uid: string;
   name: string;
   status: string;
+  presenceStatus?: string;
   sleepModeActive: boolean;
   lastActiveAt?: string;
   note?: string;
   avatarUrl?: string;
   displayBadgeId?: string;
+}
+
+export interface ContextDormLocationAnchor {
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+  recordedAt: string;
+  recordedByUid: string;
 }
 
 export interface ContextDormEvent {
@@ -105,6 +114,7 @@ export interface ContextDorm {
   rules?: Record<string, unknown>[];
   invites?: Record<string, unknown>[];
   rulesSettings?: Record<string, unknown>;
+  locationAnchor?: ContextDormLocationAnchor | null;
   pendingRuleProposal?: ContextDormPendingRuleProposal | null;
   earnedDormBadgeIds?: string[];
 }
@@ -213,6 +223,34 @@ export interface FeedbackLoopSummary {
   updatedAt: string;
 }
 
+export interface InterferenceSnapshotDoc {
+  type: "noise" | "light" | "phoneUsage" | "emotion";
+  title: string;
+  value: string;
+  gradeLabel: string;
+  status:
+    | "idle"
+    | "measuring"
+    | "ready"
+    | "denied"
+    | "unavailable"
+    | "unsupported"
+    | "error";
+  detail: string;
+  source: string;
+  measuredAt?: string | null;
+  numericValue?: number | null;
+  score?: number | null;
+}
+
+export interface TonightInterferenceStateDoc {
+  noise: InterferenceSnapshotDoc;
+  light: InterferenceSnapshotDoc;
+  phoneUsage: InterferenceSnapshotDoc;
+  emotion: InterferenceSnapshotDoc;
+  updatedAt: string;
+}
+
 export type SleepCaptureKind = "dream" | "memo";
 
 export interface PendingSleepMemoGroupDoc {
@@ -240,6 +278,7 @@ export interface UserStateDoc {
   latestNightMood?: string | null;
   profileSummary: ProfileSummary;
   tonightPlan?: TonightPlan | null;
+  tonightInterference?: TonightInterferenceStateDoc | null;
   feedbackLoop?: FeedbackLoopSummary | null;
   sleepCapture?: SleepCaptureStateDoc | null;
   updatedAt: string;

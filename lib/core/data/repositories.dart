@@ -23,6 +23,7 @@ abstract interface class AuthRepository implements Listenable {
   bool get isAuthenticated;
   bool get hasVerifiedPhoneIdentity;
   bool get isAuthenticating;
+  bool get hasCompletedInitialAuthBootstrap;
   String? get lastAuthError;
   Future<UserProfile> signInAnonymously();
   Future<UserProfile> ensureAuthenticated();
@@ -96,6 +97,11 @@ abstract interface class UserSettingsRepository implements Listenable {
 abstract interface class RecommendationRepository implements Listenable {
   List<NightRecommendation> get tonightRecommendations;
   Future<void> resetForTonight();
+  Future<void> refreshAudioCatalog();
+  Future<AudioTrack?> resolvePlayableTrack({
+    NightRecommendation? recommendation,
+    bool forceRefresh = false,
+  });
   Future<void> setRecommendationState(
     String recommendationId,
     RecommendationExecutionState state,
@@ -170,12 +176,21 @@ abstract interface class DormRepository implements Listenable {
     required String name,
     String? overview,
     DormRulesSettings? rulesSettings,
+    DormLocationAnchor? locationAnchor,
   });
   Future<void> updateCurrentUserStatus({
     required String uid,
-    required DormMemberStatus status,
-    required bool sleepModeActive,
-    required String note,
+    DormMemberStatus? status,
+    DormPresenceStatus? presenceStatus,
+    bool? sleepModeActive,
+    String? note,
+  });
+  void hydrateCurrentDormLocationAnchor(DormLocationAnchor anchor);
+  Future<void> saveDormLocationAnchor(DormLocationAnchor anchor);
+  Future<void> updateDormEnvironment({
+    int? noiseDb,
+    String? lightLabel,
+    String? quietLabel,
   });
   Future<void> saveRules(DormRulesSettings settings);
   Future<void> approvePendingRules();

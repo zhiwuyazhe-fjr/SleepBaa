@@ -142,7 +142,7 @@ void main() {
     expect(find.text('今晚你更接近哪一种心情？'), findsNothing);
   }, skip: true);
 
-  testWidgets('welcome flow can show again after skip until completion', (
+  testWidgets('welcome flow stays skipped for the same night after skip', (
     WidgetTester tester,
   ) async {
     await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
@@ -157,8 +157,8 @@ void main() {
     await tester.tap(find.byIcon(Icons.home_rounded));
     await tester.pumpAndSettle();
 
-    expect(find.byType(HomePreSleepPage), findsNothing);
-    expect(find.widgetWithText(TextButton, 'Skip'), findsOneWidget);
+    expect(find.byType(HomePreSleepPage), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Skip'), findsNothing);
   });
 
   testWidgets('bottom navigation switches between shell tabs', (
@@ -867,7 +867,7 @@ void main() {
     expect(find.byType(CalendarCheckinPage), findsOneWidget);
   });
 
-  testWidgets('profile badge card opens overview and detail pages', (
+  testWidgets('profile badge card opens overview and badge sheet', (
     WidgetTester tester,
   ) async {
     await _pumpApp(
@@ -882,31 +882,83 @@ void main() {
 
     expect(find.text('勋章图鉴'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey<String>('profile-badge-strip-card-0')),
+      find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
+      findsOneWidget,
+    );
+    expect(find.text('当前展示：安睡大师'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('profile-badge-sheet-early-sleeper')),
+      findsOneWidget,
+    );
+    expect(find.text('佩戴此勋章'), findsOneWidget);
+    expect(find.text('勋章详情'), findsNothing);
+  });
+
+  testWidgets('badge equip and restore sync between gallery and profile preview', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('profile-badge-preview-slot-0')),
+        matching: find.text('安睡大师'),
+      ),
       findsOneWidget,
     );
 
-    final Finder earlyBirdCardFinder = find.ancestor(
-      of: find.text('早睡先锋'),
-      matching: find.byType(AppCard),
-    );
-    expect(earlyBirdCardFinder, findsOneWidget);
-    final AppCard earlyBirdCard = tester.widget<AppCard>(earlyBirdCardFinder);
-    expect(earlyBirdCard.borderRadius, BorderRadius.circular(AppRadius.md));
-    expect(earlyBirdCard.padding, const EdgeInsets.all(16));
-    expect(earlyBirdCard.border, isNull);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('profile-badge-strip-card-0')),
-        matching: find.byIcon(Icons.east_rounded),
-      ),
-      findsNothing,
-    );
-
-    await tester.tap(find.text('早睡先锋'));
+    await tester.ensureVisible(find.text('我的勋章'));
+    await tester.tap(find.text('我的勋章'));
     await tester.pumpAndSettle();
 
-    expect(find.text('勋章详情'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('佩戴此勋章'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('当前佩戴：早睡先锋'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('profile-badge-preview-slot-0')),
+        matching: find.text('早睡先锋'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(find.text('我的勋章'));
+    await tester.tap(find.text('我的勋章'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('恢复最新获得'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('当前展示：安睡大师'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('profile-badge-preview-slot-0')),
+        matching: find.text('安睡大师'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('profile faq entry opens styled faq page', (
@@ -938,7 +990,7 @@ void main() {
     expect(find.text('FAQ 正在整理中'), findsOneWidget);
   });
 
-  testWidgets('profile report placeholder uses passive toast feedback', (
+  testWidgets('profile report entry opens sleep report page', (
     WidgetTester tester,
   ) async {
     await _pumpApp(
@@ -951,13 +1003,9 @@ void main() {
     await tester.tap(find.text('实验报告'));
     await tester.pumpAndSettle();
 
-    expect(find.text('本页将逐步补全'), findsOneWidget);
-
-    await tester.ensureVisible(find.text('报告页待补全'));
-    await tester.tap(find.text('报告页待补全'));
-    await tester.pump();
-
-    expect(find.text('睡眠报告 正在整理中'), findsOneWidget);
+    expect(find.text('睡眠报告'), findsOneWidget);
+    expect(find.text('本轮观察亮点'), findsOneWidget);
+    expect(find.text('最近记录'), findsOneWidget);
   });
 
   testWidgets('post sleep page hides shell navigation', (

@@ -20,6 +20,17 @@ class _RecordingRecommendationRepository extends ChangeNotifier
   }
 
   @override
+  Future<void> refreshAudioCatalog() async {}
+
+  @override
+  Future<AudioTrack?> resolvePlayableTrack({
+    NightRecommendation? recommendation,
+    bool forceRefresh = false,
+  }) async {
+    return recommendation?.track;
+  }
+
+  @override
   Future<void> setRecommendationState(
     String recommendationId,
     RecommendationExecutionState state,
