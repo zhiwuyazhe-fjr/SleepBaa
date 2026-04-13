@@ -547,7 +547,6 @@ class _DormMemberCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color presenceColor = dormPresenceSleepColor(member);
-    final Color activityColor = dormActivityColor(member);
     final Color accentColor = _memberColor(member.status);
     final String? resolvedBadgeId =
         currentUserProfile?.displayBadgeId ?? member.displayBadgeId;
@@ -652,24 +651,6 @@ class _DormMemberCard extends StatelessWidget {
                 dormPresenceSleepLabel(member),
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: presenceColor,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.xs,
-                vertical: 1,
-              ),
-              decoration: BoxDecoration(
-                color: activityColor.withAlpha(24),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                dormActivityLabel(member),
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: activityColor,
                   fontWeight: FontWeight.w800,
                 ),
               ),

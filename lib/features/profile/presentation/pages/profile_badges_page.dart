@@ -26,7 +26,9 @@ class ProfileBadgesPage extends StatelessWidget {
             final UserProfile profile = services.authRepository.currentUser;
             final List<ProfileBadgeStatusData> badges =
                 buildProfileBadgeCatalog(profile);
-            final HonorBadge? activeBadge = honorBadgeById(profile.displayBadgeId);
+            final HonorBadge? activeBadge = honorBadgeById(
+              profile.displayBadgeId,
+            );
             final int unlockedCount = badges
                 .where((ProfileBadgeStatusData badge) => badge.unlocked)
                 .length;
@@ -49,7 +51,9 @@ class ProfileBadgesPage extends StatelessWidget {
                   AppCard(
                     key: const ValueKey<String>('profile-badge-summary-card'),
                     borderRadius: AppRadius.surfacePrimary,
-                    border: Border.all(color: palette.primarySoft.withAlpha(70)),
+                    border: Border.all(
+                      color: palette.primarySoft.withAlpha(70),
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
@@ -71,25 +75,22 @@ class ProfileBadgesPage extends StatelessWidget {
                         const SizedBox(height: AppSpacing.sm),
                         Text(
                           currentBadgeLabel,
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
+                          style: Theme.of(context).textTheme.bodyLarge
+                              ?.copyWith(color: AppColors.textSecondary),
                         ),
                         const SizedBox(height: AppSpacing.sm),
                         Text(
                           '点击任意勋章可查看说明，并把已获得勋章切换为当前展示。',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppColors.textHint,
-                          ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: AppColors.textHint),
                         ),
                         const SizedBox(height: AppSpacing.md),
                         TextButton(
                           onPressed: profile.equippedBadgeId == null
                               ? null
                               : () async {
-                                  await services.profileFacade.saveEquippedBadge(
-                                    null,
-                                  );
+                                  await services.profileFacade
+                                      .saveEquippedBadge(null);
                                 },
                           child: const Text('恢复最新获得'),
                         ),
@@ -111,23 +112,27 @@ class ProfileBadgesPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  Wrap(
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.md,
-                    children: badges
-                        .map(
-                          (ProfileBadgeStatusData badge) => SizedBox(
-                            width: 104,
-                            child: _ProfileBadgeGridTile(
-                              badge: badge,
-                              onTap: () => showProfileBadgeDetailsSheet(
-                                context,
-                                badge: badge.badge,
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(growable: false),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: badges.length,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: AppSpacing.sm,
+                          mainAxisSpacing: AppSpacing.md,
+                          childAspectRatio: 0.7,
+                        ),
+                    itemBuilder: (BuildContext context, int index) {
+                      final ProfileBadgeStatusData badge = badges[index];
+                      return _ProfileBadgeGridTile(
+                        badge: badge,
+                        onTap: () => showProfileBadgeDetailsSheet(
+                          context,
+                          badge: badge.badge,
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -168,8 +173,8 @@ class _ProfileBadgeGridTile extends StatelessWidget {
                     shape: BoxShape.circle,
                     color: badge.unlocked
                         ? badge.selected
-                            ? palette.primary.withAlpha(28)
-                            : palette.primary.withAlpha(18)
+                              ? palette.primary.withAlpha(28)
+                              : palette.primary.withAlpha(18)
                         : AppColors.surfaceSoft,
                     border: Border.all(
                       color: badge.selected
