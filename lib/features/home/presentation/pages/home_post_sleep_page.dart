@@ -237,7 +237,7 @@ Future<bool> _showSleepExitDialog(
                     padding: const EdgeInsets.all(AppSpacing.xl),
                     decoration: BoxDecoration(
                       color: AppColors.darkCard.withAlpha(248),
-                      borderRadius: AppRadius.cardLarge,
+                      borderRadius: AppRadius.surfacePrimary,
                       border: Border.all(color: AppColors.darkBorder),
                       boxShadow: AppColors.floatingShadow,
                     ),

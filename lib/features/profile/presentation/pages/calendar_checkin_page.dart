@@ -389,30 +389,34 @@ class _DayCell extends StatelessWidget {
               : null,
         ),
         child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Text(
-                '${date.day}',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: selected
-                      ? AppColors.onDark
-                      : quality > 3
-                      ? palette.primaryDeep
-                      : AppColors.textPrimary,
-                ),
-              ),
-              if (pending) ...<Widget>[
-                const SizedBox(height: 2),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
                 Text(
-                  '待',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: selected ? AppColors.onDark : palette.primaryDeep,
-                    fontWeight: FontWeight.w700,
+                  '${date.day}',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: selected
+                        ? AppColors.onDark
+                        : quality > 3
+                        ? palette.primaryDeep
+                        : AppColors.textPrimary,
                   ),
                 ),
+                if (pending) ...<Widget>[
+                  const SizedBox(height: 2),
+                  Text(
+                    '待',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: selected ? AppColors.onDark : palette.primaryDeep,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
