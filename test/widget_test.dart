@@ -681,6 +681,31 @@ void main() {
     expect(find.byKey(DormStatusPage.timelineKey), findsOneWidget);
   });
 
+  testWidgets('dorm page shows roommate avatar shells and badge chips', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+
+    expect(
+      find.byKey(const ValueKey<String>('dorm-member-avatar-roommate-a')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('dorm-member-avatar-roommate-b')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('dorm-member-badge-roommate-a')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('dorm-member-badge-roommate-b')),
+      findsOneWidget,
+    );
+    expect(find.text('月度全勤'), findsOneWidget);
+    expect(find.text('安静守护者'), findsOneWidget);
+  });
+
   testWidgets('profile page shows redesigned modules', (
     WidgetTester tester,
   ) async {

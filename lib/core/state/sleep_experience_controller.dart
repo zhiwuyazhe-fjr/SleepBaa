@@ -52,6 +52,13 @@ class SleepExperienceController extends ChangeNotifier {
   AudioPlaybackController get audioPlaybackController =>
       _audioPlaybackController;
 
+  Future<UserProfile> _currentUserOrEnsureAuthenticated() async {
+    if (_authRepository.currentUser.uid.isNotEmpty) {
+      return _authRepository.currentUser;
+    }
+    return _authRepository.ensureAuthenticated();
+  }
+
   Future<void> bootstrap() async {
     await _authRepository.ensureAuthenticated();
     if (_settingsRepository.currentSettings.selectedNightMood != null) {
@@ -102,16 +109,13 @@ class SleepExperienceController extends ChangeNotifier {
     );
   }
 
-  Future<void> toggleSleepAudio({
-    NightRecommendation? recommendation,
-  }) async {
+  Future<void> toggleSleepAudio({NightRecommendation? recommendation}) async {
     final AudioTrack? currentTrack = _audioPlaybackController.currentTrack;
     final bool hasCurrentSourceUrl =
         currentTrack?.sourceUrl?.trim().isNotEmpty ?? false;
     final bool hasCurrentAssetPath =
         currentTrack?.assetPath?.trim().isNotEmpty ?? false;
-    if (currentTrack != null &&
-        (hasCurrentSourceUrl || hasCurrentAssetPath)) {
+    if (currentTrack != null && (hasCurrentSourceUrl || hasCurrentAssetPath)) {
       try {
         await _audioPlaybackController.toggleTrack(currentTrack);
         return;
@@ -120,9 +124,8 @@ class SleepExperienceController extends ChangeNotifier {
       }
     }
 
-    AudioTrack? resolvedTrack = await _recommendationRepository.resolvePlayableTrack(
-      recommendation: recommendation,
-    );
+    AudioTrack? resolvedTrack = await _recommendationRepository
+        .resolvePlayableTrack(recommendation: recommendation);
     if (resolvedTrack == null) {
       return;
     }
@@ -144,9 +147,8 @@ class SleepExperienceController extends ChangeNotifier {
     NightRecommendation recommendation,
   ) async {
     try {
-      AudioTrack? resolvedTrack = await _recommendationRepository.resolvePlayableTrack(
-        recommendation: recommendation,
-      );
+      AudioTrack? resolvedTrack = await _recommendationRepository
+          .resolvePlayableTrack(recommendation: recommendation);
       if (resolvedTrack == null) {
         throw StateError('No playable track available.');
       }
@@ -191,7 +193,7 @@ class SleepExperienceController extends ChangeNotifier {
   }
 
   Future<void> enterSleepMode() async {
-    await _authRepository.ensureAuthenticated();
+    final UserProfile user = await _currentUserOrEnsureAuthenticated();
     final List<NightRecommendation> snapshot = _recommendationRepository
         .tonightRecommendations
         .map(
@@ -206,10 +208,10 @@ class SleepExperienceController extends ChangeNotifier {
 
     await _sleepSessionRepository.startSleepSession(
       recommendationSnapshot: snapshot,
-      dormId: _authRepository.currentUser.dormId,
+      dormId: user.dormId,
     );
     await _dormRepository.updateCurrentUserStatus(
-      uid: _authRepository.currentUser.uid,
+      uid: user.uid,
       status: DormMemberStatus.quiet,
       sleepModeActive: true,
       note: '已进入睡眠模式',
@@ -217,7 +219,7 @@ class SleepExperienceController extends ChangeNotifier {
   }
 
   Future<void> exitSleepMode() async {
-    await _authRepository.ensureAuthenticated();
+    final UserProfile user = await _currentUserOrEnsureAuthenticated();
     final SleepSession? activeSession = _sleepSessionRepository.activeSession;
     if (activeSession == null) {
       return;
@@ -228,7 +230,7 @@ class SleepExperienceController extends ChangeNotifier {
       status: SleepSessionStatus.awaitingFeedback,
       endedAt: DateTime.now(),
     );
-    await _syncDormStatusAfterSleepExit();
+    await _syncDormStatusAfterSleepExit(user.uid);
     unawaited(_completeSleepExitSideEffects(activeSession));
   }
 
@@ -294,10 +296,10 @@ class SleepExperienceController extends ChangeNotifier {
     }
   }
 
-  Future<void> _syncDormStatusAfterSleepExit() async {
+  Future<void> _syncDormStatusAfterSleepExit(String uid) async {
     try {
       await _dormRepository.updateCurrentUserStatus(
-        uid: _authRepository.currentUser.uid,
+        uid: uid,
         status: DormMemberStatus.quiet,
         sleepModeActive: false,
         note: '等待晨间反馈',
@@ -308,7 +310,6 @@ class SleepExperienceController extends ChangeNotifier {
   }
 
   Future<void> _completeSleepExitSideEffects(SleepSession activeSession) async {
-
     try {
       await _notificationRepository.upsertNotification(
         NotificationItem(
@@ -335,7 +336,9 @@ class SleepExperienceController extends ChangeNotifier {
     }
 
     try {
-      await _sleepCaptureRepository.showPendingBannerForSession(activeSession.id);
+      await _sleepCaptureRepository.showPendingBannerForSession(
+        activeSession.id,
+      );
     } catch (_) {
       // Pending memo banner should not block leaving sleep mode.
     }

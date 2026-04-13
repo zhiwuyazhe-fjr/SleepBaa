@@ -950,6 +950,47 @@ export class FirestoreRepository implements AssistantDataRepository {
       limit: 10,
     });
     const earnedDormBadgeIds = asStringArray(dormDoc.earnedDormBadgeIds);
+    const hydratedMembers = await Promise.all(
+      members.map(async (doc) => {
+        const value = withoutMeta(doc);
+        const userDoc = withoutMeta(
+          (await this.store.get(Collections.users, asString(value.uid))) ?? {},
+        );
+        const avatarStoragePath = asString(userDoc.avatarStoragePath);
+        let fallbackAvatarUrl = asString(userDoc.avatarUrl) || null;
+        if (!fallbackAvatarUrl && avatarStoragePath && this.fileStorage) {
+          try {
+            fallbackAvatarUrl = await this.fileStorage.getTemporaryUrl(
+              avatarStoragePath,
+            );
+          } catch {
+            fallbackAvatarUrl = null;
+          }
+        }
+        return {
+          uid: asString(value.uid),
+          name:
+            this.preferString(value.name, userDoc.displayName, "舍友") ||
+            "舍友",
+          status: asString(value.status, "quiet"),
+          presenceStatus: asString(value.presenceStatus, "returned"),
+          sleepModeActive: asBoolean(value.sleepModeActive, false),
+          lastActiveAt: asString(value.lastActiveAt, nowIso()),
+          note: asString(value.note),
+          avatarUrl:
+            this.preferString(value.avatarUrl, fallbackAvatarUrl, null) ||
+            undefined,
+          displayBadgeId:
+            this.preferString(
+              value.displayBadgeId,
+              asString(userDoc.equippedBadgeId) ||
+                asStringArray(userDoc.earnedBadgeIds).slice(-1)[0] ||
+                null,
+              null,
+            ) || undefined,
+        } satisfies ContextDormMember;
+      }),
+    );
     return {
       id: asString(dormDoc.id, resolvedDormId),
       name: asString(
@@ -965,20 +1006,7 @@ export class FirestoreRepository implements AssistantDataRepository {
       archivedAt: asString(dormDoc.archivedAt) || null,
       lightLabel: asString(dormDoc.lightLabel, "偏暗"),
       quietLabel: asString(dormDoc.quietLabel, "平稳"),
-      members: members.map((doc) => {
-        const value = withoutMeta(doc);
-        return {
-          uid: asString(value.uid),
-          name: asString(value.name, "舍友"),
-          status: asString(value.status, "quiet"),
-          presenceStatus: asString(value.presenceStatus, "returned"),
-          sleepModeActive: asBoolean(value.sleepModeActive, false),
-          lastActiveAt: asString(value.lastActiveAt, nowIso()),
-          note: asString(value.note),
-          avatarUrl: asString(value.avatarUrl) || undefined,
-          displayBadgeId: asString(value.displayBadgeId) || undefined,
-        } satisfies ContextDormMember;
-      }),
+      members: hydratedMembers,
       events: events.map((doc) => {
         const value = withoutMeta(doc);
         return {
@@ -1361,13 +1389,21 @@ export class FirestoreRepository implements AssistantDataRepository {
     const nextSleepModeActive = asBoolean(payload.sleepModeActive, false);
     const nextNote = asString(payload.note, "已更新宿舍状态。");
     const updatedAt = nowIso();
+    const displayBadgeId =
+      user.equippedBadgeId ?? user.earnedBadgeIds?.slice(-1)[0] ?? null;
     await this.store.merge(Collections.dormMembers, memberId, {
       dormId,
       ...(existingMember ??
-        defaultDormMember(uid, user.displayName, user.avatarUrl)),
+        defaultDormMember(
+          uid,
+          user.displayName,
+          user.avatarUrl,
+          displayBadgeId,
+        )),
       uid,
       name: user.displayName,
       avatarUrl: user.avatarUrl ?? null,
+      displayBadgeId,
       status: nextStatus,
       presenceStatus: nextPresenceStatus,
       sleepModeActive: nextSleepModeActive,
@@ -1753,10 +1789,17 @@ export class FirestoreRepository implements AssistantDataRepository {
       dormId,
       updatedAt: createdAt,
     });
+    const displayBadgeId =
+      user.equippedBadgeId ?? user.earnedBadgeIds?.slice(-1)[0] ?? null;
     await this.store.set(Collections.dormMembers, `${dormId}:${uid}`, {
       dormId,
       uid,
-      ...defaultDormMember(uid, user.displayName, user.avatarUrl),
+      ...defaultDormMember(
+        uid,
+        user.displayName,
+        user.avatarUrl,
+        displayBadgeId,
+      ),
       note: "已创建宿舍，等待邀请舍友加入。",
       lastActiveAt: createdAt,
     });
@@ -2005,10 +2048,17 @@ export class FirestoreRepository implements AssistantDataRepository {
       dormId,
       updatedAt: acceptedAt,
     });
+    const displayBadgeId =
+      user.equippedBadgeId ?? user.earnedBadgeIds?.slice(-1)[0] ?? null;
     await this.store.set(Collections.dormMembers, `${dormId}:${uid}`, {
       dormId,
       uid,
-      ...defaultDormMember(uid, user.displayName, user.avatarUrl),
+      ...defaultDormMember(
+        uid,
+        user.displayName,
+        user.avatarUrl,
+        displayBadgeId,
+      ),
       note: "已通过邀请码加入宿舍。",
       lastActiveAt: acceptedAt,
     });

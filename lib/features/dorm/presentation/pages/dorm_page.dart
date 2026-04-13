@@ -572,6 +572,7 @@ class _DormMemberCard extends StatelessWidget {
         child: Column(
           children: <Widget>[
             _DormMemberAvatar(
+              key: ValueKey<String>('dorm-member-avatar-${member.uid}'),
               radius: 22,
               accentColor: accentColor,
               avatarBytes: avatarBytes,
@@ -604,6 +605,7 @@ class _DormMemberCard extends StatelessWidget {
             if (badge != null) ...<Widget>[
               const SizedBox(height: AppSpacing.xs),
               Container(
+                key: ValueKey<String>('dorm-member-badge-${member.uid}'),
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.xs,
                   vertical: 2,
@@ -681,6 +683,7 @@ class _DormMemberCard extends StatelessWidget {
 
 class _DormMemberAvatar extends StatelessWidget {
   const _DormMemberAvatar({
+    super.key,
     required this.radius,
     required this.accentColor,
     required this.fallbackSeed,
