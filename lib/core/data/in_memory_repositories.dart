@@ -611,6 +611,7 @@ class InMemorySleepSessionRepository extends ChangeNotifier
   Future<SleepSession> startSleepSession({
     required List<NightRecommendation> recommendationSnapshot,
     required String? dormId,
+    bool sleepModeActive = false,
   }) async {
     final SleepSession? existing = activeSession;
     if (existing != null) {
@@ -624,7 +625,7 @@ class InMemorySleepSessionRepository extends ChangeNotifier
       startedAt: now,
       endedAt: null,
       status: SleepSessionStatus.active,
-      sleepModeActive: true,
+      sleepModeActive: sleepModeActive,
       dormId: dormId,
       recommendations: recommendationSnapshot,
       selectedRecommendationIds: recommendationSnapshot
@@ -1048,7 +1049,6 @@ class InMemoryNotificationRepository extends ChangeNotifier
       ];
 
   List<NotificationItem> _notifications;
-  final Set<String> _tokens = <String>{};
 
   @override
   List<NotificationItem> get notifications {
@@ -1091,15 +1091,6 @@ class InMemoryNotificationRepository extends ChangeNotifier
       next[existingIndex] = notification;
       _notifications = next;
     }
-    notifyListeners();
-  }
-
-  @override
-  Future<void> registerDeviceToken({
-    required String token,
-    required String platform,
-  }) async {
-    _tokens.add('$platform:$token');
     notifyListeners();
   }
 }
@@ -1196,10 +1187,12 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
     bool? sleepModeActive,
     String? note,
   }) async {
-    final DormMember? existingMember = _currentDorm.members.cast<DormMember?>().firstWhere(
-      (DormMember? member) => member?.uid == uid,
-      orElse: () => null,
-    );
+    final DormMember? existingMember = _currentDorm.members
+        .cast<DormMember?>()
+        .firstWhere(
+          (DormMember? member) => member?.uid == uid,
+          orElse: () => null,
+        );
     if (existingMember == null) {
       return;
     }
@@ -1679,6 +1672,14 @@ class InMemoryInsightsRepository extends ChangeNotifier
     highlights: const <String>[],
     generatedAt: DateTime.now(),
   );
+  SleepTrendSeries _profileSleepDurationTrend = _buildEmptySleepTrendSeries(
+    metricKey: 'sleep_duration',
+    unit: 'hours',
+  );
+  SleepTrendSeries _profileSleepQualityTrend = _buildEmptySleepTrendSeries(
+    metricKey: 'sleep_quality',
+    unit: 'score',
+  );
 
   @override
   List<SleepInsight> get interferenceInsights =>
@@ -1688,6 +1689,12 @@ class InMemoryInsightsRepository extends ChangeNotifier
   SleepReport get currentReport => _currentReport;
 
   @override
+  SleepTrendSeries get profileSleepDurationTrend => _profileSleepDurationTrend;
+
+  @override
+  SleepTrendSeries get profileSleepQualityTrend => _profileSleepQualityTrend;
+
+  @override
   Future<void> refresh() async => _recompute();
 
   void _recompute() {
@@ -1695,6 +1702,9 @@ class InMemoryInsightsRepository extends ChangeNotifier
         .where((SleepSession session) => session.summary != null)
         .toList();
     final List<SleepSession> recent = _sleepSessionRepository.recentSessions();
+    final List<SleepSession> trendSessions = _sleepSessionRepository.sessions
+        .where((SleepSession session) => !session.id.startsWith('history-'))
+        .toList(growable: false);
 
     final double averageSleepHours = completed.isEmpty
         ? 0
@@ -1767,6 +1777,26 @@ class InMemoryInsightsRepository extends ChangeNotifier
         createdAt: DateTime.now(),
       ),
     ];
+
+    _profileSleepDurationTrend = _buildSleepTrendSeries(
+      metricKey: 'sleep_duration',
+      unit: 'hours',
+      sessions: trendSessions,
+      valueOf: (SleepSession session) => session.summary?.totalSleepHours,
+    );
+    _profileSleepQualityTrend = _buildSleepTrendSeries(
+      metricKey: 'sleep_quality',
+      unit: 'score',
+      sessions: trendSessions,
+      valueOf: (SleepSession session) {
+        final MorningSummary? summary = session.summary;
+        if (summary == null) {
+          return null;
+        }
+        final double raw = summary.sleepQuality.toDouble();
+        return raw <= 5 ? raw * 20 : raw;
+      },
+    );
 
     notifyListeners();
   }
@@ -2027,6 +2057,63 @@ class InMemoryAssistantRepository extends ChangeNotifier
       return item.copyWith(updatedAt: DateTime.now());
     }).toList();
   }
+}
+
+SleepTrendSeries _buildEmptySleepTrendSeries({
+  required String metricKey,
+  required String unit,
+}) {
+  final DateTime today = DateUtils.dateOnly(DateTime.now());
+  return SleepTrendSeries(
+    metricKey: metricKey,
+    unit: unit,
+    points: List<SleepTrendPoint>.generate(7, (int index) {
+      final DateTime day = today.subtract(Duration(days: 6 - index));
+      return SleepTrendPoint(
+        dateKey: _dateKeyOf(day),
+        weekdayLabel: _weekdayLabelOf(day),
+        value: null,
+      );
+    }, growable: false),
+  );
+}
+
+SleepTrendSeries _buildSleepTrendSeries({
+  required String metricKey,
+  required String unit,
+  required List<SleepSession> sessions,
+  required double? Function(SleepSession session) valueOf,
+}) {
+  final SleepTrendSeries base = _buildEmptySleepTrendSeries(
+    metricKey: metricKey,
+    unit: unit,
+  );
+  final Map<String, SleepSession> sessionsByDateKey = <String, SleepSession>{};
+  for (final SleepSession session in sessions) {
+    final String dateKey = _dateKeyOf(DateUtils.dateOnly(session.startedAt));
+    sessionsByDateKey[dateKey] = session;
+  }
+  return base.copyWith(
+    points: base.points
+        .map((SleepTrendPoint point) {
+          final SleepSession? session = sessionsByDateKey[point.dateKey];
+          return point.copyWith(
+            value: session == null ? null : valueOf(session),
+          );
+        })
+        .toList(growable: false),
+  );
+}
+
+String _dateKeyOf(DateTime date) {
+  final String month = date.month.toString().padLeft(2, '0');
+  final String day = date.day.toString().padLeft(2, '0');
+  return '${date.year}-$month-$day';
+}
+
+String _weekdayLabelOf(DateTime date) {
+  const List<String> labels = <String>['一', '二', '三', '四', '五', '六', '日'];
+  return labels[date.weekday - 1];
 }
 
 class NoOpPushNotificationGateway implements PushNotificationGateway {

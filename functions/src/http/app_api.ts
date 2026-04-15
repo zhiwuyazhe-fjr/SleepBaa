@@ -445,6 +445,24 @@ export function createAppApiServer() {
   );
 
   app.post(
+    "/api/notifications/read",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      const body = asMap(request.body);
+      const notificationId = asString(body.notificationId);
+      if (!notificationId.trim()) {
+        throw new Error("notificationId is required.");
+      }
+      await repo.markNotificationRead(
+        request.authContext!.uid,
+        notificationId,
+        asString(body.readAt, nowIso()),
+      );
+      response.json({ ok: true, notificationId });
+    }),
+  );
+
+  app.post(
     "/api/assistant/profile",
     asyncRoute(async (request, response) => {
       const repo = createRepositoryFromEnv();

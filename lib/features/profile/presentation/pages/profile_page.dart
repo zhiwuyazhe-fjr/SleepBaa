@@ -23,13 +23,15 @@ class ProfilePage extends StatelessWidget {
       ]),
       builder: (BuildContext context, Widget? child) {
         final UserProfile profile = services.authRepository.currentUser;
-        final List<SleepSession> weekly = services.sleepSessionRepository
-            .recentSessions();
         final DateTime now = DateTime.now();
         final DateTime currentMonth = DateTime(now.year, now.month);
         final List<SleepSession> monthSessions = services.sleepSessionRepository
             .sessionsForMonth(currentMonth);
         final SleepReport report = services.insightsFacade.currentReport;
+        final SleepTrendSeries durationTrend =
+            services.insightsFacade.profileSleepDurationTrend;
+        final SleepTrendSeries qualityTrend =
+            services.insightsFacade.profileSleepQualityTrend;
         final List<ProfileBadgeStatusData> previewBadges =
             buildProfileBadgePreview(profile);
 
@@ -57,7 +59,8 @@ class ProfilePage extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   ProfileDataCarousel(
-                    sessions: weekly,
+                    durationTrend: durationTrend,
+                    qualityTrend: qualityTrend,
                     heatmapValues: _buildMonthPreviewIntensity(
                       month: currentMonth,
                       sessions: monthSessions,

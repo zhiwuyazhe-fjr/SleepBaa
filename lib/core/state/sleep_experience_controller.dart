@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
 import 'package:sleep_dorm_app/core/state/audio_playback_controller.dart';
 
 class SleepExperienceController extends ChangeNotifier {
@@ -16,6 +17,7 @@ class SleepExperienceController extends ChangeNotifier {
     required SleepCaptureRepository sleepCaptureRepository,
     required NotificationRepository notificationRepository,
     required DormRepository dormRepository,
+    required AppNotificationService appNotificationService,
     required AudioPlaybackController audioPlaybackController,
     required PushNotificationGateway pushNotificationGateway,
   }) : _authRepository = authRepository,
@@ -26,6 +28,7 @@ class SleepExperienceController extends ChangeNotifier {
        _sleepCaptureRepository = sleepCaptureRepository,
        _notificationRepository = notificationRepository,
        _dormRepository = dormRepository,
+       _appNotificationService = appNotificationService,
        _audioPlaybackController = audioPlaybackController,
        _pushNotificationGateway = pushNotificationGateway;
 
@@ -37,6 +40,7 @@ class SleepExperienceController extends ChangeNotifier {
   final SleepCaptureRepository _sleepCaptureRepository;
   final NotificationRepository _notificationRepository;
   final DormRepository _dormRepository;
+  final AppNotificationService _appNotificationService;
   final AudioPlaybackController _audioPlaybackController;
   final PushNotificationGateway _pushNotificationGateway;
 
@@ -206,10 +210,17 @@ class SleepExperienceController extends ChangeNotifier {
         )
         .toList();
 
-    await _sleepSessionRepository.startSleepSession(
-      recommendationSnapshot: snapshot,
-      dormId: user.dormId,
-    );
+    final SleepSession session = await _sleepSessionRepository
+        .startSleepSession(
+          recommendationSnapshot: snapshot,
+          dormId: user.dormId,
+          sleepModeActive: true,
+        );
+    try {
+      await _appNotificationService.showSleepModeNotification(session: session);
+    } catch (_) {
+      // Notification display is best-effort and should not block entering sleep mode.
+    }
     await _dormRepository.updateCurrentUserStatus(
       uid: user.uid,
       status: DormMemberStatus.quiet,
@@ -220,18 +231,50 @@ class SleepExperienceController extends ChangeNotifier {
 
   Future<void> exitSleepMode() async {
     final UserProfile user = await _currentUserOrEnsureAuthenticated();
-    final SleepSession? activeSession = _sleepSessionRepository.activeSession;
+    try {
+      await _appNotificationService.cancelSleepModeNotification();
+    } catch (_) {
+      // Notification cleanup is best-effort and should not block leaving sleep mode.
+    }
+    final SleepSession? activeSession =
+        _sleepSessionRepository.activeSession ?? _latestSessionToExit();
     if (activeSession == null) {
+      await _syncDormStatusAfterSleepExit(user.uid);
       return;
     }
 
-    await _sleepSessionRepository.updateActiveSession(
-      sleepModeActive: false,
-      status: SleepSessionStatus.awaitingFeedback,
-      endedAt: DateTime.now(),
+    await _sleepSessionRepository.saveSession(
+      activeSession.copyWith(
+        sleepModeActive: false,
+        status: SleepSessionStatus.awaitingFeedback,
+        endedAt: activeSession.endedAt ?? DateTime.now(),
+        updatedAt: DateTime.now(),
+      ),
     );
+    try {
+      await _appNotificationService.cancelSleepModeNotification();
+    } catch (_) {
+      // Notification cleanup is best-effort and should not block leaving sleep mode.
+    }
     await _syncDormStatusAfterSleepExit(user.uid);
     unawaited(_completeSleepExitSideEffects(activeSession));
+  }
+
+  SleepSession? _latestSessionToExit() {
+    final List<SleepSession> sessions = _sleepSessionRepository.sessions;
+    for (final SleepSession session in sessions.reversed) {
+      if (session.uid != _authRepository.currentUser.uid) {
+        continue;
+      }
+      if (session.endedAt != null) {
+        continue;
+      }
+      if (session.sleepModeActive ||
+          session.status == SleepSessionStatus.active) {
+        return session;
+      }
+    }
+    return null;
   }
 
   Future<void> addNightAwakening({

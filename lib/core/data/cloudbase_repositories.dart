@@ -102,6 +102,39 @@ double _doubleOf(dynamic value, [double fallback = 0]) {
   return fallback;
 }
 
+double? _nullableDoubleOf(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is num) {
+    return value.toDouble();
+  }
+  return null;
+}
+
+SleepTrendSeries _sleepTrendSeriesFromCard(
+  Map<String, dynamic> card, {
+  required String metricKey,
+  required String unit,
+}) {
+  final Map<String, dynamic> payload = _mapOf(card['payload']);
+  final List<SleepTrendPoint> points = _mapListOf(payload['points'])
+      .map(
+        (Map<String, dynamic> point) => SleepTrendPoint(
+          dateKey: _stringOf(point['dateKey']),
+          weekdayLabel: _stringOf(point['weekdayLabel']),
+          value: _nullableDoubleOf(point['value']),
+        ),
+      )
+      .where((SleepTrendPoint point) => point.dateKey.isNotEmpty)
+      .toList(growable: false);
+  return SleepTrendSeries(
+    metricKey: _stringOf(payload['metricKey'], metricKey),
+    unit: _stringOf(payload['unit'], unit),
+    points: points,
+  );
+}
+
 T? _firstWhereOrNull<T>(Iterable<T> values, bool Function(T value) test) {
   for (final T value in values) {
     if (test(value)) {
@@ -1892,6 +1925,41 @@ class _SerializedRemoteSyncQueue {
   }
 }
 
+bool _isActiveSleepSession(SleepSession session) {
+  return session.status == SleepSessionStatus.active && session.endedAt == null;
+}
+
+SleepSession _normalizeSleepSession(SleepSession session) {
+  if (session.status != SleepSessionStatus.active || session.endedAt == null) {
+    return session;
+  }
+  return session.copyWith(
+    status: SleepSessionStatus.awaitingFeedback,
+    sleepModeActive: false,
+  );
+}
+
+SleepSession _normalizeSleepSessionForPhase(
+  SleepSession session, {
+  required String currentPhase,
+  required String activeSessionId,
+}) {
+  final SleepSession normalized = _normalizeSleepSession(session);
+  if (normalized.status != SleepSessionStatus.active) {
+    return normalized;
+  }
+  final bool isCurrentSleepModeSession =
+      currentPhase == 'sleep_mode' &&
+      (activeSessionId.isEmpty || activeSessionId == normalized.id);
+  if (isCurrentSleepModeSession) {
+    return normalized;
+  }
+  return normalized.copyWith(
+    status: SleepSessionStatus.awaitingFeedback,
+    sleepModeActive: false,
+  );
+}
+
 class CloudBaseSleepSessionRepository extends ChangeNotifier
     implements SleepSessionRepository {
   CloudBaseSleepSessionRepository({
@@ -1911,14 +1979,27 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
       _SerializedRemoteSyncQueue();
 
   List<SleepSession> _sessions = const <SleepSession>[];
+  String _currentPhase = '';
+  String _activeSessionId = '';
   int _latestRemoteSyncId = 0;
 
   @override
   SleepSession? get activeSession {
-    try {
-      return _sessions.lastWhere(
-        (SleepSession session) => session.status == SleepSessionStatus.active,
+    if (_currentPhase.isNotEmpty && _currentPhase != 'sleep_mode') {
+      return null;
+    }
+    if (_activeSessionId.isNotEmpty) {
+      final SleepSession? activeById = _firstWhereOrNull(
+        _sessions,
+        (SleepSession session) => session.id == _activeSessionId,
       );
+      if (activeById != null && _isActiveSleepSession(activeById)) {
+        return activeById;
+      }
+      return null;
+    }
+    try {
+      return _sessions.lastWhere(_isActiveSleepSession);
     } on StateError {
       return null;
     }
@@ -1966,6 +2047,7 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
   Future<SleepSession> startSleepSession({
     required List<NightRecommendation> recommendationSnapshot,
     required String? dormId,
+    bool sleepModeActive = false,
   }) async {
     final SleepSession? existing = activeSession;
     if (existing != null) {
@@ -1982,7 +2064,7 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
       startedAt: now,
       endedAt: null,
       status: SleepSessionStatus.active,
-      sleepModeActive: true,
+      sleepModeActive: sleepModeActive,
       dormId: dormId,
       recommendations: recommendationSnapshot,
       selectedRecommendationIds: recommendationSnapshot
@@ -2063,14 +2145,16 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
   }
 
   void _upsertLocalSession(SleepSession session) {
+    final SleepSession normalized = _normalizeSleepSession(session);
+    _applyLocalSleepPhase(normalized);
     final int index = _sessions.indexWhere(
-      (SleepSession item) => item.id == session.id,
+      (SleepSession item) => item.id == normalized.id,
     );
     if (index == -1) {
-      _sessions = <SleepSession>[..._sessions, session];
+      _sessions = <SleepSession>[..._sessions, normalized];
     } else {
       final List<SleepSession> next = List<SleepSession>.from(_sessions);
-      next[index] = session;
+      next[index] = normalized;
       _sessions = next;
     }
     _sessions = List<SleepSession>.from(_sessions)
@@ -2085,11 +2169,40 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
       _snapshotStore.payload,
       _authRepository.currentUser.uid,
     );
-    _sessions = List<SleepSession>.from(snapshot.sessions)
-      ..sort(
-        (SleepSession a, SleepSession b) => a.startedAt.compareTo(b.startedAt),
-      );
+    _currentPhase = _stringOf(snapshot.userState['currentPhase']);
+    _activeSessionId = _stringOf(snapshot.userState['activeSessionId']);
+    _sessions =
+        snapshot.sessions
+            .map(
+              (SleepSession session) => _normalizeSleepSessionForPhase(
+                session,
+                currentPhase: _currentPhase,
+                activeSessionId: _activeSessionId,
+              ),
+            )
+            .toList(growable: false)
+          ..sort(
+            (SleepSession a, SleepSession b) =>
+                a.startedAt.compareTo(b.startedAt),
+          );
     notifyListeners();
+  }
+
+  void _applyLocalSleepPhase(SleepSession session) {
+    if (_isActiveSleepSession(session) && session.sleepModeActive) {
+      _currentPhase = 'sleep_mode';
+      _activeSessionId = session.id;
+      return;
+    }
+    if (session.status == SleepSessionStatus.awaitingFeedback) {
+      _currentPhase = 'morning_feedback';
+      _activeSessionId = session.id;
+      return;
+    }
+    if (_activeSessionId == session.id) {
+      _currentPhase = 'home_pre_sleep';
+      _activeSessionId = '';
+    }
   }
 
   @override
@@ -2428,15 +2541,17 @@ class CloudBaseNotificationRepository extends ChangeNotifier
   CloudBaseNotificationRepository({
     required AuthRepository authRepository,
     required CloudBaseSnapshotStore snapshotStore,
+    required CloudBaseAppApiClient appApiClient,
   }) : _authRepository = authRepository,
-       _snapshotStore = snapshotStore {
+       _snapshotStore = snapshotStore,
+       _appApiClient = appApiClient {
     _snapshotStore.addListener(_applySnapshot);
   }
 
   final AuthRepository _authRepository;
   final CloudBaseSnapshotStore _snapshotStore;
+  final CloudBaseAppApiClient _appApiClient;
   List<NotificationItem> _notifications = const <NotificationItem>[];
-  final Set<String> _tokens = <String>{};
 
   @override
   List<NotificationItem> get notifications {
@@ -2457,15 +2572,30 @@ class CloudBaseNotificationRepository extends ChangeNotifier
 
   @override
   Future<void> markRead(String notificationId) async {
+    final DateTime readAt = DateTime.now();
     _notifications = _notifications
         .map((NotificationItem item) {
           if (item.id != notificationId) {
             return item;
           }
-          return item.copyWith(readAt: DateTime.now());
+          return item.copyWith(readAt: readAt);
         })
         .toList(growable: false);
     notifyListeners();
+    if (_appApiClient.isConfigured) {
+      try {
+        await _authRepository.ensureAuthenticated();
+        await _appApiClient.post(
+          '/api/notifications/read',
+          body: <String, dynamic>{
+            'notificationId': notificationId,
+            'readAt': readAt.toIso8601String(),
+          },
+        );
+      } catch (_) {
+        // Keep the in-memory state responsive even if the remote sync fails.
+      }
+    }
   }
 
   @override
@@ -2482,15 +2612,6 @@ class CloudBaseNotificationRepository extends ChangeNotifier
       next[index] = notification;
       _notifications = next;
     }
-    notifyListeners();
-  }
-
-  @override
-  Future<void> registerDeviceToken({
-    required String token,
-    required String platform,
-  }) async {
-    _tokens.add('$platform:$token');
     notifyListeners();
   }
 
@@ -3376,6 +3497,52 @@ class CloudBaseInsightsRepository extends ChangeNotifier
       highlights: _stringListOf(payload['highlights']),
       generatedAt: _dateOf(profileReport['generatedAt']),
     );
+  }
+
+  @override
+  SleepTrendSeries get profileSleepDurationTrend {
+    final Map<String, dynamic>? profileReport =
+        _snapshotData[BackendSurfaceIds.profileReport];
+    if (profileReport == null) {
+      return _fallback.profileSleepDurationTrend;
+    }
+    final Map<String, dynamic> card = _mapListOf(profileReport['cards'])
+        .firstWhere(
+          (Map<String, dynamic> item) => item['type'] == 'sleep_duration_trend',
+          orElse: () => <String, dynamic>{},
+        );
+    if (card.isEmpty) {
+      return _fallback.profileSleepDurationTrend;
+    }
+    final SleepTrendSeries series = _sleepTrendSeriesFromCard(
+      card,
+      metricKey: 'sleep_duration',
+      unit: 'hours',
+    );
+    return series.points.isEmpty ? _fallback.profileSleepDurationTrend : series;
+  }
+
+  @override
+  SleepTrendSeries get profileSleepQualityTrend {
+    final Map<String, dynamic>? profileReport =
+        _snapshotData[BackendSurfaceIds.profileReport];
+    if (profileReport == null) {
+      return _fallback.profileSleepQualityTrend;
+    }
+    final Map<String, dynamic> card = _mapListOf(profileReport['cards'])
+        .firstWhere(
+          (Map<String, dynamic> item) => item['type'] == 'sleep_quality_trend',
+          orElse: () => <String, dynamic>{},
+        );
+    if (card.isEmpty) {
+      return _fallback.profileSleepQualityTrend;
+    }
+    final SleepTrendSeries series = _sleepTrendSeriesFromCard(
+      card,
+      metricKey: 'sleep_quality',
+      unit: 'score',
+    );
+    return series.points.isEmpty ? _fallback.profileSleepQualityTrend : series;
   }
 
   @override

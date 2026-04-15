@@ -749,6 +749,11 @@ export interface AssistantDataRepository {
     notificationId: string,
     payload: JsonMap,
   ): Promise<void>;
+  markNotificationRead(
+    uid: string,
+    notificationId: string,
+    readAt: string,
+  ): Promise<void>;
   createDormInvite(
     uid: string,
     expiresInHours?: number,
@@ -1958,6 +1963,19 @@ export class FirestoreRepository implements AssistantDataRepository {
         notificationId,
       },
     );
+  }
+
+  async markNotificationRead(
+    uid: string,
+    notificationId: string,
+    readAt: string,
+  ): Promise<void> {
+    await this.ensureUserBootstrap(uid);
+    await this.store.merge(Collections.notifications, `${uid}:${notificationId}`, {
+      readAt,
+      ownerUid: uid,
+      notificationId,
+    });
   }
 
   async createDormInvite(

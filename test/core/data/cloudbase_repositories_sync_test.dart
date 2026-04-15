@@ -9,6 +9,8 @@ import 'package:sleep_dorm_app/core/backend/cloudbase_snapshot_store.dart';
 import 'package:sleep_dorm_app/core/data/cloudbase_repositories.dart';
 import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
+import 'package:sleep_dorm_app/core/notifications/cloudbase_notification_sync_controller.dart';
 
 void main() {
   test(
@@ -132,6 +134,128 @@ void main() {
   );
 
   test(
+    'cloudbase sleep session repository normalizes ended active sessions from snapshots',
+    () async {
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) async =>
+                <String, dynamic>{'ok': true, 'path': path, 'body': body},
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(
+          uid: 'cloud-user',
+          dormId: 'dorm-204',
+        ),
+      );
+      final CloudBaseSleepSessionRepository repository =
+          CloudBaseSleepSessionRepository(
+            authRepository: authRepository,
+            snapshotStore: snapshotStore,
+            appApiClient: appApiClient,
+          );
+
+      snapshotStore.pushPayload(<String, dynamic>{
+        'data': <String, dynamic>{
+          'user': <String, dynamic>{'uid': 'cloud-user', 'dormId': 'dorm-204'},
+          'userState': <String, dynamic>{'currentPhase': 'morning_feedback'},
+          'sleepSessions': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'session-dirty',
+              'uid': 'cloud-user',
+              'startedAt': '2026-04-13T23:00:00.000Z',
+              'endedAt': '2026-04-14T07:00:00.000Z',
+              'status': SleepSessionStatus.active.name,
+              'sleepModeActive': true,
+              'dormId': 'dorm-204',
+              'recommendations': const <Map<String, dynamic>>[],
+              'selectedRecommendationIds': const <String>[],
+              'awakenings': const <Map<String, dynamic>>[],
+              'feedback': const <Map<String, dynamic>>[],
+              'summary': null,
+              'updatedAt': '2026-04-14T07:00:00.000Z',
+            },
+          ],
+        },
+      });
+
+      expect(repository.activeSession, isNull);
+      expect(repository.latestAwaitingFeedbackSession?.id, 'session-dirty');
+      expect(
+        repository.sessions.single.status,
+        SleepSessionStatus.awaitingFeedback,
+      );
+      expect(repository.sessions.single.sleepModeActive, isFalse);
+    },
+  );
+
+  test(
+    'cloudbase sleep session repository suppresses active sessions outside sleep mode phase',
+    () async {
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) async =>
+                <String, dynamic>{'ok': true, 'path': path, 'body': body},
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(
+          uid: 'cloud-user',
+          dormId: 'dorm-204',
+        ),
+      );
+      final CloudBaseSleepSessionRepository repository =
+          CloudBaseSleepSessionRepository(
+            authRepository: authRepository,
+            snapshotStore: snapshotStore,
+            appApiClient: appApiClient,
+          );
+
+      snapshotStore.pushPayload(<String, dynamic>{
+        'data': <String, dynamic>{
+          'user': <String, dynamic>{'uid': 'cloud-user', 'dormId': 'dorm-204'},
+          'userState': <String, dynamic>{
+            'currentPhase': 'morning_feedback',
+            'activeSessionId': 'session-phase-mismatch',
+          },
+          'sleepSessions': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'session-phase-mismatch',
+              'uid': 'cloud-user',
+              'startedAt': '2026-04-13T23:00:00.000Z',
+              'endedAt': null,
+              'status': SleepSessionStatus.active.name,
+              'sleepModeActive': true,
+              'dormId': 'dorm-204',
+              'recommendations': const <Map<String, dynamic>>[],
+              'selectedRecommendationIds': const <String>[],
+              'awakenings': const <Map<String, dynamic>>[],
+              'feedback': const <Map<String, dynamic>>[],
+              'summary': null,
+              'updatedAt': '2026-04-14T07:00:00.000Z',
+            },
+          ],
+        },
+      });
+
+      expect(repository.activeSession, isNull);
+      expect(
+        repository.latestAwaitingFeedbackSession?.id,
+        'session-phase-mismatch',
+      );
+      expect(
+        repository.sessions.single.status,
+        SleepSessionStatus.awaitingFeedback,
+      );
+      expect(repository.sessions.single.sleepModeActive, isFalse);
+    },
+  );
+
+  test(
     'cloudbase dorm repository keeps local dorm status responsive while remote sync is queued',
     () async {
       final List<_PostCall> calls = <_PostCall>[];
@@ -238,6 +362,245 @@ void main() {
       expect(snapshotStore.refreshCount, 1);
     },
   );
+
+  test(
+    'cloudbase insights repository parses profile duration and quality trends from snapshots',
+    () async {
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) async =>
+                <String, dynamic>{'ok': true, 'path': path, 'body': body},
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(uid: 'cloud-user'),
+      );
+      final InMemorySleepSessionRepository sleepSessionRepository =
+          InMemorySleepSessionRepository(
+            initialSessions: const <SleepSession>[],
+          );
+      final CloudBaseInsightsRepository repository =
+          CloudBaseInsightsRepository(
+            authRepository: authRepository,
+            snapshotStore: snapshotStore,
+            appApiClient: appApiClient,
+            sleepSessionRepository: sleepSessionRepository,
+            dormRepository: InMemoryDormRepository(currentUserId: 'cloud-user'),
+            dreamRepository: InMemoryDreamRepository(userId: 'cloud-user'),
+          );
+
+      snapshotStore.pushPayload(<String, dynamic>{
+        'data': <String, dynamic>{
+          'user': <String, dynamic>{'uid': 'cloud-user'},
+          'cardSnapshots': <String, dynamic>{
+            'profile_report': <String, dynamic>{
+              'generatedAt': '2026-04-13T12:00:00.000Z',
+              'cards': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'id': 'sleep-report-summary',
+                  'type': 'sleep_report_summary',
+                  'title': '本周睡眠快照',
+                  'payload': <String, dynamic>{
+                    'averageSleepHours': 6.8,
+                    'averageSleepQuality': 78,
+                    'averageRestedLevel': 74,
+                    'calmNights': 4,
+                    'dreamEntriesCount': 2,
+                    'highlights': <String>['steady'],
+                  },
+                },
+                <String, dynamic>{
+                  'id': 'sleep-duration-trend',
+                  'type': 'sleep_duration_trend',
+                  'payload': <String, dynamic>{
+                    'metricKey': 'sleep_duration',
+                    'unit': 'hours',
+                    'points': <Map<String, dynamic>>[
+                      <String, dynamic>{
+                        'dateKey': '2026-04-07',
+                        'weekdayLabel': '一',
+                        'value': null,
+                      },
+                      <String, dynamic>{
+                        'dateKey': '2026-04-08',
+                        'weekdayLabel': '二',
+                        'value': 6.9,
+                      },
+                    ],
+                  },
+                },
+                <String, dynamic>{
+                  'id': 'sleep-quality-trend',
+                  'type': 'sleep_quality_trend',
+                  'payload': <String, dynamic>{
+                    'metricKey': 'sleep_quality',
+                    'unit': 'score',
+                    'points': <Map<String, dynamic>>[
+                      <String, dynamic>{
+                        'dateKey': '2026-04-07',
+                        'weekdayLabel': '一',
+                        'value': null,
+                      },
+                      <String, dynamic>{
+                        'dateKey': '2026-04-08',
+                        'weekdayLabel': '二',
+                        'value': 84,
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        },
+      });
+
+      expect(repository.profileSleepDurationTrend.unit, 'hours');
+      expect(repository.profileSleepDurationTrend.points[1].value, 6.9);
+      expect(repository.profileSleepQualityTrend.unit, 'score');
+      expect(repository.profileSleepQualityTrend.points[1].value, 84);
+
+      repository.dispose();
+      authRepository.dispose();
+      sleepSessionRepository.dispose();
+    },
+  );
+
+  test('cloudbase notification repository syncs read state', () async {
+    final List<_PostCall> calls = <_PostCall>[];
+    final _FakeCloudBaseAppApiClient appApiClient = _FakeCloudBaseAppApiClient(
+      onPost: (String path, Map<String, dynamic> body) async {
+        calls.add(_PostCall(path: path, body: body));
+        return <String, dynamic>{'ok': true};
+      },
+    );
+    final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+      appApiClient: appApiClient,
+    );
+    final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+      initialProfile: buildDefaultUserProfile().copyWith(uid: 'cloud-user'),
+    );
+    final CloudBaseNotificationRepository repository =
+        CloudBaseNotificationRepository(
+          authRepository: authRepository,
+          snapshotStore: snapshotStore,
+          appApiClient: appApiClient,
+        );
+
+    await repository.upsertNotification(
+      NotificationItem(
+        id: 'notif-1',
+        category: NotificationCategory.system,
+        title: 'Remote sync',
+        body: 'Ensure the notification sync stays aligned.',
+        createdAt: DateTime(2026, 4, 13, 12, 0),
+        route: '/notifications',
+        readAt: null,
+        ownerUid: 'cloud-user',
+      ),
+    );
+
+    await repository.markRead('notif-1');
+
+    expect(repository.notifications.single.isRead, isTrue);
+    expect(calls.map((call) => call.path).toList(growable: false), <String>[
+      '/api/notifications/read',
+    ]);
+    expect(calls[0].body['notificationId'], 'notif-1');
+    expect(calls[0].body['readAt'], isA<String>());
+
+    repository.dispose();
+    authRepository.dispose();
+  });
+
+  test(
+    'cloudbase notification sync controller only surfaces newly fetched unread notifications',
+    () async {
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) async {
+              return <String, dynamic>{'ok': true};
+            },
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(uid: 'cloud-user'),
+      );
+      final CloudBaseNotificationRepository repository =
+          CloudBaseNotificationRepository(
+            authRepository: authRepository,
+            snapshotStore: snapshotStore,
+            appApiClient: appApiClient,
+          );
+
+      snapshotStore.pushPayload(
+        _bootstrapPayloadWithNotifications(<NotificationItem>[
+          NotificationItem(
+            id: 'notif-existing',
+            category: NotificationCategory.system,
+            title: 'Existing',
+            body: 'Already synced before polling starts.',
+            createdAt: DateTime(2026, 4, 13, 18, 0),
+            route: '/notifications',
+            readAt: null,
+            ownerUid: 'cloud-user',
+          ),
+        ]),
+      );
+
+      final List<String> shownNotificationIds = <String>[];
+      final CloudBaseNotificationSyncController controller =
+          CloudBaseNotificationSyncController(
+            authRepository: authRepository,
+            notificationRepository: repository,
+            notificationService: AppNotificationService(),
+            snapshotStore: snapshotStore,
+            onShowNotificationItem: (NotificationItem item) async {
+              shownNotificationIds.add(item.id);
+            },
+          );
+
+      controller.start();
+      snapshotStore.onRefresh = () {
+        snapshotStore.pushPayload(
+          _bootstrapPayloadWithNotifications(<NotificationItem>[
+            NotificationItem(
+              id: 'notif-existing',
+              category: NotificationCategory.system,
+              title: 'Existing',
+              body: 'Already synced before polling starts.',
+              createdAt: DateTime(2026, 4, 13, 18, 0),
+              route: '/notifications',
+              readAt: null,
+              ownerUid: 'cloud-user',
+            ),
+            NotificationItem(
+              id: 'notif-new',
+              category: NotificationCategory.reminder,
+              title: 'Fresh reminder',
+              body: 'Pulled from CloudBase after the initial prime.',
+              createdAt: DateTime(2026, 4, 13, 18, 5),
+              route: '/feedback/morning',
+              readAt: null,
+              ownerUid: 'cloud-user',
+            ),
+          ]),
+        );
+      };
+
+      await controller.refresh(showNewLocalNotifications: true);
+
+      expect(shownNotificationIds, <String>['notif-new']);
+
+      await controller.dispose();
+      repository.dispose();
+      authRepository.dispose();
+    },
+  );
 }
 
 class _PostCall {
@@ -252,6 +615,7 @@ class _TestSnapshotStore extends CloudBaseSnapshotStore {
 
   Map<String, dynamic> _nextPayload = <String, dynamic>{};
   int refreshCount = 0;
+  FutureOr<void> Function()? onRefresh;
 
   @override
   Map<String, dynamic> get payload => _nextPayload;
@@ -264,7 +628,41 @@ class _TestSnapshotStore extends CloudBaseSnapshotStore {
   @override
   Future<void> refresh() async {
     refreshCount += 1;
+    await onRefresh?.call();
   }
+}
+
+Map<String, dynamic> _bootstrapPayloadWithNotifications(
+  List<NotificationItem> notifications,
+) {
+  return <String, dynamic>{
+    'data': <String, dynamic>{
+      'user': <String, dynamic>{'uid': 'cloud-user'},
+      'settings': <String, dynamic>{},
+      'dorm': <String, dynamic>{},
+      'sleepSessions': const <Map<String, dynamic>>[],
+      'dreamEntries': const <Map<String, dynamic>>[],
+      'sleepCaptureRecords': const <Map<String, dynamic>>[],
+      'assistantThreads': const <Map<String, dynamic>>[],
+      'assistantMessages': const <String, List<Map<String, dynamic>>>{},
+      'cardSnapshots': const <String, Map<String, dynamic>>{},
+      'userState': const <String, dynamic>{},
+      'notifications': notifications
+          .map(
+            (NotificationItem item) => <String, dynamic>{
+              'id': item.id,
+              'category': item.category.name,
+              'title': item.title,
+              'body': item.body,
+              'createdAt': item.createdAt.toIso8601String(),
+              'route': item.route,
+              'readAt': item.readAt?.toIso8601String(),
+              'ownerUid': item.ownerUid,
+            },
+          )
+          .toList(growable: false),
+    },
+  };
 }
 
 class _FakeCloudBaseAppApiClient extends CloudBaseAppApiClient {
