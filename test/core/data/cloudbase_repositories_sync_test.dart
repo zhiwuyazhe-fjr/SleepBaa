@@ -37,7 +37,7 @@ void main() {
             appApiClient: appApiClient,
           );
 
-      final SleepSession session = await repository.startSleepSession(
+      final SleepSession session = await repository.startOrResumeSleepSession(
         recommendationSnapshot: const <NightRecommendation>[],
         dormId: 'dorm-204',
       );
@@ -84,7 +84,7 @@ void main() {
             appApiClient: appApiClient,
           );
 
-      final SleepSession session = await repository.startSleepSession(
+      final SleepSession session = await repository.startOrResumeSleepSession(
         recommendationSnapshot: const <NightRecommendation>[],
         dormId: 'dorm-204',
       );
@@ -94,10 +94,8 @@ void main() {
       await pumpEventQueue();
       expect(calls.map((call) => call.path), <String>['/api/sleep/enter']);
 
-      await repository.updateActiveSession(
-        sleepModeActive: false,
-        status: SleepSessionStatus.awaitingFeedback,
-        endedAt: DateTime(2026, 4, 13, 7, 0),
+      await repository.finishActiveSleepSession(
+        at: DateTime(2026, 4, 13, 7, 0),
       );
 
       expect(repository.activeSession, isNull);
@@ -125,6 +123,82 @@ void main() {
       expect(exitBody['status'], SleepSessionStatus.awaitingFeedback.name);
 
       exitCompleter.complete(<String, dynamic>{'ok': true});
+      await pumpEventQueue();
+
+      expect(snapshotStore.refreshCount, 1);
+    },
+  );
+
+  test(
+    'cloudbase sleep session repository syncs pause events through the pause endpoint',
+    () async {
+      final List<_PostCall> calls = <_PostCall>[];
+      final Completer<Map<String, dynamic>> enterCompleter =
+          Completer<Map<String, dynamic>>();
+      final Completer<Map<String, dynamic>> pauseCompleter =
+          Completer<Map<String, dynamic>>();
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) {
+              calls.add(_PostCall(path: path, body: body));
+              if (path == '/api/sleep/enter') {
+                return enterCompleter.future;
+              }
+              if (path == '/api/sleep/pause') {
+                return pauseCompleter.future;
+              }
+              throw StateError('Unexpected path: $path');
+            },
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(
+          uid: 'cloud-user',
+          dormId: 'dorm-204',
+        ),
+      );
+      final CloudBaseSleepSessionRepository repository =
+          CloudBaseSleepSessionRepository(
+            authRepository: authRepository,
+            snapshotStore: snapshotStore,
+            appApiClient: appApiClient,
+          );
+
+      final SleepSession session = await repository.startOrResumeSleepSession(
+        recommendationSnapshot: const <NightRecommendation>[],
+        dormId: 'dorm-204',
+      );
+
+      await pumpEventQueue();
+      expect(calls.map((call) => call.path), <String>['/api/sleep/enter']);
+
+      await repository.pauseActiveSleepSession(
+        at: DateTime(2026, 4, 13, 2, 0),
+      );
+
+      expect(repository.activeSession, isNull);
+      expect(repository.sessionForSleepDayKey(session.sleepDayKey)?.status, SleepSessionStatus.paused);
+
+      await pumpEventQueue();
+      expect(calls.length, 1);
+
+      enterCompleter.complete(<String, dynamic>{'ok': true});
+      await pumpEventQueue();
+
+      expect(calls.map((call) => call.path), <String>[
+        '/api/sleep/enter',
+        '/api/sleep/pause',
+      ]);
+
+      final Map<String, dynamic> pauseBody = Map<String, dynamic>.from(
+        calls.last.body['session'] as Map,
+      );
+      expect(pauseBody['id'], session.id);
+      expect(pauseBody['status'], SleepSessionStatus.paused.name);
+
+      pauseCompleter.complete(<String, dynamic>{'ok': true});
       await pumpEventQueue();
 
       expect(snapshotStore.refreshCount, 1);

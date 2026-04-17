@@ -38,11 +38,10 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
           final List<SleepSession> monthSessions = services
               .sleepSessionRepository
               .sessionsForMonth(_visibleMonth);
-          final Map<DateTime, SleepSession> sessionMap =
-              <DateTime, SleepSession>{
-                for (final SleepSession session in monthSessions)
-                  DateUtils.dateOnly(session.startedAt): session,
-              };
+          final Map<DateTime, SleepSession> sessionMap = <DateTime, SleepSession>{
+            for (final SleepSession session in monthSessions)
+              DateUtils.dateOnly(session.sleepDayDate): session,
+          };
           final SleepSession? selectedSession = _selectedDay == null
               ? null
               : sessionMap[_selectedDay];
@@ -124,26 +123,22 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       '${_buildStreak(services.sleepSessionRepository.sessions)} 天连续打卡',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(color: palette.primary),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.headlineSmall?.copyWith(color: palette.primary),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Wrap(
                       spacing: AppSpacing.sm,
                       runSpacing: AppSpacing.sm,
                       children: <Widget>[
-                        _DetailChip(
-                          label:
-                              '本月记录 ${monthSessions.length} 夜',
-                        ),
-                        _DetailChip(
-                          label: '待补全 $pendingCount 夜',
-                        ),
+                        _DetailChip(label: '本月记录 ${monthSessions.length} 天'),
+                        _DetailChip(label: '待补全 $pendingCount 天'),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      '进入睡眠后会先占位，晨间反馈完成后会补全睡眠质量、时长和摘要。',
+                      '同一睡眠日多次退出或再次进入都会累计到同一天，晨间反馈完成后该日时长会锁定。',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppColors.textSecondary,
                         height: 1.45,
@@ -153,9 +148,7 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
-              AppCard(
-                child: _SelectedSessionDetail(session: selectedSession),
-              ),
+              AppCard(child: _SelectedSessionDetail(session: selectedSession)),
             ],
           );
         },
@@ -168,7 +161,7 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
       return 0;
     }
     final List<DateTime> uniqueDays = sessions
-        .map((SleepSession session) => DateUtils.dateOnly(session.startedAt))
+        .map((SleepSession session) => DateUtils.dateOnly(session.sleepDayDate))
         .toSet()
         .toList(growable: false)
       ..sort((DateTime a, DateTime b) => b.compareTo(a));
@@ -199,11 +192,8 @@ class _SelectedSessionDetail extends StatelessWidget {
     final MorningSummary? summary = session!.summary;
     final String stageLabel = _sessionStageLabel(session!);
     final Color stageColor = _sessionStageColor(session!);
-    final String durationLabel = summary != null
-        ? '${summary.totalSleepHours.toStringAsFixed(1)} h'
-        : session!.endedAt == null
-        ? '进行中'
-        : '${session!.endedAt!.difference(session!.startedAt).inMinutes} min';
+    final String durationLabel =
+        '${session!.displaySleepHours().toStringAsFixed(1)} h';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -212,7 +202,7 @@ class _SelectedSessionDetail extends StatelessWidget {
           children: <Widget>[
             Expanded(
               child: Text(
-                Formatters.formatDateLabel(session!.startedAt),
+                Formatters.formatDateLabel(session!.sleepDayDate),
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
@@ -232,16 +222,10 @@ class _SelectedSessionDetail extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
-        Text(
-          '当晚摘要',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        Text('当晚摘要', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: AppSpacing.sm),
         Text(
-          summary?.note ??
-              (session!.status == SleepSessionStatus.active
-                  ? '已进入睡眠模式，等待本夜结束后补全反馈。'
-                  : '已退出睡眠模式，等待晨间反馈补全质量与恢复感。'),
+          summary?.note ?? _summaryFallback(session!),
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: AppColors.textSecondary,
             height: 1.5,
@@ -263,12 +247,23 @@ class _SelectedSessionDetail extends StatelessWidget {
     );
   }
 
+  String _summaryFallback(SleepSession session) {
+    return switch (session.status) {
+      SleepSessionStatus.active => '已进入睡眠模式，仍在持续记录当晚时长。',
+      SleepSessionStatus.paused => '已退出睡眠模式，稍后再次进入仍可继续累计。',
+      SleepSessionStatus.awaitingFeedback => '等待晨间反馈补全睡眠质量与恢复感。',
+      SleepSessionStatus.completed => '晨间反馈已完成，本日记录已锁定。',
+      SleepSessionStatus.drafted => '这条记录还在准备中。',
+    };
+  }
+
   String _sessionStageLabel(SleepSession session) {
     if (session.summary != null || session.status == SleepSessionStatus.completed) {
       return '已完成';
     }
     return switch (session.status) {
       SleepSessionStatus.active => '进行中',
+      SleepSessionStatus.paused => '已暂停',
       SleepSessionStatus.awaitingFeedback => '待补全',
       SleepSessionStatus.completed => '已完成',
       SleepSessionStatus.drafted => '草稿',
@@ -281,6 +276,7 @@ class _SelectedSessionDetail extends StatelessWidget {
     }
     return switch (session.status) {
       SleepSessionStatus.active => const Color(0xFF4458D8),
+      SleepSessionStatus.paused => const Color(0xFF8B7CF6),
       SleepSessionStatus.awaitingFeedback => const Color(0xFFF39A3C),
       SleepSessionStatus.completed => const Color(0xFF2D9272),
       SleepSessionStatus.drafted => AppColors.textSecondary,

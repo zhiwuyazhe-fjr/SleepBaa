@@ -15,7 +15,9 @@ import 'package:sleep_dorm_app/features/home/presentation/widgets/home_hero_pair
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.dart';
 
 class HomePreSleepPage extends StatefulWidget {
-  const HomePreSleepPage({super.key});
+  const HomePreSleepPage({super.key, this.notice});
+
+  final String? notice;
 
   @override
   State<HomePreSleepPage> createState() => _HomePreSleepPageState();
@@ -23,6 +25,22 @@ class HomePreSleepPage extends StatefulWidget {
 
 class _HomePreSleepPageState extends State<HomePreSleepPage> {
   bool _bannerExpanded = false;
+  bool _didHandleNotice = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didHandleNotice || widget.notice != 'feedback_received') {
+      return;
+    }
+    _didHandleNotice = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      notifyPassiveToast(context, message: '您已经填写过晨间反馈，小眠已经收到🫡');
+    });
+  }
 
   Future<void> _dismissBanner() async {
     await context.appServices.sleepCaptureRepository.clearPendingBanner();

@@ -6,6 +6,12 @@ import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/state/audio_playback_controller.dart';
 
+enum FinishSleepModeResult {
+  noActiveSession,
+  goToFeedback,
+  goHomeFeedbackAlreadySubmitted,
+}
+
 class SleepExperienceController extends ChangeNotifier {
   SleepExperienceController({
     required AuthRepository authRepository,
@@ -194,6 +200,7 @@ class SleepExperienceController extends ChangeNotifier {
 
   Future<void> enterSleepMode() async {
     final UserProfile user = await _currentUserOrEnsureAuthenticated();
+    final DateTime now = DateTime.now();
     final List<NightRecommendation> snapshot = _recommendationRepository
         .tonightRecommendations
         .map(
@@ -204,34 +211,77 @@ class SleepExperienceController extends ChangeNotifier {
                 : item.executionState,
           ),
         )
-        .toList();
+        .toList(growable: false);
 
-    await _sleepSessionRepository.startSleepSession(
+    await _archiveStalePausedSessions(now);
+    final String sleepDayKey = sleepDayKeyFromDate(now);
+    final SleepSession? existingForToday = _sleepSessionRepository
+        .sessionForSleepDayKey(sleepDayKey);
+    final bool shouldClearExitArtifacts =
+        existingForToday != null && !existingForToday.sleepModeActive;
+    final SleepSession session = await _sleepSessionRepository
+        .startOrResumeSleepSession(
       recommendationSnapshot: snapshot,
       dormId: user.dormId,
+      at: now,
     );
+    if (shouldClearExitArtifacts) {
+      await _clearSleepExitArtifacts(session.id);
+    }
     await _dormRepository.updateCurrentUserStatus(
       uid: user.uid,
       status: DormMemberStatus.quiet,
       sleepModeActive: true,
-      note: '已进入睡眠模式',
+      note: session.hasSubmittedFeedback
+          ? '已进入睡眠模式，今天时长不再累计'
+          : '已进入睡眠模式',
     );
   }
 
-  Future<void> exitSleepMode() async {
+  Future<void> pauseSleepMode() async {
     final UserProfile user = await _currentUserOrEnsureAuthenticated();
-    final SleepSession? activeSession = _sleepSessionRepository.activeSession;
-    if (activeSession == null) {
+    final SleepSession? paused = await _sleepSessionRepository
+        .pauseActiveSleepSession();
+    if (paused == null) {
       return;
     }
 
-    await _sleepSessionRepository.updateActiveSession(
-      sleepModeActive: false,
-      status: SleepSessionStatus.awaitingFeedback,
-      endedAt: DateTime.now(),
+    try {
+      await _dormRepository.updateCurrentUserStatus(
+        uid: user.uid,
+        status: DormMemberStatus.quiet,
+        sleepModeActive: false,
+        note: paused.hasSubmittedFeedback
+            ? '已退出睡眠模式'
+            : '已暂停睡眠计时，稍后可继续累计',
+      );
+    } catch (_) {
+      // Dorm sync is best-effort and should not block pausing sleep mode.
+    }
+  }
+
+  Future<FinishSleepModeResult> finishSleepMode() async {
+    final UserProfile user = await _currentUserOrEnsureAuthenticated();
+    final SleepSession? finished = await _sleepSessionRepository
+        .finishActiveSleepSession();
+    if (finished == null) {
+      return FinishSleepModeResult.noActiveSession;
+    }
+
+    await _syncDormStatusAfterSleepExit(
+      user.uid,
+      hasSubmittedFeedback: finished.hasSubmittedFeedback,
     );
-    await _syncDormStatusAfterSleepExit(user.uid);
-    unawaited(_completeSleepExitSideEffects(activeSession));
+    if (finished.hasSubmittedFeedback) {
+      await _clearSleepExitArtifacts(finished.id);
+      return FinishSleepModeResult.goHomeFeedbackAlreadySubmitted;
+    }
+    unawaited(_completeSleepExitSideEffects(finished));
+    return FinishSleepModeResult.goToFeedback;
+  }
+
+  Future<void> exitSleepMode() async {
+    await finishSleepMode();
   }
 
   Future<void> addNightAwakening({
@@ -242,7 +292,7 @@ class SleepExperienceController extends ChangeNotifier {
   }) async {
     await _authRepository.ensureAuthenticated();
     SleepSession? session = _sleepSessionRepository.activeSession;
-    session ??= await _sleepSessionRepository.startSleepSession(
+    session ??= await _sleepSessionRepository.startOrResumeSleepSession(
       recommendationSnapshot: _recommendationRepository.tonightRecommendations,
       dormId: _authRepository.currentUser.dormId,
     );
@@ -290,33 +340,89 @@ class SleepExperienceController extends ChangeNotifier {
         .where(
           (NotificationItem item) => item.route == AppRoutes.feedbackMorning,
         )
-        .toList();
+        .toList(growable: false);
     for (final NotificationItem item in notifications) {
       await _notificationRepository.markRead(item.id);
     }
+    try {
+      await _pushNotificationGateway.cancelFeedbackReminder(sessionId: session.id);
+    } catch (_) {
+      // Canceling reminders is best-effort after feedback submission.
+    }
+    try {
+      await _sleepCaptureRepository.clearPendingBanner();
+    } catch (_) {
+      // Pending banner cleanup should not block feedback submission.
+    }
   }
 
-  Future<void> _syncDormStatusAfterSleepExit(String uid) async {
+  Future<void> _syncDormStatusAfterSleepExit(
+    String uid, {
+    required bool hasSubmittedFeedback,
+  }) async {
     try {
       await _dormRepository.updateCurrentUserStatus(
         uid: uid,
         status: DormMemberStatus.quiet,
         sleepModeActive: false,
-        note: '等待晨间反馈',
+        note: hasSubmittedFeedback ? '已完成晨间反馈' : '等待晨间反馈',
       );
     } catch (_) {
       // Dorm sync is best-effort and should not block leaving sleep mode.
     }
   }
 
-  Future<void> _completeSleepExitSideEffects(SleepSession activeSession) async {
+  Future<void> _archiveStalePausedSessions(DateTime now) async {
+    final String currentSleepDayKey = sleepDayKeyFromDate(now);
+    final List<SleepSession> stalePausedSessions = _sleepSessionRepository.sessions
+        .where(
+          (SleepSession session) =>
+              session.status == SleepSessionStatus.paused &&
+              !session.sleepModeActive &&
+              !session.hasSubmittedFeedback &&
+              session.sleepDayKey != currentSleepDayKey,
+        )
+        .toList(growable: false);
+    for (final SleepSession session in stalePausedSessions) {
+      await _sleepSessionRepository.saveSession(
+        session.copyWith(
+          status: SleepSessionStatus.awaitingFeedback,
+          updatedAt: now,
+        ),
+      );
+    }
+  }
+
+  Future<void> _clearSleepExitArtifacts(String sessionId) async {
+    final List<NotificationItem> notifications = _notificationRepository
+        .notifications
+        .where((NotificationItem item) => item.id == 'feedback-$sessionId')
+        .toList(growable: false);
+    for (final NotificationItem item in notifications) {
+      if (!item.isRead) {
+        await _notificationRepository.markRead(item.id);
+      }
+    }
+    try {
+      await _pushNotificationGateway.cancelFeedbackReminder(sessionId: sessionId);
+    } catch (_) {
+      // Reminder cleanup is best-effort when sleep mode is resumed.
+    }
+    try {
+      await _sleepCaptureRepository.clearPendingBanner();
+    } catch (_) {
+      // Pending banner cleanup should not block sleep mode resume.
+    }
+  }
+
+  Future<void> _completeSleepExitSideEffects(SleepSession session) async {
     try {
       await _notificationRepository.upsertNotification(
         NotificationItem(
-          id: 'feedback-${activeSession.id}',
+          id: 'feedback-${session.id}',
           category: NotificationCategory.reminder,
           title: '晨间反馈待完成',
-          body: '昨晚的行动建议还没记录效果，花 1 分钟帮我继续优化今晚方案。',
+          body: '昨晚的睡眠记录已经保存，醒来后记得补充晨间反馈。',
           createdAt: DateTime.now(),
           route: AppRoutes.feedbackMorning,
           readAt: null,
@@ -328,7 +434,7 @@ class SleepExperienceController extends ChangeNotifier {
 
     try {
       await _pushNotificationGateway.scheduleFeedbackReminder(
-        sessionId: activeSession.id,
+        sessionId: session.id,
         when: DateTime.now().add(const Duration(hours: 8)),
       );
     } catch (_) {
@@ -336,9 +442,7 @@ class SleepExperienceController extends ChangeNotifier {
     }
 
     try {
-      await _sleepCaptureRepository.showPendingBannerForSession(
-        activeSession.id,
-      );
+      await _sleepCaptureRepository.showPendingBannerForSession(session.id);
     } catch (_) {
       // Pending memo banner should not block leaving sleep mode.
     }

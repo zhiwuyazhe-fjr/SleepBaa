@@ -53,14 +53,9 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
           if (session == null) {
             return const Center(child: Text('当前没有待反馈的睡眠记录。'));
           }
-          final DateTime endAt = session.endedAt ?? DateTime.now();
-          final Duration totalRecordDuration = endAt.difference(
-            session.startedAt,
-          );
-          final int totalRecordMinutes = totalRecordDuration.inMinutes.clamp(
-            0,
-            24 * 60,
-          );
+          final DateTime endAt = session.displayEndAt ?? DateTime.now();
+          final int totalRecordMinutes =
+              session.liveTrackedDurationMinutes(now: endAt);
           final int actualSleepMinutes = (totalRecordMinutes -
                   _estimatedSleepLatency)
               .clamp(0, 24 * 60);
@@ -81,7 +76,10 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                     _MetricSummary(
                       label: '总记录时长',
                       primaryValue: _formatDurationMinutes(totalRecordMinutes),
-                      detail: _formatDateTimeRangeLabel(session.startedAt, endAt),
+                      detail: _formatDateTimeRangeLabel(
+                        session.displayStartAt,
+                        endAt,
+                      ),
                       palette: palette,
                     ),
                     const SizedBox(height: AppSpacing.md),

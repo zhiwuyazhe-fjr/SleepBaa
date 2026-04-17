@@ -141,7 +141,7 @@ void main() {
     final InMemorySleepSessionRepository repository =
         InMemorySleepSessionRepository();
 
-    final SleepSession session = await repository.startSleepSession(
+    final SleepSession session = await repository.startOrResumeSleepSession(
       recommendationSnapshot: const <NightRecommendation>[
         NightRecommendation(
           id: 'audio',
@@ -158,14 +158,96 @@ void main() {
 
     expect(repository.activeSession?.id, session.id);
 
-    await repository.updateActiveSession(
-      sleepModeActive: false,
-      status: SleepSessionStatus.awaitingFeedback,
-      endedAt: DateTime.now(),
-    );
+    await repository.finishActiveSleepSession();
 
     expect(repository.latestAwaitingFeedbackSession?.id, session.id);
   });
+
+  test(
+    'sleep session repository resumes a paused same-day session and accumulates duration',
+    () async {
+      final InMemorySleepSessionRepository repository =
+          InMemorySleepSessionRepository(initialSessions: const <SleepSession>[]);
+      final DateTime startAt = DateTime(2026, 4, 13, 23, 0);
+      final String sleepDayKey = sleepDayKeyFromDate(startAt);
+
+      final SleepSession first = await repository.startOrResumeSleepSession(
+        recommendationSnapshot: const <NightRecommendation>[],
+        dormId: 'dorm-204',
+        at: startAt,
+      );
+      await repository.pauseActiveSleepSession(
+        at: DateTime(2026, 4, 14, 1, 0),
+      );
+
+      final SleepSession resumed = await repository.startOrResumeSleepSession(
+        recommendationSnapshot: const <NightRecommendation>[],
+        dormId: 'dorm-204',
+        at: DateTime(2026, 4, 14, 2, 0),
+      );
+      await repository.finishActiveSleepSession(
+        at: DateTime(2026, 4, 14, 5, 0),
+      );
+
+      final SleepSession finished = repository.sessionForSleepDayKey(sleepDayKey)!;
+      expect(resumed.id, first.id);
+      expect(finished.id, first.id);
+      expect(finished.status, SleepSessionStatus.awaitingFeedback);
+      expect(finished.trackedDurationMinutes, 300);
+      expect(finished.segments.length, 2);
+    },
+  );
+
+  test(
+    'sleep session repository keeps tracked duration locked after morning feedback is submitted',
+    () async {
+      final InMemorySleepSessionRepository sessions =
+          InMemorySleepSessionRepository(initialSessions: const <SleepSession>[]);
+      final InMemoryFeedbackRepository feedbackRepository =
+          InMemoryFeedbackRepository(sleepSessionRepository: sessions);
+      final DateTime startAt = DateTime(2026, 4, 13, 23, 30);
+      final String sleepDayKey = sleepDayKeyFromDate(startAt);
+
+      await sessions.startOrResumeSleepSession(
+        recommendationSnapshot: const <NightRecommendation>[],
+        dormId: 'dorm-204',
+        at: startAt,
+      );
+      await sessions.finishActiveSleepSession(
+        at: DateTime(2026, 4, 14, 6, 30),
+      );
+
+      final SleepSession awaiting = sessions.sessionForSleepDayKey(sleepDayKey)!;
+      await feedbackRepository.submitFeedback(
+        session: awaiting,
+        summary: const MorningSummary(
+          sleepQuality: 4,
+          restedLevel: 4,
+          totalSleepHours: 7,
+          awakeningsCount: 0,
+          note: 'locked',
+        ),
+        recommendationFeedback: const <RecommendationFeedback>[],
+      );
+
+      final SleepSession completed = sessions.sessionForSleepDayKey(sleepDayKey)!;
+      final int lockedMinutes = completed.trackedDurationMinutes;
+
+      await sessions.startOrResumeSleepSession(
+        recommendationSnapshot: const <NightRecommendation>[],
+        dormId: 'dorm-204',
+        at: DateTime(2026, 4, 14, 9, 0),
+      );
+      await sessions.finishActiveSleepSession(
+        at: DateTime(2026, 4, 14, 10, 0),
+      );
+
+      final SleepSession locked = sessions.sessionForSleepDayKey(sleepDayKey)!;
+      expect(locked.status, SleepSessionStatus.completed);
+      expect(locked.trackedDurationMinutes, lockedMinutes);
+      expect(locked.hasSubmittedFeedback, isTrue);
+    },
+  );
 
   test('feedback repository marks session completed', () async {
     final InMemorySleepSessionRepository sessions =
@@ -173,7 +255,7 @@ void main() {
     final InMemoryFeedbackRepository feedbackRepository =
         InMemoryFeedbackRepository(sleepSessionRepository: sessions);
 
-    final SleepSession session = await sessions.startSleepSession(
+    final SleepSession session = await sessions.startOrResumeSleepSession(
       recommendationSnapshot: const <NightRecommendation>[],
       dormId: 'dorm-204',
     );

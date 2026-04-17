@@ -280,6 +280,11 @@ class SleepFacade extends ChangeNotifier {
 
   Future<void> exitSleepMode() => _experienceController.exitSleepMode();
 
+  Future<void> pauseSleepMode() => _experienceController.pauseSleepMode();
+
+  Future<FinishSleepModeResult> finishSleepMode() =>
+      _experienceController.finishSleepMode();
+
   Future<void> addNightAwakening({
     required DateTime occurredAt,
     required String trigger,

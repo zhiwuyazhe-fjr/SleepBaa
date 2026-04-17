@@ -111,7 +111,7 @@ class ProfilePage extends StatelessWidget {
   }) {
     final Map<DateTime, int> qualityByDay = <DateTime, int>{
       for (final SleepSession session in sessions)
-        DateUtils.dateOnly(session.startedAt):
+        DateUtils.dateOnly(session.sleepDayDate):
             (session.summary?.sleepQuality ?? 0).clamp(0, 5),
     };
     final int daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);

@@ -98,7 +98,9 @@ GoRouter createRouter({
                 pageBuilder: (BuildContext context, GoRouterState state) =>
                     _noTransitionPage(
                       state: state,
-                      child: const NightWelcomeGatePage(),
+                      child: NightWelcomeGatePage(
+                        notice: state.uri.queryParameters['notice'],
+                      ),
                     ),
               ),
             ],

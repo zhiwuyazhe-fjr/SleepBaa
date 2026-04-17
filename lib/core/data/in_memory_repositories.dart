@@ -581,7 +581,7 @@ class InMemorySleepSessionRepository extends ChangeNotifier
   SleepSession? get activeSession {
     try {
       return _sessions.lastWhere(
-        (SleepSession session) => session.status == SleepSessionStatus.active,
+        (SleepSession session) => session.sleepModeActive,
       );
     } on StateError {
       return null;
@@ -594,35 +594,52 @@ class InMemorySleepSessionRepository extends ChangeNotifier
   @override
   SleepSession? get latestAwaitingFeedbackSession {
     final List<SleepSession> pending =
-        _sessions
+        _latestSleepDaySessions(_sessions)
             .where(
               (SleepSession session) =>
-                  session.status == SleepSessionStatus.awaitingFeedback,
+                  session.status == SleepSessionStatus.awaitingFeedback &&
+                  !session.sleepModeActive &&
+                  !session.hasSubmittedFeedback,
             )
             .toList()
           ..sort(
             (SleepSession a, SleepSession b) =>
-                b.startedAt.compareTo(a.startedAt),
+                b.sleepDayDate.compareTo(a.sleepDayDate),
           );
     return pending.isEmpty ? null : pending.first;
   }
 
   @override
-  Future<SleepSession> startSleepSession({
+  Future<SleepSession> startOrResumeSleepSession({
     required List<NightRecommendation> recommendationSnapshot,
     required String? dormId,
+    DateTime? at,
   }) async {
-    final SleepSession? existing = activeSession;
-    if (existing != null) {
-      return existing;
+    final DateTime moment = at ?? DateTime.now();
+    final String sleepDayKey = sleepDayKeyFromDate(moment);
+    final SleepSession? currentActive = activeSession;
+    if (currentActive != null && currentActive.sleepDayKey == sleepDayKey) {
+      return currentActive;
     }
 
-    final DateTime now = DateTime.now();
+    final SleepSession? existing = sessionForSleepDayKey(sleepDayKey);
+    if (existing != null) {
+      final SleepSession resumed = _resumeSession(
+        existing,
+        at: moment,
+        dormId: dormId,
+        recommendationSnapshot: recommendationSnapshot,
+      );
+      await saveSession(resumed);
+      return resumed;
+    }
+
     final SleepSession session = SleepSession(
       id: IdGenerator.next('session'),
       uid: _uid,
-      startedAt: now,
+      startedAt: moment,
       endedAt: null,
+      sleepDayKey: sleepDayKey,
       status: SleepSessionStatus.active,
       sleepModeActive: true,
       dormId: dormId,
@@ -634,41 +651,56 @@ class InMemorySleepSessionRepository extends ChangeNotifier
           )
           .map((NightRecommendation item) => item.id)
           .toList(),
+      segments: <SleepSegment>[SleepSegment(startedAt: moment, endedAt: null)],
+      trackedDurationMinutes: 0,
       awakenings: const <NightAwakeningEntry>[],
       feedback: const <RecommendationFeedback>[],
       summary: null,
-      updatedAt: now,
+      updatedAt: moment,
     );
-    _sessions = <SleepSession>[..._sessions, session];
-    notifyListeners();
+    await saveSession(session);
     return session;
   }
 
   @override
-  Future<void> updateActiveSession({
-    bool? sleepModeActive,
-    SleepSessionStatus? status,
-    DateTime? endedAt,
-    List<String>? selectedRecommendationIds,
-  }) async {
+  Future<SleepSession?> pauseActiveSleepSession({DateTime? at}) async {
     final SleepSession? existing = activeSession;
     if (existing == null) {
-      return;
+      return null;
     }
-    await saveSession(
-      existing.copyWith(
-        sleepModeActive: sleepModeActive,
-        status: status,
-        endedAt: endedAt,
-        selectedRecommendationIds:
-            selectedRecommendationIds ?? existing.selectedRecommendationIds,
-        updatedAt: DateTime.now(),
-      ),
+    final SleepSession paused = _closeActiveSession(
+      existing,
+      at: at ?? DateTime.now(),
+      targetStatus: existing.hasSubmittedFeedback
+          ? SleepSessionStatus.completed
+          : SleepSessionStatus.paused,
     );
+    await saveSession(paused);
+    return paused;
   }
 
   @override
-  Future<void> saveSession(SleepSession session) async {
+  Future<SleepSession?> finishActiveSleepSession({DateTime? at}) async {
+    final SleepSession? existing = activeSession;
+    if (existing == null) {
+      return null;
+    }
+    final SleepSession finished = _closeActiveSession(
+      existing,
+      at: at ?? DateTime.now(),
+      targetStatus: existing.hasSubmittedFeedback
+          ? SleepSessionStatus.completed
+          : SleepSessionStatus.awaitingFeedback,
+    );
+    await saveSession(finished);
+    return finished;
+  }
+
+  @override
+  Future<void> saveSession(
+    SleepSession session, {
+    bool syncRemote = true,
+  }) async {
     final int index = _sessions.indexWhere(
       (SleepSession current) => current.id == session.id,
     );
@@ -679,24 +711,140 @@ class InMemorySleepSessionRepository extends ChangeNotifier
       next[index] = session;
       _sessions = next;
     }
+    _sessions = List<SleepSession>.from(_sessions)
+      ..sort(_compareSleepSessions);
     notifyListeners();
   }
 
   @override
   List<SleepSession> recentSessions({int count = 7}) {
-    final List<SleepSession> items = List<SleepSession>.from(_sessions)
-      ..sort(
-        (SleepSession a, SleepSession b) => a.startedAt.compareTo(b.startedAt),
-      );
+    final List<SleepSession> items = _latestSleepDaySessions(_sessions);
     return items.reversed.take(count).toList().reversed.toList();
   }
 
   @override
   List<SleepSession> sessionsForMonth(DateTime month) {
-    return _sessions.where((SleepSession session) {
-      return session.startedAt.year == month.year &&
-          session.startedAt.month == month.month;
-    }).toList();
+    return _latestSleepDaySessions(
+      _sessions.where((SleepSession session) {
+        return session.sleepDayDate.year == month.year &&
+            session.sleepDayDate.month == month.month;
+      }),
+    );
+  }
+
+  @override
+  SleepSession? sessionForSleepDayKey(String sleepDayKey) {
+    final List<SleepSession> matches = _sessions
+        .where((SleepSession session) => session.sleepDayKey == sleepDayKey)
+        .toList()
+      ..sort(_compareSleepSessions);
+    return matches.isEmpty ? null : matches.last;
+  }
+
+  SleepSession _resumeSession(
+    SleepSession session, {
+    required DateTime at,
+    required String? dormId,
+    required List<NightRecommendation> recommendationSnapshot,
+  }) {
+    if (session.sleepModeActive) {
+      return session;
+    }
+    final List<SleepSegment> segments = _normalizedSegments(session);
+    if (segments.isEmpty || !segments.last.isOpen) {
+      segments.add(SleepSegment(startedAt: at, endedAt: null));
+    }
+    final List<NightRecommendation> recommendations =
+        session.recommendations.isNotEmpty
+        ? session.recommendations
+        : recommendationSnapshot;
+    final List<String> selectedRecommendationIds =
+        session.selectedRecommendationIds.isNotEmpty
+        ? session.selectedRecommendationIds
+        : recommendationSnapshot
+              .where(
+                (NightRecommendation item) =>
+                    item.executionState != RecommendationExecutionState.idle,
+              )
+              .map((NightRecommendation item) => item.id)
+              .toList(growable: false);
+    return session.copyWith(
+      startedAt: segments.first.startedAt,
+      clearEndedAt: true,
+      sleepModeActive: true,
+      status: session.hasSubmittedFeedback
+          ? SleepSessionStatus.completed
+          : SleepSessionStatus.active,
+      dormId: dormId ?? session.dormId,
+      recommendations: recommendations,
+      selectedRecommendationIds: selectedRecommendationIds,
+      segments: segments,
+      updatedAt: at,
+    );
+  }
+
+  SleepSession _closeActiveSession(
+    SleepSession session, {
+    required DateTime at,
+    required SleepSessionStatus targetStatus,
+  }) {
+    final List<SleepSegment> segments = _normalizedSegments(session);
+    int trackedDurationMinutes = session.trackedDurationMinutes;
+    if (segments.isNotEmpty && segments.last.isOpen) {
+      final SleepSegment closed = segments.last.copyWith(endedAt: at);
+      segments[segments.length - 1] = closed;
+      if (!session.isTrackingLocked) {
+        trackedDurationMinutes += sleepSegmentDurationMinutes(closed);
+      }
+    }
+    return session.copyWith(
+      startedAt: segments.isNotEmpty ? segments.first.startedAt : session.startedAt,
+      endedAt: at,
+      status: targetStatus,
+      sleepModeActive: false,
+      segments: segments,
+      trackedDurationMinutes: session.isTrackingLocked
+          ? session.trackedDurationMinutes
+          : trackedDurationMinutes,
+      updatedAt: at,
+    );
+  }
+
+  static List<SleepSegment> _normalizedSegments(SleepSession session) {
+    if (session.segments.isNotEmpty) {
+      return List<SleepSegment>.from(session.segments);
+    }
+    return <SleepSegment>[
+      SleepSegment(
+        startedAt: session.startedAt,
+        endedAt: session.sleepModeActive ? null : session.endedAt,
+      ),
+    ];
+  }
+
+  static List<SleepSession> _latestSleepDaySessions(
+    Iterable<SleepSession> sessions,
+  ) {
+    final Map<String, SleepSession> latestByKey = <String, SleepSession>{};
+    for (final SleepSession session in sessions) {
+      final SleepSession? existing = latestByKey[session.sleepDayKey];
+      if (existing == null || _compareSleepSessions(existing, session) < 0) {
+        latestByKey[session.sleepDayKey] = session;
+      }
+    }
+    final List<SleepSession> items = latestByKey.values.toList()
+      ..sort(_compareSleepSessions);
+    return items;
+  }
+
+  static int _compareSleepSessions(SleepSession a, SleepSession b) {
+    final int dayCompare = a.sleepDayDate.compareTo(b.sleepDayDate);
+    if (dayCompare != 0) {
+      return dayCompare;
+    }
+    final DateTime aTimestamp = a.updatedAt ?? a.displayStartAt;
+    final DateTime bTimestamp = b.updatedAt ?? b.displayStartAt;
+    return aTimestamp.compareTo(bTimestamp);
   }
 
   static List<SleepSession> _seedSessions(String uid) {
@@ -733,17 +881,24 @@ class InMemorySleepSessionRepository extends ChangeNotifier
     for (int offset = 18; offset >= 2; offset--) {
       final DateTime day = now.subtract(Duration(days: offset));
       final double durationHours = 6.1 + ((offset % 5) * 0.35);
+      final DateTime startedAt = DateTime(day.year, day.month, day.day, 23, 20);
+      final DateTime endedAt = DateTime(day.year, day.month, day.day + 1, 7, 0);
       seeded.add(
         SleepSession(
           id: 'history-$offset',
           uid: uid,
-          startedAt: DateTime(day.year, day.month, day.day, 23, 20),
-          endedAt: DateTime(day.year, day.month, day.day + 1, 7, 0),
+          startedAt: startedAt,
+          endedAt: endedAt,
+          sleepDayKey: sleepDayKeyFromDate(startedAt),
           status: SleepSessionStatus.completed,
           sleepModeActive: false,
           dormId: 'dorm-204',
           recommendations: historyRecommendations,
           selectedRecommendationIds: const <String>['audio-ocean'],
+          segments: <SleepSegment>[
+            SleepSegment(startedAt: startedAt, endedAt: endedAt),
+          ],
+          trackedDurationMinutes: (durationHours * 60).round(),
           awakenings: <NightAwakeningEntry>[
             if (offset.isEven)
               NightAwakeningEntry(
@@ -768,23 +923,30 @@ class InMemorySleepSessionRepository extends ChangeNotifier
     }
 
     final DateTime yesterday = now.subtract(const Duration(days: 1));
+    final DateTime pendingStartedAt = DateTime(
+      yesterday.year,
+      yesterday.month,
+      yesterday.day,
+      23,
+      12,
+    );
+    final DateTime pendingEndedAt = DateTime(now.year, now.month, now.day, 6, 58);
     seeded.add(
       SleepSession(
         id: 'pending-yesterday',
         uid: uid,
-        startedAt: DateTime(
-          yesterday.year,
-          yesterday.month,
-          yesterday.day,
-          23,
-          12,
-        ),
-        endedAt: DateTime(now.year, now.month, now.day, 6, 58),
+        startedAt: pendingStartedAt,
+        endedAt: pendingEndedAt,
+        sleepDayKey: sleepDayKeyFromDate(pendingStartedAt),
         status: SleepSessionStatus.awaitingFeedback,
         sleepModeActive: false,
         dormId: 'dorm-204',
         recommendations: historyRecommendations,
         selectedRecommendationIds: const <String>['audio-ocean', 'earplug'],
+        segments: <SleepSegment>[
+          SleepSegment(startedAt: pendingStartedAt, endedAt: pendingEndedAt),
+        ],
+        trackedDurationMinutes: pendingEndedAt.difference(pendingStartedAt).inMinutes,
         awakenings: <NightAwakeningEntry>[
           NightAwakeningEntry(
             id: 'awakening-yesterday',
@@ -821,6 +983,7 @@ class InMemoryFeedbackRepository extends ChangeNotifier
     await _sleepSessionRepository.saveSession(
       session.copyWith(
         status: SleepSessionStatus.completed,
+        sleepModeActive: false,
         summary: summary,
         feedback: recommendationFeedback,
         updatedAt: DateTime.now(),
@@ -2037,4 +2200,7 @@ class NoOpPushNotificationGateway implements PushNotificationGateway {
     required String sessionId,
     required DateTime when,
   }) async {}
+
+  @override
+  Future<void> cancelFeedbackReminder({required String sessionId}) async {}
 }

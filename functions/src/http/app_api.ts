@@ -58,8 +58,46 @@ function asList(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
 function asSleepCaptureKind(value: unknown): "dream" | "memo" {
   return asString(value) === "dream" ? "dream" : "memo";
+}
+
+function sleepDayKeyFromIso(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const shifted = new Date(date.getTime() + 4 * 60 * 60 * 1000);
+  const month = `${shifted.getMonth() + 1}`.padStart(2, "0");
+  const day = `${shifted.getDate()}`.padStart(2, "0");
+  return `${shifted.getFullYear()}-${month}-${day}`;
+}
+
+function fallbackTrackedDurationMinutes(input: {
+  summary: unknown;
+  startedAt: string;
+  endedAt: string;
+}): number {
+  const summary = asMap(input.summary);
+  if (typeof summary.totalSleepHours === "number") {
+    return Math.round(summary.totalSleepHours * 60);
+  }
+  if (!input.startedAt || !input.endedAt) {
+    return 0;
+  }
+  const startedAt = new Date(input.startedAt);
+  const endedAt = new Date(input.endedAt);
+  if (Number.isNaN(startedAt.getTime()) || Number.isNaN(endedAt.getTime())) {
+    return 0;
+  }
+  return Math.max(
+    0,
+    Math.min(24 * 60, Math.round((endedAt.getTime() - startedAt.getTime()) / 60000)),
+  );
 }
 
 export function normalizeCloudBasePhoneNumber(value: string): string {
@@ -326,12 +364,48 @@ function buildSleepSessionPayload(input: {
     rawSession.startedAt,
     asString(input.existing?.startedAt, nowIso()),
   );
-  const endedAt = input.active
+  const sleepModeActive =
+    rawSession.sleepModeActive === undefined &&
+    input.body.sleepModeActive === undefined
+      ? input.active
+      : Boolean(
+          rawSession.sleepModeActive ?? input.body.sleepModeActive ?? input.active,
+        );
+  const endedAt = sleepModeActive
     ? null
     : asString(
         rawSession.endedAt,
         asString(input.body.endedAt, asString(input.existing?.endedAt)),
       );
+  const segments = asList(rawSession.segments ?? input.existing?.segments).map(
+    (item) => asMap(item),
+  );
+  const normalizedSegments =
+    segments.length > 0
+      ? segments
+      : [
+          {
+            startedAt,
+            endedAt,
+          },
+        ];
+  const sleepDayKey = asString(
+    rawSession.sleepDayKey,
+    asString(
+      input.body.sleepDayKey,
+      asString(input.existing?.sleepDayKey, sleepDayKeyFromIso(startedAt)),
+    ),
+  );
+  const trackedDurationMinutes = asNumber(
+    rawSession.trackedDurationMinutes ??
+      input.body.trackedDurationMinutes ??
+      input.existing?.trackedDurationMinutes,
+    fallbackTrackedDurationMinutes({
+      summary,
+      startedAt,
+      endedAt: asString(endedAt),
+    }),
+  );
 
   return {
     ...(input.existing ?? {}),
@@ -340,23 +414,23 @@ function buildSleepSessionPayload(input: {
     uid: input.uid,
     startedAt,
     endedAt,
-    status: input.active
-      ? "active"
-      : asString(
-          rawSession.status,
-          asString(input.body.status, "awaitingFeedback"),
-        ),
-    sleepModeActive: input.active
-      ? true
-      : Boolean(
-          rawSession.sleepModeActive ?? input.body.sleepModeActive ?? false,
-        ),
+    sleepDayKey,
+    status: asString(
+      rawSession.status,
+      asString(
+        input.body.status,
+        asString(input.existing?.status, input.active ? "active" : "awaitingFeedback"),
+      ),
+    ),
+    sleepModeActive,
     dormId: asString(
       input.body.dormId,
       asString(rawSession.dormId, asString(input.existing?.dormId)),
     ),
     recommendations: recommendationSnapshot,
     selectedRecommendationIds,
+    segments: normalizedSegments,
+    trackedDurationMinutes,
     awakenings,
     feedback,
     summary,
@@ -548,7 +622,7 @@ export function createAppApiServer() {
   );
 
   app.post(
-    "/api/sleep/exit",
+    "/api/sleep/pause",
     asyncRoute(async (request, response) => {
       const repo = createRepositoryFromEnv();
       const provider = createAIProviderFromEnv();
@@ -561,8 +635,8 @@ export function createAppApiServer() {
       if (!existing) {
         throw new Error("Sleep session was not found.");
       }
-      const completed = asString(body.status) === "completed";
-      const nextStatus = completed ? "completed" : "awaitingFeedback";
+      const feedbackAlreadySubmitted = Boolean(existing.summary);
+      const nextStatus = feedbackAlreadySubmitted ? "completed" : "paused";
       const session = buildSleepSessionPayload({
         uid: request.authContext!.uid,
         existing,
@@ -587,22 +661,97 @@ export function createAppApiServer() {
         request.authContext!.uid,
         asString(session.id),
         asString(existing.status) || null,
-        nextStatus,
+        "paused",
       );
       await repo.patchSleepSession(asString(session.id), {
         _automation: buildCompletedAutomation({
           previous: session._automation,
           derivedAt: automationRequestedAt,
           derivedBy: "app-api",
-          lastHandledStatus: nextStatus,
+          lastHandledStatus: "paused",
         }),
       });
       response.json({
         sessionId: session.id,
         status: nextStatus,
+        feedbackAlreadySubmitted,
+        updatedSurfaces: ["profile_report"],
+      });
+    }),
+  );
+
+  app.post(
+    "/api/sleep/exit",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      const provider = createAIProviderFromEnv();
+      const body = asMap(request.body);
+      const sessionId = asString(
+        body.sessionId,
+        asString(asMap(body.session).id),
+      );
+      const existing = sessionId ? await repo.getSleepSession(sessionId) : null;
+      if (!existing) {
+        throw new Error("Sleep session was not found.");
+      }
+      const completed = asString(body.status) === "completed";
+      const feedbackAlreadySubmitted = Boolean(existing.summary);
+      const nextStatus = completed
+        ? "completed"
+        : feedbackAlreadySubmitted
+          ? asString(existing.status, "completed")
+          : "awaitingFeedback";
+      const session = buildSleepSessionPayload({
+        uid: request.authContext!.uid,
+        existing,
+        body: {
+          ...body,
+          status: nextStatus,
+          sleepModeActive: false,
+          endedAt: asString(body.endedAt, nowIso()),
+        },
+        active: false,
+      });
+      const automationRequestedAt = nowIso();
+      session._automation = buildRequestedAutomation(
+        "app-api",
+        automationRequestedAt,
+      );
+      session.updatedAt = automationRequestedAt;
+      await repo.saveSleepSession(session);
+      await handleSleepSessionChange(
+        repo,
+        provider,
+        request.authContext!.uid,
+        asString(session.id),
+        asString(existing.status) || null,
+        completed
+          ? "completed"
+          : feedbackAlreadySubmitted
+            ? "paused"
+            : "awaitingFeedback",
+      );
+      await repo.patchSleepSession(asString(session.id), {
+        _automation: buildCompletedAutomation({
+          previous: session._automation,
+          derivedAt: automationRequestedAt,
+          derivedBy: "app-api",
+          lastHandledStatus: completed
+            ? "completed"
+            : feedbackAlreadySubmitted
+              ? "paused"
+              : "awaitingFeedback",
+        }),
+      });
+      response.json({
+        sessionId: session.id,
+        status: nextStatus,
+        feedbackAlreadySubmitted,
         updatedSurfaces: completed
           ? ["morning_feedback", "profile_report", "assistant_context"]
-          : ["morning_feedback"],
+          : feedbackAlreadySubmitted
+            ? ["profile_report"]
+            : ["morning_feedback", "profile_report"],
       });
     }),
   );

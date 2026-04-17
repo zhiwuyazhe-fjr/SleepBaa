@@ -392,6 +392,10 @@ function unboundDormContext(): ContextDorm {
 function summarizeSleepSession(doc: JsonMap): ContextSleepSessionSummary {
   const summary = asMap(doc.summary);
   const awakenings = Array.isArray(doc.awakenings) ? doc.awakenings : [];
+  const trackedDurationMinutes =
+    typeof doc.trackedDurationMinutes === "number"
+      ? doc.trackedDurationMinutes
+      : undefined;
   return {
     id: asString(doc.id, asString(doc._id)),
     startedAt: asString(doc.startedAt),
@@ -401,7 +405,9 @@ function summarizeSleepSession(doc: JsonMap): ContextSleepSessionSummary {
     totalSleepHours:
       typeof summary.totalSleepHours === "number"
         ? summary.totalSleepHours
-        : undefined,
+        : typeof trackedDurationMinutes === "number"
+          ? trackedDurationMinutes / 60
+          : undefined,
     sleepQuality:
       typeof summary.sleepQuality === "number"
         ? summary.sleepQuality

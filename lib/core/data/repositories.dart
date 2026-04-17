@@ -114,20 +114,19 @@ abstract interface class SleepSessionRepository implements Listenable {
   SleepSession? get latestAwaitingFeedbackSession;
   List<SleepSession> recentSessions({int count = 7});
   List<SleepSession> sessionsForMonth(DateTime month);
+  SleepSession? sessionForSleepDayKey(String sleepDayKey);
 
-  Future<SleepSession> startSleepSession({
+  Future<SleepSession> startOrResumeSleepSession({
     required List<NightRecommendation> recommendationSnapshot,
     required String? dormId,
+    DateTime? at,
   });
 
-  Future<void> updateActiveSession({
-    bool? sleepModeActive,
-    SleepSessionStatus? status,
-    DateTime? endedAt,
-    List<String>? selectedRecommendationIds,
-  });
+  Future<SleepSession?> pauseActiveSleepSession({DateTime? at});
 
-  Future<void> saveSession(SleepSession session);
+  Future<SleepSession?> finishActiveSleepSession({DateTime? at});
+
+  Future<void> saveSession(SleepSession session, {bool syncRemote = true});
 }
 
 abstract interface class FeedbackRepository implements Listenable {
@@ -263,4 +262,6 @@ abstract interface class PushNotificationGateway {
     required String sessionId,
     required DateTime when,
   });
+
+  Future<void> cancelFeedbackReminder({required String sessionId});
 }

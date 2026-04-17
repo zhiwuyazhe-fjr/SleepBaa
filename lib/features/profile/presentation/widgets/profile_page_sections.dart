@@ -425,7 +425,7 @@ class _SleepQualityCard extends StatelessWidget {
                               children: sessions
                                   .map(
                                     (SleepSession session) => Text(
-                                      _weekdayLabel(session.startedAt),
+                                      _weekdayLabel(session.sleepDayDate),
                                       style: Theme.of(context)
                                           .textTheme
                                           .labelSmall
@@ -492,7 +492,7 @@ class _SleepDurationCard extends StatelessWidget {
                     child: _DurationBar(
                       hours: hours[index],
                       maxHours: maxHours,
-                      label: _weekdayLabel(sessions[index].startedAt),
+                      label: _weekdayLabel(sessions[index].sleepDayDate),
                     ),
                   ),
                   if (index != sessions.length - 1)
@@ -1125,12 +1125,12 @@ List<Offset> _chartOffsets(
 _ChartValue _qualityChartValue(SleepSession session) {
   final MorningSummary? summary = session.summary;
   if (summary == null) {
-    return _ChartValue(label: _weekdayLabel(session.startedAt), value: 0);
+    return _ChartValue(label: _weekdayLabel(session.sleepDayDate), value: 0);
   }
   final double raw = summary.sleepQuality.toDouble();
   final double normalized = raw <= 5 ? raw * 20 : raw;
   return _ChartValue(
-    label: _weekdayLabel(session.startedAt),
+    label: _weekdayLabel(session.sleepDayDate),
     value: normalized.clamp(0, 100),
   );
 }
@@ -1163,15 +1163,7 @@ int _latestPointIndex(List<_ChartValue> values) {
 }
 
 double _durationHours(SleepSession session) {
-  final MorningSummary? summary = session.summary;
-  if (summary != null) {
-    return summary.totalSleepHours;
-  }
-  final DateTime? endedAt = session.endedAt;
-  if (endedAt == null) {
-    return 0;
-  }
-  return endedAt.difference(session.startedAt).inMinutes / 60;
+  return session.displaySleepHours();
 }
 
 String _weekdayLabel(DateTime date) {

@@ -528,6 +528,23 @@ export async function handleSleepSessionChange(
     return;
   }
 
+  if (afterStatus === "paused") {
+    const nextState: UserStateDoc = {
+      ...previous,
+      currentPhase: "home_pre_sleep",
+      activeSessionId: null,
+      updatedAt: nowIso(),
+    };
+    await repo.writeUserState(uid, nextState);
+    for (const snapshot of buildCardSnapshots(context, nextState, [
+      "home_pre_sleep",
+      "profile_report",
+    ])) {
+      await repo.writeCardSnapshot(uid, snapshot);
+    }
+    return;
+  }
+
   if (afterStatus === "completed" && beforeStatus !== "completed") {
     const review: MorningReviewResult = (
       await provider.analyzeFeedback(
