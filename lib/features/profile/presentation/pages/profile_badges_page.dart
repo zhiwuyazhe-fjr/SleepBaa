@@ -54,16 +54,18 @@ class ProfileBadgesPage extends StatelessWidget {
                   AppCard(
                     key: const ValueKey<String>('profile-badge-summary-card'),
                     borderRadius: AppRadius.surfacePrimary,
+                    color: palette.primaryHighlight,
                     border: Border.all(
                       color: palette.primarySoft.withAlpha(70),
                     ),
                     child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: <Widget>[
                         _BadgeVisual(badge: activeBadge, palette: palette),
                         const SizedBox(width: AppSpacing.md),
                         Expanded(
                           child: Column(
+                            mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
                               Text(
@@ -89,14 +91,15 @@ class ProfileBadgesPage extends StatelessWidget {
                                         },
                                   style: TextButton.styleFrom(
                                     backgroundColor: showingLatestEarned
-                                        ? AppColors.surfaceSoft
+                                        ? palette.primary.withAlpha(40)
                                         : palette.primaryHighlight,
                                     foregroundColor: showingLatestEarned
-                                        ? AppColors.textSecondary
+                                        ? palette.primaryDeep.withAlpha(180)
                                         : palette.primaryDeep,
-                                    disabledBackgroundColor:
-                                        AppColors.surfaceSoft,
-                                    disabledForegroundColor: AppColors.textHint,
+                                    disabledBackgroundColor: palette.primary
+                                        .withAlpha(40),
+                                    disabledForegroundColor: palette.primaryDeep
+                                        .withAlpha(120),
                                     side: BorderSide(
                                       color: showingLatestEarned
                                           ? Colors.transparent
@@ -202,8 +205,8 @@ class _ProfileBadgeGridTile extends StatelessWidget {
         color: badge.unlocked
             ? badge.selected
                   ? palette.primary.withAlpha(24)
-                  : palette.primary.withAlpha(12)
-            : AppColors.surfaceSoft,
+                  : palette.primaryHighlight
+            : AppColors.surface,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
