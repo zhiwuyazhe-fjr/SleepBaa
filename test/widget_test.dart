@@ -969,6 +969,37 @@ void main() {
   );
 
   testWidgets(
+    'selected badge card uses a stronger accent background than unlocked badge cards',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profile,
+        clock: _dayClock,
+      );
+
+      await tester.ensureVisible(find.text('我的勋章'));
+      await tester.tap(find.text('我的勋章'));
+      await tester.pumpAndSettle();
+
+      final Element badgesPageElement = tester.element(find.text('勋章图鉴'));
+      final NightMoodPalette palette = Theme.of(
+        badgesPageElement,
+      ).extension<NightMoodPalette>()!;
+
+      final AppCard selectedBadgeCard = tester.widget<AppCard>(
+        find.byKey(const ValueKey<String>('profile-badge-grid-sleep-master')),
+      );
+      final AppCard unlockedBadgeCard = tester.widget<AppCard>(
+        find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
+      );
+
+      expect(selectedBadgeCard.color, isNot(unlockedBadgeCard.color));
+      expect(selectedBadgeCard.color, palette.primaryDeep);
+      expect(unlockedBadgeCard.color, palette.primaryHighlight);
+    },
+  );
+
+  testWidgets(
     'badge equip and restore sync between gallery and profile preview',
     (WidgetTester tester) async {
       await _pumpApp(

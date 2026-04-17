@@ -202,9 +202,10 @@ class _ProfileBadgeGridTile extends StatelessWidget {
               : AppColors.divider,
           width: badge.selected ? 2 : 1,
         ),
+        boxShadow: const <BoxShadow>[],
         color: badge.unlocked
             ? badge.selected
-                  ? palette.primary.withAlpha(24)
+                  ? palette.primaryDeep
                   : palette.primaryHighlight
             : AppColors.surface,
         child: Column(
@@ -218,7 +219,7 @@ class _ProfileBadgeGridTile extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: badge.unlocked
                     ? badge.selected
-                          ? palette.primary.withAlpha(28)
+                          ? palette.primary.withAlpha(18)
                           : palette.primary.withAlpha(18)
                     : AppColors.surface,
                 border: Border.all(
@@ -235,7 +236,9 @@ class _ProfileBadgeGridTile extends StatelessWidget {
                 badge.unlocked ? badge.badge.icon : Icons.lock_rounded,
                 size: 26,
                 color: badge.unlocked
-                    ? palette.primary
+                    ? badge.selected
+                          ? AppColors.onDark
+                          : palette.primary
                     : AppColors.textSecondary.withAlpha(110),
               ),
             ),
@@ -246,9 +249,11 @@ class _ProfileBadgeGridTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: AppColors.textPrimary.withAlpha(
-                  badge.unlocked ? 255 : 120,
-                ),
+                color: badge.selected
+                    ? AppColors.onDark
+                    : AppColors.textPrimary.withAlpha(
+                        badge.unlocked ? 255 : 120,
+                      ),
               ),
             ),
             const SizedBox(height: 2),
@@ -259,7 +264,7 @@ class _ProfileBadgeGridTile extends StatelessWidget {
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: badge.selected
-                    ? palette.primary
+                    ? AppColors.onDark
                     : AppColors.textSecondary,
                 fontWeight: badge.selected ? FontWeight.w700 : FontWeight.w500,
               ),
