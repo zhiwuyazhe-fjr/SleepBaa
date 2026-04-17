@@ -159,10 +159,6 @@ abstract interface class NotificationRepository implements Listenable {
   List<NotificationItem> unreadNotifications();
   Future<void> markRead(String notificationId);
   Future<void> upsertNotification(NotificationItem notification);
-  Future<void> registerDeviceToken({
-    required String token,
-    required String platform,
-  });
 }
 
 abstract interface class DormRepository implements Listenable {
@@ -215,6 +211,8 @@ abstract interface class DreamRepository implements Listenable {
 abstract interface class InsightsRepository implements Listenable {
   List<SleepInsight> get interferenceInsights;
   SleepReport get currentReport;
+  SleepTrendSeries get profileSleepDurationTrend;
+  SleepTrendSeries get profileSleepQualityTrend;
   Future<void> refresh();
 }
 

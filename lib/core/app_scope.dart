@@ -13,7 +13,10 @@ import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/facades/app_facades.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
+import 'package:sleep_dorm_app/core/notifications/cloudbase_notification_sync_controller.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
+import 'package:sleep_dorm_app/core/notifications/sleep_mode_notification_controller.dart';
 import 'package:sleep_dorm_app/core/notifications/unified_notification.dart';
 import 'package:sleep_dorm_app/core/state/audio_playback_controller.dart';
 import 'package:sleep_dorm_app/core/state/dorm_presence_sync_controller.dart';
@@ -29,6 +32,7 @@ class AppScope extends StatefulWidget {
     this.clock,
     this.initialSettings,
     this.showNightWelcomeOutsideNightInDebug,
+    this.appNotificationService,
   });
 
   final Widget child;
@@ -36,6 +40,7 @@ class AppScope extends StatefulWidget {
   final AppClock? clock;
   final UserSettings? initialSettings;
   final bool? showNightWelcomeOutsideNightInDebug;
+  final AppNotificationService? appNotificationService;
 
   static AppServices of(BuildContext context) {
     final _AppScopeInherited? inherited = context
@@ -62,10 +67,14 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
   late final AssistantRepository _assistantRepository;
   late final UnifiedNotificationDispatcher _unifiedNotificationDispatcher;
   late final PassiveToastNotificationChannel _passiveToastNotificationChannel;
+  late final AppNotificationService _appNotificationService;
+  late final CloudBaseNotificationSyncController
+  _cloudBaseNotificationSyncController;
   late final AudioPlaybackController _audioPlaybackController;
   late final DormPresenceSyncController _dormPresenceSyncController;
   late final InterferenceProbeController _interferenceProbeController;
   late final SleepExperienceController _sleepExperienceController;
+  late final SleepModeNotificationController _sleepModeNotificationController;
   late final NightWelcomeController _nightWelcomeController;
   late final ProfileFacade _profileFacade;
   late final SleepFacade _sleepFacade;
@@ -87,6 +96,14 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
     _passiveToastNotificationChannel = PassiveToastNotificationChannel();
     _unifiedNotificationDispatcher = UnifiedNotificationDispatcher();
     _unifiedNotificationDispatcher.register(_passiveToastNotificationChannel);
+    _appNotificationService =
+        widget.appNotificationService ?? AppNotificationService();
+    _cloudBaseNotificationSyncController = CloudBaseNotificationSyncController(
+      authRepository: _authRepository,
+      notificationRepository: _notificationRepository,
+      notificationService: _appNotificationService,
+      snapshotStore: _cloudBaseSnapshotStore,
+    );
     _audioPlaybackController = AudioPlaybackController();
     _dormPresenceSyncController = DormPresenceSyncController(
       authRepository: _authRepository,
@@ -113,8 +130,13 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
       sleepCaptureRepository: _sleepCaptureRepository,
       notificationRepository: _notificationRepository,
       dormRepository: _dormRepository,
+      appNotificationService: _appNotificationService,
       audioPlaybackController: _audioPlaybackController,
       pushNotificationGateway: const NoOpPushNotificationGateway(),
+    );
+    _sleepModeNotificationController = SleepModeNotificationController(
+      sleepSessionRepository: _sleepSessionRepository,
+      notificationService: _appNotificationService,
     );
     _profileFacade = ProfileFacade(
       authRepository: _authRepository,
@@ -161,6 +183,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
       insightsRepository: _insightsRepository,
       assistantRepository: _assistantRepository,
       notificationApi: _unifiedNotificationDispatcher,
+      appNotificationService: _appNotificationService,
       audioPlaybackController: _audioPlaybackController,
       dormPresenceSyncController: _dormPresenceSyncController,
       interferenceProbeController: _interferenceProbeController,
@@ -180,6 +203,9 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
   Future<void> _bootstrapExperience() async {
     try {
       await _sleepExperienceController.bootstrap();
+      await _appNotificationService.initialize();
+      await _appNotificationService.cancelSleepModeNotification();
+      _cloudBaseNotificationSyncController.start();
       await _dormPresenceSyncController.restoreCachedLocationAnchor();
       await _dormPresenceSyncController.syncPresenceFromCurrentLocation();
     } catch (_) {
@@ -241,6 +267,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
       _notificationRepository = CloudBaseNotificationRepository(
         authRepository: _authRepository,
         snapshotStore: snapshotStore,
+        appApiClient: appApiClient,
       );
       _dormRepository = CloudBaseDormRepository(
         authRepository: _authRepository,
@@ -307,6 +334,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _cloudBaseNotificationSyncController.handleAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       unawaited(_dormPresenceSyncController.syncPresenceFromCurrentLocation());
     }
@@ -322,12 +350,15 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
     _notificationFacade.dispose();
     _dormFacade.dispose();
     _dormPresenceSyncController.dispose();
+    _sleepModeNotificationController.dispose();
     _sleepFacade.dispose();
     _profileFacade.dispose();
     _interferenceProbeController.dispose();
     _sleepExperienceController.dispose();
     _nightWelcomeController.dispose();
     _audioPlaybackController.dispose();
+    unawaited(_cloudBaseNotificationSyncController.dispose());
+    unawaited(_appNotificationService.dispose());
     _disposeListenable(_assistantRepository);
     _disposeListenable(_insightsRepository);
     _disposeListenable(_dreamRepository);
@@ -382,6 +413,7 @@ class AppServices {
     required this.insightsRepository,
     required this.assistantRepository,
     required this.notificationApi,
+    required this.appNotificationService,
     required this.audioPlaybackController,
     required this.dormPresenceSyncController,
     required this.interferenceProbeController,
@@ -409,6 +441,7 @@ class AppServices {
   final InsightsRepository insightsRepository;
   final AssistantRepository assistantRepository;
   final UnifiedNotificationApi notificationApi;
+  final AppNotificationService appNotificationService;
   final AudioPlaybackController audioPlaybackController;
   final DormPresenceSyncController dormPresenceSyncController;
   final InterferenceProbeController interferenceProbeController;

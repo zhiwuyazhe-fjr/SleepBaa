@@ -437,16 +437,6 @@ class NotificationFacade extends ChangeNotifier {
     return _notificationRepository.markRead(notificationId);
   }
 
-  Future<void> registerDeviceToken({
-    required String token,
-    required String platform,
-  }) {
-    return _notificationRepository.registerDeviceToken(
-      token: token,
-      platform: platform,
-    );
-  }
-
   @override
   void dispose() {
     _notificationRepository.removeListener(notifyListeners);
@@ -514,6 +504,10 @@ class InsightsFacade extends ChangeNotifier {
   List<SleepInsight> get interferenceInsights =>
       _insightsRepository.interferenceInsights;
   SleepReport get currentReport => _insightsRepository.currentReport;
+  SleepTrendSeries get profileSleepDurationTrend =>
+      _insightsRepository.profileSleepDurationTrend;
+  SleepTrendSeries get profileSleepQualityTrend =>
+      _insightsRepository.profileSleepQualityTrend;
 
   Future<void> refresh() => _insightsRepository.refresh();
 

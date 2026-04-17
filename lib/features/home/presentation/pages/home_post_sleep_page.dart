@@ -36,7 +36,8 @@ class HomePostSleepPage extends StatelessWidget {
         ]),
         builder: (BuildContext context, Widget? child) {
           final NightMoodPalette palette = context.nightMoodPalette;
-          final SleepSession? session = services.sleepSessionRepository.activeSession;
+          final SleepSession? session =
+              services.sleepSessionRepository.activeSession;
           final Dorm dorm = services.dormRepository.currentDorm;
           final NightRecommendation? audioRecommendation = services
               .recommendationRepository
@@ -162,7 +163,8 @@ class HomePostSleepPage extends StatelessWidget {
                             title: '记录夜醒',
                             subtitle: '标记醒来的时间与诱因',
                             icon: Icons.bedtime_rounded,
-                            onTap: () => context.push(AppRoutes.logNightAwakening),
+                            onTap: () =>
+                                context.push(AppRoutes.logNightAwakening),
                           ),
                           SupportToolCard(
                             title: '灵感记事',
@@ -176,7 +178,8 @@ class HomePostSleepPage extends StatelessWidget {
                             title: '晨间反馈',
                             subtitle: '醒来后逐条反馈昨晚建议',
                             icon: Icons.wb_sunny_rounded,
-                            onTap: () => context.push(AppRoutes.feedbackMorning),
+                            onTap: () =>
+                                context.push(AppRoutes.feedbackMorning),
                           ),
                         ],
                       ),
@@ -206,6 +209,13 @@ class HomePostSleepPage extends StatelessWidget {
                                   await services.sleepExperienceController
                                       .finishSleepMode();
                               if (!context.mounted) {
+                                return;
+                              }
+                              if (services
+                                      .sleepSessionRepository
+                                      .latestAwaitingFeedbackSession !=
+                                  null) {
+                                context.go(AppRoutes.feedbackMorning);
                                 return;
                               }
                               switch (result) {
@@ -288,10 +298,11 @@ Future<_SleepExitAction?> _showSleepExitDialog(BuildContext context) {
                         const SizedBox(height: AppSpacing.sm),
                         Text(
                           '如果只是暂时离开睡眠模式，可以先退出；真正准备结束这一晚时，再进入晨间反馈补全记录。',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppColors.onDark.withAlpha(180),
-                            height: 1.55,
-                          ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: AppColors.onDark.withAlpha(180),
+                                height: 1.55,
+                              ),
                         ),
                         const SizedBox(height: AppSpacing.xl),
                         Row(
@@ -334,10 +345,11 @@ Future<_SleepExitAction?> _showSleepExitDialog(BuildContext context) {
                         const SizedBox(height: AppSpacing.md),
                         Text(
                           '退出后再次进入，睡眠时长可累计，完成晨间反馈后该日时长就不再累计。',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.onDark.withAlpha(140),
-                            height: 1.5,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppColors.onDark.withAlpha(140),
+                                height: 1.5,
+                              ),
                         ),
                       ],
                     ),

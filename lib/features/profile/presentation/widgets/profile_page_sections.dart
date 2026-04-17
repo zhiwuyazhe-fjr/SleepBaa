@@ -115,12 +115,14 @@ class ProfileQuoteCard extends StatelessWidget {
 class ProfileDataCarousel extends StatefulWidget {
   const ProfileDataCarousel({
     super.key,
-    required this.sessions,
+    required this.durationTrend,
+    required this.qualityTrend,
     required this.heatmapValues,
     required this.onHeatmapTap,
   });
 
-  final List<SleepSession> sessions;
+  final SleepTrendSeries durationTrend;
+  final SleepTrendSeries qualityTrend;
   final List<int> heatmapValues;
   final VoidCallback onHeatmapTap;
 
@@ -164,8 +166,8 @@ class _ProfileDataCarouselState extends State<ProfileDataCarousel> {
             },
             children: <Widget>[
               for (final Widget card in <Widget>[
-                _SleepQualityCard(sessions: widget.sessions),
-                _SleepDurationCard(sessions: widget.sessions),
+                _SleepQualityCard(series: widget.qualityTrend),
+                _SleepDurationCard(series: widget.durationTrend),
                 _CheckInHeatmapCard(
                   heatmapValues: widget.heatmapValues,
                   onTap: widget.onHeatmapTap,
@@ -332,15 +334,23 @@ class ProfileSettingsCard extends StatelessWidget {
 }
 
 class _SleepQualityCard extends StatelessWidget {
-  const _SleepQualityCard({required this.sessions});
+  const _SleepQualityCard({required this.series});
 
-  final List<SleepSession> sessions;
+  final SleepTrendSeries series;
 
   @override
   Widget build(BuildContext context) {
-    final List<_ChartValue> points = sessions.map(_qualityChartValue).toList();
-    final int bestIndex = _bestPointIndex(points);
-    final int latestIndex = _latestPointIndex(points);
+    final List<_ChartPoint> points = series.points
+        .map(
+          (SleepTrendPoint point) => _ChartPoint(
+            label: point.weekdayLabel,
+            value: point.value?.clamp(0, 100),
+          ),
+        )
+        .toList(growable: false);
+    final bool hasAnyValue = points.any(
+      (_ChartPoint point) => point.value != null,
+    );
 
     return AppCard(
       padding: const EdgeInsets.fromLTRB(
@@ -367,11 +377,13 @@ class _SleepQualityCard extends StatelessWidget {
                 const double xAxisHeight = 24;
                 final double plotWidth = constraints.maxWidth - axisWidth;
                 final double plotHeight = constraints.maxHeight - xAxisHeight;
-                final List<Offset> offsets = _chartOffsets(
+                final List<Offset?> offsets = _chartOffsets(
                   points,
                   plotWidth,
                   plotHeight,
                 );
+                final int? bestIndex = _bestPointIndex(points);
+                final int? latestIndex = _latestPointIndex(points);
 
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -403,14 +415,21 @@ class _SleepQualityCard extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-                                if (offsets.isNotEmpty) ...<Widget>[
+                                if (!hasAnyValue)
+                                  const Positioned.fill(
+                                    child: _TrendEmptyState(),
+                                  ),
+                                if (bestIndex != null &&
+                                    latestIndex != null &&
+                                    offsets[bestIndex] != null &&
+                                    offsets[latestIndex] != null) ...<Widget>[
                                   _ChartBadgeMarker(
-                                    offset: offsets[bestIndex],
+                                    offset: offsets[bestIndex]!,
                                     label: '平静',
                                     color: context.nightMoodPalette.primary,
                                   ),
                                   _ChartBadgeMarker(
-                                    offset: offsets[latestIndex],
+                                    offset: offsets[latestIndex]!,
                                     label: '愉悦',
                                     color: AppColors.calmBlue,
                                   ),
@@ -422,10 +441,10 @@ class _SleepQualityCard extends StatelessWidget {
                             height: xAxisHeight,
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: sessions
+                              children: series.points
                                   .map(
-                                    (SleepSession session) => Text(
-                                      _weekdayLabel(session.sleepDayDate),
+                                    (SleepTrendPoint point) => Text(
+                                      point.weekdayLabel,
                                       style: Theme.of(context)
                                           .textTheme
                                           .labelSmall
@@ -450,16 +469,22 @@ class _SleepQualityCard extends StatelessWidget {
 }
 
 class _SleepDurationCard extends StatelessWidget {
-  const _SleepDurationCard({required this.sessions});
+  const _SleepDurationCard({required this.series});
 
-  final List<SleepSession> sessions;
+  final SleepTrendSeries series;
 
   @override
   Widget build(BuildContext context) {
-    final List<double> hours = sessions.map(_durationHours).toList();
+    final List<double> hours = series.points
+        .map((SleepTrendPoint point) => point.value ?? 0)
+        .where((double value) => value > 0)
+        .toList(growable: false);
     final double maxHours = hours.isEmpty
         ? 8
         : math.max(8, hours.reduce(math.max));
+    final bool hasAnyValue = series.points.any(
+      (SleepTrendPoint point) => point.value != null,
+    );
 
     return AppCard(
       padding: const EdgeInsets.fromLTRB(
@@ -480,24 +505,30 @@ class _SleepDurationCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            child: Stack(
               children: <Widget>[
-                for (
-                  int index = 0;
-                  index < sessions.length;
-                  index++
-                ) ...<Widget>[
-                  Expanded(
-                    child: _DurationBar(
-                      hours: hours[index],
-                      maxHours: maxHours,
-                      label: _weekdayLabel(sessions[index].sleepDayDate),
-                    ),
-                  ),
-                  if (index != sessions.length - 1)
-                    const SizedBox(width: AppSpacing.xs),
-                ],
+                if (!hasAnyValue)
+                  const Positioned.fill(child: _TrendEmptyState()),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: <Widget>[
+                    for (
+                      int index = 0;
+                      index < series.points.length;
+                      index++
+                    ) ...<Widget>[
+                      Expanded(
+                        child: _DurationBar(
+                          hours: series.points[index].value,
+                          maxHours: maxHours,
+                          label: series.points[index].weekdayLabel,
+                        ),
+                      ),
+                      if (index != series.points.length - 1)
+                        const SizedBox(width: AppSpacing.xs),
+                    ],
+                  ],
+                ),
               ],
             ),
           ),
@@ -822,8 +853,8 @@ class _BadgePreviewItem extends StatelessWidget {
                   shape: BoxShape.circle,
                   color: badge.unlocked
                       ? badge.selected
-                          ? palette.primaryHighlight
-                          : palette.primary.withAlpha(20)
+                            ? palette.primaryHighlight
+                            : palette.primary.withAlpha(20)
                       : AppColors.surfaceSoft,
                   border: Border.all(
                     color: badge.selected
@@ -868,23 +899,27 @@ class _DurationBar extends StatelessWidget {
     required this.label,
   });
 
-  final double hours;
+  final double? hours;
   final double maxHours;
   final String label;
 
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
-    final double factor = maxHours == 0
-        ? 0
-        : (hours / maxHours).clamp(0.14, 1.0);
+    final bool hasValue = hours != null;
+    final double value = hours ?? 0;
+    final double factor = hasValue
+        ? (maxHours == 0 ? 0 : (value / maxHours).clamp(0.14, 1.0))
+        : 0.18;
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,
       children: <Widget>[
         Text(
-          hours.toStringAsFixed(1),
-          style: Theme.of(context).textTheme.labelSmall,
+          hasValue ? value.toStringAsFixed(1) : '--',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: hasValue ? AppColors.textPrimary : AppColors.textHint,
+          ),
         ),
         const SizedBox(height: AppSpacing.xs),
         Expanded(
@@ -894,11 +929,20 @@ class _DurationBar extends StatelessWidget {
               heightFactor: factor,
               child: Container(
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: <Color>[palette.primary, palette.primarySoft],
-                  ),
+                  gradient: hasValue
+                      ? LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: <Color>[palette.primary, palette.primarySoft],
+                        )
+                      : LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: <Color>[
+                            AppColors.surfaceBorder,
+                            AppColors.surfaceSubtle,
+                          ],
+                        ),
                   borderRadius: AppRadius.pill,
                 ),
               ),
@@ -1006,13 +1050,40 @@ class _ChartBadgeMarker extends StatelessWidget {
   }
 }
 
+class _TrendEmptyState extends StatelessWidget {
+  const _TrendEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.surface.withAlpha(220),
+          borderRadius: AppRadius.surfaceSecondary,
+        ),
+        child: Text(
+          '待录入',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SleepQualityChartPainter extends CustomPainter {
   const _SleepQualityChartPainter({
     required this.points,
     required this.palette,
   });
 
-  final List<Offset> points;
+  final List<Offset?> points;
   final NightMoodPalette palette;
 
   @override
@@ -1029,15 +1100,12 @@ class _SleepQualityChartPainter extends CustomPainter {
       );
     }
 
-    if (points.isEmpty) {
+    final List<Offset> plotted = points.whereType<Offset>().toList(
+      growable: false,
+    );
+    if (plotted.isEmpty) {
       return;
     }
-
-    final Path linePath = _smoothPath(points);
-    final Path fillPath = Path.from(linePath)
-      ..lineTo(points.last.dx, size.height)
-      ..lineTo(points.first.dx, size.height)
-      ..close();
 
     final Paint fillPaint = Paint()
       ..shader = LinearGradient(
@@ -1048,8 +1116,6 @@ class _SleepQualityChartPainter extends CustomPainter {
           palette.primarySoft.withAlpha(10),
         ],
       ).createShader(Offset.zero & size);
-    canvas.drawPath(fillPath, fillPaint);
-
     final Paint linePaint = Paint()
       ..shader = LinearGradient(
         colors: <Color>[
@@ -1062,11 +1128,23 @@ class _SleepQualityChartPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
       ..strokeWidth = 3;
-    canvas.drawPath(linePath, linePaint);
-
     final Paint dotPaint = Paint()..color = palette.primary;
-    for (final Offset point in points) {
-      canvas.drawCircle(point, 3, dotPaint);
+    for (final List<Offset> segment in _chartSegments(points)) {
+      if (segment.isEmpty) {
+        continue;
+      }
+      if (segment.length >= 2) {
+        final Path linePath = _smoothPath(segment);
+        final Path fillPath = Path.from(linePath)
+          ..lineTo(segment.last.dx, size.height)
+          ..lineTo(segment.first.dx, size.height)
+          ..close();
+        canvas.drawPath(fillPath, fillPaint);
+        canvas.drawPath(linePath, linePaint);
+      }
+      for (final Offset point in segment) {
+        canvas.drawCircle(point, 3, dotPaint);
+      }
     }
   }
 
@@ -1076,11 +1154,11 @@ class _SleepQualityChartPainter extends CustomPainter {
   }
 }
 
-class _ChartValue {
-  const _ChartValue({required this.label, required this.value});
+class _ChartPoint {
+  const _ChartPoint({required this.label, required this.value});
 
   final String label;
-  final double value;
+  final double? value;
 }
 
 Path _smoothPath(List<Offset> points) {
@@ -1104,71 +1182,73 @@ Path _smoothPath(List<Offset> points) {
   return path;
 }
 
-List<Offset> _chartOffsets(
-  List<_ChartValue> values,
+List<Offset?> _chartOffsets(
+  List<_ChartPoint> values,
   double width,
   double height,
 ) {
   if (values.isEmpty || width <= 0 || height <= 0) {
-    return const <Offset>[];
+    return const <Offset?>[];
   }
 
   final double step = values.length == 1 ? 0 : width / (values.length - 1);
-  return List<Offset>.generate(values.length, (int index) {
+  return List<Offset?>.generate(values.length, (int index) {
     final double x = step * index;
-    final double normalized = (values[index].value / 100).clamp(0.0, 1.0);
+    final double? value = values[index].value;
+    if (value == null) {
+      return null;
+    }
+    final double normalized = (value / 100).clamp(0.0, 1.0);
     final double y = height - (height * normalized);
     return Offset(x, y);
   });
 }
 
-_ChartValue _qualityChartValue(SleepSession session) {
-  final MorningSummary? summary = session.summary;
-  if (summary == null) {
-    return _ChartValue(label: _weekdayLabel(session.sleepDayDate), value: 0);
+List<List<Offset>> _chartSegments(List<Offset?> points) {
+  final List<List<Offset>> segments = <List<Offset>>[];
+  List<Offset> current = <Offset>[];
+  for (final Offset? point in points) {
+    if (point == null) {
+      if (current.isNotEmpty) {
+        segments.add(current);
+        current = <Offset>[];
+      }
+      continue;
+    }
+    current.add(point);
   }
-  final double raw = summary.sleepQuality.toDouble();
-  final double normalized = raw <= 5 ? raw * 20 : raw;
-  return _ChartValue(
-    label: _weekdayLabel(session.sleepDayDate),
-    value: normalized.clamp(0, 100),
-  );
+  if (current.isNotEmpty) {
+    segments.add(current);
+  }
+  return segments;
 }
 
-int _bestPointIndex(List<_ChartValue> values) {
+int? _bestPointIndex(List<_ChartPoint> values) {
   if (values.isEmpty) {
-    return 0;
+    return null;
   }
-  int bestIndex = 0;
-  double bestValue = values.first.value;
-  for (int index = 1; index < values.length; index++) {
-    if (values[index].value >= bestValue) {
-      bestValue = values[index].value;
+  int? bestIndex;
+  double bestValue = -1;
+  for (int index = 0; index < values.length; index++) {
+    final double? value = values[index].value;
+    if (value != null && value >= bestValue) {
+      bestValue = value;
       bestIndex = index;
     }
   }
   return bestIndex;
 }
 
-int _latestPointIndex(List<_ChartValue> values) {
+int? _latestPointIndex(List<_ChartPoint> values) {
   if (values.isEmpty) {
-    return 0;
+    return null;
   }
   for (int index = values.length - 1; index >= 0; index--) {
-    if (values[index].value > 0) {
+    if (values[index].value != null) {
       return index;
     }
   }
-  return values.length - 1;
-}
-
-double _durationHours(SleepSession session) {
-  return session.displaySleepHours();
-}
-
-String _weekdayLabel(DateTime date) {
-  const List<String> labels = <String>['一', '二', '三', '四', '五', '六', '日'];
-  return labels[date.weekday - 1];
+  return null;
 }
 
 Color _heatColor(NightMoodPalette palette, int intensity) {

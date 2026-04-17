@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,6 +10,7 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
@@ -21,6 +24,7 @@ import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_journal_p
 import 'package:sleep_dorm_app/features/feedback/presentation/pages/morning_feedback_page.dart';
 import 'package:sleep_dorm_app/features/home/presentation/pages/home_post_sleep_page.dart';
 import 'package:sleep_dorm_app/features/home/presentation/pages/home_pre_sleep_page.dart';
+import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.dart';
 import 'package:sleep_dorm_app/features/intervention/presentation/pages/micro_intervention_task_page.dart';
 import 'package:sleep_dorm_app/features/notifications/presentation/pages/notifications_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/calendar_checkin_page.dart';
@@ -46,7 +50,10 @@ void main() {
   ) async {
     await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
 
-    expect(find.text('今晚你更接近哪一种心情？'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('night-mood-top-card')),
+      findsOneWidget,
+    );
     expect(find.byType(HomePreSleepPage), findsNothing);
     expect(find.byKey(BottomNavShell.navBarKey), findsNothing);
   });
@@ -61,7 +68,10 @@ void main() {
       showNightWelcomeOutsideNightInDebug: true,
     );
 
-    expect(find.text('今晚你更接近哪一种心情？'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('night-mood-top-card')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('skip uses the default blue theme and enters home', (
@@ -73,7 +83,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(HomePreSleepPage), findsOneWidget);
-    expect(find.text('今晚你更接近哪一种心情？'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('night-mood-top-card')),
+      findsNothing,
+    );
     expect(
       Theme.of(
         tester.element(find.byType(HomePreSleepPage)),
@@ -115,10 +128,15 @@ void main() {
       initialSettings: _settingsWithMood(NightMood.happy),
     );
 
-    expect(find.text('想把这份轻盈带进今晚'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<NightMood>(NightMood.happy)),
+      findsWidgets,
+    );
     expect(
       Theme.of(
-        tester.element(find.text('今晚你更接近哪一种心情？')),
+        tester.element(
+          find.byKey(const ValueKey<String>('night-mood-top-card')),
+        ),
       ).extension<NightMoodPalette>()?.mood,
       NightMood.happy,
     );
@@ -925,66 +943,73 @@ void main() {
     expect(find.text('勋章详情'), findsNothing);
   });
 
-  testWidgets('badge equip and restore sync between gallery and profile preview', (
-    WidgetTester tester,
-  ) async {
-    await _pumpApp(
-      tester,
-      initialLocation: AppRoutes.profile,
-      clock: _dayClock,
-    );
+  testWidgets(
+    'badge equip and restore sync between gallery and profile preview',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profile,
+        clock: _dayClock,
+      );
 
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('profile-badge-preview-slot-0')),
-        matching: find.text('安睡大师'),
-      ),
-      findsOneWidget,
-    );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('profile-badge-preview-slot-0'),
+          ),
+          matching: find.text('安睡大师'),
+        ),
+        findsOneWidget,
+      );
 
-    await tester.ensureVisible(find.text('我的勋章'));
-    await tester.tap(find.text('我的勋章'));
-    await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('我的勋章'));
+      await tester.tap(find.text('我的勋章'));
+      await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('佩戴此勋章'));
-    await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('佩戴此勋章'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('当前佩戴：早睡先锋'), findsOneWidget);
+      expect(find.text('当前佩戴：早睡先锋'), findsOneWidget);
 
-    await tester.pageBack();
-    await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
 
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('profile-badge-preview-slot-0')),
-        matching: find.text('早睡先锋'),
-      ),
-      findsOneWidget,
-    );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('profile-badge-preview-slot-0'),
+          ),
+          matching: find.text('早睡先锋'),
+        ),
+        findsOneWidget,
+      );
 
-    await tester.ensureVisible(find.text('我的勋章'));
-    await tester.tap(find.text('我的勋章'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('恢复最新获得'));
-    await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('我的勋章'));
+      await tester.tap(find.text('我的勋章'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('恢复最新获得'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('当前展示：安睡大师'), findsOneWidget);
+      expect(find.text('当前展示：安睡大师'), findsOneWidget);
 
-    await tester.pageBack();
-    await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
 
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('profile-badge-preview-slot-0')),
-        matching: find.text('安睡大师'),
-      ),
-      findsOneWidget,
-    );
-  });
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('profile-badge-preview-slot-0'),
+          ),
+          matching: find.text('安睡大师'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('profile faq entry opens styled faq page', (
     WidgetTester tester,
@@ -1172,6 +1197,100 @@ void main() {
     expect(find.text('轻触进入'), findsOneWidget);
     expect(find.text('音频已同步'), findsNothing);
   });
+  testWidgets('entering sleep mode shows the ongoing sleep notification', (
+    WidgetTester tester,
+  ) async {
+    final _FakeAppNotificationService notificationService =
+        _FakeAppNotificationService();
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+      appNotificationService: notificationService,
+    );
+
+    final int cancelCallsBeforeEnter =
+        notificationService.cancelSleepModeNotificationCalls;
+
+    await tester.tap(find.byType(StartSleepModeCard));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byType(HomePostSleepPage), findsOneWidget);
+    expect(notificationService.shownSleepSessions.length, 1);
+    expect(
+      notificationService.shownSleepSessions.single.sleepModeActive,
+      isTrue,
+    );
+    expect(
+      notificationService.shownSleepSessions.single.status,
+      SleepSessionStatus.active,
+    );
+    expect(
+      notificationService.cancelSleepModeNotificationCalls,
+      cancelCallsBeforeEnter,
+    );
+  });
+
+  testWidgets(
+    'finishing sleep mode from post-sleep page goes to morning feedback',
+    (WidgetTester tester) async {
+      final _FakeAppNotificationService notificationService =
+          _FakeAppNotificationService();
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.homePreSleep,
+        clock: _dayClock,
+        appNotificationService: notificationService,
+      );
+
+      await tester.tap(find.byType(StartSleepModeCard));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.byType(HomePostSleepPage), findsOneWidget);
+
+      final Finder endSleepModeButton = find.widgetWithText(
+        PrimaryButton,
+        '结束睡眠模式',
+      );
+      await tester.ensureVisible(endSleepModeButton);
+      await tester.tap(endSleepModeButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.widgetWithText(PrimaryButton, '结束并去晨间反馈'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.byType(MorningFeedbackPage), findsOneWidget);
+    },
+  );
+
+  testWidgets('sleep mode notification launch returns to post-sleep page', (
+    WidgetTester tester,
+  ) async {
+    final _FakeAppNotificationService notificationService =
+        _FakeAppNotificationService(
+          initialLaunchIntent: const NotificationLaunchIntent(
+            route: AppRoutes.homePostSleep,
+            markAsRead: false,
+          ),
+        );
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+      appNotificationService: notificationService,
+      settle: false,
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byType(HomePostSleepPage), findsOneWidget);
+  });
 }
 
 Future<void> _pumpApp(
@@ -1183,6 +1302,7 @@ Future<void> _pumpApp(
   UserSettings? initialSettings,
   bool settle = true,
   bool showNightWelcomeOutsideNightInDebug = false,
+  AppNotificationService? appNotificationService,
 }) async {
   await tester.pumpWidget(
     SleepDormApp(
@@ -1192,6 +1312,7 @@ Future<void> _pumpApp(
       clock: clock,
       initialSettings: initialSettings,
       showNightWelcomeOutsideNightInDebug: showNightWelcomeOutsideNightInDebug,
+      appNotificationService: appNotificationService,
     ),
   );
   if (settle) {
@@ -1214,4 +1335,51 @@ UserSettings _settingsWithMood(NightMood mood) {
     smartSuggestionsEnabled: true,
     selectedNightMood: mood,
   );
+}
+
+class _FakeAppNotificationService extends AppNotificationService {
+  _FakeAppNotificationService({this.initialLaunchIntent});
+
+  final NotificationLaunchIntent? initialLaunchIntent;
+  final List<SleepSession> shownSleepSessions = <SleepSession>[];
+  int cancelSleepModeNotificationCalls = 0;
+  final StreamController<NotificationLaunchIntent> _launchIntentController =
+      StreamController<NotificationLaunchIntent>.broadcast();
+  bool _initialIntentTaken = false;
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  Stream<NotificationLaunchIntent> get launchIntents =>
+      _launchIntentController.stream;
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<NotificationLaunchIntent?> takeInitialLaunchIntent() async {
+    if (_initialIntentTaken) {
+      return null;
+    }
+    _initialIntentTaken = true;
+    return initialLaunchIntent;
+  }
+
+  @override
+  Future<void> showSleepModeNotification({
+    required SleepSession session,
+  }) async {
+    shownSleepSessions.add(session);
+  }
+
+  @override
+  Future<void> cancelSleepModeNotification() async {
+    cancelSleepModeNotificationCalls += 1;
+  }
+
+  @override
+  Future<void> dispose() async {
+    await _launchIntentController.close();
+  }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
 import 'package:sleep_dorm_app/core/state/audio_playback_controller.dart';
 
 enum FinishSleepModeResult {
@@ -22,6 +23,7 @@ class SleepExperienceController extends ChangeNotifier {
     required SleepCaptureRepository sleepCaptureRepository,
     required NotificationRepository notificationRepository,
     required DormRepository dormRepository,
+    required AppNotificationService appNotificationService,
     required AudioPlaybackController audioPlaybackController,
     required PushNotificationGateway pushNotificationGateway,
   }) : _authRepository = authRepository,
@@ -32,6 +34,7 @@ class SleepExperienceController extends ChangeNotifier {
        _sleepCaptureRepository = sleepCaptureRepository,
        _notificationRepository = notificationRepository,
        _dormRepository = dormRepository,
+       _appNotificationService = appNotificationService,
        _audioPlaybackController = audioPlaybackController,
        _pushNotificationGateway = pushNotificationGateway;
 
@@ -43,6 +46,7 @@ class SleepExperienceController extends ChangeNotifier {
   final SleepCaptureRepository _sleepCaptureRepository;
   final NotificationRepository _notificationRepository;
   final DormRepository _dormRepository;
+  final AppNotificationService _appNotificationService;
   final AudioPlaybackController _audioPlaybackController;
   final PushNotificationGateway _pushNotificationGateway;
 
@@ -221,39 +225,44 @@ class SleepExperienceController extends ChangeNotifier {
         existingForToday != null && !existingForToday.sleepModeActive;
     final SleepSession session = await _sleepSessionRepository
         .startOrResumeSleepSession(
-      recommendationSnapshot: snapshot,
-      dormId: user.dormId,
-      at: now,
-    );
+          recommendationSnapshot: snapshot,
+          dormId: user.dormId,
+          at: now,
+        );
     if (shouldClearExitArtifacts) {
       await _clearSleepExitArtifacts(session.id);
+    }
+    try {
+      await _appNotificationService.showSleepModeNotification(session: session);
+    } catch (_) {
+      // Notification display is best-effort and should not block entering sleep mode.
     }
     await _dormRepository.updateCurrentUserStatus(
       uid: user.uid,
       status: DormMemberStatus.quiet,
       sleepModeActive: true,
-      note: session.hasSubmittedFeedback
-          ? '已进入睡眠模式，今天时长不再累计'
-          : '已进入睡眠模式',
+      note: session.hasSubmittedFeedback ? '已进入睡眠模式，今天时长不再累计' : '已进入睡眠模式',
     );
   }
 
   Future<void> pauseSleepMode() async {
     final UserProfile user = await _currentUserOrEnsureAuthenticated();
+    try {
+      await _appNotificationService.cancelSleepModeNotification();
+    } catch (_) {
+      // Notification cleanup is best-effort and should not block pausing sleep mode.
+    }
     final SleepSession? paused = await _sleepSessionRepository
         .pauseActiveSleepSession();
     if (paused == null) {
       return;
     }
-
     try {
       await _dormRepository.updateCurrentUserStatus(
         uid: user.uid,
         status: DormMemberStatus.quiet,
         sleepModeActive: false,
-        note: paused.hasSubmittedFeedback
-            ? '已退出睡眠模式'
-            : '已暂停睡眠计时，稍后可继续累计',
+        note: paused.hasSubmittedFeedback ? '已退出睡眠模式' : '已暂停睡眠计时，稍后可继续累计',
       );
     } catch (_) {
       // Dorm sync is best-effort and should not block pausing sleep mode.
@@ -262,9 +271,38 @@ class SleepExperienceController extends ChangeNotifier {
 
   Future<FinishSleepModeResult> finishSleepMode() async {
     final UserProfile user = await _currentUserOrEnsureAuthenticated();
+    try {
+      await _appNotificationService.cancelSleepModeNotification();
+    } catch (_) {
+      // Notification cleanup is best-effort and should not block leaving sleep mode.
+    }
     final SleepSession? finished = await _sleepSessionRepository
         .finishActiveSleepSession();
     if (finished == null) {
+      final SleepSession? pendingFeedbackSession =
+          _sleepSessionRepository.latestAwaitingFeedbackSession;
+      if (pendingFeedbackSession != null) {
+        await _syncDormStatusAfterSleepExit(
+          user.uid,
+          hasSubmittedFeedback: false,
+        );
+        return FinishSleepModeResult.goToFeedback;
+      }
+      final SleepSession? fallbackSession = _sleepSessionRepository
+          .sessionForSleepDayKey(sleepDayKeyFromDate(DateTime.now()));
+      if (fallbackSession != null) {
+        await _syncDormStatusAfterSleepExit(
+          user.uid,
+          hasSubmittedFeedback: fallbackSession.hasSubmittedFeedback,
+        );
+        if (fallbackSession.hasSubmittedFeedback) {
+          await _clearSleepExitArtifacts(fallbackSession.id);
+          return FinishSleepModeResult.goHomeFeedbackAlreadySubmitted;
+        }
+        if (fallbackSession.status == SleepSessionStatus.awaitingFeedback) {
+          return FinishSleepModeResult.goToFeedback;
+        }
+      }
       return FinishSleepModeResult.noActiveSession;
     }
 
@@ -345,7 +383,9 @@ class SleepExperienceController extends ChangeNotifier {
       await _notificationRepository.markRead(item.id);
     }
     try {
-      await _pushNotificationGateway.cancelFeedbackReminder(sessionId: session.id);
+      await _pushNotificationGateway.cancelFeedbackReminder(
+        sessionId: session.id,
+      );
     } catch (_) {
       // Canceling reminders is best-effort after feedback submission.
     }
@@ -374,7 +414,8 @@ class SleepExperienceController extends ChangeNotifier {
 
   Future<void> _archiveStalePausedSessions(DateTime now) async {
     final String currentSleepDayKey = sleepDayKeyFromDate(now);
-    final List<SleepSession> stalePausedSessions = _sleepSessionRepository.sessions
+    final List<SleepSession> stalePausedSessions = _sleepSessionRepository
+        .sessions
         .where(
           (SleepSession session) =>
               session.status == SleepSessionStatus.paused &&
@@ -404,7 +445,9 @@ class SleepExperienceController extends ChangeNotifier {
       }
     }
     try {
-      await _pushNotificationGateway.cancelFeedbackReminder(sessionId: sessionId);
+      await _pushNotificationGateway.cancelFeedbackReminder(
+        sessionId: sessionId,
+      );
     } catch (_) {
       // Reminder cleanup is best-effort when sleep mode is resumed.
     }

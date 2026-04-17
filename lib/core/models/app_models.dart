@@ -808,6 +808,55 @@ class NotificationItem {
   }
 }
 
+class SleepTrendPoint {
+  const SleepTrendPoint({
+    required this.dateKey,
+    required this.weekdayLabel,
+    required this.value,
+  });
+
+  final String dateKey;
+  final String weekdayLabel;
+  final double? value;
+
+  SleepTrendPoint copyWith({
+    String? dateKey,
+    String? weekdayLabel,
+    double? value,
+    bool clearValue = false,
+  }) {
+    return SleepTrendPoint(
+      dateKey: dateKey ?? this.dateKey,
+      weekdayLabel: weekdayLabel ?? this.weekdayLabel,
+      value: clearValue ? null : value ?? this.value,
+    );
+  }
+}
+
+class SleepTrendSeries {
+  const SleepTrendSeries({
+    required this.metricKey,
+    required this.unit,
+    required this.points,
+  });
+
+  final String metricKey;
+  final String unit;
+  final List<SleepTrendPoint> points;
+
+  SleepTrendSeries copyWith({
+    String? metricKey,
+    String? unit,
+    List<SleepTrendPoint>? points,
+  }) {
+    return SleepTrendSeries(
+      metricKey: metricKey ?? this.metricKey,
+      unit: unit ?? this.unit,
+      points: points ?? this.points,
+    );
+  }
+}
+
 class DormRule {
   const DormRule({this.id = '', required this.title, required this.detail});
 
