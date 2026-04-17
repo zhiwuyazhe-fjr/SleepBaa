@@ -910,7 +910,20 @@ void main() {
       find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
       findsOneWidget,
     );
-    expect(find.text('当前展示：安睡大师'), findsOneWidget);
+    expect(find.text('当前佩戴：安睡大师'), findsOneWidget);
+    expect(find.text('当前展示：安睡大师'), findsNothing);
+    expect(find.text('点击任意勋章可查看说明，并把已获得勋章切换为当前展示。'), findsNothing);
+    expect(find.widgetWithText(TextButton, '已佩戴'), findsOneWidget);
+    expect(find.text('佩戴最新获得'), findsNothing);
+    expect(find.text('3 / 10'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('profile-badge-summary-card')),
+        matching: find.text('3 / 10'),
+      ),
+      findsNothing,
+    );
+    expect(find.text('已获得的勋章会高亮显示，未解锁的勋章也可以先查看说明。'), findsNothing);
 
     await tester.tap(
       find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
@@ -925,66 +938,77 @@ void main() {
     expect(find.text('勋章详情'), findsNothing);
   });
 
-  testWidgets('badge equip and restore sync between gallery and profile preview', (
-    WidgetTester tester,
-  ) async {
-    await _pumpApp(
-      tester,
-      initialLocation: AppRoutes.profile,
-      clock: _dayClock,
-    );
+  testWidgets(
+    'badge equip and restore sync between gallery and profile preview',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profile,
+        clock: _dayClock,
+      );
 
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('profile-badge-preview-slot-0')),
-        matching: find.text('安睡大师'),
-      ),
-      findsOneWidget,
-    );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('profile-badge-preview-slot-0'),
+          ),
+          matching: find.text('安睡大师'),
+        ),
+        findsOneWidget,
+      );
 
-    await tester.ensureVisible(find.text('我的勋章'));
-    await tester.tap(find.text('我的勋章'));
-    await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('我的勋章'));
+      await tester.tap(find.text('我的勋章'));
+      await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('佩戴此勋章'));
-    await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('佩戴此勋章'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('当前佩戴：早睡先锋'), findsOneWidget);
+      expect(find.text('当前佩戴：早睡先锋'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, '佩戴最新获得'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, '已佩戴'), findsNothing);
 
-    await tester.pageBack();
-    await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
 
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('profile-badge-preview-slot-0')),
-        matching: find.text('早睡先锋'),
-      ),
-      findsOneWidget,
-    );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('profile-badge-preview-slot-0'),
+          ),
+          matching: find.text('早睡先锋'),
+        ),
+        findsOneWidget,
+      );
 
-    await tester.ensureVisible(find.text('我的勋章'));
-    await tester.tap(find.text('我的勋章'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('恢复最新获得'));
-    await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('我的勋章'));
+      await tester.tap(find.text('我的勋章'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('佩戴最新获得'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('当前展示：安睡大师'), findsOneWidget);
+      expect(find.text('当前佩戴：安睡大师'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, '已佩戴'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, '佩戴最新获得'), findsNothing);
 
-    await tester.pageBack();
-    await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
 
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('profile-badge-preview-slot-0')),
-        matching: find.text('安睡大师'),
-      ),
-      findsOneWidget,
-    );
-  });
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('profile-badge-preview-slot-0'),
+          ),
+          matching: find.text('安睡大师'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('profile faq entry opens styled faq page', (
     WidgetTester tester,
