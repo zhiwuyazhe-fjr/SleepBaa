@@ -1002,20 +1002,7 @@ class InMemorySleepSessionRepository extends ChangeNotifier
   }
 
   static bool _isValidAwaitingFeedbackSession(SleepSession session) {
-    if (session.status != SleepSessionStatus.awaitingFeedback ||
-        session.sleepModeActive ||
-        session.hasSubmittedFeedback) {
-      return false;
-    }
-    final DateTime? displayEndAt = session.displayEndAt;
-    if (displayEndAt == null) {
-      return false;
-    }
-    final List<SleepSegment> segments = _normalizedSegments(session);
-    if (segments.any((SleepSegment segment) => segment.isOpen)) {
-      return false;
-    }
-    return session.liveTrackedDurationMinutes(now: displayEndAt) > 0;
+    return canSubmitMorningFeedbackForSession(session);
   }
 
   static List<SleepSession> _seedSessions(String uid) {

@@ -8,6 +8,7 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 class CalendarCheckinPage extends StatefulWidget {
   const CalendarCheckinPage({super.key});
@@ -198,6 +199,10 @@ class _SelectedSessionDetail extends StatelessWidget {
     }
 
     final MorningSummary? summary = session!.summary;
+    final bool canSupplementFeedback =
+        session!.status == SleepSessionStatus.awaitingFeedback &&
+        !session!.sleepModeActive &&
+        !session!.hasSubmittedFeedback;
     final String stageLabel = _sessionStageLabel(session!);
     final Color stageColor = _sessionStageColor(session!);
     final String durationLabel =
@@ -239,6 +244,17 @@ class _SelectedSessionDetail extends StatelessWidget {
             height: 1.5,
           ),
         ),
+        if (canSupplementFeedback) ...<Widget>[
+          const SizedBox(height: AppSpacing.lg),
+          PrimaryButton(
+            label: '补充晨间反馈',
+            onPressed: () {
+              context.push(
+                AppRoutes.feedbackMorningLocation(sessionId: session!.id),
+              );
+            },
+          ),
+        ],
         if (summary != null) ...<Widget>[
           const SizedBox(height: AppSpacing.lg),
           Wrap(

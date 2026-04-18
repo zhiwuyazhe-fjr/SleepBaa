@@ -761,6 +761,35 @@ int sleepSegmentDurationMinutes(
       .toInt();
 }
 
+DateTime? resolveMorningFeedbackSessionEndAt(SleepSession session) {
+  if (session.sleepModeActive) {
+    return null;
+  }
+  final DateTime? displayEndAt = session.displayEndAt;
+  if (displayEndAt != null) {
+    return displayEndAt;
+  }
+  for (int index = session.segments.length - 1; index >= 0; index--) {
+    final DateTime? endedAt = session.segments[index].endedAt;
+    if (endedAt != null) {
+      return endedAt;
+    }
+  }
+  return session.endedAt;
+}
+
+bool canSubmitMorningFeedbackForSession(SleepSession session) {
+  if (session.status != SleepSessionStatus.awaitingFeedback ||
+      session.sleepModeActive ||
+      session.hasSubmittedFeedback) {
+    return false;
+  }
+  if (session.openSegment != null) {
+    return false;
+  }
+  return resolveMorningFeedbackSessionEndAt(session) != null;
+}
+
 class NotificationItem {
   const NotificationItem({
     required this.id,

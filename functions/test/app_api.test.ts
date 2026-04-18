@@ -620,6 +620,95 @@ test(
 );
 
 test(
+  "sleep exit keeps closed segments and tracked duration in bootstrap payload",
+  { concurrency: false },
+  async () => {
+    await withLocalAppApiServer(async ({ baseUrl, uid }) => {
+      const sessionId = `${uid}-sleep-exit`;
+      const enterResponse = await fetch(`${baseUrl}/api/sleep/enter`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-debug-uid": uid,
+        },
+        body: JSON.stringify({
+          session: {
+            id: sessionId,
+            startedAt: "2026-04-17T23:00:00.000Z",
+            sleepDayKey: "2026-04-18",
+            status: "active",
+            sleepModeActive: true,
+            dormId: "dorm-204",
+            recommendations: [],
+            selectedRecommendationIds: [],
+            segments: [
+              {
+                startedAt: "2026-04-17T23:00:00.000Z",
+                endedAt: null,
+              },
+            ],
+            trackedDurationMinutes: 0,
+            awakenings: [],
+            feedback: [],
+          },
+        }),
+      });
+      assert.equal(enterResponse.status, 200);
+
+      const exitEndedAt = "2026-04-18T06:45:00.000Z";
+      const exitResponse = await fetch(`${baseUrl}/api/sleep/exit`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-debug-uid": uid,
+        },
+        body: JSON.stringify({
+          sessionId,
+          endedAt: exitEndedAt,
+          trackedDurationMinutes: 465,
+          session: {
+            id: sessionId,
+            sleepDayKey: "2026-04-18",
+            segments: [
+              {
+                startedAt: "2026-04-17T23:00:00.000Z",
+                endedAt: exitEndedAt,
+              },
+            ],
+            trackedDurationMinutes: 465,
+          },
+        }),
+      });
+      assert.equal(exitResponse.status, 200);
+
+      const bootstrapResponse = await fetch(`${baseUrl}/api/app/bootstrap`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-debug-uid": uid,
+        },
+        body: JSON.stringify({}),
+      });
+      assert.equal(bootstrapResponse.status, 200);
+
+      const bootstrapPayload = await bootstrapResponse.json();
+      const sessions = bootstrapPayload.data.sleepSessions ?? [];
+      const session = sessions.find(
+        (item: Record<string, unknown>) => item.id === sessionId,
+      );
+
+      assert.ok(session);
+      assert.equal(session.status, "awaitingFeedback");
+      assert.equal(session.sleepModeActive, false);
+      assert.equal(session.endedAt, exitEndedAt);
+      assert.equal(session.trackedDurationMinutes, 465);
+      assert.equal(session.segments.length, 1);
+      assert.equal(session.segments[0].endedAt, exitEndedAt);
+    });
+  },
+);
+
+test(
   "dorm location anchor and tonight interference persist through bootstrap",
   { concurrency: false },
   async () => {

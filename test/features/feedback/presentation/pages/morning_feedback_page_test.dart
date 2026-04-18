@@ -58,6 +58,63 @@ void main() {
       isFalse,
     );
   });
+
+  test(
+    'can submit morning feedback for a closed awaiting session with zero minutes',
+    () {
+      final DateTime startedAt = DateTime(2026, 4, 17, 23, 18);
+      final SleepSession session = SleepSession(
+        id: 'session-zero-minutes',
+        uid: 'cloud-user',
+        startedAt: startedAt,
+        endedAt: startedAt,
+        sleepDayKey: sleepDayKeyFromDate(startedAt),
+        status: SleepSessionStatus.awaitingFeedback,
+        sleepModeActive: false,
+        dormId: 'dorm-204',
+        recommendations: const <NightRecommendation>[],
+        selectedRecommendationIds: const <String>[],
+        segments: <SleepSegment>[
+          SleepSegment(startedAt: startedAt, endedAt: startedAt),
+        ],
+        trackedDurationMinutes: 0,
+        awakenings: const <NightAwakeningEntry>[],
+        feedback: const <RecommendationFeedback>[],
+        summary: null,
+        updatedAt: startedAt,
+      );
+
+      expect(canSubmitMorningFeedbackForSession(session), isTrue);
+      expect(resolveMorningFeedbackSessionEndAt(session), startedAt);
+    },
+  );
+
+  test('rejects morning feedback when the session has no resolved end', () {
+    final DateTime startedAt = DateTime(2026, 4, 17, 23, 18);
+    final SleepSession session = SleepSession(
+      id: 'session-open',
+      uid: 'cloud-user',
+      startedAt: startedAt,
+      endedAt: null,
+      sleepDayKey: sleepDayKeyFromDate(startedAt),
+      status: SleepSessionStatus.awaitingFeedback,
+      sleepModeActive: false,
+      dormId: 'dorm-204',
+      recommendations: const <NightRecommendation>[],
+      selectedRecommendationIds: const <String>[],
+      segments: <SleepSegment>[
+        SleepSegment(startedAt: startedAt, endedAt: null),
+      ],
+      trackedDurationMinutes: 0,
+      awakenings: const <NightAwakeningEntry>[],
+      feedback: const <RecommendationFeedback>[],
+      summary: null,
+      updatedAt: startedAt,
+    );
+
+    expect(canSubmitMorningFeedbackForSession(session), isFalse);
+    expect(resolveMorningFeedbackSessionEndAt(session), isNull);
+  });
 }
 
 SleepSession _buildPendingFeedbackSession({required String id}) {
