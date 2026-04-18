@@ -298,17 +298,7 @@ class SleepExperienceController extends ChangeNotifier {
     final SleepSession? finished = await _sleepSessionRepository
         .finishActiveSleepSession();
     if (finished == null) {
-      final SleepSession? pendingFeedbackSession =
-          _sleepSessionRepository.latestAwaitingFeedbackSession;
-      if (pendingFeedbackSession != null) {
-        await _syncDormStatusAfterSleepExit(
-          user.uid,
-          hasSubmittedFeedback: false,
-        );
-        return FinishSleepModeResult.goToFeedback;
-      }
-      final SleepSession? fallbackSession = _sleepSessionRepository
-          .sessionForSleepDayKey(sleepDayKeyFromDate(_clock()));
+      final SleepSession? fallbackSession = _currentSleepDaySession();
       if (fallbackSession != null) {
         await _syncDormStatusAfterSleepExit(
           user.uid,
@@ -335,6 +325,12 @@ class SleepExperienceController extends ChangeNotifier {
     }
     unawaited(_completeSleepExitSideEffects(finished));
     return FinishSleepModeResult.goToFeedback;
+  }
+
+  SleepSession? _currentSleepDaySession() {
+    return _sleepSessionRepository.sessionForSleepDayKey(
+      sleepDayKeyFromDate(_clock()),
+    );
   }
 
   Future<void> exitSleepMode() async {

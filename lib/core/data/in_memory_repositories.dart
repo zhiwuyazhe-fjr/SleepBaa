@@ -597,9 +597,7 @@ class InMemorySleepSessionRepository extends ChangeNotifier
         _latestSleepDaySessions(_sessions)
             .where(
               (SleepSession session) =>
-                  session.status == SleepSessionStatus.awaitingFeedback &&
-                  !session.sleepModeActive &&
-                  !session.hasSubmittedFeedback,
+                  _isValidAwaitingFeedbackSession(session),
             )
             .toList()
           ..sort(
@@ -701,14 +699,15 @@ class InMemorySleepSessionRepository extends ChangeNotifier
     SleepSession session, {
     bool syncRemote = true,
   }) async {
+    final SleepSession normalized = _normalizeStoredSleepSession(session);
     final int index = _sessions.indexWhere(
-      (SleepSession current) => current.id == session.id,
+      (SleepSession current) => current.id == normalized.id,
     );
     if (index == -1) {
-      _sessions = <SleepSession>[..._sessions, session];
+      _sessions = <SleepSession>[..._sessions, normalized];
     } else {
       final List<SleepSession> next = List<SleepSession>.from(_sessions);
-      next[index] = session;
+      next[index] = normalized;
       _sessions = next;
     }
     _sessions = List<SleepSession>.from(_sessions)..sort(_compareSleepSessions);
@@ -917,6 +916,103 @@ class InMemorySleepSessionRepository extends ChangeNotifier
       sleepDayDate.day,
       20,
     );
+  }
+
+  static SleepSession _normalizeStoredSleepSession(SleepSession session) {
+    SleepSession normalized = session;
+    if (normalized.status == SleepSessionStatus.active &&
+        normalized.endedAt != null) {
+      normalized = normalized.copyWith(
+        status: SleepSessionStatus.awaitingFeedback,
+        sleepModeActive: false,
+      );
+    }
+    if (normalized.status != SleepSessionStatus.active ||
+        !normalized.sleepModeActive) {
+      normalized = _repairInactiveSleepSession(normalized);
+    }
+    return normalized;
+  }
+
+  static SleepSession _repairInactiveSleepSession(SleepSession session) {
+    final List<SleepSegment> segments = _normalizedSegments(session);
+    final DateTime? resolvedEndAt = _resolvedInactiveSessionEndAt(
+      session,
+      segments,
+    );
+    if (resolvedEndAt == null) {
+      return session;
+    }
+
+    bool changed = false;
+    final int openIndex = segments.lastIndexWhere(
+      (SleepSegment segment) => segment.isOpen,
+    );
+    if (openIndex != -1) {
+      segments[openIndex] = segments[openIndex].copyWith(
+        endedAt: resolvedEndAt,
+      );
+      changed = true;
+    }
+
+    final int trackedDurationMinutes = session.isTrackingLocked
+        ? session.trackedDurationMinutes
+        : _closedSegmentsDurationMinutes(segments);
+    if (trackedDurationMinutes != session.trackedDurationMinutes) {
+      changed = true;
+    }
+    if (session.endedAt == null) {
+      changed = true;
+    }
+    if (!changed) {
+      return session;
+    }
+    return session.copyWith(
+      endedAt: resolvedEndAt,
+      segments: segments,
+      trackedDurationMinutes: trackedDurationMinutes,
+    );
+  }
+
+  static DateTime? _resolvedInactiveSessionEndAt(
+    SleepSession session,
+    List<SleepSegment> segments,
+  ) {
+    if (session.endedAt != null) {
+      return session.endedAt;
+    }
+    for (int index = segments.length - 1; index >= 0; index--) {
+      final DateTime? endedAt = segments[index].endedAt;
+      if (endedAt != null) {
+        return endedAt;
+      }
+    }
+    return null;
+  }
+
+  static int _closedSegmentsDurationMinutes(List<SleepSegment> segments) {
+    return segments.fold<int>(
+      0,
+      (int total, SleepSegment segment) =>
+          total + sleepSegmentDurationMinutes(segment),
+    );
+  }
+
+  static bool _isValidAwaitingFeedbackSession(SleepSession session) {
+    if (session.status != SleepSessionStatus.awaitingFeedback ||
+        session.sleepModeActive ||
+        session.hasSubmittedFeedback) {
+      return false;
+    }
+    final DateTime? displayEndAt = session.displayEndAt;
+    if (displayEndAt == null) {
+      return false;
+    }
+    final List<SleepSegment> segments = _normalizedSegments(session);
+    if (segments.any((SleepSegment segment) => segment.isOpen)) {
+      return false;
+    }
+    return session.liveTrackedDurationMinutes(now: displayEndAt) > 0;
   }
 
   static List<SleepSession> _seedSessions(String uid) {

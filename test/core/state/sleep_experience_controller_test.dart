@@ -213,21 +213,25 @@ void main() {
   );
 
   test(
-    'finish sleep mode falls back to latest awaiting feedback session when sleep-day lookup misses',
+    'finish sleep mode ignores historical pending sessions when current sleep-day lookup misses',
     () async {
       final InMemoryAuthRepository authRepository = InMemoryAuthRepository();
       final InMemoryUserSettingsRepository settingsRepository =
           InMemoryUserSettingsRepository();
       final InMemoryRecommendationRepository recommendationRepository =
           InMemoryRecommendationRepository();
+      final DateTime historicalStartedAt = DateTime.now().subtract(
+        const Duration(days: 2, hours: 6),
+      );
+      final DateTime historicalEndedAt = historicalStartedAt.add(
+        const Duration(hours: 5),
+      );
       final SleepSession pendingFeedbackSession = SleepSession(
         id: 'session-awaiting-feedback-latest',
         uid: authRepository.currentUser.uid,
-        startedAt: DateTime.now().subtract(const Duration(hours: 6)),
-        endedAt: DateTime.now().subtract(const Duration(hours: 1)),
-        sleepDayKey: sleepDayKeyFromDate(
-          DateTime.now().subtract(const Duration(hours: 6)),
-        ),
+        startedAt: historicalStartedAt,
+        endedAt: historicalEndedAt,
+        sleepDayKey: sleepDayKeyFromDate(historicalStartedAt),
         status: SleepSessionStatus.awaitingFeedback,
         sleepModeActive: false,
         dormId: 'dorm-1',
@@ -235,8 +239,8 @@ void main() {
         selectedRecommendationIds: const <String>[],
         segments: <SleepSegment>[
           SleepSegment(
-            startedAt: DateTime.now().subtract(const Duration(hours: 6)),
-            endedAt: DateTime.now().subtract(const Duration(hours: 1)),
+            startedAt: historicalStartedAt,
+            endedAt: historicalEndedAt,
           ),
         ],
         trackedDurationMinutes: 300,
@@ -279,7 +283,7 @@ void main() {
 
       expect(
         await controller.finishSleepMode(),
-        FinishSleepModeResult.goToFeedback,
+        FinishSleepModeResult.noActiveSession,
       );
       expect(notificationService.cancelSleepModeNotificationCalls, 1);
       expect(sleepSessionRepository.savedSessions, isEmpty);
@@ -297,7 +301,7 @@ void main() {
   );
 
   test(
-    'finish sleep mode falls back to current sleep-day completed session when feedback is already submitted',
+    'finish sleep mode prefers current sleep-day completed session over historical pending sessions',
     () async {
       final InMemoryAuthRepository authRepository = InMemoryAuthRepository();
       final InMemoryUserSettingsRepository settingsRepository =
@@ -347,10 +351,39 @@ void main() {
           readAt: null,
         ),
       );
+      final DateTime historicalStartedAt = DateTime.now().subtract(
+        const Duration(days: 5, hours: 2),
+      );
+      final DateTime historicalEndedAt = historicalStartedAt.add(
+        const Duration(hours: 7),
+      );
       final _NullActiveSleepSessionRepository sleepSessionRepository =
           _NullActiveSleepSessionRepository(
             fallbackSession,
             sessionForSleepDayKeyResult: fallbackSession,
+            latestAwaitingFeedbackSessionResult: SleepSession(
+              id: 'historical-pending-session',
+              uid: authRepository.currentUser.uid,
+              startedAt: historicalStartedAt,
+              endedAt: historicalEndedAt,
+              sleepDayKey: sleepDayKeyFromDate(historicalStartedAt),
+              status: SleepSessionStatus.awaitingFeedback,
+              sleepModeActive: false,
+              dormId: 'dorm-1',
+              recommendations: const <NightRecommendation>[],
+              selectedRecommendationIds: const <String>[],
+              segments: <SleepSegment>[
+                SleepSegment(
+                  startedAt: historicalStartedAt,
+                  endedAt: historicalEndedAt,
+                ),
+              ],
+              trackedDurationMinutes: 420,
+              awakenings: const <NightAwakeningEntry>[],
+              feedback: const <RecommendationFeedback>[],
+              summary: null,
+              updatedAt: DateTime.now(),
+            ),
           );
       final InMemoryFeedbackRepository feedbackRepository =
           InMemoryFeedbackRepository(

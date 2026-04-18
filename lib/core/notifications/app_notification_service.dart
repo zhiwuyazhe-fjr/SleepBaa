@@ -51,6 +51,8 @@ class AppNotificationService {
 
   NotificationLaunchIntent? _initialLaunchIntent;
   bool _initialized = false;
+  Future<void> _sleepModeNotificationTail = Future<void>.value();
+  int _sleepModeNotificationRequestId = 0;
 
   bool get isSupported =>
       !kIsWeb &&
@@ -162,32 +164,44 @@ class AppNotificationService {
     if (!isSupported) {
       return;
     }
+    final int requestId = ++_sleepModeNotificationRequestId;
     final String payload = jsonEncode(<String, Object?>{
       'kind': 'sleep_mode',
       'sessionId': session.id,
       'route': AppRoutes.homePostSleep,
     });
-    await _localNotifications.show(
-      sleepModeNotificationId,
-      _sleepModeNotificationTitle,
-      _sleepModeNotificationBody,
-      NotificationDetails(android: _sleepModeNotificationDetails),
-      payload: payload,
-    );
+    await _enqueueSleepModeNotificationOperation(() async {
+      if (requestId != _sleepModeNotificationRequestId) {
+        return;
+      }
+      await _localNotifications.show(
+        sleepModeNotificationId,
+        _sleepModeNotificationTitle,
+        _sleepModeNotificationBody,
+        NotificationDetails(android: _sleepModeNotificationDetails),
+        payload: payload,
+      );
+    });
   }
 
   Future<void> cancelSleepModeNotification() async {
-    final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
-        _androidPlugin;
-    if (androidPlugin != null) {
-      try {
-        await androidPlugin.stopForegroundService();
-      } catch (_) {
-        // Older builds may have started a foreground service; ignore cleanup
-        // failures so regular notification cancellation can still proceed.
+    final int requestId = ++_sleepModeNotificationRequestId;
+    await _enqueueSleepModeNotificationOperation(() async {
+      final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
+          _androidPlugin;
+      if (androidPlugin != null) {
+        try {
+          await androidPlugin.stopForegroundService();
+        } catch (_) {
+          // Older builds may have started a foreground service; ignore cleanup
+          // failures so regular notification cancellation can still proceed.
+        }
       }
-    }
-    await _localNotifications.cancel(sleepModeNotificationId);
+      if (requestId != _sleepModeNotificationRequestId) {
+        return;
+      }
+      await _localNotifications.cancel(sleepModeNotificationId);
+    });
   }
 
   Future<void> cancelNotificationForItem(String notificationId) {
@@ -244,6 +258,18 @@ class AppNotificationService {
         showWhen: false,
         category: AndroidNotificationCategory.status,
       );
+
+  Future<void> _enqueueSleepModeNotificationOperation(
+    Future<void> Function() operation,
+  ) {
+    final Future<void> next = _sleepModeNotificationTail.then(
+      (_) => operation(),
+    );
+    _sleepModeNotificationTail = next.catchError(
+      (Object error, StackTrace stackTrace) {},
+    );
+    return next;
+  }
 
   Future<void> dispose() async {
     await _launchIntentController.close();

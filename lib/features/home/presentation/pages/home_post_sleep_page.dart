@@ -211,18 +211,24 @@ class HomePostSleepPage extends StatelessWidget {
                               if (!context.mounted) {
                                 return;
                               }
-                              if (services
-                                      .sleepSessionRepository
-                                      .latestAwaitingFeedbackSession !=
-                                  null) {
-                                context.go(AppRoutes.feedbackMorning);
-                                return;
-                              }
+                              final SleepSession? currentSleepDaySession =
+                                  services.sleepSessionRepository
+                                      .sessionForSleepDayKey(
+                                        sleepDayKeyFromDate(
+                                          services
+                                              .sleepExperienceController
+                                              .currentTime,
+                                        ),
+                                      );
                               switch (result) {
                                 case FinishSleepModeResult.noActiveSession:
                                   context.go(AppRoutes.homePreSleep);
                                 case FinishSleepModeResult.goToFeedback:
-                                  context.go(AppRoutes.feedbackMorning);
+                                  context.go(
+                                    AppRoutes.feedbackMorningLocation(
+                                      sessionId: currentSleepDaySession?.id,
+                                    ),
+                                  );
                                 case FinishSleepModeResult
                                     .goHomeFeedbackAlreadySubmitted:
                                   context.go(

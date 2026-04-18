@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -140,6 +141,51 @@ void main() {
 
     await service.dispose();
   });
+
+  test(
+    'sleep mode notification keeps the last requested state when show and cancel race',
+    () async {
+      final Completer<void> showCompleter = Completer<void>();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (MethodCall call) async {
+            calls.add(call);
+            switch (call.method) {
+              case 'initialize':
+                return true;
+              case 'getNotificationAppLaunchDetails':
+                return <String, Object?>{'notificationLaunchedApp': false};
+              case 'requestNotificationsPermission':
+                return true;
+              case 'show':
+                await showCompleter.future;
+                return null;
+              case 'stopForegroundService':
+                return null;
+              default:
+                return null;
+            }
+          });
+
+      final AppNotificationService service = AppNotificationService(
+        platformOverride: TargetPlatform.android,
+      );
+
+      final Future<void> showFuture = service.showSleepModeNotification(
+        session: _session(),
+      );
+      final Future<void> cancelFuture = service.cancelSleepModeNotification();
+      showCompleter.complete();
+      await Future.wait(<Future<void>>[showFuture, cancelFuture]);
+
+      expect(calls.where((MethodCall call) => call.method == 'show'), isEmpty);
+      expect(
+        calls.where((MethodCall call) => call.method == 'cancel'),
+        hasLength(1),
+      );
+
+      await service.dispose();
+    },
+  );
 }
 
 SleepSession _session() {

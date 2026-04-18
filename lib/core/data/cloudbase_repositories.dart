@@ -1930,13 +1930,19 @@ bool _isActiveSleepSession(SleepSession session) {
 }
 
 SleepSession _normalizeSleepSession(SleepSession session) {
-  if (session.status != SleepSessionStatus.active || session.endedAt == null) {
-    return session;
+  SleepSession normalized = session;
+  if (normalized.status == SleepSessionStatus.active &&
+      normalized.endedAt != null) {
+    normalized = normalized.copyWith(
+      status: SleepSessionStatus.awaitingFeedback,
+      sleepModeActive: false,
+    );
   }
-  return session.copyWith(
-    status: SleepSessionStatus.awaitingFeedback,
-    sleepModeActive: false,
-  );
+  if (normalized.status != SleepSessionStatus.active ||
+      !normalized.sleepModeActive) {
+    return _repairInactiveSleepSession(normalized);
+  }
+  return normalized;
 }
 
 SleepSession _normalizeSleepSessionForPhase(
@@ -1954,10 +1960,103 @@ SleepSession _normalizeSleepSessionForPhase(
   if (isCurrentSleepModeSession) {
     return normalized;
   }
-  return normalized.copyWith(
-    status: SleepSessionStatus.awaitingFeedback,
-    sleepModeActive: false,
+  return _repairInactiveSleepSession(
+    normalized.copyWith(
+      status: SleepSessionStatus.awaitingFeedback,
+      sleepModeActive: false,
+    ),
   );
+}
+
+SleepSession _repairInactiveSleepSession(SleepSession session) {
+  final List<SleepSegment> segments = _normalizedSleepSegments(session);
+  final DateTime? resolvedEndAt = _resolvedInactiveSessionEndAt(
+    session,
+    segments,
+  );
+  if (resolvedEndAt == null) {
+    return session;
+  }
+
+  bool changed = false;
+  final int openIndex = segments.lastIndexWhere(
+    (SleepSegment segment) => segment.isOpen,
+  );
+  if (openIndex != -1) {
+    segments[openIndex] = segments[openIndex].copyWith(endedAt: resolvedEndAt);
+    changed = true;
+  }
+
+  final int trackedDurationMinutes = session.isTrackingLocked
+      ? session.trackedDurationMinutes
+      : _closedSegmentsDurationMinutes(segments);
+  if (trackedDurationMinutes != session.trackedDurationMinutes) {
+    changed = true;
+  }
+  if (session.endedAt == null) {
+    changed = true;
+  }
+  if (!changed) {
+    return session;
+  }
+  return session.copyWith(
+    endedAt: resolvedEndAt,
+    segments: segments,
+    trackedDurationMinutes: trackedDurationMinutes,
+  );
+}
+
+List<SleepSegment> _normalizedSleepSegments(SleepSession session) {
+  if (session.segments.isNotEmpty) {
+    return List<SleepSegment>.from(session.segments);
+  }
+  return <SleepSegment>[
+    SleepSegment(
+      startedAt: session.startedAt,
+      endedAt: session.sleepModeActive ? null : session.endedAt,
+    ),
+  ];
+}
+
+DateTime? _resolvedInactiveSessionEndAt(
+  SleepSession session,
+  List<SleepSegment> segments,
+) {
+  if (session.endedAt != null) {
+    return session.endedAt;
+  }
+  for (int index = segments.length - 1; index >= 0; index--) {
+    final DateTime? endedAt = segments[index].endedAt;
+    if (endedAt != null) {
+      return endedAt;
+    }
+  }
+  return null;
+}
+
+int _closedSegmentsDurationMinutes(List<SleepSegment> segments) {
+  return segments.fold<int>(
+    0,
+    (int total, SleepSegment segment) =>
+        total + sleepSegmentDurationMinutes(segment),
+  );
+}
+
+bool _isValidAwaitingFeedbackSession(SleepSession session) {
+  if (session.status != SleepSessionStatus.awaitingFeedback ||
+      session.sleepModeActive ||
+      session.hasSubmittedFeedback) {
+    return false;
+  }
+  final DateTime? displayEndAt = session.displayEndAt;
+  if (displayEndAt == null) {
+    return false;
+  }
+  final List<SleepSegment> segments = _normalizedSleepSegments(session);
+  if (segments.any((SleepSegment segment) => segment.isOpen)) {
+    return false;
+  }
+  return session.liveTrackedDurationMinutes(now: displayEndAt) > 0;
 }
 
 class CloudBaseSleepSessionRepository extends ChangeNotifier
@@ -2014,9 +2113,7 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
         _latestSleepDaySessions(_sessions)
             .where(
               (SleepSession session) =>
-                  session.status == SleepSessionStatus.awaitingFeedback &&
-                  !session.sleepModeActive &&
-                  !session.hasSubmittedFeedback,
+                  _isValidAwaitingFeedbackSession(session),
             )
             .toList()
           ..sort(

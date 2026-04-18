@@ -263,7 +263,11 @@ function buildProfileReportSnapshot(
   userState: UserStateDoc,
 ): CardSnapshotDoc {
   const completed = context.recentSessions.filter(
-    (item) => typeof item.totalSleepHours === "number",
+    (item) =>
+      item.status === "completed" &&
+      typeof item.totalSleepHours === "number" &&
+      typeof item.sleepQuality === "number" &&
+      typeof item.restedLevel === "number",
   );
   const averageSleepHours =
     completed.length === 0
@@ -280,7 +284,7 @@ function buildProfileReportSnapshot(
       ? 0
       : completed.reduce((sum, item) => sum + (item.restedLevel ?? 0), 0) /
         completed.length;
-  const calmNights = context.recentSessions.filter(
+  const calmNights = completed.filter(
     (item) => item.awakeningsCount === 0,
   ).length;
   const payload = {
@@ -296,12 +300,12 @@ function buildProfileReportSnapshot(
     ],
   };
   const durationTrendPoints = buildTrendPoints(
-    context.recentSessions,
+    completed,
     (session) =>
       typeof session.totalSleepHours === "number" ? session.totalSleepHours : null,
   );
   const qualityTrendPoints = buildTrendPoints(
-    context.recentSessions,
+    completed,
     (session) => {
       if (typeof session.sleepQuality !== "number") {
         return null;

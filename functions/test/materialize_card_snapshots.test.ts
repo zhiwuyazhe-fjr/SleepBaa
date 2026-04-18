@@ -113,3 +113,37 @@ test("profile report snapshot includes summary and two 7-day trend cards", () =>
   assert.ok(durationPoints.some((point) => point.value === null));
   assert.ok(qualityPoints.some((point) => point.value === 80));
 });
+
+test("profile report snapshot ignores pending sessions when building averages and trends", () => {
+  const context = buildContext();
+  context.recentSessions.push({
+    id: "session-pending",
+    sleepDayKey: "2026-04-14",
+    startedAt: "2026-04-13T23:10:00.000Z",
+    status: "awaitingFeedback",
+    awakeningsCount: 0,
+    totalSleepHours: 9.5,
+    sleepQuality: 95,
+    restedLevel: 92,
+  });
+
+  const snapshots = buildCardSnapshots(context, buildUserState(), [
+    "profile_report",
+  ]);
+  const profileReport = snapshots[0];
+  const summaryCard = profileReport?.cards.find(
+    (card) => card.type === "sleep_report_summary",
+  );
+  const payload = (summaryCard?.payload ?? {}) as Record<string, unknown>;
+  const durationTrend = profileReport?.cards.find(
+    (card) => card.type === "sleep_duration_trend",
+  );
+  const durationPoints =
+    (durationTrend?.payload?.points as Array<Record<string, unknown>>) ?? [];
+
+  assert.ok(
+    Math.abs(Number(payload.averageSleepHours) - 6.8) < 1e-9,
+    `expected averageSleepHours to stay at 6.8, got ${payload.averageSleepHours}`,
+  );
+  assert.ok(durationPoints.every((point) => point.value !== 9.5));
+});

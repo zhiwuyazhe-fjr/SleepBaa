@@ -38,10 +38,12 @@ void main() {
             snapshotStore: snapshotStore,
             appApiClient: appApiClient,
           );
+      final DateTime startedAt = DateTime(2026, 4, 12, 23, 0);
 
       final SleepSession session = await repository.startOrResumeSleepSession(
         recommendationSnapshot: const <NightRecommendation>[],
         dormId: 'dorm-204',
+        at: startedAt,
       );
 
       expect(session.uid, 'cloud-user');
@@ -86,9 +88,11 @@ void main() {
             appApiClient: appApiClient,
           );
 
+      final DateTime startedAt = DateTime(2026, 4, 12, 23, 0);
       final SleepSession session = await repository.startOrResumeSleepSession(
         recommendationSnapshot: const <NightRecommendation>[],
         dormId: 'dorm-204',
+        at: startedAt,
       );
 
       expect(repository.activeSession?.id, session.id);
@@ -341,6 +345,11 @@ void main() {
         SleepSessionStatus.awaitingFeedback,
       );
       expect(repository.sessions.single.sleepModeActive, isFalse);
+      expect(
+        repository.sessions.single.displayEndAt,
+        DateTime.parse('2026-04-14T07:00:00.000Z').toLocal(),
+      );
+      expect(repository.sessions.single.trackedDurationMinutes, 480);
     },
   );
 
@@ -396,15 +405,14 @@ void main() {
       });
 
       expect(repository.activeSession, isNull);
-      expect(
-        repository.latestAwaitingFeedbackSession?.id,
-        'session-phase-mismatch',
-      );
+      expect(repository.latestAwaitingFeedbackSession, isNull);
       expect(
         repository.sessions.single.status,
         SleepSessionStatus.awaitingFeedback,
       );
       expect(repository.sessions.single.sleepModeActive, isFalse);
+      expect(repository.sessions.single.displayEndAt, isNull);
+      expect(repository.sessions.single.trackedDurationMinutes, 0);
     },
   );
 

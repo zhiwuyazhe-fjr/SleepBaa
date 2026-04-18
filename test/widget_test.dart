@@ -1202,6 +1202,89 @@ void main() {
     expect(find.text('Target feedback session'), findsOneWidget);
   });
 
+  testWidgets(
+    'morning feedback explicit completed session does not fall back to old pending session',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.feedbackMorning,
+        clock: _feedbackClock,
+      );
+
+      final AppServices services = AppScope.of(
+        tester.element(find.byType(MorningFeedbackPage)),
+      );
+      final SleepSession completedSession = _buildCompletedSession(
+        uid: services.authRepository.currentUser.uid,
+        id: 'completed-feedback-session',
+        startedAt: DateTime(2026, 4, 17, 23, 6),
+        recommendationTitle: 'Completed feedback session',
+      );
+      final SleepSession oldPendingSession = _buildPendingFeedbackSession(
+        uid: services.authRepository.currentUser.uid,
+        id: 'old-pending-session',
+        startedAt: DateTime(2026, 4, 10, 23, 12),
+        recommendationTitle: 'Old pending session',
+      );
+      await services.sleepSessionRepository.saveSession(oldPendingSession);
+      await services.sleepSessionRepository.saveSession(completedSession);
+
+      final BuildContext context = tester.element(
+        find.byType(MorningFeedbackPage),
+      );
+      GoRouter.of(
+        context,
+      ).go(AppRoutes.feedbackMorningLocation(sessionId: completedSession.id));
+      await tester.pumpAndSettle();
+
+      expect(find.text('这条睡眠记录已完成晨间反馈，可在我的页查看同步结果。'), findsOneWidget);
+      expect(find.text('Old pending session'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'generic morning feedback route ignores historical pending sessions',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.feedbackMorning,
+        clock: _feedbackClock,
+      );
+
+      final AppServices services = AppScope.of(
+        tester.element(find.byType(MorningFeedbackPage)),
+      );
+      final SleepSession currentCompletedSession = _buildCompletedSession(
+        uid: services.authRepository.currentUser.uid,
+        id: 'current-day-completed-session',
+        startedAt: DateTime(2026, 4, 17, 23, 10),
+        recommendationTitle: 'Current day completed',
+      ).copyWith(updatedAt: DateTime(2026, 4, 18, 9, 30));
+      final SleepSession historicalPendingSession =
+          _buildPendingFeedbackSession(
+            uid: services.authRepository.currentUser.uid,
+            id: 'historical-pending-session',
+            startedAt: DateTime(2026, 4, 9, 23, 8),
+            recommendationTitle: 'Historical pending session',
+          );
+      await services.sleepSessionRepository.saveSession(
+        historicalPendingSession,
+      );
+      await services.sleepSessionRepository.saveSession(
+        currentCompletedSession,
+      );
+
+      final BuildContext context = tester.element(
+        find.byType(MorningFeedbackPage),
+      );
+      GoRouter.of(context).go(AppRoutes.feedbackMorning);
+      await tester.pumpAndSettle();
+
+      expect(find.text('当前没有待补反馈的睡眠记录。'), findsOneWidget);
+      expect(find.text('Historical pending session'), findsNothing);
+    },
+  );
+
   testWidgets('calendar pending day opens that session in morning feedback', (
     WidgetTester tester,
   ) async {
@@ -1384,19 +1467,29 @@ void main() {
     (WidgetTester tester) async {
       final _FakeAppNotificationService notificationService =
           _FakeAppNotificationService();
+      DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
 
       await _pumpApp(
         tester,
         initialLocation: AppRoutes.homePreSleep,
-        clock: _dayClock,
+        clock: () => currentTime,
         appNotificationService: notificationService,
       );
 
       await tester.tap(find.byType(StartSleepModeCard));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
+      currentTime = DateTime(2030, 4, 5, 15, 10);
 
       expect(find.byType(HomePostSleepPage), findsOneWidget);
+      final AppServices services = AppScope.of(
+        tester.element(find.byType(HomePostSleepPage)),
+      );
+      final String currentSleepDaySessionId = services.sleepSessionRepository
+          .sessionForSleepDayKey(
+            sleepDayKeyFromDate(DateTime(2030, 4, 5, 15, 10)),
+          )!
+          .id;
 
       final Finder endSleepModeButton = find.widgetWithText(
         PrimaryButton,
@@ -1408,9 +1501,15 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.widgetWithText(PrimaryButton, '结束并去晨间反馈'));
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
 
       expect(find.byType(MorningFeedbackPage), findsOneWidget);
+      expect(
+        tester
+            .widget<MorningFeedbackPage>(find.byType(MorningFeedbackPage))
+            .sessionId,
+        currentSleepDaySessionId,
+      );
     },
   );
 
@@ -1484,7 +1583,7 @@ SleepSession _buildPendingFeedbackSession({
     dormId: 'dorm-204',
     recommendations: <NightRecommendation>[
       NightRecommendation(
-        id: '${id}-rec',
+        id: '$id-rec',
         title: recommendationTitle,
         subtitle: 'Unique test recommendation',
         type: RecommendationType.quickAction,
@@ -1493,7 +1592,7 @@ SleepSession _buildPendingFeedbackSession({
         executionState: RecommendationExecutionState.selected,
       ),
     ],
-    selectedRecommendationIds: <String>['${id}-rec'],
+    selectedRecommendationIds: <String>['$id-rec'],
     segments: <SleepSegment>[
       SleepSegment(startedAt: startedAt, endedAt: endedAt),
     ],
@@ -1505,9 +1604,52 @@ SleepSession _buildPendingFeedbackSession({
   );
 }
 
-DateTime _dayClock() => DateTime(2026, 4, 5, 14);
+SleepSession _buildCompletedSession({
+  required String uid,
+  required String id,
+  required DateTime startedAt,
+  required String recommendationTitle,
+}) {
+  final DateTime endedAt = startedAt.add(const Duration(hours: 7, minutes: 5));
+  return SleepSession(
+    id: id,
+    uid: uid,
+    startedAt: startedAt,
+    endedAt: endedAt,
+    sleepDayKey: sleepDayKeyFromDate(startedAt),
+    status: SleepSessionStatus.completed,
+    sleepModeActive: false,
+    dormId: 'dorm-204',
+    recommendations: <NightRecommendation>[
+      NightRecommendation(
+        id: '$id-rec',
+        title: recommendationTitle,
+        subtitle: 'Completed test recommendation',
+        type: RecommendationType.quickAction,
+        icon: Icons.bedtime_rounded,
+        tags: const <String>['completed'],
+        executionState: RecommendationExecutionState.completed,
+      ),
+    ],
+    selectedRecommendationIds: <String>['$id-rec'],
+    segments: <SleepSegment>[
+      SleepSegment(startedAt: startedAt, endedAt: endedAt),
+    ],
+    trackedDurationMinutes: endedAt.difference(startedAt).inMinutes,
+    awakenings: const <NightAwakeningEntry>[],
+    feedback: const <RecommendationFeedback>[],
+    summary: const MorningSummary(
+      sleepQuality: 4,
+      restedLevel: 4,
+      totalSleepHours: 7.1,
+      awakeningsCount: 0,
+      note: 'completed',
+    ),
+    updatedAt: endedAt,
+  );
+}
 
-DateTime _currentDayClock() => DateTime(2026, 4, 17, 14);
+DateTime _dayClock() => DateTime(2026, 4, 5, 14);
 
 DateTime _feedbackClock() => DateTime(2026, 4, 18, 7);
 

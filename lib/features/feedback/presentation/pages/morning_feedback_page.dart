@@ -53,18 +53,20 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
         ]),
         builder: (BuildContext context, Widget? child) {
           final GoRouterState routerState = GoRouterState.of(context);
-          final SleepSession? session = _resolveTargetSession(
+          final DateTime feedbackMoment =
+              services.sleepExperienceController.currentTime;
+          final _MorningFeedbackTarget target = _resolveTargetSession(
             services.sleepSessionRepository,
+            feedbackMoment: feedbackMoment,
             explicitSessionId:
                 widget.sessionId ??
                 routerState.uri.queryParameters['sessionId'],
           );
+          final SleepSession? session = target.session;
           if (session == null) {
-            return const Center(child: Text('当前没有待反馈的睡眠记录。'));
+            return Center(child: Text(target.message));
           }
           _bindSession(session);
-          final DateTime feedbackMoment =
-              services.sleepExperienceController.currentTime;
           final DateTime endAt = _resolveFeedbackDisplayEndAt(
             session,
             feedbackMoment,
@@ -88,7 +90,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      '昨晚的整体感觉',
+                      '昨晚的整体感受',
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
                     const SizedBox(height: AppSpacing.md),
@@ -134,7 +136,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                       },
                     ),
                     _MetricSlider(
-                      label: '起床疲倦感',
+                      label: '起床恢复感',
                       value: _restedLevel.toDouble(),
                       min: 1,
                       max: 5,
@@ -235,7 +237,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                           submittedAt: DateTime.now(),
                         );
                       })
-                      .toList();
+                      .toList(growable: false);
                   await services.sleepExperienceController
                       .submitMorningFeedback(
                         session: session,
@@ -262,8 +264,9 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
     );
   }
 
-  SleepSession? _resolveTargetSession(
+  _MorningFeedbackTarget _resolveTargetSession(
     SleepSessionRepository repository, {
+    required DateTime feedbackMoment,
     String? explicitSessionId,
   }) {
     final String normalizedSessionId = explicitSessionId?.trim() ?? '';
@@ -272,15 +275,27 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
         if (session.id != normalizedSessionId) {
           continue;
         }
-        if (session.status == SleepSessionStatus.awaitingFeedback &&
-            !session.sleepModeActive &&
-            !session.hasSubmittedFeedback) {
-          return session;
+        if (session.hasSubmittedFeedback) {
+          return const _MorningFeedbackTarget(
+            message: '这条睡眠记录已完成晨间反馈，可在我的页查看同步结果。',
+          );
         }
-        break;
+        if (_canSubmitFeedbackFor(session, feedbackMoment)) {
+          return _MorningFeedbackTarget(session: session);
+        }
+        return const _MorningFeedbackTarget(message: '这条睡眠记录当前不可继续补反馈。');
       }
+      return const _MorningFeedbackTarget(message: '没有找到对应的睡眠记录。');
     }
-    return repository.latestAwaitingFeedbackSession;
+
+    final String currentSleepDayKey = sleepDayKeyFromDate(feedbackMoment);
+    final SleepSession? currentSleepDaySession = repository
+        .sessionForSleepDayKey(currentSleepDayKey);
+    if (currentSleepDaySession != null &&
+        _canSubmitFeedbackFor(currentSleepDaySession, feedbackMoment)) {
+      return _MorningFeedbackTarget(session: currentSleepDaySession);
+    }
+    return const _MorningFeedbackTarget(message: '当前没有待补反馈的睡眠记录。');
   }
 
   void _bindSession(SleepSession session) {
@@ -363,15 +378,6 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
         '累计${_formatDurationMinutes(totalRecordMinutes)}';
   }
 
-  String _formatDateTimeRangeLabel(DateTime start, DateTime end) {
-    final String startDay = _formatDateLabel(start);
-    final String endDay = _formatDateLabel(end);
-    if (DateUtils.isSameDay(start, end)) {
-      return '$startDay ${_formatClock(start)} 到 ${_formatClock(end)}';
-    }
-    return '$startDay ${_formatClock(start)} 到 $endDay ${_formatClock(end)}';
-  }
-
   String _formatDateLabel(DateTime dateTime) {
     return '${dateTime.month}/${dateTime.day}';
   }
@@ -381,6 +387,40 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
     final String minute = dateTime.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
   }
+
+  bool _canSubmitFeedbackFor(SleepSession session, DateTime feedbackMoment) {
+    if (session.status != SleepSessionStatus.awaitingFeedback ||
+        session.sleepModeActive ||
+        session.hasSubmittedFeedback) {
+      return false;
+    }
+    final DateTime? displayEndAt = session.displayEndAt;
+    if (displayEndAt == null) {
+      return false;
+    }
+    final List<SleepSegment> segments = session.segments.isNotEmpty
+        ? session.segments
+        : <SleepSegment>[
+            SleepSegment(
+              startedAt: session.startedAt,
+              endedAt: session.endedAt,
+            ),
+          ];
+    if (segments.any((SleepSegment segment) => segment.isOpen)) {
+      return false;
+    }
+    final DateTime effectiveEndAt = displayEndAt.isAfter(feedbackMoment)
+        ? displayEndAt
+        : feedbackMoment;
+    return session.liveTrackedDurationMinutes(now: effectiveEndAt) > 0;
+  }
+}
+
+class _MorningFeedbackTarget {
+  const _MorningFeedbackTarget({this.session, this.message = '当前没有待补反馈的睡眠记录。'});
+
+  final SleepSession? session;
+  final String message;
 }
 
 class _MetricSlider extends StatelessWidget {
