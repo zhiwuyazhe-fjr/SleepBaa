@@ -1,15 +1,17 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_auth_client.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
-import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 enum _AuthView { login, register, resetPassword }
@@ -24,6 +26,13 @@ class PhoneAuthPage extends StatefulWidget {
 }
 
 class _PhoneAuthPageState extends State<PhoneAuthPage> {
+  static const Color _authAccent = Color(0xFF90DDF2);
+  static const Color _authAccentSoft = Color(0xFFE8F7FB);
+  static const Color _authAccentDeep = Color(0xFF004F5D);
+  static const Color _stageStart = Color(0xFF2F67EC);
+  static const Color _stageMid = Color(0xFF5E93FF);
+  static const Color _stageEnd = Color(0xFFEAF2FF);
+
   final TextEditingController _loginPhoneController = TextEditingController();
   final TextEditingController _loginPasswordController =
       TextEditingController();
@@ -589,54 +598,109 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     );
   }
 
-  Widget _buildModeSwitch() {
+  ThemeData _buildAuthTheme(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final NightMoodPalette palette = context.nightMoodPalette.copyWith(
+      primary: _authAccent,
+      primarySoft: _authAccentSoft,
+      primaryHighlight: _authAccentSoft,
+      primaryDeep: _authAccentDeep,
+      calmBlue: AppColors.calmBlue,
+      welcomeAccentColor: _authAccent,
+      welcomeTextOnAccent: _authAccentDeep,
+    );
+
+    return theme.copyWith(
+      colorScheme: theme.colorScheme.copyWith(
+        primary: _authAccent,
+        onPrimary: _authAccentDeep,
+        secondary: _authAccentDeep,
+        surface: AppColors.surface,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        isDense: true,
+        filled: true,
+        fillColor: AppColors.surface,
+        hintStyle: theme.textTheme.bodyMedium?.copyWith(
+          color: AppColors.textHint,
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 18,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: AppColors.surfaceBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: AppColors.surfaceBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: AppColors.calmBlue, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: Colors.redAccent),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 2),
+        ),
+        prefixIconColor: AppColors.textSecondary,
+        suffixIconColor: AppColors.textHint,
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: _authAccentDeep,
+          textStyle: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+      extensions: <ThemeExtension<dynamic>>[palette],
+    );
+  }
+
+  void _showRegisterFromFooter() {
+    setState(() {
+      _currentView = _AuthView.register;
+      _registerPhoneController.text = _loginPhoneController.text;
+    });
+  }
+
+  void _showLoginFromFooter() {
+    setState(() {
+      _currentView = _AuthView.login;
+      _loginMethod = _LoginMethod.password;
+      _loginPhoneController.text = _registerPhoneController.text;
+    });
+  }
+
+  Widget _buildLoginMethodSwitch() {
     return Row(
       children: <Widget>[
         Expanded(
-          child: _ModePill(
-            key: const ValueKey<String>('auth-mode-login'),
-            label: '登录',
-            selected: _currentView == _AuthView.login,
+          child: _AuthSegmentButton(
+            key: const ValueKey<String>('auth-login-method-password'),
+            label: '密码登录',
+            selected: _loginMethod == _LoginMethod.password,
             onTap: () {
-              setState(() => _currentView = _AuthView.login);
+              setState(() => _loginMethod = _LoginMethod.password);
             },
           ),
         ),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
-          child: _ModePill(
-            key: const ValueKey<String>('auth-mode-register'),
-            label: '注册',
-            selected: _currentView == _AuthView.register,
+          child: _AuthSegmentButton(
+            key: const ValueKey<String>('auth-login-method-code'),
+            label: '验证码登录',
+            selected: _loginMethod == _LoginMethod.smsCode,
             onTap: () {
-              setState(() => _currentView = _AuthView.register);
+              setState(() => _loginMethod = _LoginMethod.smsCode);
             },
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLoginMethodSwitch() {
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
-      children: <Widget>[
-        ChoiceChip(
-          label: const Text('密码登录'),
-          key: const ValueKey<String>('auth-login-method-password'),
-          selected: _loginMethod == _LoginMethod.password,
-          onSelected: (_) {
-            setState(() => _loginMethod = _LoginMethod.password);
-          },
-        ),
-        ChoiceChip(
-          label: const Text('验证码登录'),
-          key: const ValueKey<String>('auth-login-method-code'),
-          selected: _loginMethod == _LoginMethod.smsCode,
-          onSelected: (_) {
-            setState(() => _loginMethod = _LoginMethod.smsCode);
-          },
         ),
       ],
     );
@@ -646,18 +710,94 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     required Key fieldKey,
     required TextEditingController controller,
     required ValueChanged<String>? onChanged,
+    required String label,
+    String hintText = '请输入手机号',
   }) {
-    return TextField(
-      key: fieldKey,
-      controller: controller,
-      keyboardType: TextInputType.phone,
-      textInputAction: TextInputAction.next,
-      autofillHints: const <String>[AutofillHints.telephoneNumber],
-      inputFormatters: <TextInputFormatter>[
-        FilteringTextInputFormatter.allow(RegExp(r'[\d+\-\s]')),
-      ],
-      onChanged: onChanged,
-      decoration: const InputDecoration(labelText: '手机号', hintText: '请输入手机号'),
+    return _AuthFieldGroup(
+      label: label,
+      child: TextField(
+        key: fieldKey,
+        controller: controller,
+        keyboardType: TextInputType.phone,
+        textInputAction: TextInputAction.next,
+        autofillHints: const <String>[AutofillHints.telephoneNumber],
+        inputFormatters: <TextInputFormatter>[
+          FilteringTextInputFormatter.allow(RegExp(r'[\d+\-\s]')),
+        ],
+        onChanged: onChanged,
+        decoration: InputDecoration(
+          hintText: hintText,
+          prefixIcon: const Icon(Icons.smartphone_rounded),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPasswordFieldGroup({
+    required Key fieldKey,
+    required TextEditingController controller,
+    required String label,
+    required String hintText,
+    required TextInputAction textInputAction,
+  }) {
+    return _AuthFieldGroup(
+      label: label,
+      child: _AuthPasswordField(
+        fieldKey: fieldKey,
+        controller: controller,
+        labelText: label,
+        hintText: hintText,
+        textInputAction: textInputAction,
+      ),
+    );
+  }
+
+  Widget _buildCodeFieldWithAction({
+    required String label,
+    required Key fieldKey,
+    required TextEditingController controller,
+    required Key actionKey,
+    required String actionLabel,
+    required bool isLoading,
+    required VoidCallback? onPressed,
+  }) {
+    final Widget sendButton = PrimaryButton(
+      key: actionKey,
+      label: isLoading ? '发送中...' : actionLabel,
+      variant: PrimaryButtonVariant.soft,
+      foregroundColor: _authAccentDeep,
+      onPressed: onPressed,
+    );
+
+    return _AuthFieldGroup(
+      label: label,
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          if (constraints.maxWidth < MediaQuery.sizeOf(context).width * 0.46) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                _buildCodeField(fieldKey: fieldKey, controller: controller),
+                const SizedBox(height: AppSpacing.sm),
+                sendButton,
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: _buildCodeField(
+                  fieldKey: fieldKey,
+                  controller: controller,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              SizedBox(width: constraints.maxWidth * 0.3, child: sendButton),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -674,43 +814,52 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         FilteringTextInputFormatter.digitsOnly,
         LengthLimitingTextInputFormatter(6),
       ],
-      decoration: const InputDecoration(labelText: '验证码', hintText: '请输入短信验证码'),
+      decoration: const InputDecoration(
+        hintText: '请输入短信验证码',
+        prefixIcon: Icon(Icons.sms_rounded),
+      ),
     );
   }
 
-  Widget _buildLoginPanel(AppServices services) {
+  Widget _buildLoginPanel(AppServices services, {required bool compact}) {
+    final double fieldGap = compact ? AppSpacing.xs : AppSpacing.sm;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          '支持密码登录，也支持验证码快速登录。',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppColors.textSecondary,
-            height: 1.6,
+        if (compact) ...<Widget>[
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              key: const ValueKey<String>('auth-mode-register'),
+              onPressed: _showRegisterFromFooter,
+              child: const Text('免费注册'),
+            ),
           ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.xs),
+        ],
         _buildLoginMethodSwitch(),
-        const SizedBox(height: AppSpacing.lg),
+        SizedBox(height: compact ? AppSpacing.sm : AppSpacing.md),
         _buildPhoneField(
           fieldKey: const ValueKey<String>('auth-login-phone'),
           controller: _loginPhoneController,
+          label: '手机号',
           onChanged: (_) {
             if (_loginChallenge != null) {
               setState(() => _loginChallenge = null);
             }
           },
         ),
-        const SizedBox(height: AppSpacing.md),
+        SizedBox(height: fieldGap),
         if (_loginMethod == _LoginMethod.password) ...<Widget>[
-          _AuthPasswordField(
+          _buildPasswordFieldGroup(
             fieldKey: const ValueKey<String>('auth-login-password'),
             controller: _loginPasswordController,
-            labelText: '密码',
+            label: '登录密码',
             hintText: '请输入登录密码',
             textInputAction: TextInputAction.done,
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.xs),
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
@@ -722,7 +871,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
               child: const Text('忘记密码'),
             ),
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.xs),
           ListenableBuilder(
             listenable: _loginPasswordFormListenable,
             builder: (BuildContext context, Widget? child) {
@@ -730,6 +879,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
               return PrimaryButton(
                 key: const ValueKey<String>('auth-login-password-submit'),
                 label: _isSubmitting ? '登录中...' : '登录',
+                foregroundColor: _authAccentDeep,
                 onPressed: canSubmit
                     ? () => _submitLoginWithPassword(services)
                     : null,
@@ -737,267 +887,619 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
             },
           ),
         ] else ...<Widget>[
-          _buildCodeField(
+          _buildCodeFieldWithAction(
+            label: '短信验证码',
             fieldKey: const ValueKey<String>('auth-login-code'),
             controller: _loginCodeController,
+            actionKey: const ValueKey<String>('auth-login-code-send'),
+            actionLabel: '发送验证码',
+            isLoading: _isSendingLoginCode,
+            onPressed: _isSendingLoginCode || _isSubmitting
+                ? null
+                : () => _sendLoginCode(services),
           ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: PrimaryButton(
-                  key: const ValueKey<String>('auth-login-code-send'),
-                  label: _isSendingLoginCode ? '发送中...' : '发送验证码',
-                  expand: false,
-                  variant: PrimaryButtonVariant.soft,
-                  onPressed: _isSendingLoginCode || _isSubmitting
-                      ? null
-                      : () => _sendLoginCode(services),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: ListenableBuilder(
-                  listenable: _loginCodeFormListenable,
-                  builder: (BuildContext context, Widget? child) {
-                    final bool canSubmit =
-                        !_isSubmitting &&
-                        _loginPhoneController.text.trim().isNotEmpty &&
-                        _loginCodeController.text.trim().isNotEmpty;
-                    return PrimaryButton(
-                      key: const ValueKey<String>('auth-login-code-submit'),
-                      label: _isSubmitting ? '登录中...' : '验证码登录',
-                      expand: false,
-                      onPressed: canSubmit
-                          ? () => _submitLoginWithCode(services)
-                          : null,
-                    );
-                  },
-                ),
-              ),
-            ],
+          SizedBox(height: fieldGap),
+          ListenableBuilder(
+            listenable: _loginCodeFormListenable,
+            builder: (BuildContext context, Widget? child) {
+              final bool canSubmit =
+                  !_isSubmitting &&
+                  _loginPhoneController.text.trim().isNotEmpty &&
+                  _loginCodeController.text.trim().isNotEmpty;
+              return PrimaryButton(
+                key: const ValueKey<String>('auth-login-code-submit'),
+                label: _isSubmitting ? '登录中...' : '验证码登录',
+                foregroundColor: _authAccentDeep,
+                onPressed: canSubmit
+                    ? () => _submitLoginWithCode(services)
+                    : null,
+              );
+            },
+          ),
+        ],
+        if (!compact) ...<Widget>[
+          const SizedBox(height: AppSpacing.lg),
+          _AuthFooterSwitchCard(
+            key: const ValueKey<String>('auth-mode-register'),
+            prompt: '还没有账号？',
+            actionLabel: '免费注册',
+            compact: false,
+            onTap: _showRegisterFromFooter,
           ),
         ],
       ],
     );
   }
 
-  Widget _buildRegisterPanel(AppServices services) {
+  Widget _buildRegisterPanel(AppServices services, {required bool compact}) {
+    final double fieldGap = compact ? AppSpacing.xs : AppSpacing.sm;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          '首次注册时会同时设置登录密码，之后可以直接用密码登录。',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppColors.textSecondary,
-            height: 1.6,
+        if (compact) ...<Widget>[
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              key: const ValueKey<String>('auth-mode-login'),
+              onPressed: _showLoginFromFooter,
+              child: const Text('返回登录'),
+            ),
           ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.xs),
+        ],
         _buildPhoneField(
           fieldKey: const ValueKey<String>('auth-register-phone'),
           controller: _registerPhoneController,
+          label: '手机号',
           onChanged: (_) {
             if (_registerChallenge != null) {
               setState(() => _registerChallenge = null);
             }
           },
         ),
-        const SizedBox(height: AppSpacing.md),
-        _buildCodeField(
+        SizedBox(height: fieldGap),
+        _buildCodeFieldWithAction(
+          label: '短信验证码',
           fieldKey: const ValueKey<String>('auth-register-code'),
           controller: _registerCodeController,
+          actionKey: const ValueKey<String>('auth-register-send'),
+          actionLabel: '发送验证码',
+          isLoading: _isSendingRegisterCode,
+          onPressed: _isSendingRegisterCode || _isSubmitting
+              ? null
+              : () => _sendRegisterCode(services),
         ),
-        const SizedBox(height: AppSpacing.md),
-        _AuthPasswordField(
+        SizedBox(height: fieldGap),
+        _buildPasswordFieldGroup(
           fieldKey: const ValueKey<String>('auth-register-password'),
           controller: _registerPasswordController,
-          labelText: '密码',
+          label: '设置密码',
           hintText: '请设置登录密码',
           textInputAction: TextInputAction.next,
         ),
-        const SizedBox(height: AppSpacing.md),
-        _AuthPasswordField(
+        SizedBox(height: fieldGap),
+        _buildPasswordFieldGroup(
           fieldKey: const ValueKey<String>('auth-register-password-confirm'),
           controller: _registerConfirmPasswordController,
-          labelText: '确认密码',
+          label: '确认密码',
           hintText: '请再次输入密码',
           textInputAction: TextInputAction.done,
         ),
-        const SizedBox(height: AppSpacing.md),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: PrimaryButton(
-                key: const ValueKey<String>('auth-register-send'),
-                label: _isSendingRegisterCode ? '发送中...' : '发送验证码',
-                expand: false,
-                variant: PrimaryButtonVariant.soft,
-                onPressed: _isSendingRegisterCode || _isSubmitting
-                    ? null
-                    : () => _sendRegisterCode(services),
-              ),
+        if (!compact) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          const _AuthInfoBox(
+            icon: Icons.shield_outlined,
+            message: '注册仅支持手机号。完成短信验证后即可创建账号，并同时设置登录密码。',
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ] else ...<Widget>[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            '完成短信验证后即可创建账号，并同时设置登录密码。',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+              height: 1.5,
             ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: ListenableBuilder(
-                listenable: _registerFormListenable,
-                builder: (BuildContext context, Widget? child) {
-                  final bool canSubmit = !_isSubmitting;
-                  return PrimaryButton(
-                    key: const ValueKey<String>('auth-register-submit'),
-                    label: _isSubmitting ? '注册中...' : '注册并登录',
-                    expand: false,
-                    onPressed: canSubmit
-                        ? () => _submitRegister(services)
-                        : null,
-                  );
-                },
-              ),
-            ),
-          ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+        ],
+        ListenableBuilder(
+          listenable: _registerFormListenable,
+          builder: (BuildContext context, Widget? child) {
+            final bool canSubmit = !_isSubmitting;
+            return PrimaryButton(
+              key: const ValueKey<String>('auth-register-submit'),
+              label: _isSubmitting ? '注册中...' : '注册并登录',
+              foregroundColor: _authAccentDeep,
+              onPressed: canSubmit ? () => _submitRegister(services) : null,
+            );
+          },
         ),
+        if (!compact) ...<Widget>[
+          const SizedBox(height: AppSpacing.lg),
+          _AuthFooterSwitchCard(
+            key: const ValueKey<String>('auth-mode-login'),
+            prompt: '已有账号？',
+            actionLabel: '返回登录',
+            compact: false,
+            onTap: _showLoginFromFooter,
+          ),
+        ],
       ],
     );
   }
 
-  Widget _buildResetPasswordPanel(AppServices services) {
+  Widget _buildResetPasswordPanel(
+    AppServices services, {
+    required bool compact,
+  }) {
+    final double fieldGap = compact ? AppSpacing.xs : AppSpacing.sm;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Row(
-          children: <Widget>[
-            TextButton.icon(
-              onPressed: () => setState(() => _currentView = _AuthView.login),
-              icon: const Icon(Icons.arrow_back_rounded, size: 18),
-              label: const Text('返回登录'),
-            ),
-          ],
+        TextButton.icon(
+          onPressed: () => setState(() => _currentView = _AuthView.login),
+          icon: const Icon(Icons.arrow_back_rounded, size: 18),
+          label: const Text('返回登录'),
         ),
-        Text(
-          '通过验证码重置密码，成功后会直接登录。',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppColors.textSecondary,
-            height: 1.6,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
+        SizedBox(height: compact ? AppSpacing.xs : AppSpacing.sm),
         _buildPhoneField(
           fieldKey: const ValueKey<String>('auth-reset-phone'),
           controller: _resetPhoneController,
+          label: '手机号',
           onChanged: (_) {
             if (_resetChallenge != null) {
               setState(() => _resetChallenge = null);
             }
           },
         ),
-        const SizedBox(height: AppSpacing.md),
-        _buildCodeField(
+        SizedBox(height: fieldGap),
+        _buildCodeFieldWithAction(
+          label: '短信验证码',
           fieldKey: const ValueKey<String>('auth-reset-code'),
           controller: _resetCodeController,
+          actionKey: const ValueKey<String>('auth-reset-send'),
+          actionLabel: '发送验证码',
+          isLoading: _isSendingResetCode,
+          onPressed: _isSendingResetCode || _isSubmitting
+              ? null
+              : () => _sendResetCode(services),
         ),
-        const SizedBox(height: AppSpacing.md),
-        _AuthPasswordField(
+        SizedBox(height: fieldGap),
+        _buildPasswordFieldGroup(
           fieldKey: const ValueKey<String>('auth-reset-password'),
           controller: _resetPasswordController,
-          labelText: '新密码',
+          label: '新密码',
           hintText: '请输入新的登录密码',
           textInputAction: TextInputAction.next,
         ),
-        const SizedBox(height: AppSpacing.md),
-        _AuthPasswordField(
+        SizedBox(height: fieldGap),
+        _buildPasswordFieldGroup(
           fieldKey: const ValueKey<String>('auth-reset-password-confirm'),
           controller: _resetConfirmPasswordController,
-          labelText: '确认新密码',
+          label: '确认新密码',
           hintText: '请再次输入新密码',
           textInputAction: TextInputAction.done,
         ),
-        const SizedBox(height: AppSpacing.md),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: PrimaryButton(
-                key: const ValueKey<String>('auth-reset-send'),
-                label: _isSendingResetCode ? '发送中...' : '发送验证码',
-                expand: false,
-                variant: PrimaryButtonVariant.soft,
-                onPressed: _isSendingResetCode || _isSubmitting
-                    ? null
-                    : () => _sendResetCode(services),
-              ),
+        if (!compact) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          const _AuthInfoBox(
+            icon: Icons.lock_reset_rounded,
+            message: '仅支持短信找回。重置成功后会自动登录，并继续进入应用。',
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ] else ...<Widget>[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            '仅支持短信找回，重置成功后会自动登录。',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+              height: 1.5,
             ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: ListenableBuilder(
-                listenable: _resetFormListenable,
-                builder: (BuildContext context, Widget? child) {
-                  final bool canSubmit = !_isSubmitting;
-                  return PrimaryButton(
-                    key: const ValueKey<String>('auth-reset-submit'),
-                    label: _isSubmitting ? '重置中...' : '重置密码',
-                    expand: false,
-                    onPressed: canSubmit
-                        ? () => _submitResetPassword(services)
-                        : null,
-                  );
-                },
-              ),
-            ),
-          ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+        ],
+        ListenableBuilder(
+          listenable: _resetFormListenable,
+          builder: (BuildContext context, Widget? child) {
+            final bool canSubmit = !_isSubmitting;
+            return PrimaryButton(
+              key: const ValueKey<String>('auth-reset-submit'),
+              label: _isSubmitting ? '重置中...' : '重置密码',
+              foregroundColor: _authAccentDeep,
+              onPressed: canSubmit
+                  ? () => _submitResetPassword(services)
+                  : null,
+            );
+          },
         ),
       ],
+    );
+  }
+
+  Widget _buildStageIntro(bool isWide) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final List<_StageFeatureData> features = <_StageFeatureData>[
+      const _StageFeatureData(
+        icon: Icons.lock_open_rounded,
+        title: '双登录方式',
+        description: '支持手机号 + 密码，或手机号 + 短信验证码两种登录方式。',
+      ),
+      const _StageFeatureData(
+        icon: Icons.mark_chat_unread_rounded,
+        title: '短信注册',
+        description: '新用户通过短信验证注册，同时完成登录密码设置。',
+      ),
+      const _StageFeatureData(
+        icon: Icons.password_rounded,
+        title: '短信找回',
+        description: '忘记密码时，通过手机号和验证码安全重置即可。',
+      ),
+    ];
+
+    return Container(
+      padding: EdgeInsets.all(isWide ? AppSpacing.xxl : AppSpacing.xl),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[Color(0x24FFFFFF), Color(0x10FFFFFF)],
+        ),
+        borderRadius: AppRadius.cardLarge,
+        border: Border.all(color: const Color(0x26FFFFFF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const _AuthHeaderIcon(darkSurface: true),
+          const SizedBox(height: AppSpacing.xl),
+          Text(
+            '舍眠',
+            style: textTheme.displaySmall?.copyWith(
+              color: AppColors.onDark,
+              fontWeight: FontWeight.w800,
+              height: 1.08,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            '把登录、注册和密码找回统一成一套清晰稳定的前端入口。',
+            style: textTheme.bodyLarge?.copyWith(
+              color: const Color(0xEAF9F9FB),
+              height: 1.6,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: const <Widget>[
+              _StageChip(label: '手机号登录'),
+              _StageChip(label: '短信注册'),
+              _StageChip(label: '重置密码'),
+            ],
+          ),
+          if (isWide) ...<Widget>[
+            const SizedBox(height: AppSpacing.xxl),
+            for (final _StageFeatureData feature in features) ...<Widget>[
+              _StageFeatureTile(feature: feature),
+              const SizedBox(height: AppSpacing.md),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _panelTitle() {
+    switch (_currentView) {
+      case _AuthView.login:
+        return '登录舍眠';
+      case _AuthView.register:
+        return '免费注册';
+      case _AuthView.resetPassword:
+        return '重置密码';
+    }
+  }
+
+  String _panelSubtitle({required bool compact}) {
+    switch (_currentView) {
+      case _AuthView.login:
+        return compact ? '使用手机号继续登录。' : '使用手机号继续登录，支持密码登录与短信验证码登录。';
+      case _AuthView.register:
+        return compact ? '手机号注册并同步设置密码。' : '完成短信验证后即可创建账号，并同时设置登录密码。';
+      case _AuthView.resetPassword:
+        return compact ? '通过短信验证码设置新密码。' : '通过短信验证码设置新密码，成功后会自动登录。';
+    }
+  }
+
+  String? _panelBadge() {
+    switch (_currentView) {
+      case _AuthView.login:
+        return null;
+      case _AuthView.register:
+        return '短信验证注册';
+      case _AuthView.resetPassword:
+        return '设置新密码';
+    }
+  }
+
+  Widget _buildPanelHeader({required bool compact}) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final String? badge = _panelBadge();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (_currentView != _AuthView.resetPassword && !compact) ...<Widget>[
+          const _AuthHeaderIcon(),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+        if (badge != null) ...<Widget>[
+          _AuthBadge(label: badge),
+          SizedBox(height: compact ? AppSpacing.sm : AppSpacing.md),
+        ],
+        Text(
+          _panelTitle(),
+          style: (compact ? textTheme.headlineSmall : textTheme.headlineMedium)
+              ?.copyWith(
+                color: AppColors.textStrong,
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          _panelSubtitle(compact: compact),
+          style: textTheme.bodyMedium?.copyWith(
+            color: AppColors.textMuted,
+            height: 1.6,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAuthErrorBanner(String message) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF2F2),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFFC6C6)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(
+              Icons.error_outline_rounded,
+              color: Colors.redAccent,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.redAccent,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAuthCard(AppServices services, {required bool compact}) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double cardPadding =
+            constraints.maxWidth * (compact ? 0.055 : 0.072);
+        final double cardRadius = constraints.maxWidth * 0.075;
+
+        return Container(
+          padding: EdgeInsets.all(cardPadding),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(cardRadius),
+            border: Border.all(color: const Color(0xFFF0F3F8)),
+            boxShadow: const <BoxShadow>[
+              BoxShadow(
+                color: Color(0x143B67A8),
+                blurRadius: 42,
+                offset: Offset(0, 22),
+              ),
+              BoxShadow(
+                color: Color(0x0D3B67A8),
+                blurRadius: 18,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              _buildPanelHeader(compact: compact),
+              SizedBox(height: compact ? AppSpacing.md : AppSpacing.xl),
+              if (_currentView == _AuthView.login)
+                _buildLoginPanel(services, compact: compact),
+              if (_currentView == _AuthView.register)
+                _buildRegisterPanel(services, compact: compact),
+              if (_currentView == _AuthView.resetPassword)
+                _buildResetPasswordPanel(services, compact: compact),
+              if (services.authRepository.lastAuthError
+                  case final String error) ...<Widget>[
+                const SizedBox(height: AppSpacing.lg),
+                _buildAuthErrorBanner(error),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    final ThemeData authTheme = _buildAuthTheme(context);
+    final Size screenSize = MediaQuery.sizeOf(context);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 460),
-              child: AppCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      _currentView == _AuthView.register
-                          ? '创建账号'
-                          : _currentView == _AuthView.resetPassword
-                          ? '重置密码'
-                          : '欢迎回来',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    if (_currentView != _AuthView.resetPassword) ...<Widget>[
-                      _buildModeSwitch(),
-                      const SizedBox(height: AppSpacing.xl),
-                    ],
-                    if (_currentView == _AuthView.login)
-                      _buildLoginPanel(services),
-                    if (_currentView == _AuthView.register)
-                      _buildRegisterPanel(services),
-                    if (_currentView == _AuthView.resetPassword)
-                      _buildResetPasswordPanel(services),
-                    if (services.authRepository.lastAuthError
-                        case final String error)
-                      Padding(
-                        padding: const EdgeInsets.only(top: AppSpacing.lg),
-                        child: Text(
-                          error,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: Colors.redAccent, height: 1.5),
-                        ),
-                      ),
-                  ],
+    return Theme(
+      data: authTheme,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[_stageStart, _stageMid, _stageEnd],
+              stops: <double>[0, 0.55, 1],
+            ),
+          ),
+          child: Stack(
+            children: <Widget>[
+              Positioned(
+                top: -(screenSize.height * 0.12),
+                right: -(screenSize.width * 0.08),
+                child: _BlurOrb(
+                  size: screenSize.width * 0.28,
+                  color: Colors.white.withValues(alpha: 0.18),
                 ),
               ),
-            ),
+              Positioned(
+                bottom: -(screenSize.height * 0.14),
+                left: -(screenSize.width * 0.05),
+                child: _BlurOrb(
+                  size: screenSize.width * 0.24,
+                  color: const Color(0xFFBFD3FF).withValues(alpha: 0.32),
+                ),
+              ),
+              SafeArea(
+                child: LayoutBuilder(
+                  builder: (BuildContext context, BoxConstraints constraints) {
+                    final double aspectRatio =
+                        constraints.maxWidth / constraints.maxHeight;
+                    final bool isWide = aspectRatio > 1.45;
+                    final bool isCompact = !isWide && aspectRatio > 1.15;
+                    final bool useWideCompact =
+                        isWide &&
+                        (constraints.maxHeight / constraints.maxWidth) < 0.62;
+                    final bool useCompactCard = isCompact || useWideCompact;
+                    final double outerHorizontalPadding =
+                        constraints.maxWidth * (isWide ? 0.03 : 0.05);
+                    final double outerVerticalPadding =
+                        constraints.maxHeight * (isWide ? 0.028 : 0.02);
+                    final double shellPadding =
+                        constraints.maxWidth * (isWide ? 0.018 : 0.03);
+                    final double shellRadius = constraints.maxWidth * 0.03;
+                    final double shellWidth =
+                        (constraints.maxWidth - (outerHorizontalPadding * 2)) *
+                        (isWide ? 0.92 : 1);
+                    final Widget shell = Container(
+                      padding: EdgeInsets.all(shellPadding),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(shellRadius),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.14),
+                        ),
+                      ),
+                      child: isWide
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: <Widget>[
+                                Expanded(
+                                  flex: 12,
+                                  child: Padding(
+                                    padding: EdgeInsets.all(
+                                      constraints.maxWidth * 0.015,
+                                    ),
+                                    child: _buildStageIntro(!useWideCompact),
+                                  ),
+                                ),
+                                SizedBox(width: constraints.maxWidth * 0.025),
+                                Expanded(
+                                  flex: 10,
+                                  child: _buildAuthCard(
+                                    services,
+                                    compact: useCompactCard,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: <Widget>[
+                                _buildStageIntro(false),
+                                SizedBox(height: constraints.maxHeight * 0.024),
+                                _buildAuthCard(services, compact: false),
+                              ],
+                            ),
+                    );
+
+                    if (isCompact) {
+                      return SingleChildScrollView(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: outerHorizontalPadding,
+                          vertical: outerVerticalPadding,
+                        ),
+                        child: Center(
+                          child: SizedBox(
+                            width:
+                                (constraints.maxWidth -
+                                    (outerHorizontalPadding * 2)) *
+                                0.92,
+                            child: _buildAuthCard(
+                              services,
+                              compact: useCompactCard,
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+
+                    if (isWide) {
+                      return Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: outerHorizontalPadding,
+                          vertical: outerVerticalPadding,
+                        ),
+                        child: Center(
+                          child: SizedBox(
+                            width: shellWidth,
+                            height:
+                                constraints.maxHeight -
+                                (outerVerticalPadding * 2),
+                            child: shell,
+                          ),
+                        ),
+                      );
+                    }
+
+                    return SingleChildScrollView(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: outerHorizontalPadding,
+                        vertical: outerVerticalPadding,
+                      ),
+                      child: Center(
+                        child: SizedBox(width: shellWidth, child: shell),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1005,8 +1507,8 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
   }
 }
 
-class _ModePill extends StatelessWidget {
-  const _ModePill({
+class _AuthSegmentButton extends StatelessWidget {
+  const _AuthSegmentButton({
     super.key,
     required this.label,
     required this.selected,
@@ -1019,27 +1521,338 @@ class _ModePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.md,
-        ),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.textPrimary : AppColors.surfaceMuted,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: selected ? AppColors.textPrimary : AppColors.surfaceBorder,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          height: 48,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected
+                ? _PhoneAuthPageState._authAccent
+                : _PhoneAuthPageState._authAccentSoft,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected
+                  ? _PhoneAuthPageState._authAccent
+                  : const Color(0xFFD6E8F3),
+            ),
+          ),
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: _PhoneAuthPageState._authAccentDeep,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
-        alignment: Alignment.center,
-        child: Text(
+      ),
+    );
+  }
+}
+
+class _AuthHeaderIcon extends StatelessWidget {
+  const _AuthHeaderIcon({this.darkSurface = false});
+
+  final bool darkSurface;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: darkSurface
+            ? Colors.white.withValues(alpha: 0.16)
+            : _PhoneAuthPageState._authAccentDeep,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+      ),
+      alignment: Alignment.center,
+      child: Icon(Icons.bedtime_rounded, color: AppColors.onDark, size: 28),
+    );
+  }
+}
+
+class _AuthBadge extends StatelessWidget {
+  const _AuthBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: _PhoneAuthPageState._authAccentSoft,
+        borderRadius: AppRadius.pill,
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: _PhoneAuthPageState._authAccentDeep,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthFieldGroup extends StatelessWidget {
+  const _AuthFieldGroup({required this.label, required this.child});
+
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
           label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: selected ? AppColors.onDark : AppColors.textPrimary,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        child,
+      ],
+    );
+  }
+}
+
+class _AuthInfoBox extends StatelessWidget {
+  const _AuthInfoBox({required this.icon, required this.message});
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBFF),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE0EBF5)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: _PhoneAuthPageState._authAccentSoft,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              icon,
+              color: _PhoneAuthPageState._authAccentDeep,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+                height: 1.6,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuthFooterSwitchCard extends StatelessWidget {
+  const _AuthFooterSwitchCard({
+    super.key,
+    required this.prompt,
+    required this.actionLabel,
+    this.compact = false,
+    required this.onTap,
+  });
+
+  final String prompt;
+  final String actionLabel;
+  final bool compact;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Ink(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? AppSpacing.md : AppSpacing.lg,
+            vertical: compact ? AppSpacing.sm : AppSpacing.md,
+          ),
+          decoration: BoxDecoration(
+            color: compact ? Colors.transparent : const Color(0xFFF8FBFF),
+            borderRadius: BorderRadius.circular(20),
+            border: compact ? null : Border.all(color: const Color(0xFFE0EBF5)),
+          ),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: RichText(
+                  text: TextSpan(
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                    children: <InlineSpan>[
+                      TextSpan(text: prompt),
+                      TextSpan(
+                        text: actionLabel,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: _PhoneAuthPageState._authAccentDeep,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const Icon(
+                Icons.arrow_forward_rounded,
+                color: _PhoneAuthPageState._authAccentDeep,
+                size: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StageChip extends StatelessWidget {
+  const _StageChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: AppRadius.pill,
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: AppColors.onDark,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _StageFeatureData {
+  const _StageFeatureData({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+}
+
+class _StageFeatureTile extends StatelessWidget {
+  const _StageFeatureTile({required this.feature});
+
+  final _StageFeatureData feature;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            alignment: Alignment.center,
+            child: Icon(feature.icon, color: AppColors.onDark),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  feature.title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.onDark,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  feature.description,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.84),
+                    height: 1.6,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BlurOrb extends StatelessWidget {
+  const _BlurOrb({required this.size, required this.color});
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: <Color>[color, color.withValues(alpha: 0)],
           ),
         ),
       ),
@@ -1175,8 +1988,8 @@ class _AuthPasswordFieldState extends State<_AuthPasswordField> {
       smartQuotesType: SmartQuotesType.disabled,
       autofillHints: const <String>[],
       decoration: InputDecoration(
-        labelText: widget.labelText,
         hintText: widget.hintText,
+        prefixIcon: const Icon(Icons.lock_outline_rounded),
         suffixIcon: Semantics(
           button: true,
           label: _obscureText ? '显示密码' : '隐藏密码',

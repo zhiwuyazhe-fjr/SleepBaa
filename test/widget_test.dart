@@ -593,6 +593,83 @@ void main() {
     expect(find.text('该手机号已注册，请直接登录。'), findsOneWidget);
   });
 
+  testWidgets(
+    'phone auth layout keeps key actions inside viewport at desktop resolutions',
+    (WidgetTester tester) async {
+      const List<Size> sizes = <Size>[
+        Size(1920, 1080),
+        Size(2160, 1440),
+        Size(2560, 1440),
+      ];
+
+      void expectInViewport(Finder finder, Size size, String label) {
+        final Rect rect = tester.getRect(finder);
+        expect(
+          rect.left >= 0,
+          isTrue,
+          reason: '$label left overflow at $size: $rect',
+        );
+        expect(
+          rect.top >= 0,
+          isTrue,
+          reason: '$label top overflow at $size: $rect',
+        );
+        expect(
+          rect.right <= size.width,
+          isTrue,
+          reason: '$label right overflow at $size: $rect',
+        );
+        expect(
+          rect.bottom <= size.height,
+          isTrue,
+          reason: '$label bottom overflow at $size: $rect',
+        );
+      }
+
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      for (final Size size in sizes) {
+        await tester.binding.setSurfaceSize(size);
+        await _pumpApp(
+          tester,
+          initialLocation: AppRoutes.authPhone,
+          clock: _dayClock,
+        );
+        await tester.pumpAndSettle();
+
+        final Finder registerSwitch = find.byKey(
+          const ValueKey<String>('auth-mode-register'),
+        );
+        final Finder forgotPassword = find.byKey(
+          const ValueKey<String>('auth-forgot-password'),
+        );
+
+        expect(registerSwitch, findsOneWidget);
+        expect(forgotPassword, findsOneWidget);
+        expectInViewport(registerSwitch, size, 'registerSwitch');
+        expectInViewport(forgotPassword, size, 'forgotPassword');
+
+        await tester.tap(registerSwitch);
+        await tester.pumpAndSettle();
+
+        final Finder loginSwitch = find.byKey(
+          const ValueKey<String>('auth-mode-login'),
+        );
+        final Finder registerSubmit = find.byKey(
+          const ValueKey<String>('auth-register-submit'),
+        );
+
+        expect(loginSwitch, findsOneWidget);
+        expect(registerSubmit, findsOneWidget);
+        expectInViewport(loginSwitch, size, 'loginSwitch');
+        expectInViewport(registerSubmit, size, 'registerSubmit');
+
+        await tester.tap(loginSwitch);
+        await tester.pumpAndSettle();
+      }
+    },
+  );
+
   testWidgets('dorm page uses a full-width hero and draggable drawer', (
     WidgetTester tester,
   ) async {
@@ -925,66 +1002,73 @@ void main() {
     expect(find.text('勋章详情'), findsNothing);
   });
 
-  testWidgets('badge equip and restore sync between gallery and profile preview', (
-    WidgetTester tester,
-  ) async {
-    await _pumpApp(
-      tester,
-      initialLocation: AppRoutes.profile,
-      clock: _dayClock,
-    );
+  testWidgets(
+    'badge equip and restore sync between gallery and profile preview',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profile,
+        clock: _dayClock,
+      );
 
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('profile-badge-preview-slot-0')),
-        matching: find.text('安睡大师'),
-      ),
-      findsOneWidget,
-    );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('profile-badge-preview-slot-0'),
+          ),
+          matching: find.text('安睡大师'),
+        ),
+        findsOneWidget,
+      );
 
-    await tester.ensureVisible(find.text('我的勋章'));
-    await tester.tap(find.text('我的勋章'));
-    await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('我的勋章'));
+      await tester.tap(find.text('我的勋章'));
+      await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('佩戴此勋章'));
-    await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('佩戴此勋章'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('当前佩戴：早睡先锋'), findsOneWidget);
+      expect(find.text('当前佩戴：早睡先锋'), findsOneWidget);
 
-    await tester.pageBack();
-    await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
 
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('profile-badge-preview-slot-0')),
-        matching: find.text('早睡先锋'),
-      ),
-      findsOneWidget,
-    );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('profile-badge-preview-slot-0'),
+          ),
+          matching: find.text('早睡先锋'),
+        ),
+        findsOneWidget,
+      );
 
-    await tester.ensureVisible(find.text('我的勋章'));
-    await tester.tap(find.text('我的勋章'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('恢复最新获得'));
-    await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('我的勋章'));
+      await tester.tap(find.text('我的勋章'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('恢复最新获得'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('当前展示：安睡大师'), findsOneWidget);
+      expect(find.text('当前展示：安睡大师'), findsOneWidget);
 
-    await tester.pageBack();
-    await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
 
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('profile-badge-preview-slot-0')),
-        matching: find.text('安睡大师'),
-      ),
-      findsOneWidget,
-    );
-  });
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('profile-badge-preview-slot-0'),
+          ),
+          matching: find.text('安睡大师'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('profile faq entry opens styled faq page', (
     WidgetTester tester,
