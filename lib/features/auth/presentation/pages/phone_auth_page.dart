@@ -1,20 +1,16 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
-import 'package:sleep_dorm_app/app/theme/app_radius.dart';
-import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
-import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_auth_client.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
-import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
-enum _AuthView { login, register, resetPassword }
+enum _AuthView { login, register, forgotPassword, resetPassword, resetSuccess }
 
 enum _LoginMethod { password, smsCode }
 
@@ -26,12 +22,29 @@ class PhoneAuthPage extends StatefulWidget {
 }
 
 class _PhoneAuthPageState extends State<PhoneAuthPage> {
-  static const Color _authAccent = Color(0xFF90DDF2);
-  static const Color _authAccentSoft = Color(0xFFE8F7FB);
-  static const Color _authAccentDeep = Color(0xFF004F5D);
-  static const Color _stageStart = Color(0xFF2F67EC);
-  static const Color _stageMid = Color(0xFF5E93FF);
-  static const Color _stageEnd = Color(0xFFEAF2FF);
+  static const double _designWidth = 390;
+  static const double _designHeight = 844;
+  static const double _shellAspectRatio = _designWidth / _designHeight;
+
+  static const Color _pageGradientStart = Color(0xFFF7FAFF);
+  static const Color _pageGradientEnd = Color(0xFFEEF4FF);
+  static const Color _cardColor = Color(0xFFFFFFFF);
+  static const Color _cardBorder = Color(0xFFDFE3E7);
+  static const Color _accentBlue = Color(0xFF90DDF2);
+  static const Color _accentBlueSoft = Color(0xFFE8F7FB);
+  static const Color _accentBlueDeep = Color(0xFF004F5D);
+  static const Color _navyBlue = Color(0xFF204F96);
+  static const Color _successBlue = Color(0xFF4EA8C2);
+  static const Color _surfaceMuted = Color(0xFFF2F4F6);
+  static const Color _surfaceSoft = Color(0xFFECEEF1);
+  static const Color _textPrimary = Color(0xFF2F3336);
+  static const Color _textSecondary = Color(0xFF5B6063);
+  static const Color _textMuted = Color(0xFF57606B);
+  static const Color _textHint = Color(0xFFA0A0A0);
+  static const Color _actionText = Color(0xFF00697A);
+  static const Color _shellShadow = Color(0x14123B7A);
+  static const Color _buttonShadow = Color(0x4A90DDF2);
+  static const Color _focusShadow = Color(0x142457CF);
 
   final TextEditingController _loginPhoneController = TextEditingController();
   final TextEditingController _loginPasswordController =
@@ -56,7 +69,8 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
   late final Listenable _loginPasswordFormListenable;
   late final Listenable _loginCodeFormListenable;
   late final Listenable _registerFormListenable;
-  late final Listenable _resetFormListenable;
+  late final Listenable _forgotPasswordFormListenable;
+  late final Listenable _resetPasswordFormListenable;
 
   _AuthView _currentView = _AuthView.login;
   _LoginMethod _loginMethod = _LoginMethod.password;
@@ -85,9 +99,11 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
       _registerPasswordController,
       _registerConfirmPasswordController,
     ]);
-    _resetFormListenable = Listenable.merge(<Listenable>[
+    _forgotPasswordFormListenable = Listenable.merge(<Listenable>[
       _resetPhoneController,
       _resetCodeController,
+    ]);
+    _resetPasswordFormListenable = Listenable.merge(<Listenable>[
       _resetPasswordController,
       _resetConfirmPasswordController,
     ]);
@@ -109,26 +125,57 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     super.dispose();
   }
 
+  void _switchToLogin({
+    String? phoneNumber,
+    _LoginMethod method = _LoginMethod.password,
+  }) {
+    setState(() {
+      _currentView = _AuthView.login;
+      _loginMethod = method;
+      if (phoneNumber != null && phoneNumber.trim().isNotEmpty) {
+        _loginPhoneController.text = phoneNumber;
+      }
+      _loginPasswordController.clear();
+      _loginCodeController.clear();
+      _loginChallenge = null;
+    });
+  }
+
   void _switchToRegister(String phoneNumber) {
     setState(() {
       _currentView = _AuthView.register;
       _registerPhoneController.text = phoneNumber;
       _registerCodeController.clear();
-      _loginChallenge = null;
+      _registerPasswordController.clear();
+      _registerConfirmPasswordController.clear();
       _registerChallenge = null;
+    });
+  }
+
+  void _switchToForgotPassword({String? phoneNumber}) {
+    setState(() {
+      _currentView = _AuthView.forgotPassword;
+      if (phoneNumber != null && phoneNumber.trim().isNotEmpty) {
+        _resetPhoneController.text = phoneNumber;
+      }
+      _resetCodeController.clear();
+      _resetPasswordController.clear();
+      _resetConfirmPasswordController.clear();
       _resetChallenge = null;
     });
   }
 
-  void _switchToLoginWithSms(String phoneNumber) {
+  void _switchToResetPassword() {
     setState(() {
-      _currentView = _AuthView.login;
-      _loginMethod = _LoginMethod.smsCode;
-      _loginPhoneController.text = phoneNumber;
-      _loginCodeController.clear();
-      _loginChallenge = null;
-      _registerChallenge = null;
-      _resetChallenge = null;
+      _currentView = _AuthView.resetPassword;
+      _resetPasswordController.clear();
+      _resetConfirmPasswordController.clear();
+    });
+  }
+
+  void _switchToResetSuccess() {
+    setState(() {
+      _currentView = _AuthView.resetSuccess;
     });
   }
 
@@ -138,7 +185,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     required String phoneNumber,
   }) {
     if (target == PhoneVerificationTarget.newUser && challenge.isExistingUser) {
-      _switchToLoginWithSms(phoneNumber);
+      _switchToLogin(phoneNumber: phoneNumber, method: _LoginMethod.smsCode);
       _showMessage('该手机号已注册，请直接登录。');
       return true;
     }
@@ -171,10 +218,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
               );
             },
           );
-      if (challenge == null) {
-        return;
-      }
-      if (!mounted) {
+      if (challenge == null || !mounted) {
         return;
       }
       if (_redirectForUnexpectedChallenge(
@@ -185,7 +229,6 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         return;
       }
       setState(() => _loginChallenge = challenge);
-      _showMessage('验证码已发送，请查看短信。');
     } on AuthPhoneTargetMismatchException catch (error) {
       if (!mounted) {
         return;
@@ -224,10 +267,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
               );
             },
           );
-      if (challenge == null) {
-        return;
-      }
-      if (!mounted) {
+      if (challenge == null || !mounted) {
         return;
       }
       if (_redirectForUnexpectedChallenge(
@@ -238,12 +278,14 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         return;
       }
       setState(() => _registerChallenge = challenge);
-      _showMessage('验证码已发送，请继续完成注册。');
     } on AuthPhoneTargetMismatchException catch (error) {
       if (!mounted) {
         return;
       }
-      _switchToLoginWithSms(_registerPhoneController.text.trim());
+      _switchToLogin(
+        phoneNumber: _registerPhoneController.text.trim(),
+        method: _LoginMethod.smsCode,
+      );
       _showMessage(error.message);
     } catch (error) {
       if (!mounted) {
@@ -277,10 +319,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
               );
             },
           );
-      if (challenge == null) {
-        return;
-      }
-      if (!mounted) {
+      if (challenge == null || !mounted) {
         return;
       }
       if (_redirectForUnexpectedChallenge(
@@ -291,7 +330,6 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         return;
       }
       setState(() => _resetChallenge = challenge);
-      _showMessage('验证码已发送，请继续重置密码。');
     } on AuthPhoneTargetMismatchException catch (error) {
       if (!mounted) {
         return;
@@ -340,13 +378,9 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
             },
           ) ??
           false;
-      if (!completed) {
+      if (!completed || !mounted) {
         return;
       }
-      if (!mounted) {
-        return;
-      }
-      _showMessage('登录成功。');
       context.go(AppRoutes.home);
     } catch (error) {
       if (!mounted) {
@@ -367,6 +401,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
       return;
     }
 
+    await _flushTextEditingState();
     final String? phoneError = _validatePhone(_loginPhoneController.text);
     if (phoneError != null) {
       _showMessage(phoneError);
@@ -394,13 +429,9 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
             },
           ) ??
           false;
-      if (!completed) {
+      if (!completed || !mounted) {
         return;
       }
-      if (!mounted) {
-        return;
-      }
-      _showMessage('登录成功。');
       context.go(AppRoutes.home);
     } catch (error) {
       if (!mounted) {
@@ -456,7 +487,6 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
       if (!mounted) {
         return;
       }
-      _showMessage('注册成功，已为你登录。');
       context.go(AppRoutes.home);
     } catch (error) {
       if (!mounted) {
@@ -468,6 +498,31 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         setState(() => _isSubmitting = false);
       }
     }
+  }
+
+  Future<void> _verifyResetCode() async {
+    await _flushTextEditingState();
+    final PhoneVerificationChallenge? challenge = _resetChallenge;
+    if (challenge == null) {
+      _showMessage('请先发送验证码。');
+      return;
+    }
+
+    final String? phoneError = _validatePhone(_resetPhoneController.text);
+    if (phoneError != null) {
+      _showMessage(phoneError);
+      return;
+    }
+    final String? codeError = _validateCode(_resetCodeController.text);
+    if (codeError != null) {
+      _showMessage(codeError);
+      return;
+    }
+    if (!challenge.isExistingUser) {
+      _showMessage('未找到该手机号，请先注册。');
+      return;
+    }
+    _switchToResetPassword();
   }
 
   Future<void> _submitResetPassword(AppServices services) async {
@@ -511,8 +566,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
       if (!mounted) {
         return;
       }
-      _showMessage('密码已重置，已为你登录。');
-      context.go(AppRoutes.home);
+      _switchToResetSuccess();
     } catch (error) {
       if (!mounted) {
         return;
@@ -523,6 +577,32 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         setState(() => _isSubmitting = false);
       }
     }
+  }
+
+  Future<void> _returnToLoginFromSuccess(AppServices services) async {
+    try {
+      await services.authRepository.signOut();
+      if (!mounted) {
+        return;
+      }
+      _switchToLogin(phoneNumber: _resetPhoneController.text.trim());
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage(error.toString());
+    }
+  }
+
+  Future<void> _resendResetFromSuccess(AppServices services) async {
+    setState(() {
+      _currentView = _AuthView.forgotPassword;
+      _resetCodeController.clear();
+      _resetPasswordController.clear();
+      _resetConfirmPasswordController.clear();
+      _resetChallenge = null;
+    });
+    await _sendResetCode(services);
   }
 
   String? _validatePhone(String value) {
@@ -598,764 +678,668 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     );
   }
 
-  ThemeData _buildAuthTheme(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final NightMoodPalette palette = context.nightMoodPalette.copyWith(
-      primary: _authAccent,
-      primarySoft: _authAccentSoft,
-      primaryHighlight: _authAccentSoft,
-      primaryDeep: _authAccentDeep,
-      calmBlue: AppColors.calmBlue,
-      welcomeAccentColor: _authAccent,
-      welcomeTextOnAccent: _authAccentDeep,
-    );
+  bool get _canSubmitLoginWithPassword =>
+      _validatePhone(_loginPhoneController.text) == null &&
+      _validatePassword(_loginPasswordController.text) == null;
 
-    return theme.copyWith(
-      colorScheme: theme.colorScheme.copyWith(
-        primary: _authAccent,
-        onPrimary: _authAccentDeep,
-        secondary: _authAccentDeep,
-        surface: AppColors.surface,
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        isDense: true,
-        filled: true,
-        fillColor: AppColors.surface,
-        hintStyle: theme.textTheme.bodyMedium?.copyWith(
-          color: AppColors.textHint,
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 18,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: AppColors.surfaceBorder),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: AppColors.surfaceBorder),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: AppColors.calmBlue, width: 2),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: Colors.redAccent),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: Colors.redAccent, width: 2),
-        ),
-        prefixIconColor: AppColors.textSecondary,
-        suffixIconColor: AppColors.textHint,
-      ),
-      textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: _authAccentDeep,
-          textStyle: theme.textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-      extensions: <ThemeExtension<dynamic>>[palette],
-    );
-  }
+  bool get _canSubmitLoginWithCode =>
+      _loginChallenge != null &&
+      _validatePhone(_loginPhoneController.text) == null &&
+      _validateCode(_loginCodeController.text) == null;
 
-  void _showRegisterFromFooter() {
-    setState(() {
-      _currentView = _AuthView.register;
-      _registerPhoneController.text = _loginPhoneController.text;
-    });
-  }
+  bool get _canSubmitRegister =>
+      _registerChallenge != null &&
+      _validatePhone(_registerPhoneController.text) == null &&
+      _validateCode(_registerCodeController.text) == null &&
+      _validatePassword(_registerPasswordController.text) == null &&
+      _registerPasswordController.text ==
+          _registerConfirmPasswordController.text &&
+      _registerConfirmPasswordController.text.isNotEmpty;
 
-  void _showLoginFromFooter() {
-    setState(() {
-      _currentView = _AuthView.login;
-      _loginMethod = _LoginMethod.password;
-      _loginPhoneController.text = _registerPhoneController.text;
-    });
-  }
+  bool get _canVerifyResetCode =>
+      _resetChallenge != null &&
+      _validatePhone(_resetPhoneController.text) == null &&
+      _validateCode(_resetCodeController.text) == null;
 
-  Widget _buildLoginMethodSwitch() {
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: _AuthSegmentButton(
-            key: const ValueKey<String>('auth-login-method-password'),
-            label: '密码登录',
-            selected: _loginMethod == _LoginMethod.password,
-            onTap: () {
-              setState(() => _loginMethod = _LoginMethod.password);
-            },
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: _AuthSegmentButton(
-            key: const ValueKey<String>('auth-login-method-code'),
-            label: '验证码登录',
-            selected: _loginMethod == _LoginMethod.smsCode,
-            onTap: () {
-              setState(() => _loginMethod = _LoginMethod.smsCode);
-            },
-          ),
-        ),
-      ],
-    );
-  }
+  bool get _canSubmitResetPassword =>
+      _resetChallenge != null &&
+      _validatePassword(_resetPasswordController.text) == null &&
+      _resetPasswordController.text == _resetConfirmPasswordController.text &&
+      _resetConfirmPasswordController.text.isNotEmpty;
 
-  Widget _buildPhoneField({
-    required Key fieldKey,
-    required TextEditingController controller,
-    required ValueChanged<String>? onChanged,
-    required String label,
-    String hintText = '请输入手机号',
+  TextStyle _textStyle(
+    BuildContext context, {
+    required double size,
+    required FontWeight weight,
+    required Color color,
+    double? height,
   }) {
-    return _AuthFieldGroup(
-      label: label,
-      child: TextField(
-        key: fieldKey,
-        controller: controller,
-        keyboardType: TextInputType.phone,
-        textInputAction: TextInputAction.next,
-        autofillHints: const <String>[AutofillHints.telephoneNumber],
-        inputFormatters: <TextInputFormatter>[
-          FilteringTextInputFormatter.allow(RegExp(r'[\d+\-\s]')),
+    return Theme.of(context).textTheme.bodyMedium!.copyWith(
+      fontSize: size,
+      fontWeight: weight,
+      color: color,
+      height: height,
+    );
+  }
+
+  Widget _buildPhoneShell(
+    BuildContext context,
+    AppServices services, {
+    required double width,
+    required double height,
+  }) {
+    final double unit = height / _designHeight;
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: _cardColor,
+        borderRadius: BorderRadius.circular(28 * unit),
+        border: Border.all(color: _cardBorder, width: math.max(1, unit)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: _shellShadow,
+            blurRadius: 48 * unit,
+            offset: Offset(0, 20 * unit),
+          ),
         ],
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          hintText: hintText,
-          prefixIcon: const Icon(Icons.smartphone_rounded),
-        ),
       ),
-    );
-  }
-
-  Widget _buildPasswordFieldGroup({
-    required Key fieldKey,
-    required TextEditingController controller,
-    required String label,
-    required String hintText,
-    required TextInputAction textInputAction,
-  }) {
-    return _AuthFieldGroup(
-      label: label,
-      child: _AuthPasswordField(
-        fieldKey: fieldKey,
-        controller: controller,
-        labelText: label,
-        hintText: hintText,
-        textInputAction: textInputAction,
-      ),
-    );
-  }
-
-  Widget _buildCodeFieldWithAction({
-    required String label,
-    required Key fieldKey,
-    required TextEditingController controller,
-    required Key actionKey,
-    required String actionLabel,
-    required bool isLoading,
-    required VoidCallback? onPressed,
-  }) {
-    final Widget sendButton = PrimaryButton(
-      key: actionKey,
-      label: isLoading ? '发送中...' : actionLabel,
-      variant: PrimaryButtonVariant.soft,
-      foregroundColor: _authAccentDeep,
-      onPressed: onPressed,
-    );
-
-    return _AuthFieldGroup(
-      label: label,
-      child: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          if (constraints.maxWidth < MediaQuery.sizeOf(context).width * 0.46) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                _buildCodeField(fieldKey: fieldKey, controller: controller),
-                const SizedBox(height: AppSpacing.sm),
-                sendButton,
-              ],
-            );
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Expanded(
-                child: _buildCodeField(
-                  fieldKey: fieldKey,
-                  controller: controller,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              SizedBox(width: constraints.maxWidth * 0.3, child: sendButton),
-            ],
-          );
+      child: Padding(
+        padding: EdgeInsets.all(32 * unit),
+        child: switch (_currentView) {
+          _AuthView.login => _buildLoginPage(context, services, unit),
+          _AuthView.register => _buildRegisterPage(context, services, unit),
+          _AuthView.forgotPassword => _buildForgotPasswordPage(
+            context,
+            services,
+            unit,
+          ),
+          _AuthView.resetPassword => _buildResetPasswordPage(
+            context,
+            services,
+            unit,
+          ),
+          _AuthView.resetSuccess => _buildResetSuccessPage(
+            context,
+            services,
+            unit,
+          ),
         },
       ),
     );
   }
 
-  Widget _buildCodeField({
-    required Key fieldKey,
-    required TextEditingController controller,
-  }) {
-    return TextField(
-      key: fieldKey,
-      controller: controller,
-      keyboardType: TextInputType.number,
-      textInputAction: TextInputAction.next,
-      inputFormatters: <TextInputFormatter>[
-        FilteringTextInputFormatter.digitsOnly,
-        LengthLimitingTextInputFormatter(6),
-      ],
-      decoration: const InputDecoration(
-        hintText: '请输入短信验证码',
-        prefixIcon: Icon(Icons.sms_rounded),
-      ),
-    );
-  }
-
-  Widget _buildLoginPanel(AppServices services, {required bool compact}) {
-    final double fieldGap = compact ? AppSpacing.xs : AppSpacing.sm;
+  Widget _buildLoginPage(
+    BuildContext context,
+    AppServices services,
+    double unit,
+  ) {
+    final bool usePassword = _loginMethod == _LoginMethod.password;
+    final Listenable listenable = usePassword
+        ? _loginPasswordFormListenable
+        : _loginCodeFormListenable;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        if (compact) ...<Widget>[
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              key: const ValueKey<String>('auth-mode-register'),
-              onPressed: _showRegisterFromFooter,
-              child: const Text('免费注册'),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-        ],
-        _buildLoginMethodSwitch(),
-        SizedBox(height: compact ? AppSpacing.sm : AppSpacing.md),
-        _buildPhoneField(
-          fieldKey: const ValueKey<String>('auth-login-phone'),
-          controller: _loginPhoneController,
-          label: '手机号',
-          onChanged: (_) {
-            if (_loginChallenge != null) {
-              setState(() => _loginChallenge = null);
-            }
-          },
-        ),
-        SizedBox(height: fieldGap),
-        if (_loginMethod == _LoginMethod.password) ...<Widget>[
-          _buildPasswordFieldGroup(
-            fieldKey: const ValueKey<String>('auth-login-password'),
-            controller: _loginPasswordController,
-            label: '登录密码',
-            hintText: '请输入登录密码',
-            textInputAction: TextInputAction.done,
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              key: const ValueKey<String>('auth-forgot-password'),
-              onPressed: () {
-                _resetPhoneController.text = _loginPhoneController.text;
-                setState(() => _currentView = _AuthView.resetPassword);
-              },
-              child: const Text('忘记密码'),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          ListenableBuilder(
-            listenable: _loginPasswordFormListenable,
-            builder: (BuildContext context, Widget? child) {
-              final bool canSubmit = !_isSubmitting;
-              return PrimaryButton(
-                key: const ValueKey<String>('auth-login-password-submit'),
-                label: _isSubmitting ? '登录中...' : '登录',
-                foregroundColor: _authAccentDeep,
-                onPressed: canSubmit
-                    ? () => _submitLoginWithPassword(services)
-                    : null,
-              );
-            },
-          ),
-        ] else ...<Widget>[
-          _buildCodeFieldWithAction(
-            label: '短信验证码',
-            fieldKey: const ValueKey<String>('auth-login-code'),
-            controller: _loginCodeController,
-            actionKey: const ValueKey<String>('auth-login-code-send'),
-            actionLabel: '发送验证码',
-            isLoading: _isSendingLoginCode,
-            onPressed: _isSendingLoginCode || _isSubmitting
-                ? null
-                : () => _sendLoginCode(services),
-          ),
-          SizedBox(height: fieldGap),
-          ListenableBuilder(
-            listenable: _loginCodeFormListenable,
-            builder: (BuildContext context, Widget? child) {
-              final bool canSubmit =
-                  !_isSubmitting &&
-                  _loginPhoneController.text.trim().isNotEmpty &&
-                  _loginCodeController.text.trim().isNotEmpty;
-              return PrimaryButton(
-                key: const ValueKey<String>('auth-login-code-submit'),
-                label: _isSubmitting ? '登录中...' : '验证码登录',
-                foregroundColor: _authAccentDeep,
-                onPressed: canSubmit
-                    ? () => _submitLoginWithCode(services)
-                    : null,
-              );
-            },
-          ),
-        ],
-        if (!compact) ...<Widget>[
-          const SizedBox(height: AppSpacing.lg),
-          _AuthFooterSwitchCard(
-            key: const ValueKey<String>('auth-mode-register'),
-            prompt: '还没有账号？',
-            actionLabel: '免费注册',
-            compact: false,
-            onTap: _showRegisterFromFooter,
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildRegisterPanel(AppServices services, {required bool compact}) {
-    final double fieldGap = compact ? AppSpacing.xs : AppSpacing.sm;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        if (compact) ...<Widget>[
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              key: const ValueKey<String>('auth-mode-login'),
-              onPressed: _showLoginFromFooter,
-              child: const Text('返回登录'),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-        ],
-        _buildPhoneField(
-          fieldKey: const ValueKey<String>('auth-register-phone'),
-          controller: _registerPhoneController,
-          label: '手机号',
-          onChanged: (_) {
-            if (_registerChallenge != null) {
-              setState(() => _registerChallenge = null);
-            }
-          },
-        ),
-        SizedBox(height: fieldGap),
-        _buildCodeFieldWithAction(
-          label: '短信验证码',
-          fieldKey: const ValueKey<String>('auth-register-code'),
-          controller: _registerCodeController,
-          actionKey: const ValueKey<String>('auth-register-send'),
-          actionLabel: '发送验证码',
-          isLoading: _isSendingRegisterCode,
-          onPressed: _isSendingRegisterCode || _isSubmitting
-              ? null
-              : () => _sendRegisterCode(services),
-        ),
-        SizedBox(height: fieldGap),
-        _buildPasswordFieldGroup(
-          fieldKey: const ValueKey<String>('auth-register-password'),
-          controller: _registerPasswordController,
-          label: '设置密码',
-          hintText: '请设置登录密码',
-          textInputAction: TextInputAction.next,
-        ),
-        SizedBox(height: fieldGap),
-        _buildPasswordFieldGroup(
-          fieldKey: const ValueKey<String>('auth-register-password-confirm'),
-          controller: _registerConfirmPasswordController,
-          label: '确认密码',
-          hintText: '请再次输入密码',
-          textInputAction: TextInputAction.done,
-        ),
-        if (!compact) ...<Widget>[
-          const SizedBox(height: AppSpacing.sm),
-          const _AuthInfoBox(
-            icon: Icons.shield_outlined,
-            message: '注册仅支持手机号。完成短信验证后即可创建账号，并同时设置登录密码。',
-          ),
-          const SizedBox(height: AppSpacing.sm),
-        ] else ...<Widget>[
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            '完成短信验证后即可创建账号，并同时设置登录密码。',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppColors.textSecondary,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-        ],
-        ListenableBuilder(
-          listenable: _registerFormListenable,
-          builder: (BuildContext context, Widget? child) {
-            final bool canSubmit = !_isSubmitting;
-            return PrimaryButton(
-              key: const ValueKey<String>('auth-register-submit'),
-              label: _isSubmitting ? '注册中...' : '注册并登录',
-              foregroundColor: _authAccentDeep,
-              onPressed: canSubmit ? () => _submitRegister(services) : null,
-            );
-          },
-        ),
-        if (!compact) ...<Widget>[
-          const SizedBox(height: AppSpacing.lg),
-          _AuthFooterSwitchCard(
-            key: const ValueKey<String>('auth-mode-login'),
-            prompt: '已有账号？',
-            actionLabel: '返回登录',
-            compact: false,
-            onTap: _showLoginFromFooter,
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildResetPasswordPanel(
-    AppServices services, {
-    required bool compact,
-  }) {
-    final double fieldGap = compact ? AppSpacing.xs : AppSpacing.sm;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        TextButton.icon(
-          onPressed: () => setState(() => _currentView = _AuthView.login),
-          icon: const Icon(Icons.arrow_back_rounded, size: 18),
-          label: const Text('返回登录'),
-        ),
-        SizedBox(height: compact ? AppSpacing.xs : AppSpacing.sm),
-        _buildPhoneField(
-          fieldKey: const ValueKey<String>('auth-reset-phone'),
-          controller: _resetPhoneController,
-          label: '手机号',
-          onChanged: (_) {
-            if (_resetChallenge != null) {
-              setState(() => _resetChallenge = null);
-            }
-          },
-        ),
-        SizedBox(height: fieldGap),
-        _buildCodeFieldWithAction(
-          label: '短信验证码',
-          fieldKey: const ValueKey<String>('auth-reset-code'),
-          controller: _resetCodeController,
-          actionKey: const ValueKey<String>('auth-reset-send'),
-          actionLabel: '发送验证码',
-          isLoading: _isSendingResetCode,
-          onPressed: _isSendingResetCode || _isSubmitting
-              ? null
-              : () => _sendResetCode(services),
-        ),
-        SizedBox(height: fieldGap),
-        _buildPasswordFieldGroup(
-          fieldKey: const ValueKey<String>('auth-reset-password'),
-          controller: _resetPasswordController,
-          label: '新密码',
-          hintText: '请输入新的登录密码',
-          textInputAction: TextInputAction.next,
-        ),
-        SizedBox(height: fieldGap),
-        _buildPasswordFieldGroup(
-          fieldKey: const ValueKey<String>('auth-reset-password-confirm'),
-          controller: _resetConfirmPasswordController,
-          label: '确认新密码',
-          hintText: '请再次输入新密码',
-          textInputAction: TextInputAction.done,
-        ),
-        if (!compact) ...<Widget>[
-          const SizedBox(height: AppSpacing.sm),
-          const _AuthInfoBox(
-            icon: Icons.lock_reset_rounded,
-            message: '仅支持短信找回。重置成功后会自动登录，并继续进入应用。',
-          ),
-          const SizedBox(height: AppSpacing.sm),
-        ] else ...<Widget>[
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            '仅支持短信找回，重置成功后会自动登录。',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppColors.textSecondary,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-        ],
-        ListenableBuilder(
-          listenable: _resetFormListenable,
-          builder: (BuildContext context, Widget? child) {
-            final bool canSubmit = !_isSubmitting;
-            return PrimaryButton(
-              key: const ValueKey<String>('auth-reset-submit'),
-              label: _isSubmitting ? '重置中...' : '重置密码',
-              foregroundColor: _authAccentDeep,
-              onPressed: canSubmit
-                  ? () => _submitResetPassword(services)
-                  : null,
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStageIntro(bool isWide) {
-    final TextTheme textTheme = Theme.of(context).textTheme;
-    final List<_StageFeatureData> features = <_StageFeatureData>[
-      const _StageFeatureData(
-        icon: Icons.lock_open_rounded,
-        title: '双登录方式',
-        description: '支持手机号 + 密码，或手机号 + 短信验证码两种登录方式。',
-      ),
-      const _StageFeatureData(
-        icon: Icons.mark_chat_unread_rounded,
-        title: '短信注册',
-        description: '新用户通过短信验证注册，同时完成登录密码设置。',
-      ),
-      const _StageFeatureData(
-        icon: Icons.password_rounded,
-        title: '短信找回',
-        description: '忘记密码时，通过手机号和验证码安全重置即可。',
-      ),
-    ];
-
-    return Container(
-      padding: EdgeInsets.all(isWide ? AppSpacing.xxl : AppSpacing.xl),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[Color(0x24FFFFFF), Color(0x10FFFFFF)],
-        ),
-        borderRadius: AppRadius.cardLarge,
-        border: Border.all(color: const Color(0x26FFFFFF)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          const _AuthHeaderIcon(darkSurface: true),
-          const SizedBox(height: AppSpacing.xl),
-          Text(
-            '舍眠',
-            style: textTheme.displaySmall?.copyWith(
-              color: AppColors.onDark,
-              fontWeight: FontWeight.w800,
-              height: 1.08,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            '把登录、注册和密码找回统一成一套清晰稳定的前端入口。',
-            style: textTheme.bodyLarge?.copyWith(
-              color: const Color(0xEAF9F9FB),
-              height: 1.6,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Wrap(
-            spacing: AppSpacing.xs,
-            runSpacing: AppSpacing.xs,
-            children: const <Widget>[
-              _StageChip(label: '手机号登录'),
-              _StageChip(label: '短信注册'),
-              _StageChip(label: '重置密码'),
-            ],
-          ),
-          if (isWide) ...<Widget>[
-            const SizedBox(height: AppSpacing.xxl),
-            for (final _StageFeatureData feature in features) ...<Widget>[
-              _StageFeatureTile(feature: feature),
-              const SizedBox(height: AppSpacing.md),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-
-  String _panelTitle() {
-    switch (_currentView) {
-      case _AuthView.login:
-        return '登录舍眠';
-      case _AuthView.register:
-        return '免费注册';
-      case _AuthView.resetPassword:
-        return '重置密码';
-    }
-  }
-
-  String _panelSubtitle({required bool compact}) {
-    switch (_currentView) {
-      case _AuthView.login:
-        return compact ? '使用手机号继续登录。' : '使用手机号继续登录，支持密码登录与短信验证码登录。';
-      case _AuthView.register:
-        return compact ? '手机号注册并同步设置密码。' : '完成短信验证后即可创建账号，并同时设置登录密码。';
-      case _AuthView.resetPassword:
-        return compact ? '通过短信验证码设置新密码。' : '通过短信验证码设置新密码，成功后会自动登录。';
-    }
-  }
-
-  String? _panelBadge() {
-    switch (_currentView) {
-      case _AuthView.login:
-        return null;
-      case _AuthView.register:
-        return '短信验证注册';
-      case _AuthView.resetPassword:
-        return '设置新密码';
-    }
-  }
-
-  Widget _buildPanelHeader({required bool compact}) {
-    final TextTheme textTheme = Theme.of(context).textTheme;
-    final String? badge = _panelBadge();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        if (_currentView != _AuthView.resetPassword && !compact) ...<Widget>[
-          const _AuthHeaderIcon(),
-          const SizedBox(height: AppSpacing.lg),
-        ],
-        if (badge != null) ...<Widget>[
-          _AuthBadge(label: badge),
-          SizedBox(height: compact ? AppSpacing.sm : AppSpacing.md),
-        ],
-        Text(
-          _panelTitle(),
-          style: (compact ? textTheme.headlineSmall : textTheme.headlineMedium)
-              ?.copyWith(
-                color: AppColors.textStrong,
-                fontWeight: FontWeight.w800,
-              ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          _panelSubtitle(compact: compact),
-          style: textTheme.bodyMedium?.copyWith(
-            color: AppColors.textMuted,
-            height: 1.6,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAuthErrorBanner(String message) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF2F2),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFFFC6C6)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          const Padding(
-            padding: EdgeInsets.only(top: 1),
-            child: Icon(
-              Icons.error_outline_rounded,
-              color: Colors.redAccent,
-              size: 18,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.redAccent,
-                height: 1.5,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAuthCard(AppServices services, {required bool compact}) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final double cardPadding =
-            constraints.maxWidth * (compact ? 0.055 : 0.072);
-        final double cardRadius = constraints.maxWidth * 0.075;
-
-        return Container(
-          padding: EdgeInsets.all(cardPadding),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(cardRadius),
-            border: Border.all(color: const Color(0xFFF0F3F8)),
-            boxShadow: const <BoxShadow>[
-              BoxShadow(
-                color: Color(0x143B67A8),
-                blurRadius: 42,
-                offset: Offset(0, 22),
-              ),
-              BoxShadow(
-                color: Color(0x0D3B67A8),
-                blurRadius: 18,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
+        Expanded(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              _buildPanelHeader(compact: compact),
-              SizedBox(height: compact ? AppSpacing.md : AppSpacing.xl),
-              if (_currentView == _AuthView.login)
-                _buildLoginPanel(services, compact: compact),
-              if (_currentView == _AuthView.register)
-                _buildRegisterPanel(services, compact: compact),
-              if (_currentView == _AuthView.resetPassword)
-                _buildResetPasswordPanel(services, compact: compact),
-              if (services.authRepository.lastAuthError
-                  case final String error) ...<Widget>[
-                const SizedBox(height: AppSpacing.lg),
-                _buildAuthErrorBanner(error),
+              _PencilTopSquare(
+                icon: Icons.bedtime_rounded,
+                iconSize: 26 * unit,
+                size: 52 * unit,
+                radius: 16 * unit,
+                backgroundColor: _accentBlue,
+                iconColor: Colors.white,
+              ),
+              SizedBox(height: 20 * unit),
+              Text(
+                '登录舍眠',
+                style: _textStyle(
+                  context,
+                  size: 32 * unit,
+                  weight: FontWeight.w700,
+                  color: _textPrimary,
+                ),
+              ),
+              SizedBox(height: 10 * unit),
+              Text(
+                '使用手机号继续登录。支持密码登录，也支持短信验证码登录。',
+                style: _textStyle(
+                  context,
+                  size: 15 * unit,
+                  weight: FontWeight.w500,
+                  color: _textMuted,
+                  height: 1.5,
+                ),
+              ),
+              SizedBox(height: 20 * unit),
+              _buildLoginMethodSwitch(context, unit),
+              SizedBox(height: 20 * unit),
+              _PencilInputField(
+                fieldKey: const ValueKey<String>('auth-login-phone'),
+                label: '手机号',
+                hintText: '138 0013 8000',
+                controller: _loginPhoneController,
+                icon: Icons.phone_android_rounded,
+                keyboardType: TextInputType.phone,
+                textInputAction: usePassword
+                    ? TextInputAction.next
+                    : TextInputAction.done,
+                scaleUnit: unit,
+                forceHighlightedBorder: true,
+              ),
+              SizedBox(height: 12 * unit),
+              if (usePassword) ...<Widget>[
+                _PencilInputField(
+                  fieldKey: const ValueKey<String>('auth-login-password'),
+                  label: '密码',
+                  hintText: '••••••••••••',
+                  controller: _loginPasswordController,
+                  icon: Icons.lock_outline_rounded,
+                  textInputAction: TextInputAction.done,
+                  obscureText: true,
+                  scaleUnit: unit,
+                ),
+              ] else ...<Widget>[
+                _buildCodeFieldRow(
+                  context,
+                  label: '短信验证码',
+                  hintText: '输入收到的验证码',
+                  controller: _loginCodeController,
+                  fieldKey: const ValueKey<String>('auth-login-code'),
+                  actionKey: const ValueKey<String>('auth-login-code-send'),
+                  isSending: _isSendingLoginCode,
+                  onPressed: _isSendingLoginCode
+                      ? null
+                      : () => _sendLoginCode(services),
+                  unit: unit,
+                ),
               ],
+              SizedBox(height: 12 * unit),
+              Align(
+                alignment: Alignment.centerRight,
+                child: _PencilTextAction(
+                  actionKey: const ValueKey<String>('auth-forgot-password'),
+                  label: '忘记密码？',
+                  unit: unit,
+                  onTap: () => _switchToForgotPassword(
+                    phoneNumber: _loginPhoneController.text.trim(),
+                  ),
+                ),
+              ),
+              SizedBox(height: 12 * unit),
+              ListenableBuilder(
+                listenable: listenable,
+                builder: (BuildContext context, Widget? child) {
+                  return _PencilFilledButton(
+                    buttonKey: const ValueKey<String>('auth-login-submit'),
+                    label: '登录',
+                    unit: unit,
+                    onPressed: _isSubmitting
+                        ? null
+                        : usePassword
+                        ? (_canSubmitLoginWithPassword
+                              ? () => _submitLoginWithPassword(services)
+                              : null)
+                        : (_canSubmitLoginWithCode
+                              ? () => _submitLoginWithCode(services)
+                              : null),
+                  );
+                },
+              ),
             ],
           ),
-        );
-      },
+        ),
+        SizedBox(height: 24 * unit),
+        _PencilFooterCard(
+          title: '还没有账号？',
+          actionLabel: '立即注册',
+          unit: unit,
+          onTap: () => _switchToRegister(_loginPhoneController.text.trim()),
+          actionKey: const ValueKey<String>('auth-mode-register'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRegisterPage(
+    BuildContext context,
+    AppServices services,
+    double unit,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              _PencilTopSquare(
+                icon: Icons.person_add_alt_1_rounded,
+                iconSize: 26 * unit,
+                size: 52 * unit,
+                radius: 16 * unit,
+                backgroundColor: _accentBlue,
+                iconColor: Colors.white,
+              ),
+              SizedBox(height: 20 * unit),
+              _PencilBadge(label: '短信验证注册', unit: unit),
+              SizedBox(height: 10 * unit),
+              Text(
+                '免费注册',
+                style: _textStyle(
+                  context,
+                  size: 32 * unit,
+                  weight: FontWeight.w700,
+                  color: _textPrimary,
+                ),
+              ),
+              SizedBox(height: 20 * unit),
+              _PencilInputField(
+                fieldKey: const ValueKey<String>('auth-register-phone'),
+                label: '手机号',
+                hintText: '请输入手机号',
+                controller: _registerPhoneController,
+                icon: Icons.phone_android_rounded,
+                keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.next,
+                scaleUnit: unit,
+              ),
+              SizedBox(height: 12 * unit),
+              _buildCodeFieldRow(
+                context,
+                label: '短信验证码',
+                hintText: '请输入验证码',
+                controller: _registerCodeController,
+                fieldKey: const ValueKey<String>('auth-register-code'),
+                actionKey: const ValueKey<String>('auth-register-send'),
+                isSending: _isSendingRegisterCode,
+                onPressed: _isSendingRegisterCode
+                    ? null
+                    : () => _sendRegisterCode(services),
+                unit: unit,
+              ),
+              SizedBox(height: 12 * unit),
+              _PencilInputField(
+                fieldKey: const ValueKey<String>('auth-register-password'),
+                label: '密码',
+                hintText: '请设置登录密码',
+                controller: _registerPasswordController,
+                icon: Icons.lock_outline_rounded,
+                textInputAction: TextInputAction.next,
+                obscureText: true,
+                scaleUnit: unit,
+              ),
+              SizedBox(height: 12 * unit),
+              _PencilInputField(
+                fieldKey: const ValueKey<String>(
+                  'auth-register-password-confirm',
+                ),
+                label: '确认密码',
+                hintText: '请再次输入密码',
+                controller: _registerConfirmPasswordController,
+                icon: Icons.lock_outline_rounded,
+                textInputAction: TextInputAction.done,
+                obscureText: true,
+                scaleUnit: unit,
+              ),
+              SizedBox(height: 12 * unit),
+              _PencilInfoStrip(
+                icon: Icons.info_outline_rounded,
+                message: '验证码验证通过后即可完成注册，密码至少 6 位。',
+                unit: unit,
+              ),
+              SizedBox(height: 12 * unit),
+              ListenableBuilder(
+                listenable: _registerFormListenable,
+                builder: (BuildContext context, Widget? child) {
+                  return _PencilFilledButton(
+                    buttonKey: const ValueKey<String>('auth-register-submit'),
+                    label: '注册并进入',
+                    unit: unit,
+                    onPressed: _isSubmitting
+                        ? null
+                        : (_canSubmitRegister
+                              ? () => _submitRegister(services)
+                              : null),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 24 * unit),
+        _PencilFooterCard(
+          title: '已经有账号？',
+          actionLabel: '返回登录',
+          unit: unit,
+          onTap: () =>
+              _switchToLogin(phoneNumber: _registerPhoneController.text.trim()),
+          actionKey: const ValueKey<String>('auth-mode-login'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildForgotPasswordPage(
+    BuildContext context,
+    AppServices services,
+    double unit,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              _PencilTopSquare(
+                icon: Icons.chevron_left_rounded,
+                iconSize: 24 * unit,
+                size: 48 * unit,
+                radius: 14 * unit,
+                backgroundColor: _accentBlue,
+                iconColor: Colors.white,
+                onTap: () => _switchToLogin(
+                  phoneNumber: _resetPhoneController.text.trim(),
+                ),
+              ),
+              SizedBox(height: 24 * unit),
+              _PencilBadge(label: '短信找回密码', unit: unit),
+              SizedBox(height: 10 * unit),
+              Text(
+                '找回密码',
+                style: _textStyle(
+                  context,
+                  size: 32 * unit,
+                  weight: FontWeight.w700,
+                  color: _textPrimary,
+                ),
+              ),
+              SizedBox(height: 20 * unit),
+              _PencilInputField(
+                fieldKey: const ValueKey<String>('auth-reset-phone'),
+                label: '手机号',
+                hintText: '请输入已绑定手机号',
+                controller: _resetPhoneController,
+                icon: Icons.phone_android_rounded,
+                keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.next,
+                scaleUnit: unit,
+              ),
+              SizedBox(height: 12 * unit),
+              _buildCodeFieldRow(
+                context,
+                label: '短信验证码',
+                hintText: '输入收到的验证码',
+                controller: _resetCodeController,
+                fieldKey: const ValueKey<String>('auth-reset-code'),
+                actionKey: const ValueKey<String>('auth-reset-send'),
+                isSending: _isSendingResetCode,
+                onPressed: _isSendingResetCode
+                    ? null
+                    : () => _sendResetCode(services),
+                unit: unit,
+              ),
+              SizedBox(height: 12 * unit),
+              ListenableBuilder(
+                listenable: _forgotPasswordFormListenable,
+                builder: (BuildContext context, Widget? child) {
+                  return _PencilFilledButton(
+                    buttonKey: const ValueKey<String>('auth-reset-verify'),
+                    label: '验证并继续',
+                    unit: unit,
+                    onPressed: _isSubmitting
+                        ? null
+                        : (_canVerifyResetCode ? _verifyResetCode : null),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 24 * unit),
+        _PencilSupportCard(title: '无法接收验证码？', subtitle: '联系客服协助处理', unit: unit),
+      ],
+    );
+  }
+
+  Widget _buildResetPasswordPage(
+    BuildContext context,
+    AppServices services,
+    double unit,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _PencilTopSquare(
+          icon: Icons.chevron_left_rounded,
+          iconSize: 24 * unit,
+          size: 48 * unit,
+          radius: 14 * unit,
+          backgroundColor: _accentBlue,
+          iconColor: Colors.white,
+          onTap: () {
+            setState(() => _currentView = _AuthView.forgotPassword);
+          },
+        ),
+        SizedBox(height: 24 * unit),
+        _PencilBadge(label: '设置新密码', unit: unit),
+        SizedBox(height: 10 * unit),
+        Text(
+          '重置密码',
+          style: _textStyle(
+            context,
+            size: 32 * unit,
+            weight: FontWeight.w700,
+            color: _textPrimary,
+          ),
+        ),
+        SizedBox(height: 10 * unit),
+        Text(
+          '短信验证已通过，现在请设置一个新的登录密码。',
+          style: _textStyle(
+            context,
+            size: 15 * unit,
+            weight: FontWeight.w500,
+            color: _textMuted,
+            height: 1.5,
+          ),
+        ),
+        SizedBox(height: 20 * unit),
+        _PencilInputField(
+          fieldKey: const ValueKey<String>('auth-reset-password'),
+          label: '新密码',
+          hintText: '请输入新的登录密码',
+          controller: _resetPasswordController,
+          icon: Icons.lock_outline_rounded,
+          textInputAction: TextInputAction.next,
+          obscureText: true,
+          scaleUnit: unit,
+        ),
+        SizedBox(height: 12 * unit),
+        _PencilInputField(
+          fieldKey: const ValueKey<String>('auth-reset-password-confirm'),
+          label: '确认新密码',
+          hintText: '再次输入新密码',
+          controller: _resetConfirmPasswordController,
+          icon: Icons.lock_outline_rounded,
+          textInputAction: TextInputAction.done,
+          obscureText: true,
+          scaleUnit: unit,
+        ),
+        SizedBox(height: 12 * unit),
+        _PencilTipsCard(unit: unit),
+        SizedBox(height: 12 * unit),
+        ListenableBuilder(
+          listenable: _resetPasswordFormListenable,
+          builder: (BuildContext context, Widget? child) {
+            return _PencilFilledButton(
+              buttonKey: const ValueKey<String>('auth-reset-submit'),
+              label: '确认重置密码',
+              unit: unit,
+              onPressed: _isSubmitting
+                  ? null
+                  : (_canSubmitResetPassword
+                        ? () => _submitResetPassword(services)
+                        : null),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildResetSuccessPage(
+    BuildContext context,
+    AppServices services,
+    double unit,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _PencilBadge(label: '密码更新完成', unit: unit),
+        SizedBox(height: 24 * unit),
+        Text(
+          '密码已重置',
+          style: _textStyle(
+            context,
+            size: 32 * unit,
+            weight: FontWeight.w700,
+            color: _textPrimary,
+          ),
+        ),
+        SizedBox(height: 12 * unit),
+        Text(
+          '你的账号已经完成密码更新，现在可以使用新密码继续登录并同步宿舍睡眠状态。',
+          style: _textStyle(
+            context,
+            size: 15 * unit,
+            weight: FontWeight.w500,
+            color: _textMuted,
+            height: 1.5,
+          ),
+        ),
+        SizedBox(height: 24 * unit),
+        _PencilSuccessIllustration(unit: unit),
+        SizedBox(height: 24 * unit),
+        _PencilFilledButton(
+          buttonKey: const ValueKey<String>('auth-reset-success-login'),
+          label: '返回登录',
+          unit: unit,
+          onPressed: () => _returnToLoginFromSuccess(services),
+        ),
+        SizedBox(height: 12 * unit),
+        _PencilSoftSurfaceButton(
+          buttonKey: const ValueKey<String>('auth-reset-success-resend'),
+          label: '重新发送重置短信',
+          unit: unit,
+          onPressed: () => _resendResetFromSuccess(services),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLoginMethodSwitch(BuildContext context, double unit) {
+    final bool usePassword = _loginMethod == _LoginMethod.password;
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: _PencilSegmentButton(
+            label: '密码登录',
+            unit: unit,
+            selected: usePassword,
+            onTap: () {
+              setState(() {
+                _loginMethod = _LoginMethod.password;
+              });
+            },
+          ),
+        ),
+        SizedBox(width: 10 * unit),
+        Expanded(
+          child: _PencilSegmentButton(
+            segmentKey: const ValueKey<String>('auth-login-method-code'),
+            label: '验证码登录',
+            unit: unit,
+            selected: !usePassword,
+            onTap: () {
+              setState(() {
+                _loginMethod = _LoginMethod.smsCode;
+              });
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCodeFieldRow(
+    BuildContext context, {
+    required String label,
+    required String hintText,
+    required TextEditingController controller,
+    required Key fieldKey,
+    required Key actionKey,
+    required bool isSending,
+    required VoidCallback? onPressed,
+    required double unit,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          label,
+          style: _textStyle(
+            context,
+            size: 13 * unit,
+            weight: FontWeight.w600,
+            color: _textSecondary,
+          ),
+        ),
+        SizedBox(height: 6 * unit),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              flex: 10,
+              child: _PencilBareInput(
+                fieldKey: fieldKey,
+                hintText: hintText,
+                controller: controller,
+                icon: Icons.sms_outlined,
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.done,
+                scaleUnit: unit,
+              ),
+            ),
+            SizedBox(width: 10 * unit),
+            Expanded(
+              flex: 5,
+              child: _PencilSoftButton(
+                buttonKey: actionKey,
+                label: isSending ? '发送中...' : '发送验证码',
+                unit: unit,
+                onPressed: onPressed,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final AppServices services = context.appServices;
-    final ThemeData authTheme = _buildAuthTheme(context);
+    final AppServices services = AppScope.of(context);
     final Size screenSize = MediaQuery.sizeOf(context);
+    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
 
-    return Theme(
-      data: authTheme,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: DecoratedBox(
@@ -1363,143 +1347,37 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: <Color>[_stageStart, _stageMid, _stageEnd],
-              stops: <double>[0, 0.55, 1],
+              colors: <Color>[_pageGradientStart, _pageGradientEnd],
             ),
           ),
-          child: Stack(
-            children: <Widget>[
-              Positioned(
-                top: -(screenSize.height * 0.12),
-                right: -(screenSize.width * 0.08),
-                child: _BlurOrb(
-                  size: screenSize.width * 0.28,
-                  color: Colors.white.withValues(alpha: 0.18),
-                ),
+          child: SafeArea(
+            child: AnimatedPadding(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              padding: EdgeInsets.fromLTRB(
+                screenSize.width * 0.05,
+                screenSize.height * 0.025,
+                screenSize.width * 0.05,
+                keyboardInset + (screenSize.height * 0.025),
               ),
-              Positioned(
-                bottom: -(screenSize.height * 0.14),
-                left: -(screenSize.width * 0.05),
-                child: _BlurOrb(
-                  size: screenSize.width * 0.24,
-                  color: const Color(0xFFBFD3FF).withValues(alpha: 0.32),
-                ),
+              child: LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  final double shellHeight = math.min(
+                    constraints.maxHeight,
+                    constraints.maxWidth / _shellAspectRatio,
+                  );
+                  final double shellWidth = shellHeight * _shellAspectRatio;
+                  return Center(
+                    child: _buildPhoneShell(
+                      context,
+                      services,
+                      width: shellWidth,
+                      height: shellHeight,
+                    ),
+                  );
+                },
               ),
-              SafeArea(
-                child: LayoutBuilder(
-                  builder: (BuildContext context, BoxConstraints constraints) {
-                    final double aspectRatio =
-                        constraints.maxWidth / constraints.maxHeight;
-                    final bool isWide = aspectRatio > 1.45;
-                    final bool isCompact = !isWide && aspectRatio > 1.15;
-                    final bool useWideCompact =
-                        isWide &&
-                        (constraints.maxHeight / constraints.maxWidth) < 0.62;
-                    final bool useCompactCard = isCompact || useWideCompact;
-                    final double outerHorizontalPadding =
-                        constraints.maxWidth * (isWide ? 0.03 : 0.05);
-                    final double outerVerticalPadding =
-                        constraints.maxHeight * (isWide ? 0.028 : 0.02);
-                    final double shellPadding =
-                        constraints.maxWidth * (isWide ? 0.018 : 0.03);
-                    final double shellRadius = constraints.maxWidth * 0.03;
-                    final double shellWidth =
-                        (constraints.maxWidth - (outerHorizontalPadding * 2)) *
-                        (isWide ? 0.92 : 1);
-                    final Widget shell = Container(
-                      padding: EdgeInsets.all(shellPadding),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(shellRadius),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.14),
-                        ),
-                      ),
-                      child: isWide
-                          ? Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: <Widget>[
-                                Expanded(
-                                  flex: 12,
-                                  child: Padding(
-                                    padding: EdgeInsets.all(
-                                      constraints.maxWidth * 0.015,
-                                    ),
-                                    child: _buildStageIntro(!useWideCompact),
-                                  ),
-                                ),
-                                SizedBox(width: constraints.maxWidth * 0.025),
-                                Expanded(
-                                  flex: 10,
-                                  child: _buildAuthCard(
-                                    services,
-                                    compact: useCompactCard,
-                                  ),
-                                ),
-                              ],
-                            )
-                          : Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: <Widget>[
-                                _buildStageIntro(false),
-                                SizedBox(height: constraints.maxHeight * 0.024),
-                                _buildAuthCard(services, compact: false),
-                              ],
-                            ),
-                    );
-
-                    if (isCompact) {
-                      return SingleChildScrollView(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: outerHorizontalPadding,
-                          vertical: outerVerticalPadding,
-                        ),
-                        child: Center(
-                          child: SizedBox(
-                            width:
-                                (constraints.maxWidth -
-                                    (outerHorizontalPadding * 2)) *
-                                0.92,
-                            child: _buildAuthCard(
-                              services,
-                              compact: useCompactCard,
-                            ),
-                          ),
-                        ),
-                      );
-                    }
-
-                    if (isWide) {
-                      return Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: outerHorizontalPadding,
-                          vertical: outerVerticalPadding,
-                        ),
-                        child: Center(
-                          child: SizedBox(
-                            width: shellWidth,
-                            height:
-                                constraints.maxHeight -
-                                (outerVerticalPadding * 2),
-                            child: shell,
-                          ),
-                        ),
-                      );
-                    }
-
-                    return SingleChildScrollView(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: outerHorizontalPadding,
-                        vertical: outerVerticalPadding,
-                      ),
-                      child: Center(
-                        child: SizedBox(width: shellWidth, child: shell),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1507,107 +1385,109 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
   }
 }
 
-class _AuthSegmentButton extends StatelessWidget {
-  const _AuthSegmentButton({
-    super.key,
-    required this.label,
-    required this.selected,
-    required this.onTap,
+class _PencilTopSquare extends StatelessWidget {
+  const _PencilTopSquare({
+    required this.icon,
+    required this.iconSize,
+    required this.size,
+    required this.radius,
+    required this.backgroundColor,
+    required this.iconColor,
+    this.onTap,
   });
 
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
+  final IconData icon;
+  final double iconSize;
+  final double size;
+  final double radius;
+  final Color backgroundColor;
+  final Color iconColor;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    final Widget iconWidget = Icon(icon, size: iconSize, color: iconColor);
+    if (onTap == null) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(radius),
+        ),
+        alignment: Alignment.center,
+        child: iconWidget,
+      );
+    }
+
     return Material(
-      color: Colors.transparent,
+      color: backgroundColor,
+      borderRadius: BorderRadius.circular(radius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          height: 48,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected
-                ? _PhoneAuthPageState._authAccent
-                : _PhoneAuthPageState._authAccentSoft,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: selected
-                  ? _PhoneAuthPageState._authAccent
-                  : const Color(0xFFD6E8F3),
-            ),
-          ),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: _PhoneAuthPageState._authAccentDeep,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+        borderRadius: BorderRadius.circular(radius),
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Center(child: iconWidget),
         ),
       ),
     );
   }
 }
 
-class _AuthHeaderIcon extends StatelessWidget {
-  const _AuthHeaderIcon({this.darkSurface = false});
+class _PencilBadge extends StatelessWidget {
+  const _PencilBadge({required this.label, required this.unit});
 
-  final bool darkSurface;
+  final String label;
+  final double unit;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 56,
-      height: 56,
+      padding: EdgeInsets.symmetric(horizontal: 14 * unit),
+      height: 34 * unit,
       decoration: BoxDecoration(
-        color: darkSurface
-            ? Colors.white.withValues(alpha: 0.16)
-            : _PhoneAuthPageState._authAccentDeep,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
+        color: _PhoneAuthPageState._accentBlueSoft,
+        borderRadius: BorderRadius.circular(17 * unit),
       ),
       alignment: Alignment.center,
-      child: Icon(Icons.bedtime_rounded, color: AppColors.onDark, size: 28),
-    );
-  }
-}
-
-class _AuthBadge extends StatelessWidget {
-  const _AuthBadge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: _PhoneAuthPageState._authAccentSoft,
-        borderRadius: AppRadius.pill,
-      ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: _PhoneAuthPageState._authAccentDeep,
+        style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+          fontSize: 13 * unit,
           fontWeight: FontWeight.w700,
+          color: _PhoneAuthPageState._actionText,
         ),
       ),
     );
   }
 }
 
-class _AuthFieldGroup extends StatelessWidget {
-  const _AuthFieldGroup({required this.label, required this.child});
+class _PencilInputField extends StatelessWidget {
+  const _PencilInputField({
+    required this.fieldKey,
+    required this.label,
+    required this.hintText,
+    required this.controller,
+    required this.icon,
+    required this.scaleUnit,
+    this.keyboardType,
+    this.textInputAction,
+    this.obscureText = false,
+    this.forceHighlightedBorder = false,
+  });
 
+  final Key fieldKey;
   final String label;
-  final Widget child;
+  final String hintText;
+  final TextEditingController controller;
+  final IconData icon;
+  final double scaleUnit;
+  final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final bool obscureText;
+  final bool forceHighlightedBorder;
 
   @override
   Widget build(BuildContext context) {
@@ -1616,57 +1496,375 @@ class _AuthFieldGroup extends StatelessWidget {
       children: <Widget>[
         Text(
           label,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w700,
+          style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+            fontSize: 13 * scaleUnit,
+            fontWeight: FontWeight.w600,
+            color: _PhoneAuthPageState._textSecondary,
           ),
         ),
-        const SizedBox(height: 6),
-        child,
+        SizedBox(height: 6 * scaleUnit),
+        _PencilBareInput(
+          fieldKey: fieldKey,
+          hintText: hintText,
+          controller: controller,
+          icon: icon,
+          keyboardType: keyboardType,
+          textInputAction: textInputAction,
+          obscureText: obscureText,
+          scaleUnit: scaleUnit,
+          forceHighlightedBorder: forceHighlightedBorder,
+        ),
       ],
     );
   }
 }
 
-class _AuthInfoBox extends StatelessWidget {
-  const _AuthInfoBox({required this.icon, required this.message});
+class _PencilBareInput extends StatelessWidget {
+  const _PencilBareInput({
+    required this.fieldKey,
+    required this.hintText,
+    required this.controller,
+    required this.icon,
+    required this.scaleUnit,
+    this.keyboardType,
+    this.textInputAction,
+    this.obscureText = false,
+    this.forceHighlightedBorder = false,
+  });
+
+  final Key fieldKey;
+  final String hintText;
+  final TextEditingController controller;
+  final IconData icon;
+  final double scaleUnit;
+  final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final bool obscureText;
+  final bool forceHighlightedBorder;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color borderColor = forceHighlightedBorder
+        ? _PhoneAuthPageState._successBlue
+        : _PhoneAuthPageState._cardBorder;
+    final double borderWidth = forceHighlightedBorder
+        ? 2 * scaleUnit
+        : scaleUnit;
+
+    return Container(
+      height: 56 * scaleUnit,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18 * scaleUnit),
+        border: Border.all(color: borderColor, width: math.max(1, borderWidth)),
+        boxShadow: forceHighlightedBorder
+            ? <BoxShadow>[
+                BoxShadow(
+                  color: _PhoneAuthPageState._focusShadow,
+                  blurRadius: 24 * scaleUnit,
+                  offset: Offset(0, 10 * scaleUnit),
+                ),
+              ]
+            : const <BoxShadow>[],
+      ),
+      child: TextField(
+        key: fieldKey,
+        controller: controller,
+        obscureText: obscureText,
+        obscuringCharacter: '•',
+        keyboardType: keyboardType,
+        textInputAction: textInputAction,
+        enableSuggestions: !obscureText,
+        autocorrect: false,
+        style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+          fontSize: 14 * scaleUnit,
+          fontWeight: FontWeight.w500,
+          color: _PhoneAuthPageState._textPrimary,
+        ),
+        decoration: InputDecoration(
+          hintText: hintText,
+          hintStyle: Theme.of(context).textTheme.bodyMedium!.copyWith(
+            fontSize: 14 * scaleUnit,
+            fontWeight: obscureText ? FontWeight.w600 : FontWeight.w500,
+            color: forceHighlightedBorder
+                ? _PhoneAuthPageState._textPrimary
+                : obscureText
+                ? _PhoneAuthPageState._textPrimary
+                : _PhoneAuthPageState._textHint,
+          ),
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(vertical: 18 * scaleUnit),
+          prefixIcon: Icon(
+            icon,
+            size: 20 * scaleUnit,
+            color: _PhoneAuthPageState._textSecondary,
+          ),
+          prefixIconConstraints: BoxConstraints(
+            minWidth: 44 * scaleUnit,
+            minHeight: 56 * scaleUnit,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PencilFilledButton extends StatelessWidget {
+  const _PencilFilledButton({
+    required this.buttonKey,
+    required this.label,
+    required this.unit,
+    required this.onPressed,
+  });
+
+  final Key buttonKey;
+  final String label;
+  final double unit;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool enabled = onPressed != null;
+    return SizedBox(
+      key: buttonKey,
+      width: double.infinity,
+      height: 58 * unit,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18 * unit),
+          boxShadow: enabled
+              ? <BoxShadow>[
+                  BoxShadow(
+                    color: _PhoneAuthPageState._buttonShadow,
+                    blurRadius: 30 * unit,
+                    offset: Offset(0, 16 * unit),
+                  ),
+                ]
+              : const <BoxShadow>[],
+        ),
+        child: FilledButton(
+          onPressed: onPressed,
+          style: FilledButton.styleFrom(
+            padding: EdgeInsets.zero,
+            elevation: 0,
+            backgroundColor: enabled
+                ? _PhoneAuthPageState._accentBlue
+                : _PhoneAuthPageState._accentBlue.withValues(alpha: 0.55),
+            foregroundColor: enabled
+                ? _PhoneAuthPageState._accentBlueDeep
+                : _PhoneAuthPageState._accentBlueDeep.withValues(alpha: 0.5),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18 * unit),
+            ),
+            textStyle: Theme.of(context).textTheme.bodyLarge!.copyWith(
+              fontSize: 16 * unit,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          child: Text(label),
+        ),
+      ),
+    );
+  }
+}
+
+class _PencilSoftButton extends StatelessWidget {
+  const _PencilSoftButton({
+    required this.buttonKey,
+    required this.label,
+    required this.unit,
+    required this.onPressed,
+  });
+
+  final Key buttonKey;
+  final String label;
+  final double unit;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool enabled = onPressed != null;
+    return SizedBox(
+      key: buttonKey,
+      height: 56 * unit,
+      child: FilledButton(
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          padding: EdgeInsets.symmetric(horizontal: 10 * unit),
+          elevation: 0,
+          backgroundColor: enabled
+              ? _PhoneAuthPageState._accentBlueSoft
+              : _PhoneAuthPageState._accentBlueSoft.withValues(alpha: 0.45),
+          foregroundColor: enabled
+              ? _PhoneAuthPageState._actionText
+              : _PhoneAuthPageState._actionText.withValues(alpha: 0.5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18 * unit),
+          ),
+          textStyle: Theme.of(context).textTheme.bodyMedium!.copyWith(
+            fontSize: 13 * unit,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(label, maxLines: 1),
+        ),
+      ),
+    );
+  }
+}
+
+class _PencilSoftSurfaceButton extends StatelessWidget {
+  const _PencilSoftSurfaceButton({
+    required this.buttonKey,
+    required this.label,
+    required this.unit,
+    required this.onPressed,
+  });
+
+  final Key buttonKey;
+  final String label;
+  final double unit;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      key: buttonKey,
+      width: double.infinity,
+      height: 54 * unit,
+      child: FilledButton(
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          padding: EdgeInsets.zero,
+          elevation: 0,
+          backgroundColor: _PhoneAuthPageState._surfaceSoft,
+          foregroundColor: _PhoneAuthPageState._textSecondary,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18 * unit),
+          ),
+          textStyle: Theme.of(context).textTheme.bodyMedium!.copyWith(
+            fontSize: 14 * unit,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        child: Text(label),
+      ),
+    );
+  }
+}
+
+class _PencilSegmentButton extends StatelessWidget {
+  const _PencilSegmentButton({
+    this.segmentKey,
+    required this.label,
+    required this.unit,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Key? segmentKey;
+  final String label;
+  final double unit;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      key: segmentKey,
+      color: selected
+          ? _PhoneAuthPageState._accentBlue
+          : _PhoneAuthPageState._accentBlueSoft,
+      borderRadius: BorderRadius.circular(18 * unit),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18 * unit),
+        child: SizedBox(
+          height: 48 * unit,
+          child: Center(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                fontSize: 14 * unit,
+                fontWeight: FontWeight.w700,
+                color: _PhoneAuthPageState._accentBlueDeep,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PencilTextAction extends StatelessWidget {
+  const _PencilTextAction({
+    required this.actionKey,
+    required this.label,
+    required this.unit,
+    required this.onTap,
+  });
+
+  final Key actionKey;
+  final String label;
+  final double unit;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      key: actionKey,
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8 * unit),
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 4 * unit),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall!.copyWith(
+            fontSize: 12 * unit,
+            fontWeight: FontWeight.w700,
+            color: _PhoneAuthPageState._actionText,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PencilInfoStrip extends StatelessWidget {
+  const _PencilInfoStrip({
+    required this.icon,
+    required this.message,
+    required this.unit,
+  });
 
   final IconData icon;
   final String message;
+  final double unit;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      height: 38 * unit,
+      padding: EdgeInsets.symmetric(horizontal: 14 * unit),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FBFF),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE0EBF5)),
+        color: _PhoneAuthPageState._surfaceMuted,
+        borderRadius: BorderRadius.circular(14 * unit),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: _PhoneAuthPageState._authAccentSoft,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              icon,
-              color: _PhoneAuthPageState._authAccentDeep,
-              size: 18,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
+          Icon(icon, size: 18 * unit, color: _PhoneAuthPageState._navyBlue),
+          SizedBox(width: 8 * unit),
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
-                height: 1.6,
+              style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                fontSize: 12 * unit,
+                fontWeight: FontWeight.w500,
+                color: _PhoneAuthPageState._textMuted,
               ),
             ),
           ),
@@ -1676,62 +1874,112 @@ class _AuthInfoBox extends StatelessWidget {
   }
 }
 
-class _AuthFooterSwitchCard extends StatelessWidget {
-  const _AuthFooterSwitchCard({
-    super.key,
-    required this.prompt,
+class _PencilTipsCard extends StatelessWidget {
+  const _PencilTipsCard({required this.unit});
+
+  final double unit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(18 * unit),
+      decoration: BoxDecoration(
+        color: _PhoneAuthPageState._surfaceMuted,
+        borderRadius: BorderRadius.circular(22 * unit),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            '密码建议',
+            style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+              fontSize: 14 * unit,
+              fontWeight: FontWeight.w700,
+              color: _PhoneAuthPageState._textPrimary,
+            ),
+          ),
+          SizedBox(height: 8 * unit),
+          Text(
+            '至少 6 位，建议混合数字与字母。',
+            style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+              fontSize: 13 * unit,
+              fontWeight: FontWeight.w500,
+              color: _PhoneAuthPageState._textMuted,
+            ),
+          ),
+          SizedBox(height: 8 * unit),
+          Text(
+            '避免与旧密码过于接近。',
+            style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+              fontSize: 13 * unit,
+              fontWeight: FontWeight.w500,
+              color: _PhoneAuthPageState._textMuted,
+            ),
+          ),
+          SizedBox(height: 8 * unit),
+          Text(
+            '重置后将使用新密码直接登录。',
+            style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+              fontSize: 13 * unit,
+              fontWeight: FontWeight.w500,
+              color: _PhoneAuthPageState._textMuted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PencilFooterCard extends StatelessWidget {
+  const _PencilFooterCard({
+    required this.title,
     required this.actionLabel,
-    this.compact = false,
+    required this.unit,
     required this.onTap,
+    required this.actionKey,
   });
 
-  final String prompt;
+  final String title;
   final String actionLabel;
-  final bool compact;
+  final double unit;
   final VoidCallback onTap;
+  final Key actionKey;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.transparent,
+      color: _PhoneAuthPageState._surfaceMuted,
+      borderRadius: BorderRadius.circular(24 * unit),
       child: InkWell(
+        key: actionKey,
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Ink(
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? AppSpacing.md : AppSpacing.lg,
-            vertical: compact ? AppSpacing.sm : AppSpacing.md,
-          ),
-          decoration: BoxDecoration(
-            color: compact ? Colors.transparent : const Color(0xFFF8FBFF),
-            borderRadius: BorderRadius.circular(20),
-            border: compact ? null : Border.all(color: const Color(0xFFE0EBF5)),
-          ),
-          child: Row(
+        borderRadius: BorderRadius.circular(24 * unit),
+        child: SizedBox(
+          height: 74 * unit,
+          width: double.infinity,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              Expanded(
-                child: RichText(
-                  text: TextSpan(
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                    children: <InlineSpan>[
-                      TextSpan(text: prompt),
-                      TextSpan(
-                        text: actionLabel,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: _PhoneAuthPageState._authAccentDeep,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                  fontSize: 13 * unit,
+                  fontWeight: FontWeight.w500,
+                  color: _PhoneAuthPageState._textMuted,
                 ),
               ),
-              const Icon(
-                Icons.arrow_forward_rounded,
-                color: _PhoneAuthPageState._authAccentDeep,
-                size: 18,
+              SizedBox(height: 6 * unit),
+              Semantics(
+                button: true,
+                child: Text(
+                  actionLabel,
+                  style: Theme.of(context).textTheme.bodyLarge!.copyWith(
+                    fontSize: 15 * unit,
+                    fontWeight: FontWeight.w700,
+                    color: _PhoneAuthPageState._actionText,
+                  ),
+                ),
               ),
             ],
           ),
@@ -1741,94 +1989,44 @@ class _AuthFooterSwitchCard extends StatelessWidget {
   }
 }
 
-class _StageChip extends StatelessWidget {
-  const _StageChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: AppRadius.pill,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: AppColors.onDark,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-class _StageFeatureData {
-  const _StageFeatureData({
-    required this.icon,
+class _PencilSupportCard extends StatelessWidget {
+  const _PencilSupportCard({
     required this.title,
-    required this.description,
+    required this.subtitle,
+    required this.unit,
   });
 
-  final IconData icon;
   final String title;
-  final String description;
-}
-
-class _StageFeatureTile extends StatelessWidget {
-  const _StageFeatureTile({required this.feature});
-
-  final _StageFeatureData feature;
+  final String subtitle;
+  final double unit;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      height: 92 * unit,
+      width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        color: _PhoneAuthPageState._surfaceMuted,
+        borderRadius: BorderRadius.circular(24 * unit),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(14),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+              fontSize: 13 * unit,
+              fontWeight: FontWeight.w500,
+              color: _PhoneAuthPageState._textMuted,
             ),
-            alignment: Alignment.center,
-            child: Icon(feature.icon, color: AppColors.onDark),
           ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  feature.title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.onDark,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  feature.description,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.84),
-                    height: 1.6,
-                  ),
-                ),
-              ],
+          SizedBox(height: 8 * unit),
+          Text(
+            subtitle,
+            style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+              fontSize: 14 * unit,
+              fontWeight: FontWeight.w700,
+              color: _PhoneAuthPageState._textSecondary,
             ),
           ),
         ],
@@ -1837,173 +2035,95 @@ class _StageFeatureTile extends StatelessWidget {
   }
 }
 
-class _BlurOrb extends StatelessWidget {
-  const _BlurOrb({required this.size, required this.color});
+class _PencilSuccessIllustration extends StatelessWidget {
+  const _PencilSuccessIllustration({required this.unit});
 
-  final double size;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: <Color>[color, color.withValues(alpha: 0)],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AuthPasswordField extends StatefulWidget {
-  const _AuthPasswordField({
-    required this.fieldKey,
-    required this.controller,
-    required this.labelText,
-    required this.hintText,
-    required this.textInputAction,
-  });
-
-  final Key fieldKey;
-  final TextEditingController controller;
-  final String labelText;
-  final String hintText;
-  final TextInputAction textInputAction;
-
-  @override
-  State<_AuthPasswordField> createState() => _AuthPasswordFieldState();
-}
-
-class _AuthPasswordFieldState extends State<_AuthPasswordField> {
-  late final FocusNode _focusNode;
-  late TextEditingController _localController;
-  bool _obscureText = true;
-  bool _isSyncingFromExternal = false;
-  bool _isSyncingToExternal = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _focusNode = FocusNode()..addListener(_handleFocusChange);
-    _localController = TextEditingController(text: widget.controller.text)
-      ..addListener(_syncToExternalController);
-    widget.controller.addListener(_syncFromExternalController);
-  }
-
-  @override
-  void didUpdateWidget(covariant _AuthPasswordField oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_syncFromExternalController);
-      widget.controller.addListener(_syncFromExternalController);
-      _rebuildLocalController(widget.controller.text);
-      if (mounted) {
-        setState(() {});
-      }
-    }
-    _syncFromExternalController();
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_syncFromExternalController);
-    _focusNode
-      ..removeListener(_handleFocusChange)
-      ..dispose();
-    _localController.removeListener(_syncToExternalController);
-    _localController.dispose();
-    super.dispose();
-  }
-
-  void _handleFocusChange() {
-    if (!_focusNode.hasFocus) {
-      _syncToExternalController();
-    }
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _obscureText = !_focusNode.hasFocus;
-    });
-  }
-
-  void _rebuildLocalController(String text) {
-    final TextEditingController previous = _localController;
-    previous.removeListener(_syncToExternalController);
-    _localController = TextEditingController.fromValue(
-      TextEditingValue(
-        text: text,
-        selection: TextSelection.collapsed(offset: text.length),
-      ),
-    )..addListener(_syncToExternalController);
-    previous.dispose();
-  }
-
-  void _syncFromExternalController() {
-    if (_isSyncingToExternal) {
-      return;
-    }
-    final String externalText = widget.controller.text;
-    if (_localController.text == externalText) {
-      return;
-    }
-    _isSyncingFromExternal = true;
-    _rebuildLocalController(externalText);
-    _isSyncingFromExternal = false;
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  void _syncToExternalController() {
-    if (_isSyncingFromExternal) {
-      return;
-    }
-    final String value = _localController.text;
-    _isSyncingToExternal = true;
-    if (widget.controller.text != value) {
-      widget.controller.text = value;
-    }
-    _isSyncingToExternal = false;
-  }
+  final double unit;
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      key: widget.fieldKey,
-      controller: _localController,
-      focusNode: _focusNode,
-      obscureText: _obscureText,
-      textInputAction: widget.textInputAction,
-      keyboardType: TextInputType.visiblePassword,
-      enableSuggestions: false,
-      autocorrect: false,
-      enableIMEPersonalizedLearning: false,
-      smartDashesType: SmartDashesType.disabled,
-      smartQuotesType: SmartQuotesType.disabled,
-      autofillHints: const <String>[],
-      decoration: InputDecoration(
-        hintText: widget.hintText,
-        prefixIcon: const Icon(Icons.lock_outline_rounded),
-        suffixIcon: Semantics(
-          button: true,
-          label: _obscureText ? '显示密码' : '隐藏密码',
-          child: IconButton(
-            onPressed: () {
-              setState(() => _obscureText = !_obscureText);
-            },
-            icon: Icon(
-              _obscureText
-                  ? Icons.visibility_rounded
-                  : Icons.visibility_off_rounded,
-            ),
-          ),
+    final double leftRotation = -12 * math.pi / 180;
+    final double rightRotation = 12 * math.pi / 180;
+    final double topBarRotation = 32 * math.pi / 180;
+
+    return Container(
+      height: 220 * unit,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: _PhoneAuthPageState._surfaceSoft,
+        borderRadius: BorderRadius.circular(28 * unit),
+        border: Border.all(
+          color: _PhoneAuthPageState._cardBorder,
+          width: math.max(1, unit),
         ),
+      ),
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final double width = constraints.maxWidth;
+          final double height = constraints.maxHeight;
+          return Stack(
+            children: <Widget>[
+              Positioned(
+                left: width * 0.16,
+                top: height * 0.15,
+                child: Transform.rotate(
+                  angle: leftRotation,
+                  child: Container(
+                    width: width * 0.5,
+                    height: height * 0.49,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24 * unit),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: width * 0.27,
+                top: height * 0.12,
+                child: Transform.rotate(
+                  angle: rightRotation,
+                  child: Container(
+                    width: width * 0.48,
+                    height: height * 0.47,
+                    decoration: BoxDecoration(
+                      color: _PhoneAuthPageState._accentBlue,
+                      borderRadius: BorderRadius.circular(24 * unit),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: width * 0.65,
+                top: height * 0.32,
+                child: Container(
+                  width: height * 0.38,
+                  height: height * 0.38,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _PhoneAuthPageState._successBlue,
+                  ),
+                ),
+              ),
+              Positioned(
+                left: width * 0.1,
+                top: height * 0.14,
+                child: Transform.rotate(
+                  angle: topBarRotation,
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    width: width * 0.54,
+                    height: height * 0.064,
+                    decoration: BoxDecoration(
+                      color: _PhoneAuthPageState._accentBlueDeep,
+                      borderRadius: BorderRadius.circular(8 * unit),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -2105,7 +2225,7 @@ class _CaptchaVerifyDialogState extends State<_CaptchaVerifyDialog> {
     final Uint8List? imageBytes = _captchaBytes(_challenge.imageData);
 
     return AlertDialog(
-      backgroundColor: AppColors.surface,
+      backgroundColor: Colors.white,
       title: const Text('完成图片验证'),
       content: SizedBox(
         width: 320,
@@ -2116,25 +2236,25 @@ class _CaptchaVerifyDialogState extends State<_CaptchaVerifyDialog> {
             Text(
               '为了继续发送验证码或登录，请先输入图片中的字符。',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
+                color: _PhoneAuthPageState._textMuted,
                 height: 1.5,
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: 16),
             Container(
               width: double.infinity,
               height: 96,
               decoration: BoxDecoration(
-                color: AppColors.surfaceMuted,
+                color: _PhoneAuthPageState._surfaceMuted,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.surfaceBorder),
+                border: Border.all(color: _PhoneAuthPageState._cardBorder),
               ),
               alignment: Alignment.center,
               child: imageBytes == null || imageBytes.isEmpty
                   ? const Text('图片验证码加载失败')
                   : Image.memory(imageBytes, gaplessPlayback: true),
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
@@ -2153,7 +2273,7 @@ class _CaptchaVerifyDialogState extends State<_CaptchaVerifyDialog> {
               ),
             ),
             if (_error != null) ...<Widget>[
-              const SizedBox(height: AppSpacing.sm),
+              const SizedBox(height: 12),
               Text(
                 _error!,
                 style: Theme.of(

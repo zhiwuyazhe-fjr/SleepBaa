@@ -12,7 +12,6 @@ import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
 import 'package:sleep_dorm_app/core/widgets/bottom_nav_shell.dart';
-import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/pages/assistant_page.dart';
 import 'package:sleep_dorm_app/features/auth/presentation/pages/phone_auth_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_page.dart';
@@ -405,6 +404,19 @@ void main() {
         clock: _dayClock,
       );
 
+      final BuildContext authContext = tester.element(
+        find.byType(PhoneAuthPage),
+      );
+      final AppServices authServices = AppScope.of(authContext);
+      await authServices.profileFacade.registerWithPhone(
+        phoneNumber: '13800138000',
+        verificationId: 'verification-id',
+        code: '123456',
+        password: 'secret123',
+      );
+      await authServices.authRepository.signOut();
+      await tester.pump();
+
       expect(find.textContaining('首次进入需要'), findsNothing);
       expect(
         find.byKey(const ValueKey<String>('auth-login-phone')),
@@ -426,11 +438,10 @@ void main() {
       );
       await tester.enterText(
         find.byKey(const ValueKey<String>('auth-register-phone')),
-        '13800138000',
+        '13900139000',
       );
       await tester.tap(find.widgetWithText(FilledButton, '发送验证码').first);
       await tester.pumpAndSettle();
-      expect(find.byType(SnackBar), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey<String>('auth-mode-login')));
       await tester.pumpAndSettle();
@@ -443,7 +454,45 @@ void main() {
         find.byKey(const ValueKey<String>('auth-reset-phone')),
         findsOneWidget,
       );
-      expect(find.text('返回登录'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-verify')),
+        findsOneWidget,
+      );
+      expect(find.text('联系客服协助处理'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-reset-phone')),
+        '13800138000',
+      );
+      final FilledButton resetSendButton = tester.widget<FilledButton>(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('auth-reset-send')),
+          matching: find.byType(FilledButton),
+        ),
+      );
+      expect(resetSendButton.onPressed, isNotNull);
+      resetSendButton.onPressed!.call();
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-reset-code')),
+        '123456',
+      );
+      await tester.pump();
+      final FilledButton verifyButton = tester.widget<FilledButton>(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('auth-reset-verify')),
+          matching: find.byType(FilledButton),
+        ),
+      );
+      expect(verifyButton.onPressed, isNotNull);
+      verifyButton.onPressed!.call();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-password')),
+        findsOneWidget,
+      );
+      expect(find.text('密码建议'), findsOneWidget);
     },
   );
 
@@ -479,13 +528,20 @@ void main() {
 
       await tester.enterText(phoneField, '13800138000');
       await tester.enterText(phoneField, '13900139000');
+      await tester.tap(
+        find.byKey(const ValueKey<String>('auth-register-send')),
+      );
+      await tester.pumpAndSettle();
       await tester.enterText(passwordField, 'secret123');
       await tester.enterText(confirmField, 'secret123');
       await tester.enterText(codeField, '123456');
       await tester.pump();
 
-      expect(find.text('13900139000'), findsOneWidget);
-      final PrimaryButton button = tester.widget<PrimaryButton>(submitButton);
+      final TextField phoneTextField = tester.widget<TextField>(phoneField);
+      expect(phoneTextField.controller?.text, '13900139000');
+      final FilledButton button = tester.widget<FilledButton>(
+        find.descendant(of: submitButton, matching: find.byType(FilledButton)),
+      );
       expect(button.onPressed, isNotNull);
     },
   );
