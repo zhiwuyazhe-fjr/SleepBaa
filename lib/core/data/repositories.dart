@@ -114,20 +114,20 @@ abstract interface class SleepSessionRepository implements Listenable {
   SleepSession? get latestAwaitingFeedbackSession;
   List<SleepSession> recentSessions({int count = 7});
   List<SleepSession> sessionsForMonth(DateTime month);
+  SleepSession? sessionForSleepDayKey(String sleepDayKey);
+  Future<List<SleepSession>> archivePastCutoffSessions({required DateTime now});
 
-  Future<SleepSession> startSleepSession({
+  Future<SleepSession> startOrResumeSleepSession({
     required List<NightRecommendation> recommendationSnapshot,
     required String? dormId,
+    DateTime? at,
   });
 
-  Future<void> updateActiveSession({
-    bool? sleepModeActive,
-    SleepSessionStatus? status,
-    DateTime? endedAt,
-    List<String>? selectedRecommendationIds,
-  });
+  Future<SleepSession?> pauseActiveSleepSession({DateTime? at});
 
-  Future<void> saveSession(SleepSession session);
+  Future<SleepSession?> finishActiveSleepSession({DateTime? at});
+
+  Future<void> saveSession(SleepSession session, {bool syncRemote = true});
 }
 
 abstract interface class FeedbackRepository implements Listenable {
@@ -160,10 +160,6 @@ abstract interface class NotificationRepository implements Listenable {
   List<NotificationItem> unreadNotifications();
   Future<void> markRead(String notificationId);
   Future<void> upsertNotification(NotificationItem notification);
-  Future<void> registerDeviceToken({
-    required String token,
-    required String platform,
-  });
 }
 
 abstract interface class DormRepository implements Listenable {
@@ -216,6 +212,8 @@ abstract interface class DreamRepository implements Listenable {
 abstract interface class InsightsRepository implements Listenable {
   List<SleepInsight> get interferenceInsights;
   SleepReport get currentReport;
+  SleepTrendSeries get profileSleepDurationTrend;
+  SleepTrendSeries get profileSleepQualityTrend;
   Future<void> refresh();
 }
 
@@ -263,4 +261,6 @@ abstract interface class PushNotificationGateway {
     required String sessionId,
     required DateTime when,
   });
+
+  Future<void> cancelFeedbackReminder({required String sessionId});
 }

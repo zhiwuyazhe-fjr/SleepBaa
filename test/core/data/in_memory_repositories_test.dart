@@ -141,7 +141,7 @@ void main() {
     final InMemorySleepSessionRepository repository =
         InMemorySleepSessionRepository();
 
-    final SleepSession session = await repository.startSleepSession(
+    final SleepSession session = await repository.startOrResumeSleepSession(
       recommendationSnapshot: const <NightRecommendation>[
         NightRecommendation(
           id: 'audio',
@@ -158,14 +158,207 @@ void main() {
 
     expect(repository.activeSession?.id, session.id);
 
-    await repository.updateActiveSession(
-      sleepModeActive: false,
-      status: SleepSessionStatus.awaitingFeedback,
-      endedAt: DateTime.now(),
-    );
+    await repository.finishActiveSleepSession();
 
     expect(repository.latestAwaitingFeedbackSession?.id, session.id);
   });
+
+  test('sleep day key switches at 20:00 instead of calendar midnight', () {
+    expect(sleepDayKeyFromDate(DateTime(2026, 4, 17, 19, 59)), '2026-04-17');
+    expect(sleepDayKeyFromDate(DateTime(2026, 4, 17, 20, 0)), '2026-04-18');
+    expect(sleepDayKeyFromDate(DateTime(2026, 4, 17, 20, 1)), '2026-04-18');
+  });
+
+  test(
+    'sleep session repository resumes a paused same-day session and accumulates duration',
+    () async {
+      final InMemorySleepSessionRepository repository =
+          InMemorySleepSessionRepository(
+            initialSessions: const <SleepSession>[],
+          );
+      final DateTime startAt = DateTime(2026, 4, 13, 23, 0);
+      final String sleepDayKey = sleepDayKeyFromDate(startAt);
+
+      final SleepSession first = await repository.startOrResumeSleepSession(
+        recommendationSnapshot: const <NightRecommendation>[],
+        dormId: 'dorm-204',
+        at: startAt,
+      );
+      await repository.pauseActiveSleepSession(at: DateTime(2026, 4, 14, 1, 0));
+
+      final SleepSession resumed = await repository.startOrResumeSleepSession(
+        recommendationSnapshot: const <NightRecommendation>[],
+        dormId: 'dorm-204',
+        at: DateTime(2026, 4, 14, 2, 0),
+      );
+      await repository.finishActiveSleepSession(
+        at: DateTime(2026, 4, 14, 5, 0),
+      );
+
+      final SleepSession finished = repository.sessionForSleepDayKey(
+        sleepDayKey,
+      )!;
+      expect(resumed.id, first.id);
+      expect(finished.id, first.id);
+      expect(finished.status, SleepSessionStatus.awaitingFeedback);
+      expect(finished.trackedDurationMinutes, 300);
+      expect(finished.segments.length, 2);
+    },
+  );
+
+  test(
+    'sleep session repository archives active stale sessions at the sleep-day cutoff',
+    () async {
+      final InMemorySleepSessionRepository repository =
+          InMemorySleepSessionRepository(
+            initialSessions: const <SleepSession>[],
+          );
+      final DateTime startAt = DateTime(2026, 4, 16, 23, 0);
+      final String sleepDayKey = sleepDayKeyFromDate(startAt);
+
+      await repository.startOrResumeSleepSession(
+        recommendationSnapshot: const <NightRecommendation>[],
+        dormId: 'dorm-204',
+        at: startAt,
+      );
+
+      final List<SleepSession> archived = await repository
+          .archivePastCutoffSessions(now: DateTime(2026, 4, 17, 20, 5));
+
+      final SleepSession session = repository.sessionForSleepDayKey(
+        sleepDayKey,
+      )!;
+      expect(archived.map((SleepSession item) => item.id), <String>[
+        session.id,
+      ]);
+      expect(session.status, SleepSessionStatus.awaitingFeedback);
+      expect(session.sleepModeActive, isFalse);
+      expect(session.displayEndAt, DateTime(2026, 4, 17, 20, 0));
+      expect(session.trackedDurationMinutes, 1260);
+    },
+  );
+
+  test(
+    'sleep session repository archives paused stale sessions without changing tracked duration',
+    () async {
+      final InMemorySleepSessionRepository repository =
+          InMemorySleepSessionRepository(
+            initialSessions: const <SleepSession>[],
+          );
+      final DateTime startAt = DateTime(2026, 4, 16, 23, 0);
+      final String sleepDayKey = sleepDayKeyFromDate(startAt);
+
+      await repository.startOrResumeSleepSession(
+        recommendationSnapshot: const <NightRecommendation>[],
+        dormId: 'dorm-204',
+        at: startAt,
+      );
+      await repository.pauseActiveSleepSession(at: DateTime(2026, 4, 17, 7, 0));
+
+      final List<SleepSession> archived = await repository
+          .archivePastCutoffSessions(now: DateTime(2026, 4, 17, 20, 5));
+
+      final SleepSession session = repository.sessionForSleepDayKey(
+        sleepDayKey,
+      )!;
+      expect(archived.map((SleepSession item) => item.id), <String>[
+        session.id,
+      ]);
+      expect(session.status, SleepSessionStatus.awaitingFeedback);
+      expect(session.sleepModeActive, isFalse);
+      expect(session.trackedDurationMinutes, 480);
+      expect(session.displayEndAt, DateTime(2026, 4, 17, 7, 0));
+    },
+  );
+
+  test(
+    'sleep session repository prefers the latest archived pending session when multiple old days are normalized',
+    () async {
+      final InMemorySleepSessionRepository repository =
+          InMemorySleepSessionRepository(
+            initialSessions: const <SleepSession>[],
+          );
+
+      await repository.startOrResumeSleepSession(
+        recommendationSnapshot: const <NightRecommendation>[],
+        dormId: 'dorm-204',
+        at: DateTime(2026, 4, 14, 23, 0),
+      );
+      await repository.pauseActiveSleepSession(at: DateTime(2026, 4, 15, 6, 0));
+      await repository.startOrResumeSleepSession(
+        recommendationSnapshot: const <NightRecommendation>[],
+        dormId: 'dorm-204',
+        at: DateTime(2026, 4, 15, 23, 0),
+      );
+      await repository.pauseActiveSleepSession(
+        at: DateTime(2026, 4, 16, 6, 30),
+      );
+
+      final List<SleepSession> archived = await repository
+          .archivePastCutoffSessions(now: DateTime(2026, 4, 17, 20, 5));
+
+      expect(archived, hasLength(2));
+      expect(archived.first.sleepDayDate, DateTime(2026, 4, 15));
+      expect(archived.last.sleepDayDate, DateTime(2026, 4, 16));
+      expect(
+        repository.latestAwaitingFeedbackSession?.sleepDayDate,
+        DateTime(2026, 4, 16),
+      );
+    },
+  );
+
+  test(
+    'sleep session repository keeps tracked duration locked after morning feedback is submitted',
+    () async {
+      final InMemorySleepSessionRepository sessions =
+          InMemorySleepSessionRepository(
+            initialSessions: const <SleepSession>[],
+          );
+      final InMemoryFeedbackRepository feedbackRepository =
+          InMemoryFeedbackRepository(sleepSessionRepository: sessions);
+      final DateTime startAt = DateTime(2026, 4, 13, 23, 30);
+      final String sleepDayKey = sleepDayKeyFromDate(startAt);
+
+      await sessions.startOrResumeSleepSession(
+        recommendationSnapshot: const <NightRecommendation>[],
+        dormId: 'dorm-204',
+        at: startAt,
+      );
+      await sessions.finishActiveSleepSession(at: DateTime(2026, 4, 14, 6, 30));
+
+      final SleepSession awaiting = sessions.sessionForSleepDayKey(
+        sleepDayKey,
+      )!;
+      await feedbackRepository.submitFeedback(
+        session: awaiting,
+        summary: const MorningSummary(
+          sleepQuality: 4,
+          restedLevel: 4,
+          totalSleepHours: 7,
+          awakeningsCount: 0,
+          note: 'locked',
+        ),
+        recommendationFeedback: const <RecommendationFeedback>[],
+      );
+
+      final SleepSession completed = sessions.sessionForSleepDayKey(
+        sleepDayKey,
+      )!;
+      final int lockedMinutes = completed.trackedDurationMinutes;
+
+      await sessions.startOrResumeSleepSession(
+        recommendationSnapshot: const <NightRecommendation>[],
+        dormId: 'dorm-204',
+        at: DateTime(2026, 4, 14, 9, 0),
+      );
+      await sessions.finishActiveSleepSession(at: DateTime(2026, 4, 14, 10, 0));
+
+      final SleepSession locked = sessions.sessionForSleepDayKey(sleepDayKey)!;
+      expect(locked.status, SleepSessionStatus.completed);
+      expect(locked.trackedDurationMinutes, lockedMinutes);
+      expect(locked.hasSubmittedFeedback, isTrue);
+    },
+  );
 
   test('feedback repository marks session completed', () async {
     final InMemorySleepSessionRepository sessions =
@@ -173,7 +366,7 @@ void main() {
     final InMemoryFeedbackRepository feedbackRepository =
         InMemoryFeedbackRepository(sleepSessionRepository: sessions);
 
-    final SleepSession session = await sessions.startSleepSession(
+    final SleepSession session = await sessions.startOrResumeSleepSession(
       recommendationSnapshot: const <NightRecommendation>[],
       dormId: 'dorm-204',
     );

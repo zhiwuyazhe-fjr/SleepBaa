@@ -10,6 +10,64 @@ function buildVersion(): string {
   return `v-${Date.now()}`;
 }
 
+function dateKeyOf(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function sleepDayKeyFromDate(date: Date): string {
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const shifted = new Date(date.getTime() + 4 * 60 * 60 * 1000);
+  return dateKeyOf(shifted);
+}
+
+function sleepDayDateFromKey(value: string): Date | null {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date;
+}
+
+function weekdayLabelOf(date: Date): string {
+  return ["日", "一", "二", "三", "四", "五", "六"][date.getDay()] ?? "日";
+}
+
+function buildTrendPoints(
+  sessions: AssistantContext["recentSessions"],
+  valueOf: (session: AssistantContext["recentSessions"][number]) => number | null | undefined,
+): Array<Record<string, unknown>> {
+  const today =
+    sleepDayDateFromKey(sleepDayKeyFromDate(new Date())) ?? new Date();
+  today.setHours(0, 0, 0, 0);
+  const timeline = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(today);
+    day.setDate(today.getDate() - (6 - index));
+    return day;
+  });
+  const valuesByDateKey = new Map<string, number | null>();
+  for (const session of sessions) {
+    const sleepDayKey =
+      session.sleepDayKey ||
+      (session.startedAt ? sleepDayKeyFromDate(new Date(session.startedAt)) : "");
+    if (!sleepDayKey) {
+      continue;
+    }
+    valuesByDateKey.set(sleepDayKey, valueOf(session) ?? null);
+  }
+  return timeline.map((day) => ({
+    dateKey: dateKeyOf(day),
+    weekdayLabel: weekdayLabelOf(day),
+    value: valuesByDateKey.get(dateKeyOf(day)) ?? null,
+  }));
+}
+
 export function buildCardSnapshots(
   context: AssistantContext,
   userState: UserStateDoc,
@@ -205,7 +263,11 @@ function buildProfileReportSnapshot(
   userState: UserStateDoc,
 ): CardSnapshotDoc {
   const completed = context.recentSessions.filter(
-    (item) => typeof item.totalSleepHours === "number",
+    (item) =>
+      item.status === "completed" &&
+      typeof item.totalSleepHours === "number" &&
+      typeof item.sleepQuality === "number" &&
+      typeof item.restedLevel === "number",
   );
   const averageSleepHours =
     completed.length === 0
@@ -222,7 +284,7 @@ function buildProfileReportSnapshot(
       ? 0
       : completed.reduce((sum, item) => sum + (item.restedLevel ?? 0), 0) /
         completed.length;
-  const calmNights = context.recentSessions.filter(
+  const calmNights = completed.filter(
     (item) => item.awakeningsCount === 0,
   ).length;
   const payload = {
@@ -237,6 +299,22 @@ function buildProfileReportSnapshot(
       userState.profileSummary.emotionTrendSummary,
     ],
   };
+  const durationTrendPoints = buildTrendPoints(
+    completed,
+    (session) =>
+      typeof session.totalSleepHours === "number" ? session.totalSleepHours : null,
+  );
+  const qualityTrendPoints = buildTrendPoints(
+    completed,
+    (session) => {
+      if (typeof session.sleepQuality !== "number") {
+        return null;
+      }
+      return session.sleepQuality <= 5
+        ? session.sleepQuality * 20
+        : session.sleepQuality;
+    },
+  );
   return {
     surfaceId: "profile_report",
     version: buildVersion(),
@@ -253,6 +331,36 @@ function buildProfileReportSnapshot(
         actionRoute: "/profile/report",
         payload,
         priority: 0,
+      },
+      {
+        id: "sleep-duration-trend",
+        type: "sleep_duration_trend",
+        title: "七日睡眠时长",
+        subtitle: "保留近 7 天睡眠时长趋势，后续按晨间反馈补齐。",
+        metric: `${averageSleepHours.toFixed(1)} 小时`,
+        chipLabel: "睡眠趋势",
+        actionRoute: "/profile",
+        payload: {
+          metricKey: "sleep_duration",
+          unit: "hours",
+          points: durationTrendPoints,
+        },
+        priority: -1,
+      },
+      {
+        id: "sleep-quality-trend",
+        type: "sleep_quality_trend",
+        title: "七日睡眠质量",
+        subtitle: "保留近 7 天睡眠质量趋势，后续按晨间反馈补齐。",
+        metric: `${averageSleepQuality.toFixed(1)} 分`,
+        chipLabel: "睡眠趋势",
+        actionRoute: "/profile",
+        payload: {
+          metricKey: "sleep_quality",
+          unit: "score",
+          points: qualityTrendPoints,
+        },
+        priority: -2,
       },
     ],
     sourceRefs: [
