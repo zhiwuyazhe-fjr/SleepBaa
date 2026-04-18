@@ -2157,6 +2157,42 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
     return matches.isEmpty ? null : matches.last;
   }
 
+  @override
+  Future<List<SleepSession>> archivePastCutoffSessions({
+    required DateTime now,
+  }) async {
+    final String currentSleepDayKey = sleepDayKeyFromDate(now);
+    final List<SleepSession> staleSessions =
+        _sessions
+            .where(
+              (SleepSession session) =>
+                  !session.hasSubmittedFeedback &&
+                  session.sleepDayKey != currentSleepDayKey,
+            )
+            .toList()
+          ..sort(_compareSleepSessions);
+    final List<SleepSession> archived = <SleepSession>[];
+    for (final SleepSession session in staleSessions) {
+      if (session.status != SleepSessionStatus.active &&
+          session.status != SleepSessionStatus.paused) {
+        continue;
+      }
+      final SleepSession normalized = _archivePastCutoffSession(
+        session,
+        now: now,
+      );
+      if (normalized.id == session.id &&
+          normalized.status == session.status &&
+          normalized.updatedAt == session.updatedAt &&
+          normalized.displayEndAt == session.displayEndAt) {
+        continue;
+      }
+      await saveSession(normalized);
+      archived.add(normalized);
+    }
+    return archived;
+  }
+
   SleepSession _resumeSession(
     SleepSession session, {
     required DateTime at,
@@ -2226,6 +2262,30 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
           : trackedDurationMinutes,
       updatedAt: at,
     );
+  }
+
+  SleepSession _archivePastCutoffSession(
+    SleepSession session, {
+    required DateTime now,
+  }) {
+    switch (session.status) {
+      case SleepSessionStatus.paused:
+        return session.copyWith(
+          status: SleepSessionStatus.awaitingFeedback,
+          sleepModeActive: false,
+          updatedAt: now,
+        );
+      case SleepSessionStatus.active:
+        return _closeActiveSession(
+          session,
+          at: _sleepDayCutoff(session),
+          targetStatus: SleepSessionStatus.awaitingFeedback,
+        );
+      case SleepSessionStatus.drafted:
+      case SleepSessionStatus.awaitingFeedback:
+      case SleepSessionStatus.completed:
+        return session;
+    }
   }
 
   String _pathForSessionSync(SleepSession session) {
@@ -2314,6 +2374,16 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
     return aTimestamp.compareTo(bTimestamp);
   }
 
+  static DateTime _sleepDayCutoff(SleepSession session) {
+    final DateTime sleepDayDate = session.sleepDayDate;
+    return DateTime(
+      sleepDayDate.year,
+      sleepDayDate.month,
+      sleepDayDate.day,
+      20,
+    );
+  }
+
   void _applySnapshot() {
     final _SnapshotData snapshot = _SnapshotData.fromPayload(
       _snapshotStore.payload,
@@ -2321,18 +2391,72 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
     );
     _currentPhase = _stringOf(snapshot.userState['currentPhase']);
     _activeSessionId = _stringOf(snapshot.userState['activeSessionId']);
-    _sessions =
-        snapshot.sessions
-            .map(
-              (SleepSession session) => _normalizeSleepSessionForPhase(
-                session,
-                currentPhase: _currentPhase,
-                activeSessionId: _activeSessionId,
-              ),
-            )
-            .toList(growable: false)
-          ..sort(_compareSleepSessions);
+    final List<SleepSession> snapshotSessions = snapshot.sessions
+        .map(
+          (SleepSession session) => _normalizeSleepSessionForPhase(
+            session,
+            currentPhase: _currentPhase,
+            activeSessionId: _activeSessionId,
+          ),
+        )
+        .toList(growable: false);
+    _sessions = _mergeSnapshotSessions(
+      previousLocalSessions: _sessions,
+      snapshotSessions: snapshotSessions,
+    )..sort(_compareSleepSessions);
     notifyListeners();
+  }
+
+  static List<SleepSession> _mergeSnapshotSessions({
+    required List<SleepSession> previousLocalSessions,
+    required List<SleepSession> snapshotSessions,
+  }) {
+    final Map<String, SleepSession> mergedById = <String, SleepSession>{
+      for (final SleepSession session in snapshotSessions) session.id: session,
+    };
+    for (final SleepSession localSession in previousLocalSessions) {
+      final SleepSession? snapshotSession = mergedById[localSession.id];
+      if (snapshotSession == null) {
+        mergedById[localSession.id] = localSession;
+        continue;
+      }
+      if (_shouldPreferLocalSession(localSession, snapshotSession)) {
+        mergedById[localSession.id] = localSession;
+      }
+    }
+    return mergedById.values.toList(growable: false);
+  }
+
+  static bool _shouldPreferLocalSession(
+    SleepSession localSession,
+    SleepSession snapshotSession,
+  ) {
+    final DateTime localTimestamp =
+        localSession.updatedAt ??
+        localSession.displayEndAt ??
+        localSession.displayStartAt;
+    final DateTime snapshotTimestamp =
+        snapshotSession.updatedAt ??
+        snapshotSession.displayEndAt ??
+        snapshotSession.displayStartAt;
+    if (localTimestamp.isAfter(snapshotTimestamp)) {
+      return true;
+    }
+    if (snapshotTimestamp.isAfter(localTimestamp)) {
+      return false;
+    }
+    if (localSession.hasSubmittedFeedback &&
+        !snapshotSession.hasSubmittedFeedback) {
+      return true;
+    }
+    if (localSession.status == SleepSessionStatus.completed &&
+        snapshotSession.status != SleepSessionStatus.completed) {
+      return true;
+    }
+    if (localSession.feedback.length > snapshotSession.feedback.length) {
+      return true;
+    }
+    return false;
   }
 
   void _applyLocalSleepPhase(SleepSession session) {
@@ -2379,14 +2503,15 @@ class CloudBaseFeedbackRepository extends ChangeNotifier
     required MorningSummary summary,
     required List<RecommendationFeedback> recommendationFeedback,
   }) async {
+    final SleepSession completedSession = session.copyWith(
+      status: SleepSessionStatus.completed,
+      sleepModeActive: false,
+      summary: summary,
+      feedback: recommendationFeedback,
+      updatedAt: DateTime.now(),
+    );
     await _sleepSessionRepository.saveSession(
-      session.copyWith(
-        status: SleepSessionStatus.completed,
-        sleepModeActive: false,
-        summary: summary,
-        feedback: recommendationFeedback,
-        updatedAt: DateTime.now(),
-      ),
+      completedSession,
       syncRemote: false,
     );
     if (_appApiClient.isConfigured) {
@@ -2394,15 +2519,20 @@ class CloudBaseFeedbackRepository extends ChangeNotifier
         await _appApiClient.post(
           '/api/feedback/morning',
           body: <String, dynamic>{
-            'sessionId': session.id,
+            'sessionId': completedSession.id,
+            'session': ModelSerializers.sleepSessionToMap(completedSession),
             'summary': ModelSerializers.morningSummaryToMap(summary),
-            'recommendationFeedback': recommendationFeedback
+            'feedback': recommendationFeedback
                 .map(ModelSerializers.recommendationFeedbackToMap)
                 .toList(growable: false),
           },
         );
         await _snapshotStore.refresh();
-      } catch (_) {
+      } catch (error) {
+        debugPrint(
+          'CloudBase morning feedback sync failed for ${completedSession.id}: '
+          '$error',
+        );
         // Local state is already updated.
       }
     }

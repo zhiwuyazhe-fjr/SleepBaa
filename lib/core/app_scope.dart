@@ -133,6 +133,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
       appNotificationService: _appNotificationService,
       audioPlaybackController: _audioPlaybackController,
       pushNotificationGateway: const NoOpPushNotificationGateway(),
+      clock: widget.clock,
     );
     _sleepModeNotificationController = SleepModeNotificationController(
       sleepSessionRepository: _sleepSessionRepository,
@@ -336,6 +337,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _cloudBaseNotificationSyncController.handleAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
+      unawaited(_sleepExperienceController.handleAppResumed());
       unawaited(_dormPresenceSyncController.syncPresenceFromCurrentLocation());
     }
   }

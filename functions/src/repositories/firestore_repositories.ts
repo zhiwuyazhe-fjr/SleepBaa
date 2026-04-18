@@ -138,6 +138,37 @@ function asString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
+function sleepDayKeyFromIso(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const shifted = new Date(date.getTime() + 4 * 60 * 60 * 1000);
+  const month = `${shifted.getMonth() + 1}`.padStart(2, "0");
+  const day = `${shifted.getDate()}`.padStart(2, "0");
+  return `${shifted.getFullYear()}-${month}-${day}`;
+}
+
+function sleepDayKeyOf(doc: JsonMap): string {
+  return (
+    asString(doc.sleepDayKey, sleepDayKeyFromIso(asString(doc.startedAt))) ||
+    asString(doc.id, asString(doc._id))
+  );
+}
+
+function sleepSessionSortTimestamp(doc: JsonMap): number {
+  const updatedAt = Date.parse(asString(doc.updatedAt));
+  if (!Number.isNaN(updatedAt)) {
+    return updatedAt;
+  }
+  const endedAt = Date.parse(asString(doc.endedAt));
+  if (!Number.isNaN(endedAt)) {
+    return endedAt;
+  }
+  const startedAt = Date.parse(asString(doc.startedAt));
+  return Number.isNaN(startedAt) ? 0 : startedAt;
+}
+
 function asNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" ? value : fallback;
 }
@@ -398,6 +429,7 @@ function summarizeSleepSession(doc: JsonMap): ContextSleepSessionSummary {
       : undefined;
   return {
     id: asString(doc.id, asString(doc._id)),
+    sleepDayKey: sleepDayKeyOf(doc),
     startedAt: asString(doc.startedAt),
     endedAt: asString(doc.endedAt),
     status: asString(doc.status, "drafted"),
@@ -1056,10 +1088,26 @@ export class FirestoreRepository implements AssistantDataRepository {
   ): Promise<ContextSleepSessionSummary[]> {
     const docs = await this.store.query(Collections.sleepSessions, {
       filters: { uid },
-      orderBy: { field: "startedAt", direction: "desc" },
-      limit: count,
     });
-    return docs.map((doc) => summarizeSleepSession(withoutMeta(doc)));
+    const latestBySleepDayKey = new Map<string, JsonMap>();
+    for (const doc of docs) {
+      const value = withoutMeta(doc);
+      const sleepDayKey = sleepDayKeyOf(value);
+      const existing = latestBySleepDayKey.get(sleepDayKey);
+      if (!existing || sleepSessionSortTimestamp(existing) < sleepSessionSortTimestamp(value)) {
+        latestBySleepDayKey.set(sleepDayKey, value);
+      }
+    }
+    return Array.from(latestBySleepDayKey.values())
+      .sort((a, b) => {
+        const sleepDayCompare = sleepDayKeyOf(b).localeCompare(sleepDayKeyOf(a));
+        if (sleepDayCompare !== 0) {
+          return sleepDayCompare;
+        }
+        return sleepSessionSortTimestamp(b) - sleepSessionSortTimestamp(a);
+      })
+      .slice(0, count)
+      .map((doc) => summarizeSleepSession(doc));
   }
 
   async listRecentDreamEntries(

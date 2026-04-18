@@ -40,6 +40,7 @@ function buildContext(): AssistantContext {
     recentSessions: [
       {
         id: "session-1",
+        sleepDayKey: "2026-04-11",
         startedAt: "2026-04-10T23:10:00.000Z",
         status: "completed",
         awakeningsCount: 0,
@@ -49,6 +50,7 @@ function buildContext(): AssistantContext {
       },
       {
         id: "session-2",
+        sleepDayKey: "2026-04-13",
         startedAt: "2026-04-12T23:20:00.000Z",
         status: "completed",
         awakeningsCount: 1,

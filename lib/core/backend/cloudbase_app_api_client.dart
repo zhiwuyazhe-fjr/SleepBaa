@@ -52,11 +52,12 @@ class CloudBaseAppApiClient {
     String path, {
     Map<String, dynamic> body = const <String, dynamic>{},
   }) async {
+    final Map<String, dynamic> normalizedBody = _normalizeJsonMap(body);
     CloudBaseSession session = await _requireSession();
     http.Response response = await _httpClient.post(
       _uri(path),
       headers: _headers(session.accessToken, session.deviceId),
-      body: jsonEncode(body),
+      body: jsonEncode(normalizedBody),
     );
 
     if (response.statusCode == 401 && session.refreshToken.isNotEmpty) {
@@ -64,7 +65,7 @@ class CloudBaseAppApiClient {
       response = await _httpClient.post(
         _uri(path),
         headers: _headers(session.accessToken, session.deviceId),
-        body: jsonEncode(body),
+        body: jsonEncode(normalizedBody),
       );
     }
 
@@ -151,4 +152,30 @@ Map<String, dynamic> _decodeApiPayload(String body) {
 
 String _stripLeadingSlash(String value) {
   return value.startsWith('/') ? value.substring(1) : value;
+}
+
+Map<String, dynamic> _normalizeJsonMap(Map<String, dynamic> value) {
+  return <String, dynamic>{
+    for (final MapEntry<String, dynamic> entry in value.entries)
+      entry.key: _normalizeJsonValue(entry.value),
+  };
+}
+
+dynamic _normalizeJsonValue(dynamic value) {
+  if (value == null || value is num || value is bool || value is String) {
+    return value;
+  }
+  if (value is DateTime) {
+    return value.toIso8601String();
+  }
+  if (value is Map) {
+    return <String, dynamic>{
+      for (final MapEntry<dynamic, dynamic> entry in value.entries)
+        entry.key.toString(): _normalizeJsonValue(entry.value),
+    };
+  }
+  if (value is Iterable) {
+    return value.map(_normalizeJsonValue).toList(growable: false);
+  }
+  return value;
 }

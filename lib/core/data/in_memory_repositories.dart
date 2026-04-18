@@ -741,6 +741,42 @@ class InMemorySleepSessionRepository extends ChangeNotifier
     return matches.isEmpty ? null : matches.last;
   }
 
+  @override
+  Future<List<SleepSession>> archivePastCutoffSessions({
+    required DateTime now,
+  }) async {
+    final String currentSleepDayKey = sleepDayKeyFromDate(now);
+    final List<SleepSession> staleSessions =
+        _sessions
+            .where(
+              (SleepSession session) =>
+                  !session.hasSubmittedFeedback &&
+                  session.sleepDayKey != currentSleepDayKey,
+            )
+            .toList()
+          ..sort(_compareSleepSessions);
+    final List<SleepSession> archived = <SleepSession>[];
+    for (final SleepSession session in staleSessions) {
+      if (session.status != SleepSessionStatus.active &&
+          session.status != SleepSessionStatus.paused) {
+        continue;
+      }
+      final SleepSession normalized = _archivePastCutoffSession(
+        session,
+        now: now,
+      );
+      if (normalized.id == session.id &&
+          normalized.status == session.status &&
+          normalized.updatedAt == session.updatedAt &&
+          normalized.displayEndAt == session.displayEndAt) {
+        continue;
+      }
+      await saveSession(normalized);
+      archived.add(normalized);
+    }
+    return archived;
+  }
+
   SleepSession _resumeSession(
     SleepSession session, {
     required DateTime at,
@@ -812,6 +848,30 @@ class InMemorySleepSessionRepository extends ChangeNotifier
     );
   }
 
+  SleepSession _archivePastCutoffSession(
+    SleepSession session, {
+    required DateTime now,
+  }) {
+    switch (session.status) {
+      case SleepSessionStatus.paused:
+        return session.copyWith(
+          status: SleepSessionStatus.awaitingFeedback,
+          sleepModeActive: false,
+          updatedAt: now,
+        );
+      case SleepSessionStatus.active:
+        return _closeActiveSession(
+          session,
+          at: _sleepDayCutoff(session),
+          targetStatus: SleepSessionStatus.awaitingFeedback,
+        );
+      case SleepSessionStatus.drafted:
+      case SleepSessionStatus.awaitingFeedback:
+      case SleepSessionStatus.completed:
+        return session;
+    }
+  }
+
   static List<SleepSegment> _normalizedSegments(SleepSession session) {
     if (session.segments.isNotEmpty) {
       return List<SleepSegment>.from(session.segments);
@@ -847,6 +907,16 @@ class InMemorySleepSessionRepository extends ChangeNotifier
     final DateTime aTimestamp = a.updatedAt ?? a.displayStartAt;
     final DateTime bTimestamp = b.updatedAt ?? b.displayStartAt;
     return aTimestamp.compareTo(bTimestamp);
+  }
+
+  static DateTime _sleepDayCutoff(SleepSession session) {
+    final DateTime sleepDayDate = session.sleepDayDate;
+    return DateTime(
+      sleepDayDate.year,
+      sleepDayDate.month,
+      sleepDayDate.day,
+      20,
+    );
   }
 
   static List<SleepSession> _seedSessions(String uid) {
@@ -1870,11 +1940,11 @@ class InMemoryInsightsRepository extends ChangeNotifier
   Future<void> refresh() async => _recompute();
 
   void _recompute() {
-    final List<SleepSession> completed = _sleepSessionRepository.sessions
-        .where((SleepSession session) => session.summary != null)
-        .toList();
     final List<SleepSession> recent = _sleepSessionRepository.recentSessions();
-    final List<SleepSession> trendSessions = _sleepSessionRepository.sessions
+    final List<SleepSession> completed = recent
+        .where((SleepSession session) => session.summary != null)
+        .toList(growable: false);
+    final List<SleepSession> trendSessions = recent
         .where((SleepSession session) => !session.id.startsWith('history-'))
         .toList(growable: false);
 
@@ -2235,7 +2305,7 @@ SleepTrendSeries _buildEmptySleepTrendSeries({
   required String metricKey,
   required String unit,
 }) {
-  final DateTime today = DateUtils.dateOnly(DateTime.now());
+  final DateTime today = _currentSleepDayDate();
   return SleepTrendSeries(
     metricKey: metricKey,
     unit: unit,
@@ -2262,7 +2332,7 @@ SleepTrendSeries _buildSleepTrendSeries({
   );
   final Map<String, SleepSession> sessionsByDateKey = <String, SleepSession>{};
   for (final SleepSession session in sessions) {
-    final String dateKey = _dateKeyOf(DateUtils.dateOnly(session.startedAt));
+    final String dateKey = session.sleepDayKey;
     sessionsByDateKey[dateKey] = session;
   }
   return base.copyWith(
@@ -2275,6 +2345,13 @@ SleepTrendSeries _buildSleepTrendSeries({
         })
         .toList(growable: false),
   );
+}
+
+DateTime _currentSleepDayDate() {
+  final DateTime? currentSleepDay = sleepDayDateFromKey(
+    sleepDayKeyFromDate(DateTime.now()),
+  );
+  return DateUtils.dateOnly(currentSleepDay ?? DateTime.now());
 }
 
 String _dateKeyOf(DateTime date) {

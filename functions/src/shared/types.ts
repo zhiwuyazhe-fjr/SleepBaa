@@ -121,6 +121,7 @@ export interface ContextDorm {
 
 export interface ContextSleepSessionSummary {
   id: string;
+  sleepDayKey: string;
   startedAt?: string;
   endedAt?: string | null;
   status: string;

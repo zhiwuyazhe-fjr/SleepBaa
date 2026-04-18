@@ -345,9 +345,12 @@ function buildSleepSessionPayload(input: {
   const awakenings = asList(input.body.awakenings ?? rawSession.awakenings).map(
     (item) => asMap(item),
   );
-  const feedback = asList(input.body.feedback ?? rawSession.feedback).map(
-    (item) => asMap(item),
-  );
+  const feedback = asList(
+    input.body.feedback ??
+      input.body.recommendationFeedback ??
+      rawSession.feedback ??
+      input.existing?.feedback,
+  ).map((item) => asMap(item));
   const summary =
     input.body.summary === null
       ? null
@@ -870,49 +873,77 @@ export function createAppApiServer() {
       const repo = createRepositoryFromEnv();
       const provider = createAIProviderFromEnv();
       const body = asMap(request.body);
+      const sessionSnapshot = asMap(body.session);
       const sessionId = asString(
         body.sessionId,
-        asString(asMap(body.session).id),
+        asString(sessionSnapshot.id),
       );
       const existing = sessionId ? await repo.getSleepSession(sessionId) : null;
-      if (!existing) {
+      if (!existing && Object.keys(sessionSnapshot).length === 0) {
         throw new Error("Sleep session was not found.");
       }
+      const summary =
+        body.summary === null
+          ? null
+          : (body.summary ?? sessionSnapshot.summary ?? existing?.summary ?? null);
+      const feedback = asList(
+        body.feedback ??
+          body.recommendationFeedback ??
+          sessionSnapshot.feedback ??
+          existing?.feedback,
+      ).map((item) => asMap(item));
+      const endedAt = asString(
+        body.endedAt,
+        asString(sessionSnapshot.endedAt, asString(existing?.endedAt, nowIso())),
+      );
       const automationRequestedAt = nowIso();
-      const session = await repo.saveSleepSession({
-        ...existing,
-        ...asMap(body.session),
-        id: sessionId,
+      const session = buildSleepSessionPayload({
         uid: request.authContext!.uid,
-        status: "completed",
-        sleepModeActive: false,
-        summary: body.summary ?? existing.summary ?? null,
-        feedback: asList(body.feedback ?? existing.feedback).map((item) =>
-          asMap(item),
-        ),
-        endedAt: asString(body.endedAt, asString(existing.endedAt, nowIso())),
-        updatedAt: automationRequestedAt,
-        _automation: buildRequestedAutomation("app-api", automationRequestedAt),
+        existing,
+        body: {
+          ...body,
+          status: "completed",
+          sleepModeActive: false,
+          summary,
+          feedback,
+          endedAt,
+          session: {
+            ...(existing ?? {}),
+            ...sessionSnapshot,
+            id: sessionId,
+            uid: request.authContext!.uid,
+            status: "completed",
+            sleepModeActive: false,
+            summary,
+            feedback,
+            endedAt,
+          },
+        },
+        active: false,
       });
+      session.updatedAt = automationRequestedAt;
+      session._automation = buildRequestedAutomation("app-api", automationRequestedAt);
+      const savedSession = await repo.saveSleepSession(session);
+      const savedSessionId = asString(savedSession.id, sessionId);
       await handleSleepSessionChange(
         repo,
         provider,
         request.authContext!.uid,
-        sessionId,
-        asString(existing.status) || null,
+        savedSessionId,
+        asString(existing?.status) || null,
         "completed",
       );
-      await repo.patchSleepSession(sessionId, {
+      await repo.patchSleepSession(savedSessionId, {
         _automation: buildCompletedAutomation({
-          previous: session._automation,
+          previous: savedSession._automation,
           derivedAt: automationRequestedAt,
           derivedBy: "app-api",
           lastHandledStatus: "completed",
         }),
       });
       response.json({
-        sessionId,
-        status: session.status,
+        sessionId: savedSessionId,
+        status: savedSession.status,
         updatedSurfaces: [
           "morning_feedback",
           "profile_report",

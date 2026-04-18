@@ -115,6 +115,7 @@ abstract interface class SleepSessionRepository implements Listenable {
   List<SleepSession> recentSessions({int count = 7});
   List<SleepSession> sessionsForMonth(DateTime month);
   SleepSession? sessionForSleepDayKey(String sleepDayKey);
+  Future<List<SleepSession>> archivePastCutoffSessions({required DateTime now});
 
   Future<SleepSession> startOrResumeSleepSession({
     required List<NightRecommendation> recommendationSnapshot,

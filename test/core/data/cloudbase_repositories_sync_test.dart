@@ -209,6 +209,84 @@ void main() {
   );
 
   test(
+    'cloudbase sleep session repository syncs archived stale sessions through the exit endpoint',
+    () async {
+      final List<_PostCall> calls = <_PostCall>[];
+      final Completer<Map<String, dynamic>> enterCompleter =
+          Completer<Map<String, dynamic>>();
+      final Completer<Map<String, dynamic>> exitCompleter =
+          Completer<Map<String, dynamic>>();
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) {
+              calls.add(_PostCall(path: path, body: body));
+              if (path == '/api/sleep/enter') {
+                return enterCompleter.future;
+              }
+              if (path == '/api/sleep/exit') {
+                return exitCompleter.future;
+              }
+              throw StateError('Unexpected path: $path');
+            },
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(
+          uid: 'cloud-user',
+          dormId: 'dorm-204',
+        ),
+      );
+      final CloudBaseSleepSessionRepository repository =
+          CloudBaseSleepSessionRepository(
+            authRepository: authRepository,
+            snapshotStore: snapshotStore,
+            appApiClient: appApiClient,
+          );
+
+      final SleepSession session = await repository.startOrResumeSleepSession(
+        recommendationSnapshot: const <NightRecommendation>[],
+        dormId: 'dorm-204',
+        at: DateTime(2026, 4, 16, 23, 0),
+      );
+
+      await pumpEventQueue();
+      expect(calls.map((call) => call.path), <String>['/api/sleep/enter']);
+
+      final List<SleepSession> archived = await repository
+          .archivePastCutoffSessions(now: DateTime(2026, 4, 17, 20, 5));
+
+      expect(archived, hasLength(1));
+      expect(repository.activeSession, isNull);
+      expect(repository.latestAwaitingFeedbackSession?.id, session.id);
+
+      await pumpEventQueue();
+      expect(calls.length, 1);
+
+      enterCompleter.complete(<String, dynamic>{'ok': true});
+      await pumpEventQueue();
+
+      expect(calls.map((call) => call.path), <String>[
+        '/api/sleep/enter',
+        '/api/sleep/exit',
+      ]);
+
+      final Map<String, dynamic> exitBody = Map<String, dynamic>.from(
+        calls.last.body['session'] as Map,
+      );
+      expect(exitBody['id'], session.id);
+      expect(exitBody['status'], SleepSessionStatus.awaitingFeedback.name);
+      expect(exitBody['trackedDurationMinutes'], 1260);
+
+      exitCompleter.complete(<String, dynamic>{'ok': true});
+      await pumpEventQueue();
+
+      expect(snapshotStore.refreshCount, 1);
+    },
+  );
+
+  test(
     'cloudbase sleep session repository normalizes ended active sessions from snapshots',
     () async {
       final _FakeCloudBaseAppApiClient appApiClient =
@@ -678,6 +756,158 @@ void main() {
       );
 
       repository.dispose();
+      authRepository.dispose();
+      sleepSessionRepository.dispose();
+    },
+  );
+
+  test(
+    'cloudbase feedback submission keeps newer local completed sessions when refreshed snapshots are stale',
+    () async {
+      final DateTime now = DateTime.now();
+      final DateTime startedAt = now.subtract(const Duration(hours: 8));
+      final DateTime endedAt = now.subtract(const Duration(minutes: 20));
+      final List<_PostCall> calls = <_PostCall>[];
+      final Map<String, dynamic> stalePayload = <String, dynamic>{
+        'data': <String, dynamic>{
+          'user': <String, dynamic>{'uid': 'cloud-user'},
+          'userState': <String, dynamic>{
+            'currentPhase': 'morning_feedback',
+            'activeSessionId': 'session-feedback-stale',
+          },
+          'sleepSessions': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'session-feedback-stale',
+              'uid': 'cloud-user',
+              'startedAt': startedAt.toUtc().toIso8601String(),
+              'endedAt': endedAt.toUtc().toIso8601String(),
+              'sleepDayKey': sleepDayKeyFromDate(startedAt),
+              'status': SleepSessionStatus.awaitingFeedback.name,
+              'sleepModeActive': false,
+              'dormId': 'dorm-204',
+              'recommendations': const <Map<String, dynamic>>[],
+              'selectedRecommendationIds': const <String>[],
+              'segments': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'startedAt': startedAt.toUtc().toIso8601String(),
+                  'endedAt': endedAt.toUtc().toIso8601String(),
+                },
+              ],
+              'trackedDurationMinutes': 460,
+              'awakenings': const <Map<String, dynamic>>[],
+              'feedback': const <Map<String, dynamic>>[],
+              'summary': null,
+              'updatedAt': now
+                  .subtract(const Duration(minutes: 10))
+                  .toUtc()
+                  .toIso8601String(),
+            },
+          ],
+          'dreamEntries': const <Map<String, dynamic>>[],
+          'sleepCaptureRecords': const <Map<String, dynamic>>[],
+          'assistantThreads': const <Map<String, dynamic>>[],
+          'assistantMessages': const <String, List<Map<String, dynamic>>>{},
+          'notifications': const <Map<String, dynamic>>[],
+          'cardSnapshots': <String, dynamic>{
+            'profile_report': <String, dynamic>{
+              'generatedAt': now
+                  .subtract(const Duration(minutes: 5))
+                  .toUtc()
+                  .toIso8601String(),
+              'cards': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'id': 'sleep-report-summary',
+                  'type': 'sleep_report_summary',
+                  'title': 'stale snapshot',
+                  'payload': <String, dynamic>{
+                    'averageSleepHours': 0.0,
+                    'averageSleepQuality': 0.0,
+                    'averageRestedLevel': 0.0,
+                    'calmNights': 0,
+                    'dreamEntriesCount': 0,
+                    'highlights': <String>[],
+                  },
+                },
+              ],
+            },
+          },
+        },
+      };
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) async {
+              calls.add(_PostCall(path: path, body: body));
+              return <String, dynamic>{'ok': true, 'path': path, 'body': body};
+            },
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(uid: 'cloud-user'),
+      );
+      final CloudBaseSleepSessionRepository sleepSessionRepository =
+          CloudBaseSleepSessionRepository(
+            authRepository: authRepository,
+            snapshotStore: snapshotStore,
+            appApiClient: appApiClient,
+          );
+      final CloudBaseFeedbackRepository feedbackRepository =
+          CloudBaseFeedbackRepository(
+            sleepSessionRepository: sleepSessionRepository,
+            appApiClient: appApiClient,
+            snapshotStore: snapshotStore,
+          );
+      final CloudBaseInsightsRepository insightsRepository =
+          CloudBaseInsightsRepository(
+            authRepository: authRepository,
+            snapshotStore: snapshotStore,
+            appApiClient: appApiClient,
+            sleepSessionRepository: sleepSessionRepository,
+            dormRepository: InMemoryDormRepository(currentUserId: 'cloud-user'),
+            dreamRepository: InMemoryDreamRepository(userId: 'cloud-user'),
+          );
+
+      snapshotStore.pushPayload(stalePayload);
+      snapshotStore.onRefresh = () {
+        snapshotStore.pushPayload(stalePayload);
+      };
+
+      await feedbackRepository.submitFeedback(
+        session: sleepSessionRepository.sessions.single,
+        summary: const MorningSummary(
+          sleepQuality: 4,
+          restedLevel: 5,
+          totalSleepHours: 7.5,
+          awakeningsCount: 0,
+          note: 'fresh local feedback',
+        ),
+        recommendationFeedback: const <RecommendationFeedback>[],
+      );
+
+      expect(
+        sleepSessionRepository.sessions.single.hasSubmittedFeedback,
+        isTrue,
+      );
+      expect(
+        sleepSessionRepository.sessions.single.status,
+        SleepSessionStatus.completed,
+      );
+      expect(insightsRepository.currentReport.averageSleepHours, 7.5);
+      expect(calls.map((call) => call.path), <String>['/api/feedback/morning']);
+      final Map<String, dynamic> requestBody = calls.single.body;
+      expect(requestBody['sessionId'], 'session-feedback-stale');
+      expect(requestBody['session'], isA<Map<String, dynamic>>());
+      final Map<String, dynamic> sessionBody = Map<String, dynamic>.from(
+        requestBody['session'] as Map,
+      );
+      expect(sessionBody['id'], 'session-feedback-stale');
+      expect(sessionBody['status'], SleepSessionStatus.completed.name);
+      expect(sessionBody['summary'], isA<Map<String, dynamic>>());
+      expect(requestBody['feedback'], isA<List<dynamic>>());
+
+      insightsRepository.dispose();
+      feedbackRepository.dispose();
       authRepository.dispose();
       sleepSessionRepository.dispose();
     },

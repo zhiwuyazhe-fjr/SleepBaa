@@ -1,3 +1,5 @@
+import 'package:go_router/go_router.dart';
+import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
@@ -38,10 +40,11 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
           final List<SleepSession> monthSessions = services
               .sleepSessionRepository
               .sessionsForMonth(_visibleMonth);
-          final Map<DateTime, SleepSession> sessionMap = <DateTime, SleepSession>{
-            for (final SleepSession session in monthSessions)
-              DateUtils.dateOnly(session.sleepDayDate): session,
-          };
+          final Map<DateTime, SleepSession> sessionMap =
+              <DateTime, SleepSession>{
+                for (final SleepSession session in monthSessions)
+                  DateUtils.dateOnly(session.sleepDayDate): session,
+              };
           final SleepSession? selectedSession = _selectedDay == null
               ? null
               : sessionMap[_selectedDay];
@@ -123,9 +126,8 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       '${_buildStreak(services.sleepSessionRepository.sessions)} 天连续打卡',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.headlineSmall?.copyWith(color: palette.primary),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(color: palette.primary),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Wrap(
@@ -160,14 +162,20 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
     if (sessions.isEmpty) {
       return 0;
     }
-    final List<DateTime> uniqueDays = sessions
-        .map((SleepSession session) => DateUtils.dateOnly(session.sleepDayDate))
-        .toSet()
-        .toList(growable: false)
-      ..sort((DateTime a, DateTime b) => b.compareTo(a));
+    final List<DateTime> uniqueDays =
+        sessions
+            .map(
+              (SleepSession session) =>
+                  DateUtils.dateOnly(session.sleepDayDate),
+            )
+            .toSet()
+            .toList(growable: false)
+          ..sort((DateTime a, DateTime b) => b.compareTo(a));
     int streak = 1;
     for (int index = 1; index < uniqueDays.length; index++) {
-      final int gap = uniqueDays[index - 1].difference(uniqueDays[index]).inDays;
+      final int gap = uniqueDays[index - 1]
+          .difference(uniqueDays[index])
+          .inDays;
       if (gap == 1) {
         streak += 1;
         continue;
@@ -258,7 +266,8 @@ class _SelectedSessionDetail extends StatelessWidget {
   }
 
   String _sessionStageLabel(SleepSession session) {
-    if (session.summary != null || session.status == SleepSessionStatus.completed) {
+    if (session.summary != null ||
+        session.status == SleepSessionStatus.completed) {
       return '已完成';
     }
     return switch (session.status) {
@@ -271,7 +280,8 @@ class _SelectedSessionDetail extends StatelessWidget {
   }
 
   Color _sessionStageColor(SleepSession session) {
-    if (session.summary != null || session.status == SleepSessionStatus.completed) {
+    if (session.summary != null ||
+        session.status == SleepSessionStatus.completed) {
       return const Color(0xFF2D9272);
     }
     return switch (session.status) {
@@ -324,7 +334,8 @@ class _CalendarGrid extends StatelessWidget {
     final int daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
     final int leadingEmpty = DateTime(month.year, month.month, 1).weekday - 1;
     final List<Widget> cells = <Widget>[
-      for (int index = 0; index < leadingEmpty; index++) const SizedBox.shrink(),
+      for (int index = 0; index < leadingEmpty; index++)
+        const SizedBox.shrink(),
       for (int day = 1; day <= daysInMonth; day++)
         _DayCell(
           date: DateTime(month.year, month.month, day),
@@ -375,13 +386,27 @@ class _DayCell extends StatelessWidget {
     };
     return InkWell(
       borderRadius: BorderRadius.circular(14),
-      onTap: () => onTap(date),
+      onTap: () {
+        final SleepSession? currentSession = session;
+        if (currentSession != null &&
+            currentSession.status == SleepSessionStatus.awaitingFeedback &&
+            !currentSession.sleepModeActive &&
+            !currentSession.hasSubmittedFeedback) {
+          context.push(
+            AppRoutes.feedbackMorningLocation(sessionId: currentSession.id),
+          );
+          return;
+        }
+        onTap(date);
+      },
       child: Ink(
         decoration: BoxDecoration(
           color: selected ? AppColors.darkSurface : fill,
           borderRadius: BorderRadius.circular(14),
           border: pending
-              ? Border.all(color: palette.primary.withAlpha(selected ? 255 : 180))
+              ? Border.all(
+                  color: palette.primary.withAlpha(selected ? 255 : 180),
+                )
               : null,
         ),
         child: Center(

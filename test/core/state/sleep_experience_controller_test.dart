@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
@@ -578,6 +580,323 @@ void main() {
       harness.dispose();
     },
   );
+
+  test(
+    'bootstrap archives past-cutoff sessions and schedules the next cutoff timer',
+    () async {
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository();
+      final InMemoryUserSettingsRepository settingsRepository =
+          InMemoryUserSettingsRepository();
+      final InMemoryRecommendationRepository recommendationRepository =
+          InMemoryRecommendationRepository();
+      final SleepSession staleActiveSession = SleepSession(
+        id: 'session-cutoff-bootstrap',
+        uid: authRepository.currentUser.uid,
+        startedAt: DateTime(2026, 4, 15, 23, 10),
+        endedAt: null,
+        sleepDayKey: sleepDayKeyFromDate(DateTime(2026, 4, 15, 23, 10)),
+        status: SleepSessionStatus.active,
+        sleepModeActive: true,
+        dormId: 'dorm-1',
+        recommendations: const <NightRecommendation>[],
+        selectedRecommendationIds: const <String>[],
+        segments: <SleepSegment>[
+          SleepSegment(startedAt: DateTime(2026, 4, 15, 23, 10), endedAt: null),
+        ],
+        trackedDurationMinutes: 0,
+        awakenings: const <NightAwakeningEntry>[],
+        feedback: const <RecommendationFeedback>[],
+        summary: null,
+        updatedAt: DateTime(2026, 4, 15, 23, 10),
+      );
+      final SleepSession archivedSession = staleActiveSession.copyWith(
+        endedAt: DateTime(2026, 4, 16, 20, 0),
+        status: SleepSessionStatus.awaitingFeedback,
+        sleepModeActive: false,
+        segments: <SleepSegment>[
+          SleepSegment(
+            startedAt: DateTime(2026, 4, 15, 23, 10),
+            endedAt: DateTime(2026, 4, 16, 20, 0),
+          ),
+        ],
+        trackedDurationMinutes: 1250,
+        updatedAt: DateTime(2026, 4, 16, 20, 0),
+      );
+      final _NullActiveSleepSessionRepository sleepSessionRepository =
+          _NullActiveSleepSessionRepository(
+            staleActiveSession,
+            sessionsResult: <SleepSession>[staleActiveSession],
+            archiveResultsByCall: <List<SleepSession>>[
+              <SleepSession>[archivedSession],
+            ],
+          );
+      final InMemoryFeedbackRepository feedbackRepository =
+          InMemoryFeedbackRepository(
+            sleepSessionRepository: sleepSessionRepository,
+          );
+      final InMemorySleepCaptureRepository sleepCaptureRepository =
+          InMemorySleepCaptureRepository();
+      await sleepCaptureRepository.addRecord(
+        type: SleepCaptureType.memo,
+        sessionId: archivedSession.id,
+        content: 'remember to review',
+      );
+      final InMemoryNotificationRepository notificationRepository =
+          InMemoryNotificationRepository();
+      final InMemoryDormRepository dormRepository = InMemoryDormRepository(
+        currentUserId: authRepository.currentUser.uid,
+      );
+      final _FakeNotificationService notificationService =
+          _FakeNotificationService();
+      final _RecordingTimerFactory timerFactory = _RecordingTimerFactory();
+      final DateTime now = DateTime(2026, 4, 17, 19, 30);
+      final SleepExperienceController controller = SleepExperienceController(
+        authRepository: authRepository,
+        settingsRepository: settingsRepository,
+        recommendationRepository: recommendationRepository,
+        sleepSessionRepository: sleepSessionRepository,
+        feedbackRepository: feedbackRepository,
+        sleepCaptureRepository: sleepCaptureRepository,
+        notificationRepository: notificationRepository,
+        dormRepository: dormRepository,
+        appNotificationService: notificationService,
+        audioPlaybackController: AudioPlaybackController(),
+        pushNotificationGateway: const NoOpPushNotificationGateway(),
+        clock: () => now,
+        timerFactory: timerFactory.create,
+      );
+
+      await controller.bootstrap();
+
+      expect(sleepSessionRepository.archiveCalls, <DateTime>[now]);
+      expect(notificationService.cancelSleepModeNotificationCalls, 1);
+      expect(
+        notificationRepository.notifications.any(
+          (NotificationItem item) =>
+              item.id == 'feedback-${archivedSession.id}' &&
+              item.route ==
+                  AppRoutes.feedbackMorningLocation(
+                    sessionId: archivedSession.id,
+                  ),
+        ),
+        isTrue,
+      );
+      expect(
+        sleepCaptureRepository.pendingSleepMemoBanner?.groups.any(
+          (PendingSleepMemoGroup group) =>
+              group.sessionId == archivedSession.id,
+        ),
+        isTrue,
+      );
+      expect(timerFactory.timers, hasLength(1));
+      expect(timerFactory.timers.single.duration, const Duration(minutes: 30));
+
+      controller.dispose();
+      authRepository.dispose();
+      settingsRepository.dispose();
+      recommendationRepository.dispose();
+      sleepSessionRepository.dispose();
+      feedbackRepository.dispose();
+      sleepCaptureRepository.dispose();
+      notificationRepository.dispose();
+      dormRepository.dispose();
+    },
+  );
+
+  test(
+    'handle app resumed rechecks cutoff sessions and reschedules the next timer',
+    () async {
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository();
+      final InMemoryUserSettingsRepository settingsRepository =
+          InMemoryUserSettingsRepository();
+      final InMemoryRecommendationRepository recommendationRepository =
+          InMemoryRecommendationRepository();
+      final SleepSession pausedSession = SleepSession(
+        id: 'session-cutoff-resume',
+        uid: authRepository.currentUser.uid,
+        startedAt: DateTime(2026, 4, 15, 23, 10),
+        endedAt: DateTime(2026, 4, 16, 7, 0),
+        sleepDayKey: sleepDayKeyFromDate(DateTime(2026, 4, 15, 23, 10)),
+        status: SleepSessionStatus.paused,
+        sleepModeActive: false,
+        dormId: 'dorm-1',
+        recommendations: const <NightRecommendation>[],
+        selectedRecommendationIds: const <String>[],
+        segments: <SleepSegment>[
+          SleepSegment(
+            startedAt: DateTime(2026, 4, 15, 23, 10),
+            endedAt: DateTime(2026, 4, 16, 7, 0),
+          ),
+        ],
+        trackedDurationMinutes: 470,
+        awakenings: const <NightAwakeningEntry>[],
+        feedback: const <RecommendationFeedback>[],
+        summary: null,
+        updatedAt: DateTime(2026, 4, 16, 7, 0),
+      );
+      final SleepSession archivedSession = pausedSession.copyWith(
+        status: SleepSessionStatus.awaitingFeedback,
+        updatedAt: DateTime(2026, 4, 17, 10, 0),
+      );
+      final _NullActiveSleepSessionRepository sleepSessionRepository =
+          _NullActiveSleepSessionRepository(
+            pausedSession,
+            sessionsResult: <SleepSession>[pausedSession],
+            archiveResultsByCall: <List<SleepSession>>[
+              <SleepSession>[archivedSession],
+              const <SleepSession>[],
+            ],
+          );
+      final _RecordingTimerFactory timerFactory = _RecordingTimerFactory();
+      DateTime now = DateTime(2026, 4, 17, 10, 0);
+      final SleepExperienceController controller = SleepExperienceController(
+        authRepository: authRepository,
+        settingsRepository: settingsRepository,
+        recommendationRepository: recommendationRepository,
+        sleepSessionRepository: sleepSessionRepository,
+        feedbackRepository: InMemoryFeedbackRepository(
+          sleepSessionRepository: sleepSessionRepository,
+        ),
+        sleepCaptureRepository: InMemorySleepCaptureRepository(),
+        notificationRepository: InMemoryNotificationRepository(),
+        dormRepository: InMemoryDormRepository(
+          currentUserId: authRepository.currentUser.uid,
+        ),
+        appNotificationService: _FakeNotificationService(),
+        audioPlaybackController: AudioPlaybackController(),
+        pushNotificationGateway: const NoOpPushNotificationGateway(),
+        clock: () => now,
+        timerFactory: timerFactory.create,
+      );
+
+      await controller.handleAppResumed();
+      expect(sleepSessionRepository.archiveCalls, <DateTime>[now]);
+      expect(timerFactory.timers.last.duration, const Duration(hours: 10));
+
+      final _FakeTimer firstTimer = timerFactory.timers.last;
+      now = DateTime(2026, 4, 17, 21, 0);
+      await controller.handleAppResumed();
+
+      expect(firstTimer.isActive, isFalse);
+      expect(sleepSessionRepository.archiveCalls, <DateTime>[
+        DateTime(2026, 4, 17, 10, 0),
+        now,
+      ]);
+      expect(timerFactory.timers.last.duration, const Duration(hours: 23));
+
+      controller.dispose();
+      authRepository.dispose();
+      settingsRepository.dispose();
+      recommendationRepository.dispose();
+      sleepSessionRepository.dispose();
+    },
+  );
+
+  test(
+    'sleep cutoff timer archives sessions when the scheduled cutoff fires',
+    () async {
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository();
+      final InMemoryUserSettingsRepository settingsRepository =
+          InMemoryUserSettingsRepository();
+      final InMemoryRecommendationRepository recommendationRepository =
+          InMemoryRecommendationRepository();
+      final SleepSession currentDayActiveSession = SleepSession(
+        id: 'session-cutoff-timer',
+        uid: authRepository.currentUser.uid,
+        startedAt: DateTime(2026, 4, 16, 23, 10),
+        endedAt: null,
+        sleepDayKey: sleepDayKeyFromDate(DateTime(2026, 4, 16, 23, 10)),
+        status: SleepSessionStatus.active,
+        sleepModeActive: true,
+        dormId: 'dorm-1',
+        recommendations: const <NightRecommendation>[],
+        selectedRecommendationIds: const <String>[],
+        segments: <SleepSegment>[
+          SleepSegment(startedAt: DateTime(2026, 4, 16, 23, 10), endedAt: null),
+        ],
+        trackedDurationMinutes: 0,
+        awakenings: const <NightAwakeningEntry>[],
+        feedback: const <RecommendationFeedback>[],
+        summary: null,
+        updatedAt: DateTime(2026, 4, 16, 23, 10),
+      );
+      final SleepSession archivedSession = currentDayActiveSession.copyWith(
+        endedAt: DateTime(2026, 4, 17, 20, 0),
+        status: SleepSessionStatus.awaitingFeedback,
+        sleepModeActive: false,
+        segments: <SleepSegment>[
+          SleepSegment(
+            startedAt: DateTime(2026, 4, 16, 23, 10),
+            endedAt: DateTime(2026, 4, 17, 20, 0),
+          ),
+        ],
+        trackedDurationMinutes: 1250,
+        updatedAt: DateTime(2026, 4, 17, 20, 0),
+      );
+      final _NullActiveSleepSessionRepository sleepSessionRepository =
+          _NullActiveSleepSessionRepository(
+            currentDayActiveSession,
+            sessionsResult: <SleepSession>[currentDayActiveSession],
+            archiveResultsByCall: <List<SleepSession>>[
+              const <SleepSession>[],
+              <SleepSession>[archivedSession],
+            ],
+          );
+      final InMemoryNotificationRepository notificationRepository =
+          InMemoryNotificationRepository();
+      final _FakeNotificationService notificationService =
+          _FakeNotificationService();
+      final _RecordingTimerFactory timerFactory = _RecordingTimerFactory();
+      DateTime now = DateTime(2026, 4, 17, 19, 55);
+      final SleepExperienceController controller = SleepExperienceController(
+        authRepository: authRepository,
+        settingsRepository: settingsRepository,
+        recommendationRepository: recommendationRepository,
+        sleepSessionRepository: sleepSessionRepository,
+        feedbackRepository: InMemoryFeedbackRepository(
+          sleepSessionRepository: sleepSessionRepository,
+        ),
+        sleepCaptureRepository: InMemorySleepCaptureRepository(),
+        notificationRepository: notificationRepository,
+        dormRepository: InMemoryDormRepository(
+          currentUserId: authRepository.currentUser.uid,
+        ),
+        appNotificationService: notificationService,
+        audioPlaybackController: AudioPlaybackController(),
+        pushNotificationGateway: const NoOpPushNotificationGateway(),
+        clock: () => now,
+        timerFactory: timerFactory.create,
+      );
+
+      await controller.bootstrap();
+      expect(sleepSessionRepository.archiveCalls, <DateTime>[now]);
+      expect(timerFactory.timers.last.duration, const Duration(minutes: 5));
+
+      now = DateTime(2026, 4, 17, 20, 0);
+      timerFactory.timers.last.fire();
+      await pumpEventQueue();
+
+      expect(sleepSessionRepository.archiveCalls, <DateTime>[
+        DateTime(2026, 4, 17, 19, 55),
+        now,
+      ]);
+      expect(notificationService.cancelSleepModeNotificationCalls, 1);
+      expect(
+        notificationRepository.notifications.any(
+          (NotificationItem item) =>
+              item.id == 'feedback-${archivedSession.id}',
+        ),
+        isTrue,
+      );
+      expect(timerFactory.timers.last.duration, const Duration(hours: 24));
+
+      controller.dispose();
+      authRepository.dispose();
+      settingsRepository.dispose();
+      recommendationRepository.dispose();
+      sleepSessionRepository.dispose();
+    },
+  );
 }
 
 class _SleepControllerHarness {
@@ -690,28 +1009,90 @@ class _FakeNotificationService extends AppNotificationService {
   }
 }
 
+class _RecordingTimerFactory {
+  final List<_FakeTimer> timers = <_FakeTimer>[];
+
+  Timer create(Duration duration, void Function() callback) {
+    final _FakeTimer timer = _FakeTimer(duration, callback);
+    timers.add(timer);
+    return timer;
+  }
+}
+
+class _FakeTimer implements Timer {
+  _FakeTimer(this.duration, this._callback);
+
+  final Duration duration;
+  final void Function() _callback;
+  bool _isActive = true;
+  int _tick = 0;
+
+  void fire() {
+    if (!_isActive) {
+      return;
+    }
+    _tick += 1;
+    _callback();
+  }
+
+  @override
+  void cancel() {
+    _isActive = false;
+  }
+
+  @override
+  bool get isActive => _isActive;
+
+  @override
+  int get tick => _tick;
+}
+
 class _NullActiveSleepSessionRepository extends ChangeNotifier
     implements SleepSessionRepository {
   _NullActiveSleepSessionRepository(
     this._session, {
+    List<SleepSession>? sessionsResult,
     this.sessionForSleepDayKeyResult,
     this.latestAwaitingFeedbackSessionResult,
-  });
+    List<List<SleepSession>>? archiveResultsByCall,
+  }) : _sessionsResult = sessionsResult,
+       _archiveResultsByCall = archiveResultsByCall ?? <List<SleepSession>>[];
 
   SleepSession _session;
+  List<SleepSession>? _sessionsResult;
   final SleepSession? sessionForSleepDayKeyResult;
   final SleepSession? latestAwaitingFeedbackSessionResult;
   final List<SleepSession> savedSessions = <SleepSession>[];
+  final List<List<SleepSession>> _archiveResultsByCall;
+  final List<DateTime> archiveCalls = <DateTime>[];
+  int _archiveCallIndex = 0;
 
   @override
   SleepSession? get activeSession => null;
 
   @override
   SleepSession? get latestAwaitingFeedbackSession =>
-      latestAwaitingFeedbackSessionResult;
+      latestAwaitingFeedbackSessionResult ??
+      sessions
+          .where(
+            (SleepSession session) =>
+                session.status == SleepSessionStatus.awaitingFeedback &&
+                !session.sleepModeActive &&
+                !session.hasSubmittedFeedback,
+          )
+          .fold<SleepSession?>(
+            null,
+            (SleepSession? latest, SleepSession session) =>
+                latest == null ||
+                    latest.sleepDayDate.isBefore(session.sleepDayDate)
+                ? session
+                : latest,
+          );
 
   @override
-  List<SleepSession> get sessions => <SleepSession>[_session];
+  List<SleepSession> get sessions => List<SleepSession>.unmodifiable(
+    _sessionsResult ?? <SleepSession>[_session],
+  );
 
   @override
   List<SleepSession> recentSessions({int count = 7}) => sessions;
@@ -721,7 +1102,29 @@ class _NullActiveSleepSessionRepository extends ChangeNotifier
 
   @override
   SleepSession? sessionForSleepDayKey(String sleepDayKey) =>
-      sessionForSleepDayKeyResult;
+      sessionForSleepDayKeyResult ??
+      sessions.cast<SleepSession?>().firstWhere(
+        (SleepSession? session) => session?.sleepDayKey == sleepDayKey,
+        orElse: () => null,
+      );
+
+  @override
+  Future<List<SleepSession>> archivePastCutoffSessions({
+    required DateTime now,
+  }) async {
+    archiveCalls.add(now);
+    if (_archiveCallIndex >= _archiveResultsByCall.length) {
+      return const <SleepSession>[];
+    }
+    final List<SleepSession> result = _archiveResultsByCall[_archiveCallIndex];
+    _archiveCallIndex += 1;
+    if (result.isNotEmpty) {
+      _session = result.last;
+      _sessionsResult = result;
+    }
+    notifyListeners();
+    return result;
+  }
 
   @override
   Future<SleepSession> startOrResumeSleepSession({
@@ -744,7 +1147,19 @@ class _NullActiveSleepSessionRepository extends ChangeNotifier
     bool syncRemote = true,
   }) async {
     savedSessions.add(session);
+    final List<SleepSession> current = List<SleepSession>.from(
+      _sessionsResult ?? <SleepSession>[_session],
+    );
+    final int index = current.indexWhere(
+      (SleepSession item) => item.id == session.id,
+    );
+    if (index == -1) {
+      current.add(session);
+    } else {
+      current[index] = session;
+    }
     _session = session;
+    _sessionsResult = current;
     notifyListeners();
   }
 }

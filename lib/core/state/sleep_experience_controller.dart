@@ -13,6 +13,10 @@ enum FinishSleepModeResult {
   goHomeFeedbackAlreadySubmitted,
 }
 
+typedef SleepExperienceClock = DateTime Function();
+typedef SleepExperienceTimerFactory =
+    Timer Function(Duration duration, void Function() callback);
+
 class SleepExperienceController extends ChangeNotifier {
   SleepExperienceController({
     required AuthRepository authRepository,
@@ -26,6 +30,8 @@ class SleepExperienceController extends ChangeNotifier {
     required AppNotificationService appNotificationService,
     required AudioPlaybackController audioPlaybackController,
     required PushNotificationGateway pushNotificationGateway,
+    SleepExperienceClock? clock,
+    SleepExperienceTimerFactory? timerFactory,
   }) : _authRepository = authRepository,
        _settingsRepository = settingsRepository,
        _recommendationRepository = recommendationRepository,
@@ -36,7 +42,9 @@ class SleepExperienceController extends ChangeNotifier {
        _dormRepository = dormRepository,
        _appNotificationService = appNotificationService,
        _audioPlaybackController = audioPlaybackController,
-       _pushNotificationGateway = pushNotificationGateway;
+       _pushNotificationGateway = pushNotificationGateway,
+       _clock = clock ?? DateTime.now,
+       _timerFactory = timerFactory ?? Timer.new;
 
   final AuthRepository _authRepository;
   final UserSettingsRepository _settingsRepository;
@@ -49,6 +57,11 @@ class SleepExperienceController extends ChangeNotifier {
   final AppNotificationService _appNotificationService;
   final AudioPlaybackController _audioPlaybackController;
   final PushNotificationGateway _pushNotificationGateway;
+  final SleepExperienceClock _clock;
+  final SleepExperienceTimerFactory _timerFactory;
+
+  Timer? _sleepDayCutoffTimer;
+  Future<void>? _pendingCutoffSync;
 
   AuthRepository get authRepository => _authRepository;
   UserSettingsRepository get settingsRepository => _settingsRepository;
@@ -61,6 +74,7 @@ class SleepExperienceController extends ChangeNotifier {
   DormRepository get dormRepository => _dormRepository;
   AudioPlaybackController get audioPlaybackController =>
       _audioPlaybackController;
+  DateTime get currentTime => _clock();
 
   Future<UserProfile> _currentUserOrEnsureAuthenticated() async {
     if (_authRepository.currentUser.uid.isNotEmpty) {
@@ -75,6 +89,11 @@ class SleepExperienceController extends ChangeNotifier {
       await _recommendationRepository.resetForTonight();
     }
     await _recommendationRepository.refreshAudioCatalog();
+    await _synchronizePastCutoffSessions(rescheduleTimer: true);
+  }
+
+  Future<void> handleAppResumed() async {
+    await _synchronizePastCutoffSessions(rescheduleTimer: true);
   }
 
   Future<void> handleRecommendationTap(
@@ -203,8 +222,9 @@ class SleepExperienceController extends ChangeNotifier {
   }
 
   Future<void> enterSleepMode() async {
+    await _synchronizePastCutoffSessions(rescheduleTimer: true);
     final UserProfile user = await _currentUserOrEnsureAuthenticated();
-    final DateTime now = DateTime.now();
+    final DateTime now = _clock();
     final List<NightRecommendation> snapshot = _recommendationRepository
         .tonightRecommendations
         .map(
@@ -217,7 +237,6 @@ class SleepExperienceController extends ChangeNotifier {
         )
         .toList(growable: false);
 
-    await _archiveStalePausedSessions(now);
     final String sleepDayKey = sleepDayKeyFromDate(now);
     final SleepSession? existingForToday = _sleepSessionRepository
         .sessionForSleepDayKey(sleepDayKey);
@@ -289,7 +308,7 @@ class SleepExperienceController extends ChangeNotifier {
         return FinishSleepModeResult.goToFeedback;
       }
       final SleepSession? fallbackSession = _sleepSessionRepository
-          .sessionForSleepDayKey(sleepDayKeyFromDate(DateTime.now()));
+          .sessionForSleepDayKey(sleepDayKeyFromDate(_clock()));
       if (fallbackSession != null) {
         await _syncDormStatusAfterSleepExit(
           user.uid,
@@ -375,9 +394,7 @@ class SleepExperienceController extends ChangeNotifier {
 
     final List<NotificationItem> notifications = _notificationRepository
         .notifications
-        .where(
-          (NotificationItem item) => item.route == AppRoutes.feedbackMorning,
-        )
+        .where((NotificationItem item) => item.id == 'feedback-${session.id}')
         .toList(growable: false);
     for (final NotificationItem item in notifications) {
       await _notificationRepository.markRead(item.id);
@@ -412,26 +429,61 @@ class SleepExperienceController extends ChangeNotifier {
     }
   }
 
-  Future<void> _archiveStalePausedSessions(DateTime now) async {
-    final String currentSleepDayKey = sleepDayKeyFromDate(now);
-    final List<SleepSession> stalePausedSessions = _sleepSessionRepository
-        .sessions
-        .where(
-          (SleepSession session) =>
-              session.status == SleepSessionStatus.paused &&
-              !session.sleepModeActive &&
-              !session.hasSubmittedFeedback &&
-              session.sleepDayKey != currentSleepDayKey,
-        )
-        .toList(growable: false);
-    for (final SleepSession session in stalePausedSessions) {
-      await _sleepSessionRepository.saveSession(
-        session.copyWith(
-          status: SleepSessionStatus.awaitingFeedback,
-          updatedAt: now,
-        ),
-      );
+  Future<void> _synchronizePastCutoffSessions({required bool rescheduleTimer}) {
+    final Future<void>? inFlight = _pendingCutoffSync;
+    if (inFlight != null) {
+      return inFlight;
     }
+    final Future<void> task =
+        _runPastCutoffSync(rescheduleTimer: rescheduleTimer).whenComplete(() {
+          _pendingCutoffSync = null;
+        });
+    _pendingCutoffSync = task;
+    return task;
+  }
+
+  Future<void> _runPastCutoffSync({required bool rescheduleTimer}) async {
+    final DateTime now = _clock();
+    final String currentSleepDayKey = sleepDayKeyFromDate(now);
+    final bool hadArchivedActiveSession = _sleepSessionRepository.sessions.any(
+      (SleepSession session) =>
+          session.status == SleepSessionStatus.active &&
+          !session.hasSubmittedFeedback &&
+          session.sleepDayKey != currentSleepDayKey,
+    );
+    final List<SleepSession> archivedSessions = await _sleepSessionRepository
+        .archivePastCutoffSessions(now: now);
+    if (rescheduleTimer) {
+      _scheduleNextSleepDayCutoff(now);
+    }
+    if (archivedSessions.isEmpty) {
+      return;
+    }
+    if (hadArchivedActiveSession) {
+      try {
+        await _appNotificationService.cancelSleepModeNotification();
+      } catch (_) {
+        // Notification cleanup is best-effort after automatic cutoff archival.
+      }
+      final String uid = _authRepository.currentUser.uid;
+      if (uid.isNotEmpty) {
+        await _syncDormStatusAfterSleepExit(uid, hasSubmittedFeedback: false);
+      }
+    }
+    for (final SleepSession session in archivedSessions) {
+      await _completeSleepExitSideEffects(session);
+    }
+  }
+
+  void _scheduleNextSleepDayCutoff(DateTime now) {
+    _sleepDayCutoffTimer?.cancel();
+    final DateTime cutoffToday = DateTime(now.year, now.month, now.day, 20);
+    final DateTime nextCutoff = now.isBefore(cutoffToday)
+        ? cutoffToday
+        : cutoffToday.add(const Duration(days: 1));
+    _sleepDayCutoffTimer = _timerFactory(nextCutoff.difference(now), () {
+      unawaited(_synchronizePastCutoffSessions(rescheduleTimer: true));
+    });
   }
 
   Future<void> _clearSleepExitArtifacts(String sessionId) async {
@@ -466,8 +518,8 @@ class SleepExperienceController extends ChangeNotifier {
           category: NotificationCategory.reminder,
           title: '晨间反馈待完成',
           body: '昨晚的睡眠记录已经保存，醒来后记得补充晨间反馈。',
-          createdAt: DateTime.now(),
-          route: AppRoutes.feedbackMorning,
+          createdAt: _clock(),
+          route: AppRoutes.feedbackMorningLocation(sessionId: session.id),
           readAt: null,
         ),
       );
@@ -478,7 +530,7 @@ class SleepExperienceController extends ChangeNotifier {
     try {
       await _pushNotificationGateway.scheduleFeedbackReminder(
         sessionId: session.id,
-        when: DateTime.now().add(const Duration(hours: 8)),
+        when: _clock().add(const Duration(hours: 8)),
       );
     } catch (_) {
       // Keep reminder scheduling as a background best-effort task.
@@ -489,5 +541,11 @@ class SleepExperienceController extends ChangeNotifier {
     } catch (_) {
       // Pending memo banner should not block leaving sleep mode.
     }
+  }
+
+  @override
+  void dispose() {
+    _sleepDayCutoffTimer?.cancel();
+    super.dispose();
   }
 }

@@ -16,6 +16,25 @@ function dateKeyOf(date: Date): string {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
+function sleepDayKeyFromDate(date: Date): string {
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const shifted = new Date(date.getTime() + 4 * 60 * 60 * 1000);
+  return dateKeyOf(shifted);
+}
+
+function sleepDayDateFromKey(value: string): Date | null {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date;
+}
+
 function weekdayLabelOf(date: Date): string {
   return ["日", "一", "二", "三", "四", "五", "六"][date.getDay()] ?? "日";
 }
@@ -24,7 +43,8 @@ function buildTrendPoints(
   sessions: AssistantContext["recentSessions"],
   valueOf: (session: AssistantContext["recentSessions"][number]) => number | null | undefined,
 ): Array<Record<string, unknown>> {
-  const today = new Date();
+  const today =
+    sleepDayDateFromKey(sleepDayKeyFromDate(new Date())) ?? new Date();
   today.setHours(0, 0, 0, 0);
   const timeline = Array.from({ length: 7 }, (_, index) => {
     const day = new Date(today);
@@ -33,15 +53,13 @@ function buildTrendPoints(
   });
   const valuesByDateKey = new Map<string, number | null>();
   for (const session of sessions) {
-    if (!session.startedAt) {
+    const sleepDayKey =
+      session.sleepDayKey ||
+      (session.startedAt ? sleepDayKeyFromDate(new Date(session.startedAt)) : "");
+    if (!sleepDayKey) {
       continue;
     }
-    const startedAt = new Date(session.startedAt);
-    if (Number.isNaN(startedAt.getTime())) {
-      continue;
-    }
-    startedAt.setHours(0, 0, 0, 0);
-    valuesByDateKey.set(dateKeyOf(startedAt), valueOf(session) ?? null);
+    valuesByDateKey.set(sleepDayKey, valueOf(session) ?? null);
   }
   return timeline.map((day) => ({
     dateKey: dateKeyOf(day),

@@ -520,7 +520,7 @@ export async function handleSleepSessionChange(
       category: "reminder",
       title: "晨间反馈待完成",
       body: "补完昨晚的晨间反馈后，AI 才能继续优化下一晚的睡眠建议。",
-      route: "/feedback/morning",
+      route: `/feedback/morning?sessionId=${encodeURIComponent(sessionId)}`,
       createdAt: nowIso(),
       ownerUid: uid,
       readAt: null,
