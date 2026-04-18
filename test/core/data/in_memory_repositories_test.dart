@@ -163,6 +163,16 @@ void main() {
     expect(repository.latestAwaitingFeedbackSession?.id, session.id);
   });
 
+  test(
+    'sleep session repository lookup readiness is always true in memory',
+    () {
+      final InMemorySleepSessionRepository repository =
+          InMemorySleepSessionRepository();
+
+      expect(repository.isReadyForSessionLookup, isTrue);
+    },
+  );
+
   test('sleep day key switches at 20:00 instead of calendar midnight', () {
     expect(sleepDayKeyFromDate(DateTime(2026, 4, 17, 19, 59)), '2026-04-17');
     expect(sleepDayKeyFromDate(DateTime(2026, 4, 17, 20, 0)), '2026-04-18');

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
@@ -10,6 +11,21 @@ import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
+
+@visibleForTesting
+bool shouldShowMorningFeedbackLoading({
+  required String explicitSessionId,
+  required bool isReadyForSessionLookup,
+  required List<SleepSession> sessions,
+}) {
+  final String normalizedSessionId = explicitSessionId.trim();
+  if (normalizedSessionId.isEmpty || isReadyForSessionLookup) {
+    return false;
+  }
+  return !sessions.any(
+    (SleepSession session) => session.id == normalizedSessionId,
+  );
+}
 
 class MorningFeedbackPage extends StatefulWidget {
   const MorningFeedbackPage({super.key, this.sessionId});
@@ -52,15 +68,26 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
           services.notificationRepository,
         ]),
         builder: (BuildContext context, Widget? child) {
+          final SleepSessionRepository repository =
+              services.sleepSessionRepository;
           final GoRouterState routerState = GoRouterState.of(context);
+          final String explicitSessionId =
+              widget.sessionId ??
+              routerState.uri.queryParameters['sessionId'] ??
+              '';
+          if (shouldShowMorningFeedbackLoading(
+            explicitSessionId: explicitSessionId,
+            isReadyForSessionLookup: repository.isReadyForSessionLookup,
+            sessions: repository.sessions,
+          )) {
+            return const Center(child: CircularProgressIndicator());
+          }
           final DateTime feedbackMoment =
               services.sleepExperienceController.currentTime;
           final _MorningFeedbackTarget target = _resolveTargetSession(
-            services.sleepSessionRepository,
+            repository,
             feedbackMoment: feedbackMoment,
-            explicitSessionId:
-                widget.sessionId ??
-                routerState.uri.queryParameters['sessionId'],
+            explicitSessionId: explicitSessionId,
           );
           final SleepSession? session = target.session;
           if (session == null) {

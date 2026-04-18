@@ -136,6 +136,119 @@ void main() {
   );
 
   test(
+    'cloudbase sleep session repository waits for the initial remote lookup before becoming ready',
+    () {
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) async {
+              return <String, dynamic>{'ok': true, 'path': path, 'body': body};
+            },
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(
+          uid: 'cloud-user',
+          dormId: 'dorm-204',
+        ),
+      );
+      final CloudBaseSleepSessionRepository repository =
+          CloudBaseSleepSessionRepository(
+            authRepository: authRepository,
+            snapshotStore: snapshotStore,
+            appApiClient: appApiClient,
+          );
+
+      expect(repository.isReadyForSessionLookup, isFalse);
+
+      snapshotStore.beginRefresh();
+      expect(repository.isReadyForSessionLookup, isFalse);
+
+      snapshotStore.completeRefresh(error: 'bootstrap failed');
+      expect(repository.isReadyForSessionLookup, isTrue);
+    },
+  );
+
+  test(
+    'cloudbase sleep session repository becomes ready after the first payload is applied',
+    () {
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) async {
+              return <String, dynamic>{'ok': true, 'path': path, 'body': body};
+            },
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(
+          uid: 'cloud-user',
+          dormId: 'dorm-204',
+        ),
+      );
+      final CloudBaseSleepSessionRepository repository =
+          CloudBaseSleepSessionRepository(
+            authRepository: authRepository,
+            snapshotStore: snapshotStore,
+            appApiClient: appApiClient,
+          );
+      final SleepSession session = _buildRemoteSleepSession(
+        uid: 'cloud-user',
+        id: 'cloud-session-1',
+      );
+
+      snapshotStore.beginRefresh();
+      snapshotStore.completeRefresh(
+        payload: <String, dynamic>{
+          'data': <String, dynamic>{
+            'user': <String, dynamic>{'uid': 'cloud-user'},
+            'settings': const <String, dynamic>{},
+            'dorm': const <String, dynamic>{},
+            'sleepSessions': <Map<String, dynamic>>[
+              _sleepSessionToPayload(session),
+            ],
+            'dreamEntries': const <Map<String, dynamic>>[],
+            'sleepCaptureRecords': const <Map<String, dynamic>>[],
+            'assistantThreads': const <Map<String, dynamic>>[],
+            'assistantMessages': const <String, List<Map<String, dynamic>>>{},
+            'cardSnapshots': const <String, Map<String, dynamic>>{},
+            'userState': const <String, dynamic>{},
+            'notifications': const <Map<String, dynamic>>[],
+          },
+        },
+      );
+
+      expect(repository.isReadyForSessionLookup, isTrue);
+      expect(repository.sessions.single.id, session.id);
+    },
+  );
+
+  test(
+    'cloudbase sleep session repository is immediately ready when app api is unavailable',
+    () {
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: _UnconfiguredCloudBaseAppApiClient(),
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(
+          uid: 'cloud-user',
+          dormId: 'dorm-204',
+        ),
+      );
+      final CloudBaseSleepSessionRepository repository =
+          CloudBaseSleepSessionRepository(
+            authRepository: authRepository,
+            snapshotStore: snapshotStore,
+            appApiClient: _UnconfiguredCloudBaseAppApiClient(),
+          );
+
+      expect(repository.isReadyForSessionLookup, isTrue);
+    },
+  );
+
+  test(
     'cloudbase sleep session repository syncs pause events through the pause endpoint',
     () async {
       final List<_PostCall> calls = <_PostCall>[];
@@ -1067,14 +1180,39 @@ class _TestSnapshotStore extends CloudBaseSnapshotStore {
   _TestSnapshotStore({required super.appApiClient});
 
   Map<String, dynamic> _nextPayload = <String, dynamic>{};
+  bool _isRefreshing = false;
+  String? _lastError;
   int refreshCount = 0;
   FutureOr<void> Function()? onRefresh;
 
   @override
   Map<String, dynamic> get payload => _nextPayload;
 
+  @override
+  bool get isRefreshing => _isRefreshing;
+
+  @override
+  String? get lastError => _lastError;
+
   void pushPayload(Map<String, dynamic> payload) {
     _nextPayload = payload;
+    _isRefreshing = false;
+    _lastError = null;
+    notifyListeners();
+  }
+
+  void beginRefresh() {
+    _isRefreshing = true;
+    _lastError = null;
+    notifyListeners();
+  }
+
+  void completeRefresh({Map<String, dynamic>? payload, String? error}) {
+    if (payload != null) {
+      _nextPayload = payload;
+    }
+    _isRefreshing = false;
+    _lastError = error;
     notifyListeners();
   }
 
@@ -1160,6 +1298,72 @@ class _FakeCloudBaseAppApiClient extends CloudBaseAppApiClient {
   }) {
     return onPost(path, body);
   }
+}
+
+class _UnconfiguredCloudBaseAppApiClient extends _FakeCloudBaseAppApiClient {
+  _UnconfiguredCloudBaseAppApiClient()
+    : super(
+        onPost: (String path, Map<String, dynamic> body) async {
+          throw StateError('App API should not be called when unconfigured.');
+        },
+      );
+
+  @override
+  bool get isConfigured => false;
+}
+
+SleepSession _buildRemoteSleepSession({
+  required String uid,
+  required String id,
+}) {
+  final DateTime startedAt = DateTime(2026, 4, 12, 23, 0);
+  final DateTime endedAt = DateTime(2026, 4, 13, 7, 0);
+  return SleepSession(
+    id: id,
+    uid: uid,
+    startedAt: startedAt,
+    endedAt: endedAt,
+    sleepDayKey: sleepDayKeyFromDate(startedAt),
+    status: SleepSessionStatus.awaitingFeedback,
+    sleepModeActive: false,
+    dormId: 'dorm-204',
+    recommendations: const <NightRecommendation>[],
+    selectedRecommendationIds: const <String>[],
+    segments: <SleepSegment>[
+      SleepSegment(startedAt: startedAt, endedAt: endedAt),
+    ],
+    trackedDurationMinutes: endedAt.difference(startedAt).inMinutes,
+    awakenings: const <NightAwakeningEntry>[],
+    feedback: const <RecommendationFeedback>[],
+    summary: null,
+    updatedAt: endedAt,
+  );
+}
+
+Map<String, dynamic> _sleepSessionToPayload(SleepSession session) {
+  return <String, dynamic>{
+    'id': session.id,
+    'uid': session.uid,
+    'startedAt': session.startedAt.toIso8601String(),
+    'endedAt': session.endedAt?.toIso8601String(),
+    'sleepDayKey': session.sleepDayKey,
+    'status': session.status.name,
+    'sleepModeActive': session.sleepModeActive,
+    'dormId': session.dormId,
+    'recommendations': const <Map<String, dynamic>>[],
+    'selectedRecommendationIds': const <String>[],
+    'segments': <Map<String, dynamic>>[
+      <String, dynamic>{
+        'startedAt': session.startedAt.toIso8601String(),
+        'endedAt': session.endedAt?.toIso8601String(),
+      },
+    ],
+    'trackedDurationMinutes': session.trackedDurationMinutes,
+    'awakenings': const <Map<String, dynamic>>[],
+    'feedback': const <Map<String, dynamic>>[],
+    'summary': null,
+    'updatedAt': session.updatedAt?.toIso8601String(),
+  };
 }
 
 class _FakeSessionStore extends CloudBaseSessionStore {
