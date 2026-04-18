@@ -11,13 +11,21 @@ import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 class MorningFeedbackPage extends StatefulWidget {
-  const MorningFeedbackPage({super.key});
+  const MorningFeedbackPage({
+    super.key,
+    this.preferredSession,
+    this.preferredSessionId,
+  });
+
+  final SleepSession? preferredSession;
+  final String? preferredSessionId;
 
   @override
   State<MorningFeedbackPage> createState() => _MorningFeedbackPageState();
 }
 
 class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
+  static const Duration _maxActiveFeedbackSessionAge = Duration(hours: 18);
   final TextEditingController _noteController = TextEditingController();
   final Map<String, RecommendationFeedbackStatus> _statuses =
       <String, RecommendationFeedbackStatus>{};
@@ -41,19 +49,124 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
     final AppServices services = context.appServices;
     final NightMoodPalette palette = context.nightMoodPalette;
     return Scaffold(
-      appBar: AppBar(title: const Text('晨间反馈')),
+      appBar: AppBar(
+        title: const Text('晨间反馈'),
+        leading: IconButton(
+          onPressed: () => GoRouter.of(context).go(_fallbackRoute(services)),
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+      ),
       body: ListenableBuilder(
         listenable: Listenable.merge(<Listenable>[
           services.sleepSessionRepository,
           services.notificationRepository,
         ]),
         builder: (BuildContext context, Widget? child) {
-          final SleepSession? session =
-              services.sleepSessionRepository.latestAwaitingFeedbackSession;
-          if (session == null) {
-            return const Center(child: Text('当前没有待反馈的睡眠记录。'));
+          final List<SleepSession> sessions =
+              services.sleepSessionRepository.sessions;
+          final bool waitingForPreferredSession =
+              sessions.isEmpty &&
+              ((widget.preferredSessionId?.trim().isNotEmpty == true) ||
+                  widget.preferredSession != null);
+          final SleepSession? completedSession = _resolveCompletedSession(
+            sessions,
+          );
+          final SleepSession? session = _resolveSession(
+            sessions,
+            services.sleepSessionRepository.latestAwaitingFeedbackSession,
+          );
+          if (waitingForPreferredSession) {
+            return const Center(child: CircularProgressIndicator());
           }
-          final DateTime endAt = session.endedAt ?? DateTime.now();
+          if (session == null) {
+            if (completedSession != null) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Icon(
+                        Icons.check_circle_rounded,
+                        size: 48,
+                        color: palette.primary,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Text(
+                        '这次晨间反馈已经填写完成',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        '不用重复提交啦，我们已经把这次反馈记下来了。',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.textSecondary,
+                          height: 1.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+                      PrimaryButton(
+                        label: '返回主页',
+                        onPressed: () => GoRouter.of(context).go(
+                          completedSession.sleepModeActive
+                              ? AppRoutes.homePostSleep
+                              : AppRoutes.homePreSleep,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(
+                      Icons.bedtime_off_rounded,
+                      size: 44,
+                      color: palette.primarySoft,
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    Text(
+                      '当前没有待反馈的睡眠记录',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      '请先结束一次睡眠模式，或者回到主页继续查看当前状态。',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                        height: 1.5,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    PrimaryButton(
+                      label: '返回主页',
+                      onPressed: () => GoRouter.of(
+                        context,
+                      ).go(_fallbackRoute(services)),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          final DateTime endAt =
+              session.endedAt ??
+              (_isStaleActiveSession(session)
+                  ? (session.updatedAt ?? session.startedAt)
+                  : DateTime.now());
           final Duration totalRecordDuration = endAt.difference(
             session.startedAt,
           );
@@ -61,9 +174,8 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
             0,
             24 * 60,
           );
-          final int actualSleepMinutes = (totalRecordMinutes -
-                  _estimatedSleepLatency)
-              .clamp(0, 24 * 60);
+          final int actualSleepMinutes =
+              (totalRecordMinutes - _estimatedSleepLatency).clamp(0, 24 * 60);
           final double actualSleepHours = actualSleepMinutes / 60;
 
           return ListView(
@@ -81,7 +193,10 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                     _MetricSummary(
                       label: '总记录时长',
                       primaryValue: _formatDurationMinutes(totalRecordMinutes),
-                      detail: _formatDateTimeRangeLabel(session.startedAt, endAt),
+                      detail: _formatDateTimeRangeLabel(
+                        session.startedAt,
+                        endAt,
+                      ),
                       palette: palette,
                     ),
                     const SizedBox(height: AppSpacing.md),
@@ -100,8 +215,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                     _MetricSummary(
                       label: '实际睡眠时长',
                       primaryValue: _formatDurationMinutes(actualSleepMinutes),
-                      detail:
-                          '按总记录时长减去预计入睡时长自动推算得到',
+                      detail: '按总记录时长减去预计入睡时长自动推算得到',
                       palette: palette,
                     ),
                     _MetricSlider(
@@ -206,6 +320,10 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                 label: '提交反馈',
                 onPressed: () async {
                   final GoRouter router = GoRouter.of(context);
+                  final bool keepSleepModeActive =
+                      session.sleepModeActive &&
+                      session.status == SleepSessionStatus.active &&
+                      session.endedAt == null;
                   final List<RecommendationFeedback> feedback = session
                       .recommendations
                       .map((NightRecommendation item) {
@@ -235,7 +353,11 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                     return;
                   }
                   notifyPassiveToast(context, message: '已记录晨间反馈');
-                  router.go(AppRoutes.homePreSleep);
+                  router.go(
+                    keepSleepModeActive
+                        ? AppRoutes.homePostSleep
+                        : AppRoutes.homePreSleep,
+                  );
                 },
               ),
             ],
@@ -243,6 +365,101 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
         },
       ),
     );
+  }
+
+  SleepSession? _resolveSession(
+    List<SleepSession> sessions,
+    SleepSession? latestAwaitingFeedbackSession,
+  ) {
+    final SleepSession? preferredSession = widget.preferredSession;
+    final String? explicitPreferredId =
+        widget.preferredSessionId?.trim().isNotEmpty == true
+        ? widget.preferredSessionId!.trim()
+        : null;
+    final String? preferredId = explicitPreferredId ?? preferredSession?.id;
+
+    if (preferredId != null && preferredId.isNotEmpty) {
+      for (final SleepSession session in sessions) {
+        if (session.id != preferredId) {
+          continue;
+        }
+        if (context.appServices.sleepSessionRepository.isFeedbackCompleted(
+          preferredId,
+        )) {
+          return null;
+        }
+        if (_isStaleActiveSession(session)) {
+          return null;
+        }
+        if (session.status == SleepSessionStatus.awaitingFeedback ||
+            session.status == SleepSessionStatus.active ||
+            session.endedAt != null) {
+          return session;
+        }
+        return null;
+      }
+    }
+
+    if (latestAwaitingFeedbackSession != null &&
+        !_isStaleActiveSession(latestAwaitingFeedbackSession)) {
+      return latestAwaitingFeedbackSession;
+    }
+
+    final List<SleepSession> fallbackCandidates =
+        sessions
+            .where(
+              (SleepSession session) =>
+                  session.summary == null &&
+                  !_isStaleActiveSession(session) &&
+                  (session.endedAt != null ||
+                      session.status == SleepSessionStatus.active) &&
+                  session.status != SleepSessionStatus.completed,
+            )
+            .toList()
+          ..sort(
+            (SleepSession a, SleepSession b) =>
+                b.startedAt.compareTo(a.startedAt),
+          );
+    return fallbackCandidates.isEmpty ? null : fallbackCandidates.first;
+  }
+
+  bool _isStaleActiveSession(SleepSession session) {
+    return session.status == SleepSessionStatus.active &&
+        session.endedAt == null &&
+        DateTime.now().difference(session.startedAt) >=
+            _maxActiveFeedbackSessionAge;
+  }
+
+  String _fallbackRoute(AppServices services) {
+    return services.sleepSessionRepository.activeSession != null
+        ? AppRoutes.homePostSleep
+        : AppRoutes.homePreSleep;
+  }
+
+  SleepSession? _resolveCompletedSession(List<SleepSession> sessions) {
+    final String? explicitPreferredId =
+        widget.preferredSessionId?.trim().isNotEmpty == true
+        ? widget.preferredSessionId!.trim()
+        : null;
+    final String? preferredId = explicitPreferredId ?? widget.preferredSession?.id;
+    if (preferredId == null || preferredId.isEmpty) {
+      return null;
+    }
+    if (context.appServices.sleepSessionRepository.isFeedbackCompleted(
+      preferredId,
+    )) {
+      for (final SleepSession session in sessions) {
+        if (session.id == preferredId) {
+          return session;
+        }
+      }
+    }
+    for (final SleepSession session in sessions) {
+      if (session.id == preferredId && session.summary != null) {
+        return session;
+      }
+    }
+    return null;
   }
 
   String _feedbackLabel(RecommendationFeedbackStatus status) {
@@ -369,9 +586,9 @@ class _MetricSummary extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             detail,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSecondary,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
           ),
         ],
       ),
