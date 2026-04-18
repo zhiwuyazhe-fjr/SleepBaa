@@ -178,8 +178,12 @@ class HomePostSleepPage extends StatelessWidget {
                             title: '晨间反馈',
                             subtitle: '醒来后逐条反馈昨晚建议',
                             icon: Icons.wb_sunny_rounded,
-                            onTap: () =>
-                                context.push(AppRoutes.feedbackMorning),
+                            onTap: () async {
+                              await _finishSleepModeAndOpenFeedback(
+                                context,
+                                services,
+                              );
+                            },
                           ),
                         ],
                       ),
@@ -204,37 +208,13 @@ class HomePostSleepPage extends StatelessWidget {
                               if (context.mounted) {
                                 context.go(AppRoutes.homePreSleep);
                               }
+                              return;
                             case _SleepExitAction.finish:
-                              final FinishSleepModeResult result =
-                                  await services.sleepExperienceController
-                                      .finishSleepMode();
-                              if (!context.mounted) {
-                                return;
-                              }
-                              final SleepSession? currentSleepDaySession =
-                                  services.sleepSessionRepository
-                                      .sessionForSleepDayKey(
-                                        sleepDayKeyFromDate(
-                                          services
-                                              .sleepExperienceController
-                                              .currentTime,
-                                        ),
-                                      );
-                              switch (result) {
-                                case FinishSleepModeResult.noActiveSession:
-                                  context.go(AppRoutes.homePreSleep);
-                                case FinishSleepModeResult.goToFeedback:
-                                  context.go(
-                                    AppRoutes.feedbackMorningLocation(
-                                      sessionId: currentSleepDaySession?.id,
-                                    ),
-                                  );
-                                case FinishSleepModeResult
-                                    .goHomeFeedbackAlreadySubmitted:
-                                  context.go(
-                                    '${AppRoutes.homePreSleep}?notice=feedback_received',
-                                  );
-                              }
+                              await _finishSleepModeAndOpenFeedback(
+                                context,
+                                services,
+                              );
+                              return;
                           }
                         },
                       ),
@@ -253,6 +233,55 @@ class HomePostSleepPage extends StatelessWidget {
         },
       ),
     );
+  }
+}
+
+Future<void> _finishSleepModeAndOpenFeedback(
+  BuildContext context,
+  AppServices services,
+) async {
+  final FinishSleepModeResult result = await services.sleepExperienceController
+      .finishSleepMode();
+  if (!context.mounted) {
+    return;
+  }
+  _routeAfterSleepModeFinish(
+    context,
+    services: services,
+    result: result,
+    resumeToSleep: true,
+  );
+}
+
+void _routeAfterSleepModeFinish(
+  BuildContext context, {
+  required AppServices services,
+  required FinishSleepModeResult result,
+  required bool resumeToSleep,
+}) {
+  final SleepSession? currentSleepDaySession = services.sleepSessionRepository
+      .sessionForSleepDayKey(
+        sleepDayKeyFromDate(services.sleepExperienceController.currentTime),
+      );
+  switch (result) {
+    case FinishSleepModeResult.noActiveSession:
+      context.go(AppRoutes.homePreSleep);
+      return;
+    case FinishSleepModeResult.goToFeedback:
+      context.go(
+        AppRoutes.feedbackMorningLocation(
+          sessionId: currentSleepDaySession?.id,
+          resumeToSleep: resumeToSleep,
+        ),
+      );
+      return;
+    case FinishSleepModeResult.goHomeFeedbackAlreadySubmitted:
+      context.go(
+        AppRoutes.homePreSleepLocation(
+          notice: AppRoutes.feedbackReceivedNotice,
+        ),
+      );
+      return;
   }
 }
 

@@ -217,6 +217,45 @@ void main() {
   );
 
   test(
+    'sleep session repository resumes a same-day awaiting feedback session until feedback is submitted',
+    () async {
+      final InMemorySleepSessionRepository repository =
+          InMemorySleepSessionRepository(
+            initialSessions: const <SleepSession>[],
+          );
+      final DateTime startAt = DateTime(2026, 4, 13, 23, 0);
+      final String sleepDayKey = sleepDayKeyFromDate(startAt);
+
+      final SleepSession first = await repository.startOrResumeSleepSession(
+        recommendationSnapshot: const <NightRecommendation>[],
+        dormId: 'dorm-204',
+        at: startAt,
+      );
+      await repository.finishActiveSleepSession(
+        at: DateTime(2026, 4, 14, 6, 0),
+      );
+
+      final SleepSession resumed = await repository.startOrResumeSleepSession(
+        recommendationSnapshot: const <NightRecommendation>[],
+        dormId: 'dorm-204',
+        at: DateTime(2026, 4, 14, 8, 30),
+      );
+      await repository.finishActiveSleepSession(
+        at: DateTime(2026, 4, 14, 9, 0),
+      );
+
+      final SleepSession finished = repository.sessionForSleepDayKey(
+        sleepDayKey,
+      )!;
+      expect(resumed.id, first.id);
+      expect(finished.id, first.id);
+      expect(finished.status, SleepSessionStatus.awaitingFeedback);
+      expect(finished.trackedDurationMinutes, 450);
+      expect(finished.segments.length, 2);
+    },
+  );
+
+  test(
     'sleep session repository archives active stale sessions at the sleep-day cutoff',
     () async {
       final InMemorySleepSessionRepository repository =

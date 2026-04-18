@@ -14,6 +14,7 @@ import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/facades/app_facades.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
+import 'package:sleep_dorm_app/core/notifications/bedtime_reminder_sync_controller.dart';
 import 'package:sleep_dorm_app/core/notifications/cloudbase_notification_sync_controller.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/notifications/sleep_mode_notification_controller.dart';
@@ -68,6 +69,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
   late final UnifiedNotificationDispatcher _unifiedNotificationDispatcher;
   late final PassiveToastNotificationChannel _passiveToastNotificationChannel;
   late final AppNotificationService _appNotificationService;
+  late final BedtimeReminderSyncController _bedtimeReminderSyncController;
   late final CloudBaseNotificationSyncController
   _cloudBaseNotificationSyncController;
   late final AudioPlaybackController _audioPlaybackController;
@@ -98,6 +100,11 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
     _unifiedNotificationDispatcher.register(_passiveToastNotificationChannel);
     _appNotificationService =
         widget.appNotificationService ?? AppNotificationService();
+    _bedtimeReminderSyncController = BedtimeReminderSyncController(
+      authRepository: _authRepository,
+      settingsRepository: _settingsRepository,
+      notificationService: _appNotificationService,
+    );
     _cloudBaseNotificationSyncController = CloudBaseNotificationSyncController(
       authRepository: _authRepository,
       notificationRepository: _notificationRepository,
@@ -206,6 +213,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
       await _sleepExperienceController.bootstrap();
       await _appNotificationService.initialize();
       await _appNotificationService.cancelSleepModeNotification();
+      _bedtimeReminderSyncController.start();
       _cloudBaseNotificationSyncController.start();
       await _dormPresenceSyncController.restoreCachedLocationAnchor();
       await _dormPresenceSyncController.syncPresenceFromCurrentLocation();
@@ -335,6 +343,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _bedtimeReminderSyncController.handleAppLifecycleState(state);
     _cloudBaseNotificationSyncController.handleAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       unawaited(_sleepExperienceController.handleAppResumed());
@@ -359,6 +368,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
     _sleepExperienceController.dispose();
     _nightWelcomeController.dispose();
     _audioPlaybackController.dispose();
+    unawaited(_bedtimeReminderSyncController.dispose());
     unawaited(_cloudBaseNotificationSyncController.dispose());
     unawaited(_appNotificationService.dispose());
     _disposeListenable(_assistantRepository);

@@ -46,6 +46,8 @@ dependencies:
   noise_meter: ^5.1.0
   permission_handler: ^12.0.1
   flutter_local_notifications: ^19.4.0
+  timezone: ^0.10.1
+  flutter_timezone: ^4.1.1
 
 dev_dependencies:
   flutter_test:

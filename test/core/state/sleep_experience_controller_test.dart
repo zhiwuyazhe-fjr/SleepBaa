@@ -574,6 +574,67 @@ void main() {
   });
 
   test(
+    'resume sleep mode from feedback return restores the same-day session',
+    () async {
+      final _SleepControllerHarness harness = _SleepControllerHarness.create();
+
+      await harness.controller.enterSleepMode();
+      expect(
+        await harness.controller.finishSleepMode(),
+        FinishSleepModeResult.goToFeedback,
+      );
+
+      final SleepSession awaiting =
+          harness.sleepSessionRepository.latestAwaitingFeedbackSession!;
+      final SleepSession resumed =
+          await harness.controller.resumeSleepModeFromFeedbackReturn();
+
+      expect(resumed.id, awaiting.id);
+      expect(harness.sleepSessionRepository.activeSession?.id, awaiting.id);
+      expect(resumed.status, SleepSessionStatus.active);
+      expect(resumed.sleepModeActive, isTrue);
+      expect(resumed.segments.length, 2);
+      expect(harness.notificationService.shownSleepSessions.last.id, awaiting.id);
+
+      harness.dispose();
+    },
+  );
+
+  test(
+    'resume sleep mode from feedback return ignores non-critical side effect failures',
+    () async {
+      final _ThrowingDormRepository dormRepository =
+          _ThrowingDormRepository(currentUserId: 'anon-paul');
+      final _FakeNotificationService notificationService =
+          _FakeNotificationService();
+      final _SleepControllerHarness harness = _SleepControllerHarness.create(
+        dormRepository: dormRepository,
+        notificationService: notificationService,
+      );
+
+      await harness.controller.enterSleepMode();
+      expect(
+        await harness.controller.finishSleepMode(),
+        FinishSleepModeResult.goToFeedback,
+      );
+
+      dormRepository.throwOnUpdateCurrentUserStatus = true;
+      notificationService.throwOnShowSleepModeNotification = true;
+
+      final SleepSession awaiting =
+          harness.sleepSessionRepository.latestAwaitingFeedbackSession!;
+      final SleepSession resumed =
+          await harness.controller.resumeSleepModeFromFeedbackReturn();
+
+      expect(resumed.id, awaiting.id);
+      expect(harness.sleepSessionRepository.activeSession?.id, awaiting.id);
+      expect(resumed.sleepModeActive, isTrue);
+
+      harness.dispose();
+    },
+  );
+
+  test(
     'finish sleep mode returns home when same-day feedback has already been submitted',
     () async {
       final _SleepControllerHarness harness = _SleepControllerHarness.create();
@@ -947,7 +1008,10 @@ class _SleepControllerHarness {
     required this.controller,
   });
 
-  factory _SleepControllerHarness.create() {
+  factory _SleepControllerHarness.create({
+    InMemoryDormRepository? dormRepository,
+    _FakeNotificationService? notificationService,
+  }) {
     final InMemoryAuthRepository authRepository = InMemoryAuthRepository();
     final InMemoryUserSettingsRepository settingsRepository =
         InMemoryUserSettingsRepository();
@@ -965,11 +1029,13 @@ class _SleepControllerHarness {
         InMemorySleepCaptureRepository();
     final InMemoryNotificationRepository notificationRepository =
         InMemoryNotificationRepository();
-    final InMemoryDormRepository dormRepository = InMemoryDormRepository(
-      currentUserId: authRepository.currentUser.uid,
-    );
-    final _FakeNotificationService notificationService =
-        _FakeNotificationService();
+    final InMemoryDormRepository resolvedDormRepository =
+        dormRepository ??
+        InMemoryDormRepository(
+          currentUserId: authRepository.currentUser.uid,
+        );
+    final _FakeNotificationService resolvedNotificationService =
+        notificationService ?? _FakeNotificationService();
     final AudioPlaybackController audioPlaybackController =
         AudioPlaybackController();
     final SleepExperienceController controller = SleepExperienceController(
@@ -980,8 +1046,8 @@ class _SleepControllerHarness {
       feedbackRepository: feedbackRepository,
       sleepCaptureRepository: sleepCaptureRepository,
       notificationRepository: notificationRepository,
-      dormRepository: dormRepository,
-      appNotificationService: notificationService,
+      dormRepository: resolvedDormRepository,
+      appNotificationService: resolvedNotificationService,
       audioPlaybackController: audioPlaybackController,
       pushNotificationGateway: const NoOpPushNotificationGateway(),
     );
@@ -993,8 +1059,8 @@ class _SleepControllerHarness {
       feedbackRepository: feedbackRepository,
       sleepCaptureRepository: sleepCaptureRepository,
       notificationRepository: notificationRepository,
-      dormRepository: dormRepository,
-      notificationService: notificationService,
+      dormRepository: resolvedDormRepository,
+      notificationService: resolvedNotificationService,
       audioPlaybackController: audioPlaybackController,
       controller: controller,
     );
@@ -1026,19 +1092,51 @@ class _SleepControllerHarness {
 }
 
 class _FakeNotificationService extends AppNotificationService {
+  _FakeNotificationService();
+
   final List<SleepSession> shownSleepSessions = <SleepSession>[];
   int cancelSleepModeNotificationCalls = 0;
+  bool throwOnShowSleepModeNotification = false;
 
   @override
   Future<void> showSleepModeNotification({
     required SleepSession session,
   }) async {
+    if (throwOnShowSleepModeNotification) {
+      throw StateError('show notification failed');
+    }
     shownSleepSessions.add(session);
   }
 
   @override
   Future<void> cancelSleepModeNotification() async {
     cancelSleepModeNotificationCalls += 1;
+  }
+}
+
+class _ThrowingDormRepository extends InMemoryDormRepository {
+  _ThrowingDormRepository({required super.currentUserId});
+
+  bool throwOnUpdateCurrentUserStatus = false;
+
+  @override
+  Future<void> updateCurrentUserStatus({
+    required String uid,
+    DormMemberStatus? status,
+    DormPresenceStatus? presenceStatus,
+    bool? sleepModeActive,
+    String? note,
+  }) async {
+    if (throwOnUpdateCurrentUserStatus) {
+      throw StateError('dorm sync failed');
+    }
+    return super.updateCurrentUserStatus(
+      uid: uid,
+      status: status,
+      presenceStatus: presenceStatus,
+      sleepModeActive: sleepModeActive,
+      note: note,
+    );
   }
 }
 
