@@ -530,6 +530,79 @@ void main() {
   );
 
   test(
+    'cloudbase sleep session repository keeps a complete local awaiting session when a newer snapshot is incomplete',
+    () async {
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) async =>
+                <String, dynamic>{'ok': true, 'path': path, 'body': body},
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(
+          uid: 'cloud-user',
+          dormId: 'dorm-204',
+        ),
+      );
+      final CloudBaseSleepSessionRepository repository =
+          CloudBaseSleepSessionRepository(
+            authRepository: authRepository,
+            snapshotStore: snapshotStore,
+            appApiClient: appApiClient,
+          );
+
+      final DateTime startedAt = DateTime(2026, 4, 13, 23, 0);
+      final DateTime endedAt = DateTime(2026, 4, 14, 7, 0);
+      final SleepSession active = await repository.startOrResumeSleepSession(
+        recommendationSnapshot: const <NightRecommendation>[],
+        dormId: 'dorm-204',
+        at: startedAt,
+      );
+      await repository.finishActiveSleepSession(at: endedAt);
+
+      snapshotStore.pushPayload(<String, dynamic>{
+        'data': <String, dynamic>{
+          'user': <String, dynamic>{'uid': 'cloud-user', 'dormId': 'dorm-204'},
+          'userState': <String, dynamic>{
+            'currentPhase': 'morning_feedback',
+            'activeSessionId': active.id,
+          },
+          'sleepSessions': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': active.id,
+              'uid': 'cloud-user',
+              'startedAt': startedAt.toUtc().toIso8601String(),
+              'endedAt': null,
+              'sleepDayKey': sleepDayKeyFromDate(startedAt),
+              'status': SleepSessionStatus.active.name,
+              'sleepModeActive': true,
+              'dormId': 'dorm-204',
+              'recommendations': const <Map<String, dynamic>>[],
+              'selectedRecommendationIds': const <String>[],
+              'awakenings': const <Map<String, dynamic>>[],
+              'feedback': const <Map<String, dynamic>>[],
+              'summary': null,
+              'updatedAt': endedAt
+                  .add(const Duration(minutes: 10))
+                  .toUtc()
+                  .toIso8601String(),
+            },
+          ],
+        },
+      });
+
+      expect(repository.activeSession, isNull);
+      expect(repository.latestAwaitingFeedbackSession?.id, active.id);
+      expect(repository.sessions.single.status, SleepSessionStatus.awaitingFeedback);
+      expect(repository.sessions.single.sleepModeActive, isFalse);
+      expect(repository.sessions.single.displayEndAt, endedAt);
+      expect(repository.sessions.single.trackedDurationMinutes, 480);
+    },
+  );
+
+  test(
     'cloudbase dorm repository keeps local dorm status responsive while remote sync is queued',
     () async {
       final List<_PostCall> calls = <_PostCall>[];

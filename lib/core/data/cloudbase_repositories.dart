@@ -2154,20 +2154,7 @@ int _closedSegmentsDurationMinutes(List<SleepSegment> segments) {
 }
 
 bool _isValidAwaitingFeedbackSession(SleepSession session) {
-  if (session.status != SleepSessionStatus.awaitingFeedback ||
-      session.sleepModeActive ||
-      session.hasSubmittedFeedback) {
-    return false;
-  }
-  final DateTime? displayEndAt = session.displayEndAt;
-  if (displayEndAt == null) {
-    return false;
-  }
-  final List<SleepSegment> segments = _normalizedSleepSegments(session);
-  if (segments.any((SleepSegment segment) => segment.isOpen)) {
-    return false;
-  }
-  return session.liveTrackedDurationMinutes(now: displayEndAt) > 0;
+  return canSubmitMorningFeedbackForSession(session);
 }
 
 class CloudBaseSleepSessionRepository extends ChangeNotifier
@@ -2656,6 +2643,12 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
     SleepSession localSession,
     SleepSession snapshotSession,
   ) {
+    if (_shouldPreferCompleteClosedLocalSession(
+      localSession,
+      snapshotSession,
+    )) {
+      return true;
+    }
     final DateTime localTimestamp =
         localSession.updatedAt ??
         localSession.displayEndAt ??
@@ -2682,6 +2675,26 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
       return true;
     }
     return false;
+  }
+
+  static bool _shouldPreferCompleteClosedLocalSession(
+    SleepSession localSession,
+    SleepSession snapshotSession,
+  ) {
+    if (!canSubmitMorningFeedbackForSession(localSession) ||
+        canSubmitMorningFeedbackForSession(snapshotSession) ||
+        snapshotSession.sleepModeActive) {
+      return false;
+    }
+    final DateTime? localEndAt = resolveMorningFeedbackSessionEndAt(localSession);
+    final DateTime? snapshotEndAt = resolveMorningFeedbackSessionEndAt(
+      snapshotSession,
+    );
+    if (localEndAt == null || snapshotEndAt != null) {
+      return false;
+    }
+    return snapshotSession.openSegment != null ||
+        snapshotSession.trackedDurationMinutes < localSession.trackedDurationMinutes;
   }
 
   void _applyLocalSleepPhase(SleepSession session) {

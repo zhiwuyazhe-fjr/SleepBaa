@@ -1,6 +1,6 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
@@ -8,9 +8,12 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 class CalendarCheckinPage extends StatefulWidget {
-  const CalendarCheckinPage({super.key});
+  const CalendarCheckinPage({super.key, this.initialSelectedDay});
+
+  final DateTime? initialSelectedDay;
 
   @override
   State<CalendarCheckinPage> createState() => _CalendarCheckinPageState();
@@ -25,7 +28,9 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
     super.initState();
     final DateTime now = DateTime.now();
     _visibleMonth = DateTime(now.year, now.month);
-    _selectedDay = DateUtils.dateOnly(now.subtract(const Duration(days: 1)));
+    _selectedDay = DateUtils.dateOnly(
+      widget.initialSelectedDay ?? now.subtract(const Duration(days: 1)),
+    );
   }
 
   @override
@@ -35,8 +40,13 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('睡眠打卡日历')),
       body: ListenableBuilder(
-        listenable: services.sleepSessionRepository,
+        listenable: Listenable.merge(<Listenable>[
+          services.sleepSessionRepository,
+          services.settingsRepository,
+        ]),
         builder: (BuildContext context, Widget? child) {
+          final UserSettings settings =
+              services.settingsRepository.currentSettings;
           final List<SleepSession> monthSessions = services
               .sleepSessionRepository
               .sessionsForMonth(_visibleMonth);
@@ -108,6 +118,7 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
                       month: _visibleMonth,
                       sessionMap: sessionMap,
                       selectedDay: _selectedDay,
+                      sleepGoalHours: settings.sleepGoalHours,
                       palette: palette,
                       onSelectDay: (DateTime day) {
                         setState(() => _selectedDay = day);
@@ -135,7 +146,7 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
                       runSpacing: AppSpacing.sm,
                       children: <Widget>[
                         _DetailChip(label: '本月记录 ${monthSessions.length} 天'),
-                        _DetailChip(label: '待补全 $pendingCount 天'),
+                        _DetailChip(label: '待补充 $pendingCount 天'),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.sm),
@@ -150,7 +161,12 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
-              AppCard(child: _SelectedSessionDetail(session: selectedSession)),
+              AppCard(
+                child: _SelectedSessionDetail(
+                  session: selectedSession,
+                  sleepGoalHours: settings.sleepGoalHours,
+                ),
+              ),
             ],
           );
         },
@@ -187,9 +203,13 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
 }
 
 class _SelectedSessionDetail extends StatelessWidget {
-  const _SelectedSessionDetail({required this.session});
+  const _SelectedSessionDetail({
+    required this.session,
+    required this.sleepGoalHours,
+  });
 
   final SleepSession? session;
+  final double sleepGoalHours;
 
   @override
   Widget build(BuildContext context) {
@@ -198,6 +218,12 @@ class _SelectedSessionDetail extends StatelessWidget {
     }
 
     final MorningSummary? summary = session!.summary;
+    final bool canSupplementFeedback =
+        session!.status == SleepSessionStatus.awaitingFeedback &&
+        !session!.sleepModeActive &&
+        !session!.hasSubmittedFeedback;
+    final bool sleepGoalMet =
+        _sleepGoalMetForSession(session!, sleepGoalHours) == true;
     final String stageLabel = _sessionStageLabel(session!);
     final Color stageColor = _sessionStageColor(session!);
     final String durationLabel =
@@ -223,6 +249,7 @@ class _SelectedSessionDetail extends StatelessWidget {
           runSpacing: AppSpacing.sm,
           children: <Widget>[
             _DetailChip(label: '时长 $durationLabel'),
+            if (sleepGoalMet) const _DetailChip(label: '睡眠时长已达标'),
             _DetailChip(label: '夜醒 ${session!.awakenings.length} 次'),
             _DetailChip(
               label: '建议 ${session!.selectedRecommendationIds.length} 项',
@@ -239,6 +266,17 @@ class _SelectedSessionDetail extends StatelessWidget {
             height: 1.5,
           ),
         ),
+        if (canSupplementFeedback) ...<Widget>[
+          const SizedBox(height: AppSpacing.lg),
+          PrimaryButton(
+            label: '补充晨间反馈',
+            onPressed: () {
+              context.push(
+                AppRoutes.feedbackMorningLocation(sessionId: session!.id),
+              );
+            },
+          ),
+        ],
         if (summary != null) ...<Widget>[
           const SizedBox(height: AppSpacing.lg),
           Wrap(
@@ -273,7 +311,7 @@ class _SelectedSessionDetail extends StatelessWidget {
     return switch (session.status) {
       SleepSessionStatus.active => '进行中',
       SleepSessionStatus.paused => '已暂停',
-      SleepSessionStatus.awaitingFeedback => '待补全',
+      SleepSessionStatus.awaitingFeedback => '待补充',
       SleepSessionStatus.completed => '已完成',
       SleepSessionStatus.drafted => '草稿',
     };
@@ -319,6 +357,7 @@ class _CalendarGrid extends StatelessWidget {
     required this.month,
     required this.sessionMap,
     required this.selectedDay,
+    required this.sleepGoalHours,
     required this.palette,
     required this.onSelectDay,
   });
@@ -326,6 +365,7 @@ class _CalendarGrid extends StatelessWidget {
   final DateTime month;
   final Map<DateTime, SleepSession> sessionMap;
   final DateTime? selectedDay;
+  final double sleepGoalHours;
   final NightMoodPalette palette;
   final ValueChanged<DateTime> onSelectDay;
 
@@ -341,6 +381,7 @@ class _CalendarGrid extends StatelessWidget {
           date: DateTime(month.year, month.month, day),
           session: sessionMap[DateTime(month.year, month.month, day)],
           selected: selectedDay == DateTime(month.year, month.month, day),
+          sleepGoalHours: sleepGoalHours,
           palette: palette,
           onTap: onSelectDay,
         ),
@@ -362,6 +403,7 @@ class _DayCell extends StatelessWidget {
     required this.date,
     required this.session,
     required this.selected,
+    required this.sleepGoalHours,
     required this.palette,
     required this.onTap,
   });
@@ -369,6 +411,7 @@ class _DayCell extends StatelessWidget {
   final DateTime date;
   final SleepSession? session;
   final bool selected;
+  final double sleepGoalHours;
   final NightMoodPalette palette;
   final ValueChanged<DateTime> onTap;
 
@@ -376,6 +419,9 @@ class _DayCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final int quality = session?.summary?.sleepQuality ?? 0;
     final bool pending = session != null && session!.summary == null;
+    final bool sleepGoalMet =
+        session != null &&
+        _sleepGoalMetForSession(session!, sleepGoalHours) == true;
     final Color fill = switch (quality) {
       5 => palette.primary,
       4 => palette.primarySoft,
@@ -409,40 +455,65 @@ class _DayCell extends StatelessWidget {
                 )
               : null,
         ),
-        child: Center(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Text(
-                  '${date.day}',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+        child: Stack(
+          children: <Widget>[
+            Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    Text(
+                      '${date.day}',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: selected
+                            ? AppColors.onDark
+                            : quality > 3
+                            ? palette.primaryDeep
+                            : AppColors.textPrimary,
+                      ),
+                    ),
+                    if (pending) ...<Widget>[
+                      const SizedBox(height: 2),
+                      Text(
+                        '待',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: selected
+                              ? AppColors.onDark
+                              : palette.primaryDeep,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            if (sleepGoalMet)
+              Positioned(
+                top: 6,
+                right: 6,
+                child: Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
                     color: selected
                         ? AppColors.onDark
-                        : quality > 3
-                        ? palette.primaryDeep
-                        : AppColors.textPrimary,
+                        : const Color(0xFF2D9272),
+                    shape: BoxShape.circle,
                   ),
                 ),
-                if (pending) ...<Widget>[
-                  const SizedBox(height: 2),
-                  Text(
-                    '待',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: selected ? AppColors.onDark : palette.primaryDeep,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
+              ),
+          ],
         ),
       ),
     );
   }
+}
+
+bool? _sleepGoalMetForSession(SleepSession session, double sleepGoalHours) {
+  return session.sleepGoalMet ?? session.deriveSleepGoalMet(sleepGoalHours);
 }
 
 class _DetailChip extends StatelessWidget {

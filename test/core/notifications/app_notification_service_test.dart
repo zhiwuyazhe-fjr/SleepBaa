@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -138,6 +139,101 @@ void main() {
       'id': AppNotificationService.sleepModeNotificationId,
       'tag': null,
     });
+
+    await service.dispose();
+  });
+
+  test('scheduleBedtimeReminder schedules a daily bedtime reminder', () async {
+    final AppNotificationService service = AppNotificationService(
+      platformOverride: TargetPlatform.android,
+      timeZoneNameResolver: () async => 'Asia/Shanghai',
+    );
+
+    await service.scheduleBedtimeReminder(
+      time: const TimeOfDay(hour: 23, minute: 10),
+    );
+
+    final MethodCall scheduleCall = calls.firstWhere(
+      (MethodCall call) => call.method == 'zonedSchedule',
+    );
+    final Map<Object?, Object?> arguments =
+        scheduleCall.arguments as Map<Object?, Object?>;
+    final Map<String, dynamic> payload =
+        jsonDecode(arguments['payload']! as String) as Map<String, dynamic>;
+    final Map<Object?, Object?> platformSpecifics =
+        arguments['platformSpecifics'] as Map<Object?, Object?>;
+
+    expect(
+      arguments['id'],
+      AppNotificationService.bedtimeReminderNotificationId,
+    );
+    expect(payload['kind'], 'bedtime_reminder');
+    expect(payload['route'], AppRoutes.homePreSleep);
+    expect(
+      platformSpecifics['channelId'],
+      AppNotificationService.bedtimeReminderChannelId,
+    );
+    expect(arguments['matchDateTimeComponents'], isNotNull);
+
+    await service.dispose();
+  });
+
+  test('cancelBedtimeReminder clears the scheduled reminder', () async {
+    final AppNotificationService service = AppNotificationService(
+      platformOverride: TargetPlatform.android,
+    );
+
+    await service.cancelBedtimeReminder();
+
+    final MethodCall cancelCall = calls.singleWhere(
+      (MethodCall call) => call.method == 'cancel',
+    );
+    expect(cancelCall.arguments, <String, Object?>{
+      'id': AppNotificationService.bedtimeReminderNotificationId,
+      'tag': null,
+    });
+
+    await service.dispose();
+  });
+
+  test('initialize parses bedtime reminder launch payload', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (MethodCall call) async {
+          calls.add(call);
+          switch (call.method) {
+            case 'initialize':
+              return true;
+            case 'getNotificationAppLaunchDetails':
+              return <String, Object?>{
+                'notificationLaunchedApp': true,
+                'notificationResponse': <String, Object?>{
+                  'id': 900002,
+                  'notificationResponseType': 0,
+                  'payload': jsonEncode(<String, Object?>{
+                    'kind': 'bedtime_reminder',
+                    'route': AppRoutes.homePreSleep,
+                  }),
+                },
+              };
+            case 'requestNotificationsPermission':
+              return true;
+            default:
+              return null;
+          }
+        });
+
+    final AppNotificationService service = AppNotificationService(
+      platformOverride: TargetPlatform.android,
+    );
+
+    await service.initialize();
+    final NotificationLaunchIntent? intent = await service
+        .takeInitialLaunchIntent();
+
+    expect(intent, isNotNull);
+    expect(intent!.route, AppRoutes.homePreSleep);
+    expect(intent.markAsRead, isFalse);
+    expect(intent.notificationId, isNull);
 
     await service.dispose();
   });

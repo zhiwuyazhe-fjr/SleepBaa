@@ -118,9 +118,8 @@ abstract final class ModelSerializers {
     final List<SleepSegment> segments =
         (map['segments'] as List<dynamic>? ?? const <dynamic>[])
             .map(
-              (dynamic item) => sleepSegmentFromMap(
-                Map<String, dynamic>.from(item as Map),
-              ),
+              (dynamic item) =>
+                  sleepSegmentFromMap(Map<String, dynamic>.from(item as Map)),
             )
             .toList(growable: false);
     return SleepSession(
@@ -174,6 +173,7 @@ abstract final class ModelSerializers {
           )
           .toList(growable: false),
       summary: summary,
+      sleepGoalMet: map['sleepGoalMet'] as bool?,
       updatedAt: _dateValue(map['updatedAt']),
     );
   }

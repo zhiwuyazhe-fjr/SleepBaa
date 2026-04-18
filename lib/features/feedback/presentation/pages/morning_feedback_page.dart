@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
@@ -8,7 +7,6 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
-import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
@@ -28,9 +26,14 @@ bool shouldShowMorningFeedbackLoading({
 }
 
 class MorningFeedbackPage extends StatefulWidget {
-  const MorningFeedbackPage({super.key, this.sessionId});
+  const MorningFeedbackPage({
+    super.key,
+    this.sessionId,
+    this.allowReturnToSleep = false,
+  });
 
   final String? sessionId;
+  final bool allowReturnToSleep;
 
   @override
   State<MorningFeedbackPage> createState() => _MorningFeedbackPageState();
@@ -46,6 +49,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
   int _sleepQuality = 4;
   int _restedLevel = 4;
   String? _boundSessionId;
+  bool _isReturningToSleep = false;
 
   @override
   void dispose() {
@@ -68,6 +72,9 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
           services.notificationRepository,
         ]),
         builder: (BuildContext context, Widget? child) {
+          if (_isReturningToSleep) {
+            return _ReturningToSleepLoading(palette: palette);
+          }
           final SleepSessionRepository repository =
               services.sleepSessionRepository;
           final GoRouterState routerState = GoRouterState.of(context);
@@ -280,10 +287,23 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                   if (!context.mounted) {
                     return;
                   }
-                  notifyPassiveToast(context, message: '已记录晨间反馈');
-                  router.go(AppRoutes.homePreSleep);
+                  router.go(
+                    AppRoutes.homePreSleepLocation(
+                      notice: AppRoutes.feedbackSubmittedNotice,
+                    ),
+                  );
                 },
               ),
+              if (widget.allowReturnToSleep) ...<Widget>[
+                const SizedBox(height: AppSpacing.md),
+                PrimaryButton(
+                  label: '返回',
+                  variant: PrimaryButtonVariant.ghost,
+                  onPressed: () async {
+                    await _handleReturnToSleep(context);
+                  },
+                ),
+              ],
             ],
           );
         },
@@ -307,7 +327,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
             message: '这条睡眠记录已完成晨间反馈，可在我的页查看同步结果。',
           );
         }
-        if (_canSubmitFeedbackFor(session, feedbackMoment)) {
+        if (_canSubmitFeedbackFor(session)) {
           return _MorningFeedbackTarget(session: session);
         }
         return const _MorningFeedbackTarget(message: '这条睡眠记录当前不可继续补反馈。');
@@ -319,7 +339,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
     final SleepSession? currentSleepDaySession = repository
         .sessionForSleepDayKey(currentSleepDayKey);
     if (currentSleepDaySession != null &&
-        _canSubmitFeedbackFor(currentSleepDaySession, feedbackMoment)) {
+        _canSubmitFeedbackFor(currentSleepDaySession)) {
       return _MorningFeedbackTarget(session: currentSleepDaySession);
     }
     return const _MorningFeedbackTarget(message: '当前没有待补反馈的睡眠记录。');
@@ -339,6 +359,72 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
     _estimatedSleepLatency = 20;
     _sleepQuality = 4;
     _restedLevel = 4;
+  }
+
+  bool _hasUnsavedChanges() {
+    if (_estimatedSleepLatency != 20 ||
+        _sleepQuality != 4 ||
+        _restedLevel != 4) {
+      return true;
+    }
+    if (_noteController.text.trim().isNotEmpty || _statuses.isNotEmpty) {
+      return true;
+    }
+    return _feedbackNotes.values.any(
+      (TextEditingController controller) => controller.text.trim().isNotEmpty,
+    );
+  }
+
+  Future<void> _handleReturnToSleep(BuildContext context) async {
+    if (!widget.allowReturnToSleep || _isReturningToSleep) {
+      return;
+    }
+    if (_hasUnsavedChanges()) {
+      final bool shouldReturn = await _confirmReturnToSleep(context);
+      if (!shouldReturn || !context.mounted) {
+        return;
+      }
+    }
+    setState(() => _isReturningToSleep = true);
+    try {
+      await context.appServices.sleepExperienceController
+          .resumeSleepModeFromFeedbackReturn();
+      if (!context.mounted) {
+        return;
+      }
+      GoRouter.of(context).go(AppRoutes.homePostSleep);
+    } catch (_) {
+      if (!context.mounted) {
+        return;
+      }
+      setState(() => _isReturningToSleep = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('返回睡眠模式失败，请重试')));
+    }
+  }
+
+  Future<bool> _confirmReturnToSleep(BuildContext context) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('返回继续计时？'),
+          content: const Text('返回后会丢失这次未提交的晨间反馈内容，并恢复睡眠模式继续计时。'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('继续填写'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('确认返回'),
+            ),
+          ],
+        );
+      },
+    );
+    return confirmed ?? false;
   }
 
   String _feedbackLabel(RecommendationFeedbackStatus status) {
@@ -363,7 +449,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
     SleepSession session,
     DateTime feedbackMoment,
   ) {
-    final DateTime? recordedEndAt = session.displayEndAt;
+    final DateTime? recordedEndAt = resolveMorningFeedbackSessionEndAt(session);
     if (recordedEndAt == null || feedbackMoment.isAfter(recordedEndAt)) {
       return feedbackMoment;
     }
@@ -415,31 +501,8 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
     return '$hour:$minute';
   }
 
-  bool _canSubmitFeedbackFor(SleepSession session, DateTime feedbackMoment) {
-    if (session.status != SleepSessionStatus.awaitingFeedback ||
-        session.sleepModeActive ||
-        session.hasSubmittedFeedback) {
-      return false;
-    }
-    final DateTime? displayEndAt = session.displayEndAt;
-    if (displayEndAt == null) {
-      return false;
-    }
-    final List<SleepSegment> segments = session.segments.isNotEmpty
-        ? session.segments
-        : <SleepSegment>[
-            SleepSegment(
-              startedAt: session.startedAt,
-              endedAt: session.endedAt,
-            ),
-          ];
-    if (segments.any((SleepSegment segment) => segment.isOpen)) {
-      return false;
-    }
-    final DateTime effectiveEndAt = displayEndAt.isAfter(feedbackMoment)
-        ? displayEndAt
-        : feedbackMoment;
-    return session.liveTrackedDurationMinutes(now: effectiveEndAt) > 0;
+  bool _canSubmitFeedbackFor(SleepSession session) {
+    return canSubmitMorningFeedbackForSession(session);
   }
 }
 
@@ -448,6 +511,29 @@ class _MorningFeedbackTarget {
 
   final SleepSession? session;
   final String message;
+}
+
+class _ReturningToSleepLoading extends StatelessWidget {
+  const _ReturningToSleepLoading({required this.palette});
+
+  final NightMoodPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            CircularProgressIndicator(color: palette.primary),
+            const SizedBox(height: AppSpacing.lg),
+            Text('正在返回睡眠模式...', style: Theme.of(context).textTheme.titleMedium),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _MetricSlider extends StatelessWidget {

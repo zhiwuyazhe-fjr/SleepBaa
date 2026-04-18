@@ -264,6 +264,45 @@ class SleepExperienceController extends ChangeNotifier {
     );
   }
 
+  Future<SleepSession> resumeSleepModeFromFeedbackReturn() async {
+    await _synchronizePastCutoffSessions(rescheduleTimer: true);
+    final UserProfile user = await _currentUserOrEnsureAuthenticated();
+    final DateTime now = _clock();
+    final List<NightRecommendation> snapshot = _recommendationRepository
+        .tonightRecommendations
+        .map(
+          (NightRecommendation item) => item.copyWith(
+            executionState:
+                item.executionState == RecommendationExecutionState.idle
+                ? RecommendationExecutionState.selected
+                : item.executionState,
+          ),
+        )
+        .toList(growable: false);
+
+    final String sleepDayKey = sleepDayKeyFromDate(now);
+    final SleepSession? existingForToday = _sleepSessionRepository
+        .sessionForSleepDayKey(sleepDayKey);
+    final bool shouldClearExitArtifacts =
+        existingForToday != null && !existingForToday.sleepModeActive;
+    final SleepSession session = await _sleepSessionRepository
+        .startOrResumeSleepSession(
+          recommendationSnapshot: snapshot,
+          dormId: user.dormId,
+          at: now,
+        );
+    if (shouldClearExitArtifacts) {
+      await _clearSleepExitArtifacts(session.id);
+    }
+    unawaited(
+      _completeSleepModeEntrySideEffects(
+        uid: user.uid,
+        session: session,
+      ),
+    );
+    return session;
+  }
+
   Future<void> pauseSleepMode() async {
     final UserProfile user = await _currentUserOrEnsureAuthenticated();
     try {
@@ -272,7 +311,7 @@ class SleepExperienceController extends ChangeNotifier {
       // Notification cleanup is best-effort and should not block pausing sleep mode.
     }
     final SleepSession? paused = await _sleepSessionRepository
-        .pauseActiveSleepSession();
+        .pauseActiveSleepSession(at: _clock());
     if (paused == null) {
       return;
     }
@@ -296,7 +335,7 @@ class SleepExperienceController extends ChangeNotifier {
       // Notification cleanup is best-effort and should not block leaving sleep mode.
     }
     final SleepSession? finished = await _sleepSessionRepository
-        .finishActiveSleepSession();
+        .finishActiveSleepSession(at: _clock());
     if (finished == null) {
       final SleepSession? fallbackSession = _currentSleepDaySession();
       if (fallbackSession != null) {
@@ -503,6 +542,29 @@ class SleepExperienceController extends ChangeNotifier {
       await _sleepCaptureRepository.clearPendingBanner();
     } catch (_) {
       // Pending banner cleanup should not block sleep mode resume.
+    }
+  }
+
+  Future<void> _completeSleepModeEntrySideEffects({
+    required String uid,
+    required SleepSession session,
+  }) async {
+    try {
+      await _appNotificationService.showSleepModeNotification(session: session);
+    } catch (_) {
+      // Notification display is best-effort and should not block returning to sleep mode.
+    }
+    try {
+      await _dormRepository.updateCurrentUserStatus(
+        uid: uid,
+        status: DormMemberStatus.quiet,
+        sleepModeActive: true,
+        note: session.hasSubmittedFeedback
+            ? '已进入睡眠模式，今天时长不再累计'
+            : '已进入睡眠模式',
+      );
+    } catch (_) {
+      // Dorm sync is best-effort and should not block returning to sleep mode.
     }
   }
 
