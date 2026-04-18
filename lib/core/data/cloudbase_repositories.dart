@@ -2081,6 +2081,8 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
   String _currentPhase = '';
   String _activeSessionId = '';
   int _latestRemoteSyncId = 0;
+  bool _hasObservedInitialSessionLookup = false;
+  bool _hasCompletedInitialSessionLookup = false;
 
   @override
   SleepSession? get activeSession {
@@ -2106,6 +2108,14 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
 
   @override
   List<SleepSession> get sessions => List<SleepSession>.unmodifiable(_sessions);
+
+  @override
+  bool get isReadyForSessionLookup {
+    if (!_appApiClient.isConfigured || _snapshotStore.hasPayload) {
+      return true;
+    }
+    return _hasCompletedInitialSessionLookup;
+  }
 
   @override
   SleepSession? get latestAwaitingFeedbackSession {
@@ -2482,6 +2492,13 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
   }
 
   void _applySnapshot() {
+    if (_snapshotStore.isRefreshing) {
+      _hasObservedInitialSessionLookup = true;
+    } else if (_hasObservedInitialSessionLookup ||
+        _snapshotStore.hasPayload ||
+        _snapshotStore.lastError != null) {
+      _hasCompletedInitialSessionLookup = true;
+    }
     final _SnapshotData snapshot = _SnapshotData.fromPayload(
       _snapshotStore.payload,
       _authRepository.currentUser.uid,

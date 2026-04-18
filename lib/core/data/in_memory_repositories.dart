@@ -592,6 +592,9 @@ class InMemorySleepSessionRepository extends ChangeNotifier
   List<SleepSession> get sessions => List<SleepSession>.unmodifiable(_sessions);
 
   @override
+  bool get isReadyForSessionLookup => true;
+
+  @override
   SleepSession? get latestAwaitingFeedbackSession {
     final List<SleepSession> pending =
         _latestSleepDaySessions(_sessions)

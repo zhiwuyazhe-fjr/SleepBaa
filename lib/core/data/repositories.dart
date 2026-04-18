@@ -111,6 +111,7 @@ abstract interface class RecommendationRepository implements Listenable {
 abstract interface class SleepSessionRepository implements Listenable {
   SleepSession? get activeSession;
   List<SleepSession> get sessions;
+  bool get isReadyForSessionLookup;
   SleepSession? get latestAwaitingFeedbackSession;
   List<SleepSession> recentSessions({int count = 7});
   List<SleepSession> sessionsForMonth(DateTime month);

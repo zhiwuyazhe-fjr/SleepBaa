@@ -1128,6 +1128,9 @@ class _NullActiveSleepSessionRepository extends ChangeNotifier
   );
 
   @override
+  bool get isReadyForSessionLookup => true;
+
+  @override
   List<SleepSession> recentSessions({int count = 7}) => sessions;
 
   @override
