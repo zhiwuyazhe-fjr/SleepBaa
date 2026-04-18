@@ -493,6 +493,27 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('密码建议'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-reset-password')),
+        'renewed123',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-reset-password-confirm')),
+        'renewed123',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey<String>('auth-reset-submit')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-success-login')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-success-resend')),
+        findsOneWidget,
+      );
     },
   );
 
@@ -545,6 +566,49 @@ void main() {
       expect(button.onPressed, isNotNull);
     },
   );
+
+  testWidgets('phone auth send-code enters a 60 second cooldown', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.authPhone,
+      clock: _dayClock,
+    );
+
+    await tester.tap(find.byKey(const ValueKey<String>('auth-mode-register')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('auth-register-phone')),
+      '13900139000',
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('auth-register-send')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('60s'), findsOneWidget);
+
+    FilledButton sendButton = tester.widget<FilledButton>(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('auth-register-send')),
+        matching: find.byType(FilledButton),
+      ),
+    );
+    expect(sendButton.onPressed, isNull);
+
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('59s'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 59));
+    sendButton = tester.widget<FilledButton>(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('auth-register-send')),
+        matching: find.byType(FilledButton),
+      ),
+    );
+    expect(sendButton.onPressed, isNotNull);
+    expect(find.text('发送验证码'), findsOneWidget);
+  });
 
   testWidgets('phone auth register password can be deleted and re-entered', (
     WidgetTester tester,
