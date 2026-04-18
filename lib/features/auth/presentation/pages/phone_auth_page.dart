@@ -17,6 +17,8 @@ enum _LoginMethod { password, smsCode }
 
 enum _CodeCooldownTarget { login, register, reset }
 
+enum _PageTransitionDirection { forward, backward }
+
 class PhoneAuthPage extends StatefulWidget {
   const PhoneAuthPage({super.key});
 
@@ -26,7 +28,6 @@ class PhoneAuthPage extends StatefulWidget {
 
 class _PhoneAuthPageState extends State<PhoneAuthPage> {
   static const double _designWidth = 390;
-  static const double _designHeight = 844;
   static const Color _cardBorder = Color(0xFFDFE3E7);
   static const Color _accentBlue = Color(0xFF90DDF2);
   static const Color _accentBlueSoft = Color(0xFFE8F7FB);
@@ -82,6 +83,9 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
   int _loginCodeCooldown = 0;
   int _registerCodeCooldown = 0;
   int _resetCodeCooldown = 0;
+  final List<_AuthView> _viewHistory = <_AuthView>[_AuthView.login];
+  _PageTransitionDirection _pageTransitionDirection =
+      _PageTransitionDirection.forward;
 
   @override
   void initState() {
@@ -183,58 +187,137 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     return '发送验证码';
   }
 
+  void _applyViewState(
+    _AuthView view, {
+    required _PageTransitionDirection direction,
+    bool push = false,
+    bool replace = false,
+    bool resetStack = false,
+  }) {
+    setState(() {
+      _pageTransitionDirection = direction;
+      if (resetStack) {
+        _viewHistory
+          ..clear()
+          ..add(view);
+      } else if (replace) {
+        if (_viewHistory.isEmpty) {
+          _viewHistory.add(view);
+        } else {
+          _viewHistory[_viewHistory.length - 1] = view;
+        }
+      } else if (push) {
+        if (_viewHistory.isEmpty || _viewHistory.last != view) {
+          _viewHistory.add(view);
+        }
+      }
+      _currentView = view;
+    });
+  }
+
+  void _returnToPreviousView() {
+    switch (_currentView) {
+      case _AuthView.login:
+        return;
+      case _AuthView.register:
+        _switchToLogin(
+          phoneNumber: _registerPhoneController.text.trim(),
+          replaceCurrent: true,
+        );
+      case _AuthView.forgotPassword:
+        _switchToLogin(
+          phoneNumber: _resetPhoneController.text.trim(),
+          replaceCurrent: true,
+        );
+      case _AuthView.resetPassword:
+        _switchToForgotPassword(
+          phoneNumber: _resetPhoneController.text.trim(),
+          replaceCurrent: true,
+        );
+      case _AuthView.resetSuccess:
+        _switchToForgotPassword(
+          phoneNumber: _resetPhoneController.text.trim(),
+          resetStack: true,
+        );
+    }
+  }
+
   void _switchToLogin({
     String? phoneNumber,
     _LoginMethod method = _LoginMethod.password,
+    bool replaceCurrent = false,
+    bool resetStack = false,
   }) {
-    setState(() {
-      _currentView = _AuthView.login;
-      _loginMethod = method;
-      if (phoneNumber != null && phoneNumber.trim().isNotEmpty) {
-        _loginPhoneController.text = phoneNumber;
-      }
-      _loginPasswordController.clear();
-      _loginCodeController.clear();
-      _loginChallenge = null;
-    });
+    _applyViewState(
+      _AuthView.login,
+      direction: _PageTransitionDirection.backward,
+      replace: replaceCurrent,
+      resetStack: resetStack,
+    );
+    _loginMethod = method;
+    if (phoneNumber != null && phoneNumber.trim().isNotEmpty) {
+      _loginPhoneController.text = phoneNumber;
+    }
+    _loginPasswordController.clear();
+    _loginCodeController.clear();
+    _loginChallenge = null;
   }
 
-  void _switchToRegister(String phoneNumber) {
-    setState(() {
-      _currentView = _AuthView.register;
-      _registerPhoneController.text = phoneNumber;
-      _registerCodeController.clear();
-      _registerPasswordController.clear();
-      _registerConfirmPasswordController.clear();
-      _registerChallenge = null;
-    });
+  void _switchToRegister(String phoneNumber, {bool replaceCurrent = false}) {
+    _applyViewState(
+      _AuthView.register,
+      direction: replaceCurrent
+          ? _PageTransitionDirection.backward
+          : _PageTransitionDirection.forward,
+      push: !replaceCurrent,
+      replace: replaceCurrent,
+    );
+    _registerPhoneController.text = phoneNumber;
+    _registerCodeController.clear();
+    _registerPasswordController.clear();
+    _registerConfirmPasswordController.clear();
+    _registerChallenge = null;
   }
 
-  void _switchToForgotPassword({String? phoneNumber}) {
-    setState(() {
-      _currentView = _AuthView.forgotPassword;
-      if (phoneNumber != null && phoneNumber.trim().isNotEmpty) {
-        _resetPhoneController.text = phoneNumber;
-      }
-      _resetCodeController.clear();
-      _resetPasswordController.clear();
-      _resetConfirmPasswordController.clear();
-      _resetChallenge = null;
-    });
+  void _switchToForgotPassword({
+    String? phoneNumber,
+    bool replaceCurrent = false,
+    bool resetStack = false,
+  }) {
+    _applyViewState(
+      _AuthView.forgotPassword,
+      direction: replaceCurrent
+          ? _PageTransitionDirection.backward
+          : _PageTransitionDirection.forward,
+      push: !replaceCurrent && !resetStack,
+      replace: replaceCurrent,
+      resetStack: resetStack,
+    );
+    if (phoneNumber != null && phoneNumber.trim().isNotEmpty) {
+      _resetPhoneController.text = phoneNumber;
+    }
+    _resetCodeController.clear();
+    _resetPasswordController.clear();
+    _resetConfirmPasswordController.clear();
+    _resetChallenge = null;
   }
 
   void _switchToResetPassword() {
-    setState(() {
-      _currentView = _AuthView.resetPassword;
-      _resetPasswordController.clear();
-      _resetConfirmPasswordController.clear();
-    });
+    _applyViewState(
+      _AuthView.resetPassword,
+      direction: _PageTransitionDirection.forward,
+      push: true,
+    );
+    _resetPasswordController.clear();
+    _resetConfirmPasswordController.clear();
   }
 
   void _switchToResetSuccess() {
-    setState(() {
-      _currentView = _AuthView.resetSuccess;
-    });
+    _applyViewState(
+      _AuthView.resetSuccess,
+      direction: _PageTransitionDirection.forward,
+      push: true,
+    );
   }
 
   bool _redirectForUnexpectedChallenge({
@@ -243,13 +326,20 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     required String phoneNumber,
   }) {
     if (target == PhoneVerificationTarget.newUser && challenge.isExistingUser) {
-      _switchToLogin(phoneNumber: phoneNumber, method: _LoginMethod.smsCode);
+      _switchToLogin(
+        phoneNumber: phoneNumber,
+        method: _LoginMethod.smsCode,
+        replaceCurrent: true,
+      );
       _showMessage('该手机号已注册，请直接登录。');
       return true;
     }
     if (target == PhoneVerificationTarget.existingUser &&
         !challenge.isExistingUser) {
-      _switchToRegister(phoneNumber);
+      _switchToRegister(
+        phoneNumber,
+        replaceCurrent: _currentView != _AuthView.login,
+      );
       _showMessage('未找到该手机号，请先注册。');
       return true;
     }
@@ -345,6 +435,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
       _switchToLogin(
         phoneNumber: _registerPhoneController.text.trim(),
         method: _LoginMethod.smsCode,
+        replaceCurrent: true,
       );
       _showMessage(error.message);
     } catch (error) {
@@ -395,7 +486,10 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
       if (!mounted) {
         return;
       }
-      _switchToRegister(_resetPhoneController.text.trim());
+      _switchToRegister(
+        _resetPhoneController.text.trim(),
+        replaceCurrent: true,
+      );
       _showMessage(error.message);
     } catch (error) {
       if (!mounted) {
@@ -646,7 +740,10 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
       if (!mounted) {
         return;
       }
-      _switchToLogin(phoneNumber: _resetPhoneController.text.trim());
+      _switchToLogin(
+        phoneNumber: _resetPhoneController.text.trim(),
+        resetStack: true,
+      );
     } catch (error) {
       if (!mounted) {
         return;
@@ -656,13 +753,10 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
   }
 
   Future<void> _resendResetFromSuccess(AppServices services) async {
-    setState(() {
-      _currentView = _AuthView.forgotPassword;
-      _resetCodeController.clear();
-      _resetPasswordController.clear();
-      _resetConfirmPasswordController.clear();
-      _resetChallenge = null;
-    });
+    _switchToForgotPassword(
+      phoneNumber: _resetPhoneController.text.trim(),
+      resetStack: true,
+    );
     await _sendResetCode(services);
   }
 
@@ -784,13 +878,15 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
   }
 
   double _frameWidthFor(BoxConstraints constraints) {
-    if (constraints.maxWidth <= constraints.maxHeight) {
+    if (constraints.maxWidth < 650) {
       return constraints.maxWidth;
     }
-    return math.min(
-      constraints.maxWidth * 0.26,
-      constraints.maxHeight * (_designWidth / _designHeight),
-    );
+    final double widthTarget = constraints.maxWidth < 1100
+        ? constraints.maxWidth * 0.58
+        : constraints.maxWidth * 0.26;
+    final double heightSafeTarget =
+        constraints.maxHeight * (_designWidth / 844);
+    return math.min(widthTarget, heightSafeTarget);
   }
 
   double _framePaddingFor(double frameWidth) {
@@ -850,24 +946,13 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
             color: _textPrimary,
           ),
         ),
-        SizedBox(height: 10 * unit),
-        Text(
-          '使用手机号继续登录。支持密码登录，也支持短信验证码登录。',
-          style: _textStyle(
-            context,
-            size: 15 * unit,
-            weight: FontWeight.w500,
-            color: _textMuted,
-            height: 1.45,
-          ),
-        ),
         SizedBox(height: 20 * unit),
         _buildLoginMethodSwitch(context, unit),
         SizedBox(height: 20 * unit),
         _PencilInputField(
           fieldKey: const ValueKey<String>('auth-login-phone'),
           label: '手机号',
-          hintText: '138 0013 8000',
+          hintText: '请输入手机号',
           controller: _loginPhoneController,
           icon: Icons.smartphone_rounded,
           keyboardType: TextInputType.phone,
@@ -882,7 +967,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
           _PencilInputField(
             fieldKey: const ValueKey<String>('auth-login-password'),
             label: '密码',
-            hintText: '••••••••••••',
+            hintText: '请输入密码',
             controller: _loginPasswordController,
             icon: Icons.lock_outline_rounded,
             textInputAction: TextInputAction.done,
@@ -893,7 +978,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
           _buildCodeFieldRow(
             context,
             label: '短信验证码',
-            hintText: '输入收到的验证码',
+            hintText: '请输入验证码',
             controller: _loginCodeController,
             fieldKey: const ValueKey<String>('auth-login-code'),
             actionKey: const ValueKey<String>('auth-login-code-send'),
@@ -1052,8 +1137,10 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         title: '已经有账号？',
         actionLabel: '返回登录',
         unit: unit,
-        onTap: () =>
-            _switchToLogin(phoneNumber: _registerPhoneController.text.trim()),
+        onTap: () => _switchToLogin(
+          phoneNumber: _registerPhoneController.text.trim(),
+          replaceCurrent: true,
+        ),
         actionKey: const ValueKey<String>('auth-mode-login'),
       ),
     );
@@ -1074,8 +1161,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
           radius: 14 * unit,
           backgroundColor: _accentBlue,
           iconColor: _accentBlueDeep,
-          onTap: () =>
-              _switchToLogin(phoneNumber: _resetPhoneController.text.trim()),
+          onTap: _returnToPreviousView,
         ),
         SizedBox(height: 24 * unit),
         Text(
@@ -1102,7 +1188,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         _buildCodeFieldRow(
           context,
           label: '短信验证码',
-          hintText: '输入收到的验证码',
+          hintText: '请输入验证码',
           controller: _resetCodeController,
           fieldKey: const ValueKey<String>('auth-reset-code'),
           actionKey: const ValueKey<String>('auth-reset-send'),
@@ -1153,9 +1239,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
           radius: 14 * unit,
           backgroundColor: _accentBlue,
           iconColor: _accentBlueDeep,
-          onTap: () {
-            setState(() => _currentView = _AuthView.forgotPassword);
-          },
+          onTap: _returnToPreviousView,
         ),
         SizedBox(height: 24 * unit),
         Text(
@@ -1200,8 +1284,6 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
           obscureText: true,
           scaleUnit: unit,
         ),
-        SizedBox(height: 12 * unit),
-        _PencilTipsCard(unit: unit),
         SizedBox(height: 12 * unit),
         ListenableBuilder(
           listenable: _resetPasswordFormListenable,
@@ -1362,76 +1444,120 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
   Widget build(BuildContext context) {
     final AppServices services = AppScope.of(context);
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final Widget authContent = PopScope<void>(
+      canPop: _currentView == _AuthView.login,
+      onPopInvokedWithResult: (bool didPop, void _) {
+        if (!didPop && _currentView != _AuthView.login) {
+          _returnToPreviousView();
+        }
+      },
+      child: SafeArea(
+        child: AnimatedPadding(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.only(bottom: keyboardInset),
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final double frameWidth = _frameWidthFor(constraints);
+              final double unit = frameWidth / _designWidth;
+              final double framePadding = _framePaddingFor(frameWidth);
+              final double horizontalInset =
+                  ((constraints.maxWidth - frameWidth) / 2) + framePadding;
+              final double verticalInset = framePadding;
+              final double minPageHeight = math.max(
+                constraints.maxHeight - (verticalInset * 2),
+                0,
+              );
+              final ValueKey<String> activeKey = ValueKey<String>(
+                _currentView.name,
+              );
+              final double transitionSign =
+                  _pageTransitionDirection == _PageTransitionDirection.forward
+                  ? 1
+                  : -1;
+
+              return SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalInset,
+                  verticalInset,
+                  horizontalInset,
+                  verticalInset,
+                ),
+                physics: const ClampingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: minPageHeight),
+                  child: IntrinsicHeight(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 260),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      layoutBuilder:
+                          (
+                            Widget? currentChild,
+                            List<Widget> previousChildren,
+                          ) {
+                            final List<Widget> stackedChildren =
+                                List<Widget>.of(previousChildren);
+                            if (currentChild != null) {
+                              stackedChildren.add(currentChild);
+                            }
+                            return Stack(
+                              alignment: Alignment.topCenter,
+                              children: stackedChildren,
+                            );
+                          },
+                      transitionBuilder:
+                          (Widget child, Animation<double> animation) {
+                            final bool isIncoming = child.key == activeKey;
+                            return AnimatedBuilder(
+                              animation: animation,
+                              child: child,
+                              builder: (BuildContext context, Widget? child) {
+                                final double progress = animation.value;
+                                final double xOffset = isIncoming
+                                    ? (1 - progress) * transitionSign
+                                    : (1 - progress) * -transitionSign * 0.18;
+                                return Opacity(
+                                  opacity: progress,
+                                  child: FractionalTranslation(
+                                    translation: Offset(xOffset, 0),
+                                    child: child,
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                      child: KeyedSubtree(
+                        key: activeKey,
+                        child: _buildCurrentPage(context, services, unit),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    final bool hasRouter = Router.maybeOf(context) != null;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
         backgroundColor: Colors.white,
-        body: SafeArea(
-          child: AnimatedPadding(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            padding: EdgeInsets.only(bottom: keyboardInset),
-            child: LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints constraints) {
-                final double frameWidth = _frameWidthFor(constraints);
-                final double unit = frameWidth / _designWidth;
-                final double framePadding = _framePaddingFor(frameWidth);
-                final double horizontalInset =
-                    ((constraints.maxWidth - frameWidth) / 2) + framePadding;
-                final double verticalInset = framePadding;
-                final double minPageHeight = math.max(
-                  constraints.maxHeight - (verticalInset * 2),
-                  0,
-                );
-
-                return SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(
-                    horizontalInset,
-                    verticalInset,
-                    horizontalInset,
-                    verticalInset,
-                  ),
-                  physics: const ClampingScrollPhysics(),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: minPageHeight),
-                    child: IntrinsicHeight(
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 280),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        transitionBuilder:
-                            (Widget child, Animation<double> animation) {
-                              final Animation<Offset> offsetAnimation =
-                                  Tween<Offset>(
-                                    begin: const Offset(0.08, 0),
-                                    end: Offset.zero,
-                                  ).animate(
-                                    CurvedAnimation(
-                                      parent: animation,
-                                      curve: Curves.easeOutCubic,
-                                    ),
-                                  );
-                              return FadeTransition(
-                                opacity: animation,
-                                child: SlideTransition(
-                                  position: offsetAnimation,
-                                  child: child,
-                                ),
-                              );
-                            },
-                        child: KeyedSubtree(
-                          key: ValueKey<String>(_currentView.name),
-                          child: _buildCurrentPage(context, services, unit),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
+        body: hasRouter
+            ? BackButtonListener(
+                onBackButtonPressed: () async {
+                  if (_currentView == _AuthView.login) {
+                    return false;
+                  }
+                  _returnToPreviousView();
+                  return true;
+                },
+                child: authContent,
+              )
+            : authContent,
       ),
     );
   }
@@ -1952,63 +2078,6 @@ class _PencilInfoStrip extends StatelessWidget {
                 fontWeight: FontWeight.w500,
                 color: _PhoneAuthPageState._textMuted,
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PencilTipsCard extends StatelessWidget {
-  const _PencilTipsCard({required this.unit});
-
-  final double unit;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.all(18 * unit),
-      decoration: BoxDecoration(
-        color: _PhoneAuthPageState._surfaceMuted,
-        borderRadius: BorderRadius.circular(22 * unit),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            '密码建议',
-            style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-              fontSize: 14 * unit,
-              fontWeight: FontWeight.w700,
-              color: _PhoneAuthPageState._textPrimary,
-            ),
-          ),
-          SizedBox(height: 8 * unit),
-          Text(
-            '至少 6 位，建议混合数字与字母。',
-            style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-              fontSize: 13 * unit,
-              fontWeight: FontWeight.w500,
-              color: _PhoneAuthPageState._textMuted,
-            ),
-          ),
-          SizedBox(height: 8 * unit),
-          Text(
-            '避免与旧密码过于接近。',
-            style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-              fontSize: 13 * unit,
-              fontWeight: FontWeight.w500,
-              color: _PhoneAuthPageState._textMuted,
-            ),
-          ),
-          SizedBox(height: 8 * unit),
-          Text(
-            '重置后将使用新密码直接登录。',
-            style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-              fontSize: 13 * unit,
-              fontWeight: FontWeight.w500,
-              color: _PhoneAuthPageState._textMuted,
             ),
           ),
         ],

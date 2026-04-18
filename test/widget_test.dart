@@ -492,7 +492,7 @@ void main() {
         find.byKey(const ValueKey<String>('auth-reset-password')),
         findsOneWidget,
       );
-      expect(find.text('密码建议'), findsOneWidget);
+      expect(find.text('密码建议'), findsNothing);
 
       await tester.enterText(
         find.byKey(const ValueKey<String>('auth-reset-password')),
@@ -516,6 +516,35 @@ void main() {
       );
     },
   );
+
+  testWidgets('phone auth system back returns to the previous subpage', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.authPhone,
+      clock: _dayClock,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('auth-forgot-password')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('auth-reset-phone')),
+      findsOneWidget,
+    );
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PhoneAuthPage), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('auth-login-phone')),
+      findsOneWidget,
+    );
+  });
 
   testWidgets(
     'phone auth register fields stay editable and submit button enables after input',
@@ -608,6 +637,30 @@ void main() {
     );
     expect(sendButton.onPressed, isNotNull);
     expect(find.text('发送验证码'), findsOneWidget);
+  });
+
+  testWidgets('phone auth keeps a usable width in short mobile heights', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 300));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.authPhone,
+      clock: _dayClock,
+    );
+    await tester.pumpAndSettle();
+
+    final Rect phoneRect = tester.getRect(
+      find.byKey(const ValueKey<String>('auth-login-phone')),
+    );
+    final Rect submitRect = tester.getRect(
+      find.byKey(const ValueKey<String>('auth-login-submit')),
+    );
+
+    expect(phoneRect.width, greaterThan(250));
+    expect(submitRect.width, greaterThan(250));
   });
 
   testWidgets('phone auth register password can be deleted and re-entered', (
