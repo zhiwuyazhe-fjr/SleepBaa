@@ -1,3 +1,5 @@
+import 'package:go_router/go_router.dart';
+import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
@@ -41,7 +43,7 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
           final Map<DateTime, SleepSession> sessionMap =
               <DateTime, SleepSession>{
                 for (final SleepSession session in monthSessions)
-                  DateUtils.dateOnly(session.startedAt): session,
+                  DateUtils.dateOnly(session.sleepDayDate): session,
               };
           final SleepSession? selectedSession = _selectedDay == null
               ? null
@@ -132,18 +134,13 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
                       spacing: AppSpacing.sm,
                       runSpacing: AppSpacing.sm,
                       children: <Widget>[
-                        _DetailChip(
-                          label:
-                              '本月记录 ${monthSessions.length} 夜',
-                        ),
-                        _DetailChip(
-                          label: '待补全 $pendingCount 夜',
-                        ),
+                        _DetailChip(label: '本月记录 ${monthSessions.length} 天'),
+                        _DetailChip(label: '待补全 $pendingCount 天'),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      '进入睡眠后会先占位，晨间反馈完成后会补全睡眠质量、时长和摘要。',
+                      '同一睡眠日多次退出或再次进入都会累计到同一天，晨间反馈完成后该日时长会锁定。',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppColors.textSecondary,
                         height: 1.45,
@@ -153,9 +150,7 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
-              AppCard(
-                child: _SelectedSessionDetail(session: selectedSession),
-              ),
+              AppCard(child: _SelectedSessionDetail(session: selectedSession)),
             ],
           );
         },
@@ -167,14 +162,20 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
     if (sessions.isEmpty) {
       return 0;
     }
-    final List<DateTime> uniqueDays = sessions
-        .map((SleepSession session) => DateUtils.dateOnly(session.startedAt))
-        .toSet()
-        .toList(growable: false)
-      ..sort((DateTime a, DateTime b) => b.compareTo(a));
+    final List<DateTime> uniqueDays =
+        sessions
+            .map(
+              (SleepSession session) =>
+                  DateUtils.dateOnly(session.sleepDayDate),
+            )
+            .toSet()
+            .toList(growable: false)
+          ..sort((DateTime a, DateTime b) => b.compareTo(a));
     int streak = 1;
     for (int index = 1; index < uniqueDays.length; index++) {
-      final int gap = uniqueDays[index - 1].difference(uniqueDays[index]).inDays;
+      final int gap = uniqueDays[index - 1]
+          .difference(uniqueDays[index])
+          .inDays;
       if (gap == 1) {
         streak += 1;
         continue;
@@ -199,11 +200,8 @@ class _SelectedSessionDetail extends StatelessWidget {
     final MorningSummary? summary = session!.summary;
     final String stageLabel = _sessionStageLabel(session!);
     final Color stageColor = _sessionStageColor(session!);
-    final String durationLabel = summary != null
-        ? '${summary.totalSleepHours.toStringAsFixed(1)} h'
-        : session!.endedAt == null
-        ? '进行中'
-        : '${session!.endedAt!.difference(session!.startedAt).inMinutes} min';
+    final String durationLabel =
+        '${session!.displaySleepHours().toStringAsFixed(1)} h';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -212,7 +210,7 @@ class _SelectedSessionDetail extends StatelessWidget {
           children: <Widget>[
             Expanded(
               child: Text(
-                Formatters.formatDateLabel(session!.startedAt),
+                Formatters.formatDateLabel(session!.sleepDayDate),
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
@@ -232,16 +230,10 @@ class _SelectedSessionDetail extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
-        Text(
-          '当晚摘要',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        Text('当晚摘要', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: AppSpacing.sm),
         Text(
-          summary?.note ??
-              (session!.status == SleepSessionStatus.active
-                  ? '已进入睡眠模式，等待本夜结束后补全反馈。'
-                  : '已退出睡眠模式，等待晨间反馈补全质量与恢复感。'),
+          summary?.note ?? _summaryFallback(session!),
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: AppColors.textSecondary,
             height: 1.5,
@@ -263,12 +255,24 @@ class _SelectedSessionDetail extends StatelessWidget {
     );
   }
 
+  String _summaryFallback(SleepSession session) {
+    return switch (session.status) {
+      SleepSessionStatus.active => '已进入睡眠模式，仍在持续记录当晚时长。',
+      SleepSessionStatus.paused => '已退出睡眠模式，稍后再次进入仍可继续累计。',
+      SleepSessionStatus.awaitingFeedback => '等待晨间反馈补全睡眠质量与恢复感。',
+      SleepSessionStatus.completed => '晨间反馈已完成，本日记录已锁定。',
+      SleepSessionStatus.drafted => '这条记录还在准备中。',
+    };
+  }
+
   String _sessionStageLabel(SleepSession session) {
-    if (session.summary != null || session.status == SleepSessionStatus.completed) {
+    if (session.summary != null ||
+        session.status == SleepSessionStatus.completed) {
       return '已完成';
     }
     return switch (session.status) {
       SleepSessionStatus.active => '进行中',
+      SleepSessionStatus.paused => '已暂停',
       SleepSessionStatus.awaitingFeedback => '待补全',
       SleepSessionStatus.completed => '已完成',
       SleepSessionStatus.drafted => '草稿',
@@ -276,11 +280,13 @@ class _SelectedSessionDetail extends StatelessWidget {
   }
 
   Color _sessionStageColor(SleepSession session) {
-    if (session.summary != null || session.status == SleepSessionStatus.completed) {
+    if (session.summary != null ||
+        session.status == SleepSessionStatus.completed) {
       return const Color(0xFF2D9272);
     }
     return switch (session.status) {
       SleepSessionStatus.active => const Color(0xFF4458D8),
+      SleepSessionStatus.paused => const Color(0xFF8B7CF6),
       SleepSessionStatus.awaitingFeedback => const Color(0xFFF39A3C),
       SleepSessionStatus.completed => const Color(0xFF2D9272),
       SleepSessionStatus.drafted => AppColors.textSecondary,
@@ -328,7 +334,8 @@ class _CalendarGrid extends StatelessWidget {
     final int daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
     final int leadingEmpty = DateTime(month.year, month.month, 1).weekday - 1;
     final List<Widget> cells = <Widget>[
-      for (int index = 0; index < leadingEmpty; index++) const SizedBox.shrink(),
+      for (int index = 0; index < leadingEmpty; index++)
+        const SizedBox.shrink(),
       for (int day = 1; day <= daysInMonth; day++)
         _DayCell(
           date: DateTime(month.year, month.month, day),
@@ -379,13 +386,27 @@ class _DayCell extends StatelessWidget {
     };
     return InkWell(
       borderRadius: BorderRadius.circular(14),
-      onTap: () => onTap(date),
+      onTap: () {
+        final SleepSession? currentSession = session;
+        if (currentSession != null &&
+            currentSession.status == SleepSessionStatus.awaitingFeedback &&
+            !currentSession.sleepModeActive &&
+            !currentSession.hasSubmittedFeedback) {
+          context.push(
+            AppRoutes.feedbackMorningLocation(sessionId: currentSession.id),
+          );
+          return;
+        }
+        onTap(date);
+      },
       child: Ink(
         decoration: BoxDecoration(
           color: selected ? AppColors.darkSurface : fill,
           borderRadius: BorderRadius.circular(14),
           border: pending
-              ? Border.all(color: palette.primary.withAlpha(selected ? 255 : 180))
+              ? Border.all(
+                  color: palette.primary.withAlpha(selected ? 255 : 180),
+                )
               : null,
         ),
         child: Center(

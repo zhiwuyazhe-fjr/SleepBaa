@@ -5,13 +5,16 @@ import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 class MorningFeedbackPage extends StatefulWidget {
-  const MorningFeedbackPage({super.key});
+  const MorningFeedbackPage({super.key, this.sessionId});
+
+  final String? sessionId;
 
   @override
   State<MorningFeedbackPage> createState() => _MorningFeedbackPageState();
@@ -26,6 +29,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
   int _estimatedSleepLatency = 20;
   int _sleepQuality = 4;
   int _restedLevel = 4;
+  String? _boundSessionId;
 
   @override
   void dispose() {
@@ -48,22 +52,34 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
           services.notificationRepository,
         ]),
         builder: (BuildContext context, Widget? child) {
-          final SleepSession? session =
-              services.sleepSessionRepository.latestAwaitingFeedbackSession;
+          final GoRouterState routerState = GoRouterState.of(context);
+          final DateTime feedbackMoment =
+              services.sleepExperienceController.currentTime;
+          final _MorningFeedbackTarget target = _resolveTargetSession(
+            services.sleepSessionRepository,
+            feedbackMoment: feedbackMoment,
+            explicitSessionId:
+                widget.sessionId ??
+                routerState.uri.queryParameters['sessionId'],
+          );
+          final SleepSession? session = target.session;
           if (session == null) {
-            return const Center(child: Text('当前没有待反馈的睡眠记录。'));
+            return Center(child: Text(target.message));
           }
-          final DateTime endAt = session.endedAt ?? DateTime.now();
-          final Duration totalRecordDuration = endAt.difference(
-            session.startedAt,
+          _bindSession(session);
+          final DateTime endAt = _resolveFeedbackDisplayEndAt(
+            session,
+            feedbackMoment,
           );
-          final int totalRecordMinutes = totalRecordDuration.inMinutes.clamp(
-            0,
-            24 * 60,
+          final DateTime startAt = _resolveFeedbackDisplayStartAt(
+            session,
+            endAt,
           );
-          final int actualSleepMinutes = (totalRecordMinutes -
-                  _estimatedSleepLatency)
-              .clamp(0, 24 * 60);
+          final int totalRecordMinutes = session.liveTrackedDurationMinutes(
+            now: endAt,
+          );
+          final int actualSleepMinutes =
+              (totalRecordMinutes - _estimatedSleepLatency).clamp(0, 24 * 60);
           final double actualSleepHours = actualSleepMinutes / 60;
 
           return ListView(
@@ -74,14 +90,18 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      '昨晚的整体感觉',
+                      '昨晚的整体感受',
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
                     const SizedBox(height: AppSpacing.md),
                     _MetricSummary(
                       label: '总记录时长',
                       primaryValue: _formatDurationMinutes(totalRecordMinutes),
-                      detail: _formatDateTimeRangeLabel(session.startedAt, endAt),
+                      detail: _formatFeedbackWindowLabel(
+                        startAt,
+                        endAt,
+                        totalRecordMinutes,
+                      ),
                       palette: palette,
                     ),
                     const SizedBox(height: AppSpacing.md),
@@ -100,8 +120,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                     _MetricSummary(
                       label: '实际睡眠时长',
                       primaryValue: _formatDurationMinutes(actualSleepMinutes),
-                      detail:
-                          '按总记录时长减去预计入睡时长自动推算得到',
+                      detail: '按总记录时长减去预计入睡时长自动推算得到',
                       palette: palette,
                     ),
                     _MetricSlider(
@@ -117,7 +136,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                       },
                     ),
                     _MetricSlider(
-                      label: '起床疲倦感',
+                      label: '起床恢复感',
                       value: _restedLevel.toDouble(),
                       min: 1,
                       max: 5,
@@ -218,7 +237,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                           submittedAt: DateTime.now(),
                         );
                       })
-                      .toList();
+                      .toList(growable: false);
                   await services.sleepExperienceController
                       .submitMorningFeedback(
                         session: session,
@@ -245,6 +264,56 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
     );
   }
 
+  _MorningFeedbackTarget _resolveTargetSession(
+    SleepSessionRepository repository, {
+    required DateTime feedbackMoment,
+    String? explicitSessionId,
+  }) {
+    final String normalizedSessionId = explicitSessionId?.trim() ?? '';
+    if (normalizedSessionId.isNotEmpty) {
+      for (final SleepSession session in repository.sessions) {
+        if (session.id != normalizedSessionId) {
+          continue;
+        }
+        if (session.hasSubmittedFeedback) {
+          return const _MorningFeedbackTarget(
+            message: '这条睡眠记录已完成晨间反馈，可在我的页查看同步结果。',
+          );
+        }
+        if (_canSubmitFeedbackFor(session, feedbackMoment)) {
+          return _MorningFeedbackTarget(session: session);
+        }
+        return const _MorningFeedbackTarget(message: '这条睡眠记录当前不可继续补反馈。');
+      }
+      return const _MorningFeedbackTarget(message: '没有找到对应的睡眠记录。');
+    }
+
+    final String currentSleepDayKey = sleepDayKeyFromDate(feedbackMoment);
+    final SleepSession? currentSleepDaySession = repository
+        .sessionForSleepDayKey(currentSleepDayKey);
+    if (currentSleepDaySession != null &&
+        _canSubmitFeedbackFor(currentSleepDaySession, feedbackMoment)) {
+      return _MorningFeedbackTarget(session: currentSleepDaySession);
+    }
+    return const _MorningFeedbackTarget(message: '当前没有待补反馈的睡眠记录。');
+  }
+
+  void _bindSession(SleepSession session) {
+    if (_boundSessionId == session.id) {
+      return;
+    }
+    _boundSessionId = session.id;
+    _noteController.clear();
+    _statuses.clear();
+    for (final TextEditingController controller in _feedbackNotes.values) {
+      controller.dispose();
+    }
+    _feedbackNotes.clear();
+    _estimatedSleepLatency = 20;
+    _sleepQuality = 4;
+    _restedLevel = 4;
+  }
+
   String _feedbackLabel(RecommendationFeedbackStatus status) {
     return switch (status) {
       RecommendationFeedbackStatus.effective => '有效',
@@ -263,10 +332,54 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
     return '${hours}h ${remainder.toString().padLeft(2, '0')}min';
   }
 
-  String _formatDateTimeRangeLabel(DateTime start, DateTime end) {
-    final String startDay = '昨日';
-    final String endDay = start.day == end.day ? '今日' : '今日';
-    return '$startDay ${_formatClock(start)} 到 $endDay ${_formatClock(end)}';
+  DateTime _resolveFeedbackDisplayEndAt(
+    SleepSession session,
+    DateTime feedbackMoment,
+  ) {
+    final DateTime? recordedEndAt = session.displayEndAt;
+    if (recordedEndAt == null || feedbackMoment.isAfter(recordedEndAt)) {
+      return feedbackMoment;
+    }
+    return recordedEndAt;
+  }
+
+  DateTime _resolveFeedbackDisplayStartAt(
+    SleepSession session,
+    DateTime endAt,
+  ) {
+    final DateTime sleepDayDate = session.sleepDayDate;
+    final DateTime cutoffStart = DateTime(
+      sleepDayDate.year,
+      sleepDayDate.month,
+      sleepDayDate.day - 1,
+      20,
+    );
+    for (final SleepSegment segment in session.segments) {
+      final DateTime effectiveEnd = segment.endedAt ?? endAt;
+      if (effectiveEnd.isBefore(cutoffStart)) {
+        continue;
+      }
+      if (segment.startedAt.isBefore(cutoffStart)) {
+        return cutoffStart;
+      }
+      return segment.startedAt;
+    }
+    final DateTime fallback = session.displayStartAt;
+    return fallback.isBefore(cutoffStart) ? cutoffStart : fallback;
+  }
+
+  String _formatFeedbackWindowLabel(
+    DateTime start,
+    DateTime end,
+    int totalRecordMinutes,
+  ) {
+    return '${_formatDateLabel(start)} ${_formatClock(start)} - '
+        '${_formatDateLabel(end)} ${_formatClock(end)} '
+        '累计${_formatDurationMinutes(totalRecordMinutes)}';
+  }
+
+  String _formatDateLabel(DateTime dateTime) {
+    return '${dateTime.month}/${dateTime.day}';
   }
 
   String _formatClock(DateTime dateTime) {
@@ -274,6 +387,40 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
     final String minute = dateTime.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
   }
+
+  bool _canSubmitFeedbackFor(SleepSession session, DateTime feedbackMoment) {
+    if (session.status != SleepSessionStatus.awaitingFeedback ||
+        session.sleepModeActive ||
+        session.hasSubmittedFeedback) {
+      return false;
+    }
+    final DateTime? displayEndAt = session.displayEndAt;
+    if (displayEndAt == null) {
+      return false;
+    }
+    final List<SleepSegment> segments = session.segments.isNotEmpty
+        ? session.segments
+        : <SleepSegment>[
+            SleepSegment(
+              startedAt: session.startedAt,
+              endedAt: session.endedAt,
+            ),
+          ];
+    if (segments.any((SleepSegment segment) => segment.isOpen)) {
+      return false;
+    }
+    final DateTime effectiveEndAt = displayEndAt.isAfter(feedbackMoment)
+        ? displayEndAt
+        : feedbackMoment;
+    return session.liveTrackedDurationMinutes(now: effectiveEndAt) > 0;
+  }
+}
+
+class _MorningFeedbackTarget {
+  const _MorningFeedbackTarget({this.session, this.message = '当前没有待补反馈的睡眠记录。'});
+
+  final SleepSession? session;
+  final String message;
 }
 
 class _MetricSlider extends StatelessWidget {
@@ -369,9 +516,9 @@ class _MetricSummary extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             detail,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSecondary,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
           ),
         ],
       ),

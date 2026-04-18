@@ -67,3 +67,6 @@ app.*.map.json
 skills
 
 /dorm_honor
+
+/.cursor
+/.claude

@@ -82,6 +82,7 @@ abstract final class ModelSerializers {
       'uid': session.uid,
       'startedAt': session.startedAt,
       'endedAt': session.endedAt,
+      'sleepDayKey': session.sleepDayKey,
       'status': session.status.name,
       'sleepModeActive': session.sleepModeActive,
       'dormId': session.dormId,
@@ -89,6 +90,10 @@ abstract final class ModelSerializers {
           .map(recommendationToMap)
           .toList(growable: false),
       'selectedRecommendationIds': session.selectedRecommendationIds,
+      'segments': session.segments
+          .map(sleepSegmentToMap)
+          .toList(growable: false),
+      'trackedDurationMinutes': session.trackedDurationMinutes,
       'awakenings': session.awakenings
           .map(awakeningToMap)
           .toList(growable: false),
@@ -103,11 +108,28 @@ abstract final class ModelSerializers {
   }
 
   static SleepSession sleepSessionFromMap(Map<String, dynamic> map) {
+    final DateTime startedAt = _dateValue(map['startedAt']) ?? DateTime.now();
+    final DateTime? endedAt = _dateValue(map['endedAt']);
+    final MorningSummary? summary = map['summary'] == null
+        ? null
+        : morningSummaryFromMap(
+            Map<String, dynamic>.from(map['summary'] as Map),
+          );
+    final List<SleepSegment> segments =
+        (map['segments'] as List<dynamic>? ?? const <dynamic>[])
+            .map(
+              (dynamic item) => sleepSegmentFromMap(
+                Map<String, dynamic>.from(item as Map),
+              ),
+            )
+            .toList(growable: false);
     return SleepSession(
       id: map['id'] as String? ?? '',
       uid: map['uid'] as String? ?? 'anon-paul',
-      startedAt: _dateValue(map['startedAt']) ?? DateTime.now(),
-      endedAt: _dateValue(map['endedAt']),
+      startedAt: startedAt,
+      endedAt: endedAt,
+      sleepDayKey:
+          map['sleepDayKey'] as String? ?? _sleepDayKeyFromDate(startedAt),
       status:
           _sleepStatusFromName(map['status'] as String?) ??
           SleepSessionStatus.drafted,
@@ -126,6 +148,18 @@ abstract final class ModelSerializers {
                   const <dynamic>[])
               .map((dynamic item) => item.toString())
               .toList(growable: false),
+      segments: segments.isNotEmpty
+          ? segments
+          : <SleepSegment>[
+              SleepSegment(startedAt: startedAt, endedAt: endedAt),
+            ],
+      trackedDurationMinutes:
+          (map['trackedDurationMinutes'] as num?)?.toInt() ??
+          _fallbackTrackedDurationMinutes(
+            summary: summary,
+            startedAt: startedAt,
+            endedAt: endedAt,
+          ),
       awakenings: (map['awakenings'] as List<dynamic>? ?? const <dynamic>[])
           .map(
             (dynamic item) =>
@@ -139,12 +173,22 @@ abstract final class ModelSerializers {
             ),
           )
           .toList(growable: false),
-      summary: map['summary'] == null
-          ? null
-          : morningSummaryFromMap(
-              Map<String, dynamic>.from(map['summary'] as Map),
-            ),
+      summary: summary,
       updatedAt: _dateValue(map['updatedAt']),
+    );
+  }
+
+  static Map<String, dynamic> sleepSegmentToMap(SleepSegment segment) {
+    return <String, dynamic>{
+      'startedAt': segment.startedAt,
+      'endedAt': segment.endedAt,
+    };
+  }
+
+  static SleepSegment sleepSegmentFromMap(Map<String, dynamic> map) {
+    return SleepSegment(
+      startedAt: _dateValue(map['startedAt']) ?? DateTime.now(),
+      endedAt: _dateValue(map['endedAt']),
     );
   }
 
@@ -757,6 +801,27 @@ abstract final class ModelSerializers {
       SleepSessionStatus.values,
       (SleepSessionStatus item) => item.name == value,
     );
+  }
+
+  static int _fallbackTrackedDurationMinutes({
+    required MorningSummary? summary,
+    required DateTime startedAt,
+    required DateTime? endedAt,
+  }) {
+    if (summary != null) {
+      return (summary.totalSleepHours * 60).round();
+    }
+    if (endedAt == null) {
+      return 0;
+    }
+    return endedAt.difference(startedAt).inMinutes.clamp(0, 24 * 60).toInt();
+  }
+
+  static String _sleepDayKeyFromDate(DateTime value) {
+    final DateTime shifted = value.add(const Duration(hours: 4));
+    final String month = shifted.month.toString().padLeft(2, '0');
+    final String day = shifted.day.toString().padLeft(2, '0');
+    return '${shifted.year}-$month-$day';
   }
 
   static RecommendationType? _recommendationTypeFromName(String? value) {
