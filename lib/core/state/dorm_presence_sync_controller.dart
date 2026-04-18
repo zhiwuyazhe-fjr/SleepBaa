@@ -28,7 +28,10 @@ class DormPresenceSyncController {
     double radiusMeters = 100,
     bool requestPermission = true,
   }) async {
-    final String uid = (await _authRepository.ensureAuthenticated()).uid;
+    if (_authRepository.currentUser.uid.trim().isEmpty) {
+      return null;
+    }
+    final String uid = _authRepository.currentUser.uid;
     final Position? position = await _readCurrentPosition(
       requestPermission: requestPermission,
     );
@@ -48,9 +51,15 @@ class DormPresenceSyncController {
     if (_isSyncing) {
       return;
     }
+    if (!_authRepository.hasVerifiedPhoneIdentity) {
+      return;
+    }
     _isSyncing = true;
     try {
-      final UserProfile currentUser = await _authRepository.ensureAuthenticated();
+      final UserProfile currentUser = _authRepository.currentUser;
+      if (currentUser.uid.trim().isEmpty) {
+        return;
+      }
       await restoreCachedLocationAnchor();
       final Dorm dorm = _dormRepository.currentDorm;
       if (dorm.id.isEmpty) {
@@ -97,9 +106,12 @@ class DormPresenceSyncController {
     if (_isRestoringAnchor) {
       return;
     }
+    if (_authRepository.currentUser.uid.trim().isEmpty) {
+      return;
+    }
     _isRestoringAnchor = true;
     try {
-      final UserProfile currentUser = await _authRepository.ensureAuthenticated();
+      final UserProfile currentUser = _authRepository.currentUser;
       final Dorm dorm = _dormRepository.currentDorm;
       final DormLocationAnchor? anchor =
           dorm.locationAnchor ??
@@ -132,7 +144,10 @@ class DormPresenceSyncController {
   }
 
   Future<void> persistDormLocationAnchor(DormLocationAnchor anchor) async {
-    final UserProfile currentUser = await _authRepository.ensureAuthenticated();
+    if (_authRepository.currentUser.uid.trim().isEmpty) {
+      return;
+    }
+    final UserProfile currentUser = _authRepository.currentUser;
     final String dormId = _dormRepository.currentDorm.id;
     _pendingAnchor = anchor;
     await _cache.save(uid: currentUser.uid, dormId: dormId, anchor: anchor);

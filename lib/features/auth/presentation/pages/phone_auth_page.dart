@@ -59,6 +59,21 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
   bool _isSendingResetCode = false;
   bool _isSubmitting = false;
 
+  /// Incremented when the user clears a field so the [TextField] is remounted
+  /// with a new key — this drops the IME connection so deleted characters
+  /// cannot reappear as suggestions while the page stays open.
+  int _loginPhoneRemount = 0;
+  int _loginCodeRemount = 0;
+  int _loginPasswordRemount = 0;
+  int _registerPhoneRemount = 0;
+  int _registerCodeRemount = 0;
+  int _registerPasswordRemount = 0;
+  int _registerConfirmPasswordRemount = 0;
+  int _resetPhoneRemount = 0;
+  int _resetCodeRemount = 0;
+  int _resetPasswordRemount = 0;
+  int _resetConfirmPasswordRemount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -646,35 +661,70 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     required Key fieldKey,
     required TextEditingController controller,
     required ValueChanged<String>? onChanged,
+    VoidCallback? onImeRemount,
   }) {
     return TextField(
       key: fieldKey,
       controller: controller,
-      keyboardType: TextInputType.phone,
+      spellCheckConfiguration: const SpellCheckConfiguration.disabled(),
+      // TextInputType.number avoids the phone dialer keyboard which on many
+      // Android devices shows recent-call / contact-history suggestions that
+      // survive controller.clear().
+      keyboardType: TextInputType.number,
       textInputAction: TextInputAction.next,
-      autofillHints: const <String>[AutofillHints.telephoneNumber],
+      autofillHints: const <String>[],
+      enableSuggestions: false,
+      autocorrect: false,
+      enableIMEPersonalizedLearning: false,
+      smartDashesType: SmartDashesType.disabled,
+      smartQuotesType: SmartQuotesType.disabled,
       inputFormatters: <TextInputFormatter>[
         FilteringTextInputFormatter.allow(RegExp(r'[\d+\-\s]')),
       ],
       onChanged: onChanged,
-      decoration: const InputDecoration(labelText: '手机号', hintText: '请输入手机号'),
+      decoration: InputDecoration(
+        labelText: '手机号',
+        hintText: '请输入手机号',
+        suffixIcon: _ClearFieldButton(
+          controller: controller,
+          semanticsLabel: '清除手机号',
+          onCleared: onChanged,
+          onImeRemount: onImeRemount,
+        ),
+      ),
     );
   }
 
   Widget _buildCodeField({
     required Key fieldKey,
     required TextEditingController controller,
+    VoidCallback? onImeRemount,
   }) {
     return TextField(
       key: fieldKey,
       controller: controller,
+      spellCheckConfiguration: const SpellCheckConfiguration.disabled(),
       keyboardType: TextInputType.number,
       textInputAction: TextInputAction.next,
+      enableSuggestions: false,
+      autocorrect: false,
+      enableIMEPersonalizedLearning: false,
+      smartDashesType: SmartDashesType.disabled,
+      smartQuotesType: SmartQuotesType.disabled,
+      autofillHints: const <String>[],
       inputFormatters: <TextInputFormatter>[
         FilteringTextInputFormatter.digitsOnly,
         LengthLimitingTextInputFormatter(6),
       ],
-      decoration: const InputDecoration(labelText: '验证码', hintText: '请输入短信验证码'),
+      decoration: InputDecoration(
+        labelText: '验证码',
+        hintText: '请输入短信验证码',
+        suffixIcon: _ClearFieldButton(
+          controller: controller,
+          semanticsLabel: '清除验证码',
+          onImeRemount: onImeRemount,
+        ),
+      ),
     );
   }
 
@@ -693,22 +743,24 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         _buildLoginMethodSwitch(),
         const SizedBox(height: AppSpacing.lg),
         _buildPhoneField(
-          fieldKey: const ValueKey<String>('auth-login-phone'),
+          fieldKey: ValueKey<String>('auth-login-phone-$_loginPhoneRemount'),
           controller: _loginPhoneController,
           onChanged: (_) {
             if (_loginChallenge != null) {
               setState(() => _loginChallenge = null);
             }
           },
+          onImeRemount: () => setState(() => _loginPhoneRemount++),
         ),
         const SizedBox(height: AppSpacing.md),
         if (_loginMethod == _LoginMethod.password) ...<Widget>[
           _AuthPasswordField(
-            fieldKey: const ValueKey<String>('auth-login-password'),
+            fieldKey: ValueKey<String>('auth-login-password-$_loginPasswordRemount'),
             controller: _loginPasswordController,
             labelText: '密码',
             hintText: '请输入登录密码',
             textInputAction: TextInputAction.done,
+            onImeRemount: () => setState(() => _loginPasswordRemount++),
           ),
           const SizedBox(height: AppSpacing.sm),
           Align(
@@ -738,8 +790,9 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
           ),
         ] else ...<Widget>[
           _buildCodeField(
-            fieldKey: const ValueKey<String>('auth-login-code'),
+            fieldKey: ValueKey<String>('auth-login-code-$_loginCodeRemount'),
             controller: _loginCodeController,
+            onImeRemount: () => setState(() => _loginCodeRemount++),
           ),
           const SizedBox(height: AppSpacing.md),
           Row(
@@ -795,34 +848,42 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         ),
         const SizedBox(height: AppSpacing.lg),
         _buildPhoneField(
-          fieldKey: const ValueKey<String>('auth-register-phone'),
+          fieldKey: ValueKey<String>('auth-register-phone-$_registerPhoneRemount'),
           controller: _registerPhoneController,
           onChanged: (_) {
             if (_registerChallenge != null) {
               setState(() => _registerChallenge = null);
             }
           },
+          onImeRemount: () => setState(() => _registerPhoneRemount++),
         ),
         const SizedBox(height: AppSpacing.md),
         _buildCodeField(
-          fieldKey: const ValueKey<String>('auth-register-code'),
+          fieldKey: ValueKey<String>('auth-register-code-$_registerCodeRemount'),
           controller: _registerCodeController,
+          onImeRemount: () => setState(() => _registerCodeRemount++),
         ),
         const SizedBox(height: AppSpacing.md),
         _AuthPasswordField(
-          fieldKey: const ValueKey<String>('auth-register-password'),
+          fieldKey:
+              ValueKey<String>('auth-register-password-$_registerPasswordRemount'),
           controller: _registerPasswordController,
           labelText: '密码',
           hintText: '请设置登录密码',
           textInputAction: TextInputAction.next,
+          onImeRemount: () => setState(() => _registerPasswordRemount++),
         ),
         const SizedBox(height: AppSpacing.md),
         _AuthPasswordField(
-          fieldKey: const ValueKey<String>('auth-register-password-confirm'),
+          fieldKey: ValueKey<String>(
+            'auth-register-password-confirm-$_registerConfirmPasswordRemount',
+          ),
           controller: _registerConfirmPasswordController,
           labelText: '确认密码',
           hintText: '请再次输入密码',
           textInputAction: TextInputAction.done,
+          onImeRemount: () =>
+              setState(() => _registerConfirmPasswordRemount++),
         ),
         const SizedBox(height: AppSpacing.md),
         Row(
@@ -883,34 +944,41 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         ),
         const SizedBox(height: AppSpacing.lg),
         _buildPhoneField(
-          fieldKey: const ValueKey<String>('auth-reset-phone'),
+          fieldKey: ValueKey<String>('auth-reset-phone-$_resetPhoneRemount'),
           controller: _resetPhoneController,
           onChanged: (_) {
             if (_resetChallenge != null) {
               setState(() => _resetChallenge = null);
             }
           },
+          onImeRemount: () => setState(() => _resetPhoneRemount++),
         ),
         const SizedBox(height: AppSpacing.md),
         _buildCodeField(
-          fieldKey: const ValueKey<String>('auth-reset-code'),
+          fieldKey: ValueKey<String>('auth-reset-code-$_resetCodeRemount'),
           controller: _resetCodeController,
+          onImeRemount: () => setState(() => _resetCodeRemount++),
         ),
         const SizedBox(height: AppSpacing.md),
         _AuthPasswordField(
-          fieldKey: const ValueKey<String>('auth-reset-password'),
+          fieldKey: ValueKey<String>('auth-reset-password-$_resetPasswordRemount'),
           controller: _resetPasswordController,
           labelText: '新密码',
           hintText: '请输入新的登录密码',
           textInputAction: TextInputAction.next,
+          onImeRemount: () => setState(() => _resetPasswordRemount++),
         ),
         const SizedBox(height: AppSpacing.md),
         _AuthPasswordField(
-          fieldKey: const ValueKey<String>('auth-reset-password-confirm'),
+          fieldKey: ValueKey<String>(
+            'auth-reset-password-confirm-$_resetConfirmPasswordRemount',
+          ),
           controller: _resetConfirmPasswordController,
           labelText: '确认新密码',
           hintText: '请再次输入新密码',
           textInputAction: TextInputAction.done,
+          onImeRemount: () =>
+              setState(() => _resetConfirmPasswordRemount++),
         ),
         const SizedBox(height: AppSpacing.md),
         Row(
@@ -955,46 +1023,49 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 460),
-              child: AppCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      _currentView == _AuthView.register
-                          ? '创建账号'
-                          : _currentView == _AuthView.resetPassword
-                          ? '重置密码'
-                          : '欢迎回来',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    if (_currentView != _AuthView.resetPassword) ...<Widget>[
-                      _buildModeSwitch(),
-                      const SizedBox(height: AppSpacing.xl),
-                    ],
-                    if (_currentView == _AuthView.login)
-                      _buildLoginPanel(services),
-                    if (_currentView == _AuthView.register)
-                      _buildRegisterPanel(services),
-                    if (_currentView == _AuthView.resetPassword)
-                      _buildResetPasswordPanel(services),
-                    if (services.authRepository.lastAuthError
-                        case final String error)
-                      Padding(
-                        padding: const EdgeInsets.only(top: AppSpacing.lg),
-                        child: Text(
-                          error,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: Colors.redAccent, height: 1.5),
-                        ),
+      body: AutofillGroup(
+        onDisposeAction: AutofillContextAction.cancel,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: AppCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        _currentView == _AuthView.register
+                            ? '创建账号'
+                            : _currentView == _AuthView.resetPassword
+                            ? '重置密码'
+                            : '欢迎回来',
+                        style: Theme.of(context).textTheme.headlineSmall,
                       ),
-                  ],
+                      const SizedBox(height: AppSpacing.xl),
+                      if (_currentView != _AuthView.resetPassword) ...<Widget>[
+                        _buildModeSwitch(),
+                        const SizedBox(height: AppSpacing.xl),
+                      ],
+                      if (_currentView == _AuthView.login)
+                        _buildLoginPanel(services),
+                      if (_currentView == _AuthView.register)
+                        _buildRegisterPanel(services),
+                      if (_currentView == _AuthView.resetPassword)
+                        _buildResetPasswordPanel(services),
+                      if (services.authRepository.lastAuthError
+                          case final String error)
+                        Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.lg),
+                          child: Text(
+                            error,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: Colors.redAccent, height: 1.5),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1054,6 +1125,7 @@ class _AuthPasswordField extends StatefulWidget {
     required this.labelText,
     required this.hintText,
     required this.textInputAction,
+    this.onImeRemount,
   });
 
   final Key fieldKey;
@@ -1061,6 +1133,7 @@ class _AuthPasswordField extends StatefulWidget {
   final String labelText;
   final String hintText;
   final TextInputAction textInputAction;
+  final VoidCallback? onImeRemount;
 
   @override
   State<_AuthPasswordField> createState() => _AuthPasswordFieldState();
@@ -1068,106 +1141,45 @@ class _AuthPasswordField extends StatefulWidget {
 
 class _AuthPasswordFieldState extends State<_AuthPasswordField> {
   late final FocusNode _focusNode;
-  late TextEditingController _localController;
   bool _obscureText = true;
-  bool _isSyncingFromExternal = false;
-  bool _isSyncingToExternal = false;
 
   @override
   void initState() {
     super.initState();
     _focusNode = FocusNode()..addListener(_handleFocusChange);
-    _localController = TextEditingController(text: widget.controller.text)
-      ..addListener(_syncToExternalController);
-    widget.controller.addListener(_syncFromExternalController);
-  }
-
-  @override
-  void didUpdateWidget(covariant _AuthPasswordField oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_syncFromExternalController);
-      widget.controller.addListener(_syncFromExternalController);
-      _rebuildLocalController(widget.controller.text);
-      if (mounted) {
-        setState(() {});
-      }
-    }
-    _syncFromExternalController();
   }
 
   @override
   void dispose() {
-    widget.controller.removeListener(_syncFromExternalController);
     _focusNode
       ..removeListener(_handleFocusChange)
       ..dispose();
-    _localController.removeListener(_syncToExternalController);
-    _localController.dispose();
     super.dispose();
   }
 
   void _handleFocusChange() {
-    if (!_focusNode.hasFocus) {
-      _syncToExternalController();
-    }
     if (!mounted) {
       return;
     }
+    // When the field loses focus we re-hide the password for privacy, but
+    // never rebuild the controller — that would erase any text the user
+    // has typed (and is the historical reason deletes could appear to undo
+    // themselves when the parent triggered a setState elsewhere).
     setState(() {
-      _obscureText = !_focusNode.hasFocus;
+      _obscureText = !_focusNode.hasFocus || _obscureText;
     });
-  }
-
-  void _rebuildLocalController(String text) {
-    final TextEditingController previous = _localController;
-    previous.removeListener(_syncToExternalController);
-    _localController = TextEditingController.fromValue(
-      TextEditingValue(
-        text: text,
-        selection: TextSelection.collapsed(offset: text.length),
-      ),
-    )..addListener(_syncToExternalController);
-    previous.dispose();
-  }
-
-  void _syncFromExternalController() {
-    if (_isSyncingToExternal) {
-      return;
-    }
-    final String externalText = widget.controller.text;
-    if (_localController.text == externalText) {
-      return;
-    }
-    _isSyncingFromExternal = true;
-    _rebuildLocalController(externalText);
-    _isSyncingFromExternal = false;
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  void _syncToExternalController() {
-    if (_isSyncingFromExternal) {
-      return;
-    }
-    final String value = _localController.text;
-    _isSyncingToExternal = true;
-    if (widget.controller.text != value) {
-      widget.controller.text = value;
-    }
-    _isSyncingToExternal = false;
   }
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       key: widget.fieldKey,
-      controller: _localController,
+      controller: widget.controller,
       focusNode: _focusNode,
       obscureText: _obscureText,
       textInputAction: widget.textInputAction,
       keyboardType: TextInputType.visiblePassword,
+      spellCheckConfiguration: const SpellCheckConfiguration.disabled(),
       enableSuggestions: false,
       autocorrect: false,
       enableIMEPersonalizedLearning: false,
@@ -1177,21 +1189,73 @@ class _AuthPasswordFieldState extends State<_AuthPasswordField> {
       decoration: InputDecoration(
         labelText: widget.labelText,
         hintText: widget.hintText,
-        suffixIcon: Semantics(
-          button: true,
-          label: _obscureText ? '显示密码' : '隐藏密码',
-          child: IconButton(
-            onPressed: () {
-              setState(() => _obscureText = !_obscureText);
-            },
-            icon: Icon(
-              _obscureText
-                  ? Icons.visibility_rounded
-                  : Icons.visibility_off_rounded,
+        suffixIcon: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            _ClearFieldButton(
+              controller: widget.controller,
+              semanticsLabel: '清除${widget.labelText}',
+              onImeRemount: widget.onImeRemount,
             ),
-          ),
+            Semantics(
+              button: true,
+              label: _obscureText ? '显示密码' : '隐藏密码',
+              child: IconButton(
+                onPressed: () {
+                  setState(() => _obscureText = !_obscureText);
+                },
+                icon: Icon(
+                  _obscureText
+                      ? Icons.visibility_rounded
+                      : Icons.visibility_off_rounded,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+class _ClearFieldButton extends StatelessWidget {
+  const _ClearFieldButton({
+    required this.controller,
+    required this.semanticsLabel,
+    this.onCleared,
+    this.onImeRemount,
+  });
+
+  final TextEditingController controller;
+  final String semanticsLabel;
+  final ValueChanged<String>? onCleared;
+  final VoidCallback? onImeRemount;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (BuildContext context, TextEditingValue value, Widget? _) {
+        if (value.text.isEmpty) {
+          return const SizedBox(width: 0, height: 0);
+        }
+        return Semantics(
+          button: true,
+          label: semanticsLabel,
+          child: IconButton(
+            icon: const Icon(Icons.close_rounded),
+            onPressed: () {
+              controller.clear();
+              // Tell the platform to discard any remembered input for this
+              // autofill context so the cleared value does not reappear via
+              // IME candidate bar or system autofill on the next focus.
+              TextInput.finishAutofillContext(shouldSave: false);
+              onCleared?.call('');
+              onImeRemount?.call();
+            },
+          ),
+        );
+      },
     );
   }
 }

@@ -1843,6 +1843,9 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
   }
 
   @override
+  Future<void> refreshDormSnapshot() async {}
+
+  @override
   Future<void> sendGentleReminder({
     required String targetUid,
     bool anonymous = true,

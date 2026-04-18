@@ -201,6 +201,9 @@ abstract interface class DormRepository implements Listenable {
     bool anonymous = true,
     required String message,
   });
+
+  /// Pulls latest dorm snapshot from the server (no-op for in-memory).
+  Future<void> refreshDormSnapshot();
 }
 
 abstract interface class DreamRepository implements Listenable {

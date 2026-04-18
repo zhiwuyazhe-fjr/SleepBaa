@@ -19,6 +19,7 @@ import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dar
 import 'package:sleep_dorm_app/core/notifications/sleep_mode_notification_controller.dart';
 import 'package:sleep_dorm_app/core/notifications/unified_notification.dart';
 import 'package:sleep_dorm_app/core/state/audio_playback_controller.dart';
+import 'package:sleep_dorm_app/core/state/dorm_noise_sample_ledger.dart';
 import 'package:sleep_dorm_app/core/state/dorm_presence_sync_controller.dart';
 import 'package:sleep_dorm_app/core/state/interference_probe_controller.dart';
 import 'package:sleep_dorm_app/core/state/night_welcome_controller.dart';
@@ -72,6 +73,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
   _cloudBaseNotificationSyncController;
   late final AudioPlaybackController _audioPlaybackController;
   late final DormPresenceSyncController _dormPresenceSyncController;
+  late final DormNoiseSampleLedger _dormNoiseSampleLedger;
   late final InterferenceProbeController _interferenceProbeController;
   late final SleepExperienceController _sleepExperienceController;
   late final SleepModeNotificationController _sleepModeNotificationController;
@@ -109,12 +111,14 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
       authRepository: _authRepository,
       dormRepository: _dormRepository,
     );
+    _dormNoiseSampleLedger = DormNoiseSampleLedger();
     _interferenceProbeController = InterferenceProbeController(
       authRepository: _authRepository,
       dormRepository: _dormRepository,
       environment: widget.environment,
       appApiClient: _cloudBaseAppApiClient,
       snapshotStore: _cloudBaseSnapshotStore,
+      noiseSampleLedger: _dormNoiseSampleLedger,
     );
     _nightWelcomeController = NightWelcomeController(
       clock: widget.clock ?? DateTime.now,
@@ -187,6 +191,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
       appNotificationService: _appNotificationService,
       audioPlaybackController: _audioPlaybackController,
       dormPresenceSyncController: _dormPresenceSyncController,
+      dormNoiseSampleLedger: _dormNoiseSampleLedger,
       interferenceProbeController: _interferenceProbeController,
       sleepExperienceController: _sleepExperienceController,
       nightWelcomeController: _nightWelcomeController,
@@ -337,8 +342,18 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _cloudBaseNotificationSyncController.handleAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      unawaited(_sleepExperienceController.handleAppResumed());
-      unawaited(_dormPresenceSyncController.syncPresenceFromCurrentLocation());
+      // Always poke ensureAuthenticated so that a returning user gets their
+      // session restored.  The call is a fast no-op when the cached auth
+      // state is still valid.
+      unawaited(_authRepository.ensureAuthenticated());
+      // Heavy background syncs (presence, sleep) only run when there is an
+      // authenticated user — otherwise resuming from the SMS app to check a
+      // verification code would trigger network calls that cycle the auth
+      // gate and destroy PhoneAuthPage state.
+      if (_authRepository.hasVerifiedPhoneIdentity) {
+        unawaited(_sleepExperienceController.handleAppResumed());
+        unawaited(_dormPresenceSyncController.syncPresenceFromCurrentLocation());
+      }
     }
   }
 
@@ -418,6 +433,7 @@ class AppServices {
     required this.appNotificationService,
     required this.audioPlaybackController,
     required this.dormPresenceSyncController,
+    required this.dormNoiseSampleLedger,
     required this.interferenceProbeController,
     required this.sleepExperienceController,
     required this.nightWelcomeController,
@@ -446,6 +462,7 @@ class AppServices {
   final AppNotificationService appNotificationService;
   final AudioPlaybackController audioPlaybackController;
   final DormPresenceSyncController dormPresenceSyncController;
+  final DormNoiseSampleLedger dormNoiseSampleLedger;
   final InterferenceProbeController interferenceProbeController;
   final SleepExperienceController sleepExperienceController;
   final NightWelcomeController nightWelcomeController;

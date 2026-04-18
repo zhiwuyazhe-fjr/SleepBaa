@@ -1044,6 +1044,7 @@ class DormMember {
     required this.note,
     this.avatarUrl,
     this.displayBadgeId,
+    this.noiseDb,
   });
 
   final String uid;
@@ -1056,6 +1057,9 @@ class DormMember {
   final String? avatarUrl;
   final String? displayBadgeId;
 
+  /// Latest microphone noise level reported for this member (dB), if any.
+  final int? noiseDb;
+
   DormMember copyWith({
     String? uid,
     String? name,
@@ -1066,6 +1070,8 @@ class DormMember {
     String? note,
     String? avatarUrl,
     String? displayBadgeId,
+    int? noiseDb,
+    bool clearNoiseDb = false,
   }) {
     return DormMember(
       uid: uid ?? this.uid,
@@ -1077,6 +1083,7 @@ class DormMember {
       note: note ?? this.note,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       displayBadgeId: displayBadgeId ?? this.displayBadgeId,
+      noiseDb: clearNoiseDb ? null : (noiseDb ?? this.noiseDb),
     );
   }
 }

@@ -14,6 +14,7 @@ import 'package:sleep_dorm_app/core/data/backend_contract.dart';
 import 'package:sleep_dorm_app/core/data/model_serializers.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/state/dorm_noise_sample_ledger.dart';
 
 class InterferenceProbeController extends ChangeNotifier {
   InterferenceProbeController({
@@ -23,12 +24,14 @@ class InterferenceProbeController extends ChangeNotifier {
     CloudBaseAppApiClient? appApiClient,
     CloudBaseSnapshotStore? snapshotStore,
     AndroidUsageStatsGateway? usageStatsGateway,
+    DormNoiseSampleLedger? noiseSampleLedger,
   }) : _authRepository = authRepository,
        _dormRepository = dormRepository,
        _environment = environment,
        _appApiClient = appApiClient,
        _snapshotStore = snapshotStore,
        _usageStatsGateway = usageStatsGateway ?? const AndroidUsageStatsGateway(),
+       _noiseSampleLedger = noiseSampleLedger,
        _state = _buildFallbackState(dormRepository.currentDorm) {
     _dormRepository.addListener(_syncDormFallbacks);
     _snapshotStore?.addListener(_hydrateFromSnapshot);
@@ -41,6 +44,7 @@ class InterferenceProbeController extends ChangeNotifier {
   final CloudBaseAppApiClient? _appApiClient;
   final CloudBaseSnapshotStore? _snapshotStore;
   final AndroidUsageStatsGateway _usageStatsGateway;
+  final DormNoiseSampleLedger? _noiseSampleLedger;
 
   TonightInterferenceState _state;
   final Set<InterferenceFactorType> _activeProbes = <InterferenceFactorType>{};
@@ -226,6 +230,7 @@ class InterferenceProbeController extends ChangeNotifier {
       _commitLocalFactor(factor);
       await _persistFactor(factor);
       await _dormRepository.updateDormEnvironment(noiseDb: average.round());
+      _noiseSampleLedger?.recordSample(average, DateTime.now());
     } catch (_) {
       await subscription?.cancel();
       _commitLocalFactor(

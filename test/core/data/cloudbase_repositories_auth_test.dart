@@ -113,6 +113,134 @@ void main() {
   );
 
   test(
+    'ensureAuthenticated keeps session when snapshot refresh fails transiently',
+    () async {
+      int bootstrapCalls = 0;
+      int userMeCalls = 0;
+      final _AuthHarness harness = _buildHarness(
+        MockClient((http.Request request) async {
+          if (request.url.path == '/auth/v1/user/me') {
+            userMeCalls += 1;
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'sub': 'tester',
+                'name': 'Tester',
+                'phone_number': '+86 13800138000',
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/app/bootstrap') {
+            bootstrapCalls += 1;
+            // First bootstrap succeeds, second one simulates a transient 503.
+            if (bootstrapCalls >= 2) {
+              return http.Response('service unavailable', 503);
+            }
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'user': <String, dynamic>{
+                  'uid': 'tester',
+                  'displayName': 'Tester',
+                  'tagline': 'tagline',
+                  'role': 'role',
+                  'phoneNumber': '+86 13800138000',
+                  'phoneLinkedAt': DateTime.now().toIso8601String(),
+                  'showDormPulseBadge': true,
+                },
+              }),
+              200,
+            );
+          }
+          throw StateError('Unexpected path: ${request.url.path}');
+        }),
+      );
+      final CloudBaseAuthRepository repository = harness.repository;
+
+      // Initial bootstrap establishes a verified session.
+      await repository.ensureAuthenticated();
+      expect(repository.hasVerifiedPhoneIdentity, isTrue);
+      expect(repository.currentUser.phoneNumber, '+86 13800138000');
+      expect(repository.lastAuthError, isNull);
+
+      // A subsequent ensureAuthenticated should short-circuit via the
+      // revalidation window and not trigger an additional user/bootstrap hit.
+      await repository.ensureAuthenticated();
+      expect(bootstrapCalls, 1);
+      expect(userMeCalls, 1);
+
+      // Forcing a revalidation hits the failing snapshot endpoint, but must
+      // keep the existing session intact and only surface a soft warning.
+      await repository.retryAuthentication();
+      expect(repository.hasVerifiedPhoneIdentity, isTrue);
+      expect(repository.currentUser.phoneNumber, '+86 13800138000');
+      expect(repository.lastAuthError, isNotNull);
+      expect(bootstrapCalls, greaterThanOrEqualTo(2));
+    },
+  );
+
+  test(
+    'ensureAuthenticated clears session when refresh token is rejected with 401',
+    () async {
+      final _FakeSessionStore sessionStore = _FakeSessionStore();
+      sessionStore._session = CloudBaseSession(
+        accessToken: 'stale-access',
+        refreshToken: 'stale-refresh',
+        subject: 'tester',
+        expiresAt: DateTime.now().subtract(const Duration(minutes: 5)),
+        deviceId: 'test-device-id',
+      );
+      const AppEnvironment environment = AppEnvironment(
+        target: AppBackendTarget.production,
+        appIdPrefix: 'com.dormsleep.app',
+        cloudbaseEnvId: 'demo-env',
+        cloudbaseAuthBaseUrl: 'https://example.com',
+        cloudbaseAppApiBaseUrl: 'https://example.com',
+        cloudbasePublishableKey: 'publishable-key',
+        cloudbaseClientId: 'demo-env',
+      );
+      final http.Client httpClient = MockClient((http.Request request) async {
+        if (request.url.path == '/auth/v1/token') {
+          return http.Response(
+            jsonEncode(<String, dynamic>{
+              'error': 'invalid_grant',
+              'error_description': 'refresh token expired',
+            }),
+            401,
+          );
+        }
+        throw StateError('Unexpected path: ${request.url.path}');
+      });
+      final CloudBaseAuthClient authClient = CloudBaseAuthClient(
+        environment: environment,
+        httpClient: httpClient,
+      );
+      final CloudBaseAppApiClient appApiClient = CloudBaseAppApiClient(
+        environment: environment,
+        sessionStore: sessionStore,
+        authClient: authClient,
+        httpClient: httpClient,
+      );
+      final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final CloudBaseAuthRepository repository = CloudBaseAuthRepository(
+        environment: environment,
+        authClient: authClient,
+        appApiClient: appApiClient,
+        sessionStore: sessionStore,
+        snapshotStore: snapshotStore,
+      );
+
+      await repository.ensureAuthenticated();
+
+      expect(repository.hasVerifiedPhoneIdentity, isFalse);
+      expect(repository.isAuthenticated, isFalse);
+      expect(sessionStore._session, isNull);
+      expect(repository.lastAuthError, contains('登录状态已失效'));
+    },
+  );
+
+  test(
     'cloudbase auth repository keeps dorm badge visibility off after queued snapshot refresh',
     () async {
       final Completer<void> firstBootstrapCompleter = Completer<void>();
