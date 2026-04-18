@@ -610,6 +610,7 @@ class SleepSession {
     required this.awakenings,
     required this.feedback,
     required this.summary,
+    this.sleepGoalMet,
     this.updatedAt,
   });
 
@@ -628,6 +629,7 @@ class SleepSession {
   final List<NightAwakeningEntry> awakenings;
   final List<RecommendationFeedback> feedback;
   final MorningSummary? summary;
+  final bool? sleepGoalMet;
   final DateTime? updatedAt;
 
   bool get hasSubmittedFeedback => summary != null;
@@ -689,6 +691,17 @@ class SleepSession {
     return liveTrackedDurationMinutes(now: now) / 60;
   }
 
+  bool? deriveSleepGoalMet(double sleepGoalHours) {
+    if (status != SleepSessionStatus.awaitingFeedback &&
+        status != SleepSessionStatus.completed) {
+      return null;
+    }
+    if (sleepModeActive) {
+      return null;
+    }
+    return displaySleepHours() >= sleepGoalHours;
+  }
+
   SleepSession copyWith({
     String? id,
     String? uid,
@@ -707,6 +720,8 @@ class SleepSession {
     List<RecommendationFeedback>? feedback,
     MorningSummary? summary,
     bool clearSummary = false,
+    bool? sleepGoalMet,
+    bool clearSleepGoalMet = false,
     DateTime? updatedAt,
   }) {
     return SleepSession(
@@ -727,6 +742,9 @@ class SleepSession {
       awakenings: awakenings ?? this.awakenings,
       feedback: feedback ?? this.feedback,
       summary: clearSummary ? null : summary ?? this.summary,
+      sleepGoalMet: clearSleepGoalMet
+          ? null
+          : sleepGoalMet ?? this.sleepGoalMet,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
@@ -1533,8 +1551,7 @@ class InterferenceFactorSnapshot {
     if (measuredAt == null) {
       return false;
     }
-    return DateTime.now().difference(measuredAt!) <
-        const Duration(minutes: 15);
+    return DateTime.now().difference(measuredAt!) < const Duration(minutes: 15);
   }
 
   InterferenceFactorSnapshot copyWith({
@@ -1561,7 +1578,9 @@ class InterferenceFactorSnapshot {
       detail: detail ?? this.detail,
       source: source ?? this.source,
       measuredAt: clearMeasuredAt ? null : measuredAt ?? this.measuredAt,
-      numericValue: clearNumericValue ? null : numericValue ?? this.numericValue,
+      numericValue: clearNumericValue
+          ? null
+          : numericValue ?? this.numericValue,
       score: clearScore ? null : score ?? this.score,
     );
   }
@@ -1591,8 +1610,12 @@ class TonightInterferenceState {
     };
   }
 
-  List<InterferenceFactorSnapshot> get factors =>
-      <InterferenceFactorSnapshot>[noise, light, phoneUsage, emotion];
+  List<InterferenceFactorSnapshot> get factors => <InterferenceFactorSnapshot>[
+    noise,
+    light,
+    phoneUsage,
+    emotion,
+  ];
 
   TonightInterferenceState replaceFactor(InterferenceFactorSnapshot factor) {
     return switch (factor.type) {

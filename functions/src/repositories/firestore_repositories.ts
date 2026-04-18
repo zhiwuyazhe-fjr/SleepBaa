@@ -420,13 +420,67 @@ function unboundDormContext(): ContextDorm {
   };
 }
 
-function summarizeSleepSession(doc: JsonMap): ContextSleepSessionSummary {
+function resolvedSleepSessionHours(doc: JsonMap): number | null {
   const summary = asMap(doc.summary);
-  const awakenings = Array.isArray(doc.awakenings) ? doc.awakenings : [];
   const trackedDurationMinutes =
     typeof doc.trackedDurationMinutes === "number"
       ? doc.trackedDurationMinutes
       : undefined;
+  if (typeof summary.totalSleepHours === "number") {
+    return summary.totalSleepHours;
+  }
+  if (typeof trackedDurationMinutes === "number") {
+    return trackedDurationMinutes / 60;
+  }
+  return null;
+}
+
+function isStableEndedSleepSession(doc: JsonMap): boolean {
+  const status = asString(doc.status, "drafted");
+  if (status !== "awaitingFeedback" && status !== "completed") {
+    return false;
+  }
+  if (asBoolean(doc.sleepModeActive, false)) {
+    return false;
+  }
+  const segments = Array.isArray(doc.segments) ? doc.segments.map(asMap) : [];
+  if (segments.some((segment) => !isMeaningfulString(segment.endedAt))) {
+    return false;
+  }
+  return segments.length > 0 || isMeaningfulString(doc.endedAt);
+}
+
+function deriveSleepGoalMet(
+  doc: JsonMap,
+  sleepGoalHours: number,
+): boolean | null {
+  if (!isStableEndedSleepSession(doc)) {
+    return null;
+  }
+  const totalSleepHours = resolvedSleepSessionHours(doc);
+  if (totalSleepHours == null || !Number.isFinite(totalSleepHours)) {
+    return null;
+  }
+  return totalSleepHours >= sleepGoalHours;
+}
+
+function withDerivedSleepGoalMet(
+  doc: JsonMap,
+  sleepGoalHours: number,
+): JsonMap {
+  return {
+    ...doc,
+    sleepGoalMet: deriveSleepGoalMet(doc, sleepGoalHours),
+  };
+}
+
+function summarizeSleepSession(
+  doc: JsonMap,
+  sleepGoalHours: number,
+): ContextSleepSessionSummary {
+  const summary = asMap(doc.summary);
+  const awakenings = Array.isArray(doc.awakenings) ? doc.awakenings : [];
+  const totalSleepHours = resolvedSleepSessionHours(doc);
   return {
     id: asString(doc.id, asString(doc._id)),
     sleepDayKey: sleepDayKeyOf(doc),
@@ -434,12 +488,8 @@ function summarizeSleepSession(doc: JsonMap): ContextSleepSessionSummary {
     endedAt: asString(doc.endedAt),
     status: asString(doc.status, "drafted"),
     awakeningsCount: awakenings.length,
-    totalSleepHours:
-      typeof summary.totalSleepHours === "number"
-        ? summary.totalSleepHours
-        : typeof trackedDurationMinutes === "number"
-          ? trackedDurationMinutes / 60
-          : undefined,
+    totalSleepHours: totalSleepHours ?? undefined,
+    sleepGoalMet: deriveSleepGoalMet(doc, sleepGoalHours),
     sleepQuality:
       typeof summary.sleepQuality === "number"
         ? summary.sleepQuality
@@ -1084,6 +1134,7 @@ export class FirestoreRepository implements AssistantDataRepository {
 
   async listRecentSleepSessions(
     uid: string,
+    sleepGoalHours: number,
     count = 7,
   ): Promise<ContextSleepSessionSummary[]> {
     const docs = await this.store.query(Collections.sleepSessions, {
@@ -1107,7 +1158,7 @@ export class FirestoreRepository implements AssistantDataRepository {
         return sleepSessionSortTimestamp(b) - sleepSessionSortTimestamp(a);
       })
       .slice(0, count)
-      .map((doc) => summarizeSleepSession(doc));
+      .map((doc) => summarizeSleepSession(doc, sleepGoalHours));
   }
 
   async listRecentDreamEntries(
@@ -1182,7 +1233,7 @@ export class FirestoreRepository implements AssistantDataRepository {
     ] =
       await Promise.all([
         this.getDorm(user.dormId, uid),
-        this.listRecentSleepSessions(uid),
+        this.listRecentSleepSessions(uid, settings.sleepGoalHours),
         this.listRecentDreamEntries(uid),
         this.listThreadMessages(resolvedThreadId),
         this.readAssistantThreadSummary(resolvedThreadId),
@@ -1281,7 +1332,9 @@ export class FirestoreRepository implements AssistantDataRepository {
         user: user as unknown as JsonMap,
         settings: settings as unknown as JsonMap,
         dorm: dorm as unknown as JsonMap,
-        sleepSessions: sleepSessions.map((doc) => withoutMeta(doc)),
+        sleepSessions: sleepSessions.map((doc) =>
+          withDerivedSleepGoalMet(withoutMeta(doc), settings.sleepGoalHours),
+        ),
         dreamEntries: dreamEntries.map((doc) => withoutMeta(doc)),
         sleepCaptureRecords: sleepCaptureRecords.map((doc) => withoutMeta(doc)),
         notifications: notifications.map((doc) => withoutMeta(doc)),

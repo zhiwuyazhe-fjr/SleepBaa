@@ -19,6 +19,13 @@ function buildContext() {
         },
         settings: {
             sleepGoalHours: 7.5,
+            bedtimeReminderEnabled: true,
+            morningReminderEnabled: true,
+            dormAlertsEnabled: true,
+            bedtimeReminder: {
+                hour: 23,
+                minute: 10,
+            },
             preferredTrackTitle: "Deep Ocean Waves",
             smartSuggestionsEnabled: true,
             selectedNightMood: "calm",

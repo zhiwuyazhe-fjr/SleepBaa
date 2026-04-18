@@ -2,9 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:timezone/data/latest_all.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
 
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse response) {}
@@ -28,14 +32,18 @@ class AppNotificationService {
   AppNotificationService({
     FlutterLocalNotificationsPlugin? localNotificationsPlugin,
     TargetPlatform? platformOverride,
+    Future<String?> Function()? timeZoneNameResolver,
   }) : _localNotifications =
            localNotificationsPlugin ?? FlutterLocalNotificationsPlugin(),
-       _platformOverride = platformOverride;
+       _platformOverride = platformOverride,
+       _timeZoneNameResolver = timeZoneNameResolver;
 
   static const String generalChannelId = 'sleep_dorm_messages';
   static const String sleepModeChannelId =
       'sleep_dorm_sleep_mode_foreground_v2';
+  static const String bedtimeReminderChannelId = 'sleep_dorm_bedtime_reminder';
   static const int sleepModeNotificationId = 900001;
+  static const int bedtimeReminderNotificationId = 900002;
   static const String _generalChannelName = 'Sleep Dorm Messages';
   static const String _generalChannelDescription =
       'General message center notifications.';
@@ -43,14 +51,20 @@ class AppNotificationService {
   static const String _sleepModeChannelDescription = '睡眠模式进行中时显示在通知栏和锁屏上的常驻通知。';
   static const String _sleepModeNotificationTitle = '睡眠模式进行中';
   static const String _sleepModeNotificationBody = '点击可返回睡眠模式页面';
+  static const String _bedtimeReminderChannelName = '睡前提醒';
+  static const String _bedtimeReminderChannelDescription = '按你设置的时间提醒你准备休息。';
+  static const String _bedtimeReminderTitle = '睡前提醒';
+  static const String _bedtimeReminderBody = '该准备休息啦，别让今晚又被拖晚了。';
 
   final FlutterLocalNotificationsPlugin _localNotifications;
   final TargetPlatform? _platformOverride;
+  final Future<String?> Function()? _timeZoneNameResolver;
   final StreamController<NotificationLaunchIntent> _launchIntentController =
       StreamController<NotificationLaunchIntent>.broadcast();
 
   NotificationLaunchIntent? _initialLaunchIntent;
   bool _initialized = false;
+  bool _timeZonesInitialized = false;
   Future<void> _sleepModeNotificationTail = Future<void>.value();
   int _sleepModeNotificationRequestId = 0;
 
@@ -121,6 +135,14 @@ class AppNotificationService {
         playSound: false,
         enableVibration: false,
         showBadge: false,
+      ),
+    );
+    await androidPlugin?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        bedtimeReminderChannelId,
+        _bedtimeReminderChannelName,
+        description: _bedtimeReminderChannelDescription,
+        importance: Importance.high,
       ),
     );
     await androidPlugin?.requestNotificationsPermission();
@@ -204,6 +226,34 @@ class AppNotificationService {
     });
   }
 
+  Future<void> scheduleBedtimeReminder({required TimeOfDay time}) async {
+    if (!isSupported) {
+      return;
+    }
+    await initialize();
+    await _ensureTimeZonesInitialized();
+    await _localNotifications.zonedSchedule(
+      bedtimeReminderNotificationId,
+      _bedtimeReminderTitle,
+      _bedtimeReminderBody,
+      _nextBedtimeReminderInstance(time),
+      NotificationDetails(android: _bedtimeReminderNotificationDetails),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      matchDateTimeComponents: DateTimeComponents.time,
+      payload: jsonEncode(<String, Object?>{
+        'kind': 'bedtime_reminder',
+        'route': AppRoutes.homePreSleep,
+      }),
+    );
+  }
+
+  Future<void> cancelBedtimeReminder() async {
+    if (!isSupported) {
+      return;
+    }
+    await _localNotifications.cancel(bedtimeReminderNotificationId);
+  }
+
   Future<void> cancelNotificationForItem(String notificationId) {
     return _localNotifications.cancel(_notificationIdFor(notificationId));
   }
@@ -214,6 +264,12 @@ class AppNotificationService {
     if (kind == 'sleep_mode') {
       return const NotificationLaunchIntent(
         route: AppRoutes.homePostSleep,
+        markAsRead: false,
+      );
+    }
+    if (kind == 'bedtime_reminder') {
+      return const NotificationLaunchIntent(
+        route: AppRoutes.homePreSleep,
         markAsRead: false,
       );
     }
@@ -259,6 +315,16 @@ class AppNotificationService {
         category: AndroidNotificationCategory.status,
       );
 
+  AndroidNotificationDetails get _bedtimeReminderNotificationDetails =>
+      const AndroidNotificationDetails(
+        bedtimeReminderChannelId,
+        _bedtimeReminderChannelName,
+        channelDescription: _bedtimeReminderChannelDescription,
+        importance: Importance.high,
+        priority: Priority.high,
+        visibility: NotificationVisibility.public,
+      );
+
   Future<void> _enqueueSleepModeNotificationOperation(
     Future<void> Function() operation,
   ) {
@@ -269,6 +335,58 @@ class AppNotificationService {
       (Object error, StackTrace stackTrace) {},
     );
     return next;
+  }
+
+  Future<void> _ensureTimeZonesInitialized() async {
+    if (_timeZonesInitialized) {
+      return;
+    }
+    tz_data.initializeTimeZones();
+    final String? timeZoneName = await _resolveTimeZoneName();
+    if (timeZoneName != null && timeZoneName.trim().isNotEmpty) {
+      try {
+        tz.setLocalLocation(tz.getLocation(timeZoneName.trim()));
+      } catch (_) {
+        // Fall back to the default location when the platform timezone
+        // identifier is not available in the bundled timezone database.
+      }
+    }
+    _timeZonesInitialized = true;
+  }
+
+  Future<String?> _resolveTimeZoneName() async {
+    final Future<String?> Function()? resolver = _timeZoneNameResolver;
+    if (resolver != null) {
+      return resolver();
+    }
+    try {
+      final dynamic timeZoneInfo = await FlutterTimezone.getLocalTimezone();
+      if (timeZoneInfo is String) {
+        return timeZoneInfo;
+      }
+      final dynamic dynamicInfo = timeZoneInfo;
+      final dynamic identifier =
+          dynamicInfo.identifier ?? dynamicInfo.name ?? dynamicInfo.id;
+      return identifier is String ? identifier : timeZoneInfo.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  tz.TZDateTime _nextBedtimeReminderInstance(TimeOfDay time) {
+    final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
+    tz.TZDateTime scheduled = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      time.hour,
+      time.minute,
+    );
+    if (!scheduled.isAfter(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
+    return scheduled;
   }
 
   Future<void> dispose() async {

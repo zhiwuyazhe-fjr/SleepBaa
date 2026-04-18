@@ -398,9 +398,9 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
         return;
       }
       setState(() => _isReturningToSleep = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('返回睡眠模式失败，请重试')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('返回睡眠模式失败，请重试')));
     }
   }
 
@@ -528,10 +528,7 @@ class _ReturningToSleepLoading extends StatelessWidget {
           children: <Widget>[
             CircularProgressIndicator(color: palette.primary),
             const SizedBox(height: AppSpacing.lg),
-            Text(
-              '正在返回睡眠模式...',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text('正在返回睡眠模式...', style: Theme.of(context).textTheme.titleMedium),
           ],
         ),
       ),
