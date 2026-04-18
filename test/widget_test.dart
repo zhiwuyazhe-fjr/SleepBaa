@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sleep_dorm_app/app/app.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
@@ -8,6 +11,7 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
@@ -21,10 +25,12 @@ import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_journal_p
 import 'package:sleep_dorm_app/features/feedback/presentation/pages/morning_feedback_page.dart';
 import 'package:sleep_dorm_app/features/home/presentation/pages/home_post_sleep_page.dart';
 import 'package:sleep_dorm_app/features/home/presentation/pages/home_pre_sleep_page.dart';
+import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.dart';
 import 'package:sleep_dorm_app/features/intervention/presentation/pages/micro_intervention_task_page.dart';
 import 'package:sleep_dorm_app/features/notifications/presentation/pages/notifications_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/calendar_checkin_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_page.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/sleep_report_page.dart';
 
 void main() {
   setUpAll(() {
@@ -46,7 +52,10 @@ void main() {
   ) async {
     await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
 
-    expect(find.text('今晚你更接近哪一种心情？'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('night-mood-top-card')),
+      findsOneWidget,
+    );
     expect(find.byType(HomePreSleepPage), findsNothing);
     expect(find.byKey(BottomNavShell.navBarKey), findsNothing);
   });
@@ -57,11 +66,14 @@ void main() {
     await _pumpApp(
       tester,
       initialLocation: AppRoutes.home,
-      clock: _dayClock,
+      clock: _feedbackClock,
       showNightWelcomeOutsideNightInDebug: true,
     );
 
-    expect(find.text('今晚你更接近哪一种心情？'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('night-mood-top-card')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('skip uses the default blue theme and enters home', (
@@ -73,7 +85,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(HomePreSleepPage), findsOneWidget);
-    expect(find.text('今晚你更接近哪一种心情？'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('night-mood-top-card')),
+      findsNothing,
+    );
     expect(
       Theme.of(
         tester.element(find.byType(HomePreSleepPage)),
@@ -115,10 +130,15 @@ void main() {
       initialSettings: _settingsWithMood(NightMood.happy),
     );
 
-    expect(find.text('想把这份轻盈带进今晚'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<NightMood>(NightMood.happy)),
+      findsWidgets,
+    );
     expect(
       Theme.of(
-        tester.element(find.text('今晚你更接近哪一种心情？')),
+        tester.element(
+          find.byKey(const ValueKey<String>('night-mood-top-card')),
+        ),
       ).extension<NightMoodPalette>()?.mood,
       NightMood.happy,
     );
@@ -925,66 +945,73 @@ void main() {
     expect(find.text('勋章详情'), findsNothing);
   });
 
-  testWidgets('badge equip and restore sync between gallery and profile preview', (
-    WidgetTester tester,
-  ) async {
-    await _pumpApp(
-      tester,
-      initialLocation: AppRoutes.profile,
-      clock: _dayClock,
-    );
+  testWidgets(
+    'badge equip and restore sync between gallery and profile preview',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profile,
+        clock: _dayClock,
+      );
 
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('profile-badge-preview-slot-0')),
-        matching: find.text('安睡大师'),
-      ),
-      findsOneWidget,
-    );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('profile-badge-preview-slot-0'),
+          ),
+          matching: find.text('安睡大师'),
+        ),
+        findsOneWidget,
+      );
 
-    await tester.ensureVisible(find.text('我的勋章'));
-    await tester.tap(find.text('我的勋章'));
-    await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('我的勋章'));
+      await tester.tap(find.text('我的勋章'));
+      await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('佩戴此勋章'));
-    await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('佩戴此勋章'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('当前佩戴：早睡先锋'), findsOneWidget);
+      expect(find.text('当前佩戴：早睡先锋'), findsOneWidget);
 
-    await tester.pageBack();
-    await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
 
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('profile-badge-preview-slot-0')),
-        matching: find.text('早睡先锋'),
-      ),
-      findsOneWidget,
-    );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('profile-badge-preview-slot-0'),
+          ),
+          matching: find.text('早睡先锋'),
+        ),
+        findsOneWidget,
+      );
 
-    await tester.ensureVisible(find.text('我的勋章'));
-    await tester.tap(find.text('我的勋章'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('恢复最新获得'));
-    await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('我的勋章'));
+      await tester.tap(find.text('我的勋章'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('恢复最新获得'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('当前展示：安睡大师'), findsOneWidget);
+      expect(find.text('当前展示：安睡大师'), findsOneWidget);
 
-    await tester.pageBack();
-    await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
 
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('profile-badge-preview-slot-0')),
-        matching: find.text('安睡大师'),
-      ),
-      findsOneWidget,
-    );
-  });
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('profile-badge-preview-slot-0'),
+          ),
+          matching: find.text('安睡大师'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('profile faq entry opens styled faq page', (
     WidgetTester tester,
@@ -1132,6 +1159,233 @@ void main() {
     expect(find.byType(MorningFeedbackPage), findsOneWidget);
   });
 
+  testWidgets('morning feedback route loads the explicitly requested session', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.feedbackMorning,
+      clock: _feedbackClock,
+    );
+
+    final AppServices services = AppScope.of(
+      tester.element(find.byType(MorningFeedbackPage)),
+    );
+    final SleepSession targetSession = _buildPendingFeedbackSession(
+      uid: services.authRepository.currentUser.uid,
+      id: 'pending-target-session',
+      startedAt: DateTime(2026, 4, 17, 23, 18),
+      recommendationTitle: 'Target feedback session',
+    );
+    await services.sleepSessionRepository.saveSession(targetSession);
+
+    final BuildContext context = tester.element(
+      find.byType(MorningFeedbackPage),
+    );
+    GoRouter.of(
+      context,
+    ).go(AppRoutes.feedbackMorningLocation(sessionId: targetSession.id));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('4/17 23:18 - 4/18 07:00'), findsOneWidget);
+    await tester.dragUntilVisible(
+      find.text('Target feedback session'),
+      find
+          .descendant(
+            of: find.byType(MorningFeedbackPage),
+            matching: find.byType(ListView),
+          )
+          .first,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Target feedback session'), findsOneWidget);
+  });
+
+  testWidgets(
+    'morning feedback explicit completed session does not fall back to old pending session',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.feedbackMorning,
+        clock: _feedbackClock,
+      );
+
+      final AppServices services = AppScope.of(
+        tester.element(find.byType(MorningFeedbackPage)),
+      );
+      final SleepSession completedSession = _buildCompletedSession(
+        uid: services.authRepository.currentUser.uid,
+        id: 'completed-feedback-session',
+        startedAt: DateTime(2026, 4, 17, 23, 6),
+        recommendationTitle: 'Completed feedback session',
+      );
+      final SleepSession oldPendingSession = _buildPendingFeedbackSession(
+        uid: services.authRepository.currentUser.uid,
+        id: 'old-pending-session',
+        startedAt: DateTime(2026, 4, 10, 23, 12),
+        recommendationTitle: 'Old pending session',
+      );
+      await services.sleepSessionRepository.saveSession(oldPendingSession);
+      await services.sleepSessionRepository.saveSession(completedSession);
+
+      final BuildContext context = tester.element(
+        find.byType(MorningFeedbackPage),
+      );
+      GoRouter.of(
+        context,
+      ).go(AppRoutes.feedbackMorningLocation(sessionId: completedSession.id));
+      await tester.pumpAndSettle();
+
+      expect(find.text('这条睡眠记录已完成晨间反馈，可在我的页查看同步结果。'), findsOneWidget);
+      expect(find.text('Old pending session'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'generic morning feedback route ignores historical pending sessions',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.feedbackMorning,
+        clock: _feedbackClock,
+      );
+
+      final AppServices services = AppScope.of(
+        tester.element(find.byType(MorningFeedbackPage)),
+      );
+      final SleepSession currentCompletedSession = _buildCompletedSession(
+        uid: services.authRepository.currentUser.uid,
+        id: 'current-day-completed-session',
+        startedAt: DateTime(2026, 4, 17, 23, 10),
+        recommendationTitle: 'Current day completed',
+      ).copyWith(updatedAt: DateTime(2026, 4, 18, 9, 30));
+      final SleepSession historicalPendingSession =
+          _buildPendingFeedbackSession(
+            uid: services.authRepository.currentUser.uid,
+            id: 'historical-pending-session',
+            startedAt: DateTime(2026, 4, 9, 23, 8),
+            recommendationTitle: 'Historical pending session',
+          );
+      await services.sleepSessionRepository.saveSession(
+        historicalPendingSession,
+      );
+      await services.sleepSessionRepository.saveSession(
+        currentCompletedSession,
+      );
+
+      final BuildContext context = tester.element(
+        find.byType(MorningFeedbackPage),
+      );
+      GoRouter.of(context).go(AppRoutes.feedbackMorning);
+      await tester.pumpAndSettle();
+
+      expect(find.text('当前没有待补反馈的睡眠记录。'), findsOneWidget);
+      expect(find.text('Historical pending session'), findsNothing);
+    },
+  );
+
+  testWidgets('calendar pending day opens that session in morning feedback', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileCalendar,
+      clock: _dayClock,
+    );
+
+    final AppServices services = AppScope.of(
+      tester.element(find.byType(CalendarCheckinPage)),
+    );
+    final DateTime calendarTargetDay = DateTime.now().add(
+      const Duration(days: 2),
+    );
+    final SleepSession targetSession = _buildPendingFeedbackSession(
+      uid: services.authRepository.currentUser.uid,
+      id: 'calendar-target-session',
+      startedAt: DateTime(
+        calendarTargetDay.year,
+        calendarTargetDay.month,
+        calendarTargetDay.day,
+        23,
+        24,
+      ),
+      recommendationTitle: 'Calendar target session',
+    );
+    await services.sleepSessionRepository.saveSession(targetSession);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('${targetSession.sleepDayDate.day}').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MorningFeedbackPage), findsOneWidget);
+    expect(
+      tester
+          .widget<MorningFeedbackPage>(find.byType(MorningFeedbackPage))
+          .sessionId,
+      targetSession.id,
+    );
+  });
+
+  testWidgets(
+    'sleep report pending item opens that session in morning feedback',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profileReport,
+        clock: _dayClock,
+      );
+
+      final AppServices services = AppScope.of(
+        tester.element(find.byType(SleepReportPage)),
+      );
+      final DateTime reportTargetDay = DateTime.now().add(
+        const Duration(days: 2),
+      );
+      final SleepSession targetSession = _buildPendingFeedbackSession(
+        uid: services.authRepository.currentUser.uid,
+        id: 'report-target-session',
+        startedAt: DateTime(
+          reportTargetDay.year,
+          reportTargetDay.month,
+          reportTargetDay.day,
+          23,
+          28,
+        ),
+        recommendationTitle: 'Report target session',
+      );
+      await services.sleepSessionRepository.saveSession(targetSession);
+      await tester.pumpAndSettle();
+
+      final Finder targetDate = find
+          .text(
+            '${targetSession.sleepDayDate.month}/${targetSession.sleepDayDate.day}',
+          )
+          .first;
+      await tester.dragUntilVisible(
+        targetDate,
+        find
+            .descendant(
+              of: find.byType(SleepReportPage),
+              matching: find.byType(ListView),
+            )
+            .first,
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(targetDate);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MorningFeedbackPage), findsOneWidget);
+      expect(
+        tester
+            .widget<MorningFeedbackPage>(find.byType(MorningFeedbackPage))
+            .sessionId,
+        targetSession.id,
+      );
+    },
+  );
+
   testWidgets('calendar page renders month view', (WidgetTester tester) async {
     await _pumpApp(
       tester,
@@ -1172,6 +1426,116 @@ void main() {
     expect(find.text('轻触进入'), findsOneWidget);
     expect(find.text('音频已同步'), findsNothing);
   });
+  testWidgets('entering sleep mode shows the ongoing sleep notification', (
+    WidgetTester tester,
+  ) async {
+    final _FakeAppNotificationService notificationService =
+        _FakeAppNotificationService();
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _freshSleepClock,
+      appNotificationService: notificationService,
+    );
+
+    final int cancelCallsBeforeEnter =
+        notificationService.cancelSleepModeNotificationCalls;
+
+    await tester.tap(find.byType(StartSleepModeCard));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byType(HomePostSleepPage), findsOneWidget);
+    expect(notificationService.shownSleepSessions.length, 1);
+    expect(
+      notificationService.shownSleepSessions.single.sleepModeActive,
+      isTrue,
+    );
+    expect(
+      notificationService.shownSleepSessions.single.status,
+      SleepSessionStatus.active,
+    );
+    expect(
+      notificationService.cancelSleepModeNotificationCalls,
+      cancelCallsBeforeEnter,
+    );
+  });
+
+  testWidgets(
+    'finishing sleep mode from post-sleep page goes to morning feedback',
+    (WidgetTester tester) async {
+      final _FakeAppNotificationService notificationService =
+          _FakeAppNotificationService();
+      DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.homePreSleep,
+        clock: () => currentTime,
+        appNotificationService: notificationService,
+      );
+
+      await tester.tap(find.byType(StartSleepModeCard));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      currentTime = DateTime(2030, 4, 5, 15, 10);
+
+      expect(find.byType(HomePostSleepPage), findsOneWidget);
+      final AppServices services = AppScope.of(
+        tester.element(find.byType(HomePostSleepPage)),
+      );
+      final String currentSleepDaySessionId = services.sleepSessionRepository
+          .sessionForSleepDayKey(
+            sleepDayKeyFromDate(DateTime(2030, 4, 5, 15, 10)),
+          )!
+          .id;
+
+      final Finder endSleepModeButton = find.widgetWithText(
+        PrimaryButton,
+        '结束睡眠模式',
+      );
+      await tester.ensureVisible(endSleepModeButton);
+      await tester.tap(endSleepModeButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.widgetWithText(PrimaryButton, '结束并去晨间反馈'));
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MorningFeedbackPage), findsOneWidget);
+      expect(
+        tester
+            .widget<MorningFeedbackPage>(find.byType(MorningFeedbackPage))
+            .sessionId,
+        currentSleepDaySessionId,
+      );
+    },
+  );
+
+  testWidgets('sleep mode notification launch returns to post-sleep page', (
+    WidgetTester tester,
+  ) async {
+    final _FakeAppNotificationService notificationService =
+        _FakeAppNotificationService(
+          initialLaunchIntent: const NotificationLaunchIntent(
+            route: AppRoutes.homePostSleep,
+            markAsRead: false,
+          ),
+        );
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+      appNotificationService: notificationService,
+      settle: false,
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byType(HomePostSleepPage), findsOneWidget);
+  });
 }
 
 Future<void> _pumpApp(
@@ -1183,6 +1547,7 @@ Future<void> _pumpApp(
   UserSettings? initialSettings,
   bool settle = true,
   bool showNightWelcomeOutsideNightInDebug = false,
+  AppNotificationService? appNotificationService,
 }) async {
   await tester.pumpWidget(
     SleepDormApp(
@@ -1192,6 +1557,7 @@ Future<void> _pumpApp(
       clock: clock,
       initialSettings: initialSettings,
       showNightWelcomeOutsideNightInDebug: showNightWelcomeOutsideNightInDebug,
+      appNotificationService: appNotificationService,
     ),
   );
   if (settle) {
@@ -1199,7 +1565,95 @@ Future<void> _pumpApp(
   }
 }
 
+SleepSession _buildPendingFeedbackSession({
+  required String uid,
+  required String id,
+  required DateTime startedAt,
+  required String recommendationTitle,
+}) {
+  final DateTime endedAt = startedAt.add(const Duration(hours: 7, minutes: 10));
+  return SleepSession(
+    id: id,
+    uid: uid,
+    startedAt: startedAt,
+    endedAt: endedAt,
+    sleepDayKey: sleepDayKeyFromDate(startedAt),
+    status: SleepSessionStatus.awaitingFeedback,
+    sleepModeActive: false,
+    dormId: 'dorm-204',
+    recommendations: <NightRecommendation>[
+      NightRecommendation(
+        id: '$id-rec',
+        title: recommendationTitle,
+        subtitle: 'Unique test recommendation',
+        type: RecommendationType.quickAction,
+        icon: Icons.bedtime_rounded,
+        tags: const <String>['pending'],
+        executionState: RecommendationExecutionState.selected,
+      ),
+    ],
+    selectedRecommendationIds: <String>['$id-rec'],
+    segments: <SleepSegment>[
+      SleepSegment(startedAt: startedAt, endedAt: endedAt),
+    ],
+    trackedDurationMinutes: endedAt.difference(startedAt).inMinutes,
+    awakenings: const <NightAwakeningEntry>[],
+    feedback: const <RecommendationFeedback>[],
+    summary: null,
+    updatedAt: endedAt,
+  );
+}
+
+SleepSession _buildCompletedSession({
+  required String uid,
+  required String id,
+  required DateTime startedAt,
+  required String recommendationTitle,
+}) {
+  final DateTime endedAt = startedAt.add(const Duration(hours: 7, minutes: 5));
+  return SleepSession(
+    id: id,
+    uid: uid,
+    startedAt: startedAt,
+    endedAt: endedAt,
+    sleepDayKey: sleepDayKeyFromDate(startedAt),
+    status: SleepSessionStatus.completed,
+    sleepModeActive: false,
+    dormId: 'dorm-204',
+    recommendations: <NightRecommendation>[
+      NightRecommendation(
+        id: '$id-rec',
+        title: recommendationTitle,
+        subtitle: 'Completed test recommendation',
+        type: RecommendationType.quickAction,
+        icon: Icons.bedtime_rounded,
+        tags: const <String>['completed'],
+        executionState: RecommendationExecutionState.completed,
+      ),
+    ],
+    selectedRecommendationIds: <String>['$id-rec'],
+    segments: <SleepSegment>[
+      SleepSegment(startedAt: startedAt, endedAt: endedAt),
+    ],
+    trackedDurationMinutes: endedAt.difference(startedAt).inMinutes,
+    awakenings: const <NightAwakeningEntry>[],
+    feedback: const <RecommendationFeedback>[],
+    summary: const MorningSummary(
+      sleepQuality: 4,
+      restedLevel: 4,
+      totalSleepHours: 7.1,
+      awakeningsCount: 0,
+      note: 'completed',
+    ),
+    updatedAt: endedAt,
+  );
+}
+
 DateTime _dayClock() => DateTime(2026, 4, 5, 14);
+
+DateTime _feedbackClock() => DateTime(2026, 4, 18, 7);
+
+DateTime _freshSleepClock() => DateTime(2026, 5, 17, 14);
 
 DateTime _nightClock() => DateTime(2026, 4, 5, 22);
 
@@ -1214,4 +1668,51 @@ UserSettings _settingsWithMood(NightMood mood) {
     smartSuggestionsEnabled: true,
     selectedNightMood: mood,
   );
+}
+
+class _FakeAppNotificationService extends AppNotificationService {
+  _FakeAppNotificationService({this.initialLaunchIntent});
+
+  final NotificationLaunchIntent? initialLaunchIntent;
+  final List<SleepSession> shownSleepSessions = <SleepSession>[];
+  int cancelSleepModeNotificationCalls = 0;
+  final StreamController<NotificationLaunchIntent> _launchIntentController =
+      StreamController<NotificationLaunchIntent>.broadcast();
+  bool _initialIntentTaken = false;
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  Stream<NotificationLaunchIntent> get launchIntents =>
+      _launchIntentController.stream;
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<NotificationLaunchIntent?> takeInitialLaunchIntent() async {
+    if (_initialIntentTaken) {
+      return null;
+    }
+    _initialIntentTaken = true;
+    return initialLaunchIntent;
+  }
+
+  @override
+  Future<void> showSleepModeNotification({
+    required SleepSession session,
+  }) async {
+    shownSleepSessions.add(session);
+  }
+
+  @override
+  Future<void> cancelSleepModeNotification() async {
+    cancelSleepModeNotificationCalls += 1;
+  }
+
+  @override
+  Future<void> dispose() async {
+    await _launchIntentController.close();
+  }
 }

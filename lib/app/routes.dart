@@ -61,6 +61,22 @@ abstract final class AppRoutes {
   static const String assistant = '/assistant';
   static const String assistantHistory = '/assistant/history';
   static const String authPhone = '/auth/phone';
+
+  static String feedbackMorningLocation({String? sessionId}) {
+    final String normalizedSessionId = sessionId?.trim() ?? '';
+    if (normalizedSessionId.isEmpty) {
+      return feedbackMorning;
+    }
+    return Uri(
+      path: feedbackMorning,
+      queryParameters: <String, String>{'sessionId': normalizedSessionId},
+    ).toString();
+  }
+
+  static bool isFeedbackMorningRoute(String route) {
+    final Uri? parsed = Uri.tryParse(route);
+    return (parsed?.path ?? route) == feedbackMorning;
+  }
 }
 
 GoRouter createRouter({
@@ -98,7 +114,9 @@ GoRouter createRouter({
                 pageBuilder: (BuildContext context, GoRouterState state) =>
                     _noTransitionPage(
                       state: state,
-                      child: const NightWelcomeGatePage(),
+                      child: NightWelcomeGatePage(
+                        notice: state.uri.queryParameters['notice'],
+                      ),
                     ),
               ),
             ],
@@ -141,7 +159,12 @@ GoRouter createRouter({
       GoRoute(
         path: AppRoutes.feedbackMorning,
         builder: (BuildContext context, GoRouterState state) =>
-            const MorningFeedbackPage(),
+            MorningFeedbackPage(
+              key: ValueKey<String>(
+                state.uri.queryParameters['sessionId'] ?? '__latest__',
+              ),
+              sessionId: state.uri.queryParameters['sessionId'],
+            ),
       ),
       GoRoute(
         path: AppRoutes.logNightAwakening,
