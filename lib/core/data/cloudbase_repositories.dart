@@ -1055,6 +1055,38 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   }
 
   @override
+  Future<PhoneVerificationProof> verifyPhoneCode({
+    required String verificationId,
+    required String code,
+  }) async {
+    _requireCloudBaseAuthConfig();
+    final String verifiedDeviceId = await _sessionStore.ensureDeviceId();
+    try {
+      final CloudBasePhoneVerificationResult verificationResult =
+          await _authClient.verifyPhoneCode(
+            verificationId: verificationId,
+            code: code,
+            deviceId: verifiedDeviceId,
+          );
+      return PhoneVerificationProof(
+        verificationToken: verificationResult.verificationToken,
+        expiresIn: verificationResult.expiresIn,
+      );
+    } on CloudBaseAuthException catch (error) {
+      _throwAuthFlowError(
+        _phoneAuthErrorMessage(error, action: 'verifyCode'),
+      );
+    } catch (error) {
+      _throwAuthFlowError(
+        _unexpectedPhoneAuthError(
+          error,
+          fallbackMessage: '验证码校验失败，请稍后再试。',
+        ),
+      );
+    }
+  }
+
+  @override
   Future<void> signInWithPassword({
     required String phoneNumber,
     required String password,
@@ -1193,21 +1225,32 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     required String code,
     required String newPassword,
   }) async {
+    final PhoneVerificationProof proof = await verifyPhoneCode(
+      verificationId: verificationId,
+      code: code,
+    );
+    await resetPasswordWithVerificationToken(
+      phoneNumber: phoneNumber,
+      verificationToken: proof.verificationToken,
+      newPassword: newPassword,
+    );
+  }
+
+  @override
+  Future<void> resetPasswordWithVerificationToken({
+    required String phoneNumber,
+    required String verificationToken,
+    required String newPassword,
+  }) async {
     _requireCloudBaseAuthConfig();
     final String requestedPhoneNumber = normalizeCloudBasePhoneNumber(
       phoneNumber,
     );
     final String verifiedDeviceId = await _sessionStore.ensureDeviceId();
     try {
-      final CloudBasePhoneVerificationResult verificationResult =
-          await _authClient.verifyPhoneCode(
-            verificationId: verificationId,
-            code: code,
-            deviceId: verifiedDeviceId,
-          );
       await _authClient.resetPasswordWithVerificationToken(
         phoneNumber: requestedPhoneNumber,
-        verificationToken: verificationResult.verificationToken,
+        verificationToken: verificationToken,
         newPassword: newPassword,
         deviceId: verifiedDeviceId,
       );

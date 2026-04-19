@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sleep_dorm_app/app/app.dart';
@@ -28,6 +31,41 @@ import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_page.
 void main() {
   setUpAll(() {
     GoogleFonts.config.allowRuntimeFetching = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_secureStorageChannel, _handleSecureStorageCall);
+  });
+
+  setUp(() {
+    _mockSecureStorage.clear();
+  });
+
+  tearDownAll(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_secureStorageChannel, null);
+  });
+
+  test('cloudbase auth gate only blocks before bootstrap completes', () {
+    expect(
+      shouldShowCloudBaseAuthBlockingScreen(
+        usesCloudBase: true,
+        hasCompletedInitialAuthBootstrap: false,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldShowCloudBaseAuthBlockingScreen(
+        usesCloudBase: true,
+        hasCompletedInitialAuthBootstrap: true,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldShowCloudBaseAuthBlockingScreen(
+        usesCloudBase: false,
+        hasCompletedInitialAuthBootstrap: false,
+      ),
+      isFalse,
+    );
   });
 
   testWidgets(
@@ -380,10 +418,7 @@ void main() {
         tester,
         initialLocation: AppRoutes.home,
         clock: _dayClock,
-        environment: const AppEnvironment(
-          target: AppBackendTarget.emulator,
-          appIdPrefix: 'com.dormsleep.app',
-        ),
+        environment: _cloudBaseTestEnvironment,
       );
 
       expect(find.byType(PhoneAuthPage), findsOneWidget);
@@ -392,6 +427,45 @@ void main() {
         findsOneWidget,
       );
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'cloudbase auth gate keeps phone auth input stable during re-authentication',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.home,
+        clock: _dayClock,
+        environment: _cloudBaseTestEnvironment,
+        settle: false,
+      );
+
+      await _pumpUntilFound(tester, find.byType(PhoneAuthPage));
+
+      final Finder loginPhoneField = find.byKey(
+        const ValueKey<String>('auth-login-phone'),
+      );
+      expect(loginPhoneField, findsOneWidget);
+
+      await tester.enterText(loginPhoneField, '13800138000');
+      await tester.pump();
+
+      final BuildContext authContext = tester.element(find.byType(PhoneAuthPage));
+      final AppServices authServices = AppScope.of(authContext);
+      _seedExpiredCloudBaseSession();
+      final Future<UserProfile> reauthFuture =
+          authServices.authRepository.ensureAuthenticated();
+
+      await tester.pump();
+      expect(loginPhoneField, findsOneWidget);
+      expect(find.text('13800138000'), findsOneWidget);
+
+      await reauthFuture;
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(loginPhoneField, findsOneWidget);
+      expect(find.text('13800138000'), findsOneWidget);
     },
   );
 
@@ -408,13 +482,7 @@ void main() {
         find.byType(PhoneAuthPage),
       );
       final AppServices authServices = AppScope.of(authContext);
-      await authServices.profileFacade.registerWithPhone(
-        phoneNumber: '13800138000',
-        verificationId: 'verification-id',
-        code: '123456',
-        password: 'secret123',
-      );
-      await authServices.authRepository.signOut();
+      await _seedRegisteredPhoneUser(authServices);
       await tester.pump();
 
       expect(find.textContaining('首次进入需要'), findsNothing);
@@ -488,9 +556,26 @@ void main() {
       verifyButton.onPressed!.call();
       await tester.pumpAndSettle();
 
+      expect(find.text('重置密码'), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('auth-reset-password')),
         findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-password-confirm')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-phone')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-code')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-send')),
+        findsNothing,
       );
       expect(find.text('密码建议'), findsNothing);
 
@@ -512,6 +597,56 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey<String>('auth-reset-success-resend')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'phone auth reset keeps password fields hidden when code verification fails',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.authPhone,
+        clock: _dayClock,
+      );
+
+      final BuildContext authContext = tester.element(
+        find.byType(PhoneAuthPage),
+      );
+      final AppServices authServices = AppScope.of(authContext);
+      await _seedRegisteredPhoneUser(authServices);
+      await tester.pump();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('auth-forgot-password')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-reset-phone')),
+        '13800138000',
+      );
+      await tester.tap(find.byKey(const ValueKey<String>('auth-reset-send')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-reset-code')),
+        '654321',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey<String>('auth-reset-verify')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-password')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-password-confirm')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-verify')),
         findsOneWidget,
       );
     },
@@ -545,6 +680,78 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'phone auth back leaves reset password page before returning to login',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.authPhone,
+        clock: _dayClock,
+      );
+
+      final BuildContext authContext = tester.element(
+        find.byType(PhoneAuthPage),
+      );
+      final AppServices authServices = AppScope.of(authContext);
+      await _seedRegisteredPhoneUser(authServices);
+      await tester.pump();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('auth-forgot-password')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-reset-phone')),
+        '13800138000',
+      );
+      await tester.tap(find.byKey(const ValueKey<String>('auth-reset-send')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-reset-code')),
+        '123456',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey<String>('auth-reset-verify')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('重置密码'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-password')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-phone')),
+        findsNothing,
+      );
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-phone')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-password')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-verify')),
+        findsOneWidget,
+      );
+      expect(find.text('找回密码'), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('auth-login-phone')),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets(
     'phone auth register fields stay editable and submit button enables after input',
@@ -736,13 +943,7 @@ void main() {
 
     final BuildContext context = tester.element(find.byType(PhoneAuthPage));
     final AppServices services = AppScope.of(context);
-    await services.profileFacade.registerWithPhone(
-      phoneNumber: '13800138000',
-      verificationId: 'verification-id',
-      code: '123456',
-      password: 'secret123',
-    );
-    await services.authRepository.signOut();
+    await _seedRegisteredPhoneUser(services);
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey<String>('auth-mode-register')));
@@ -1456,9 +1657,90 @@ Future<void> _pumpApp(
   }
 }
 
+Future<void> _pumpUntilFound(
+  WidgetTester tester,
+  Finder finder, {
+  Duration step = const Duration(milliseconds: 50),
+  int maxPumps = 80,
+}) async {
+  for (int i = 0; i < maxPumps; i += 1) {
+    if (finder.evaluate().isNotEmpty) {
+      return;
+    }
+    await tester.pump(step);
+  }
+  fail('Expected finder to match within ${step * maxPumps}.');
+}
+
+Future<dynamic> _handleSecureStorageCall(MethodCall call) async {
+  final Map<dynamic, dynamic> arguments =
+      call.arguments as Map<dynamic, dynamic>? ?? <dynamic, dynamic>{};
+  final String key = arguments['key'] as String? ?? '';
+  switch (call.method) {
+    case 'read':
+      return _mockSecureStorage[key];
+    case 'write':
+      _mockSecureStorage[key] = arguments['value'] as String? ?? '';
+      return null;
+    case 'delete':
+      _mockSecureStorage.remove(key);
+      return null;
+    case 'containsKey':
+      return _mockSecureStorage.containsKey(key);
+    case 'readAll':
+      return Map<String, String>.from(_mockSecureStorage);
+    case 'deleteAll':
+      _mockSecureStorage.clear();
+      return null;
+    default:
+      return null;
+  }
+}
+
 DateTime _dayClock() => DateTime(2026, 4, 5, 14);
 
 DateTime _nightClock() => DateTime(2026, 4, 5, 22);
+
+const AppEnvironment _cloudBaseTestEnvironment = AppEnvironment(
+  target: AppBackendTarget.emulator,
+  appIdPrefix: 'com.dormsleep.app',
+  cloudbaseEnvId: 'test-env',
+  cloudbaseAuthBaseUrl: 'https://example.com/auth',
+);
+
+const MethodChannel _secureStorageChannel = MethodChannel(
+  'plugins.it_nomads.com/flutter_secure_storage',
+);
+final Map<String, String> _mockSecureStorage = <String, String>{};
+
+const String _localVerificationId = 'local-verification-id';
+
+Future<void> _seedRegisteredPhoneUser(
+  AppServices services, {
+  String phoneNumber = '13800138000',
+  String password = 'secret123',
+}) async {
+  await services.profileFacade.registerWithPhone(
+    phoneNumber: phoneNumber,
+    verificationId: _localVerificationId,
+    code: '123456',
+    password: password,
+  );
+  await services.authRepository.signOut();
+}
+
+void _seedExpiredCloudBaseSession() {
+  const String deviceId = 'cb-device-test';
+  _mockSecureStorage['cloudbase.device_id'] = deviceId;
+  _mockSecureStorage['cloudbase.session'] = jsonEncode(<String, Object?>{
+    'accessToken': 'expired-access-token',
+    'refreshToken': 'expired-refresh-token',
+    'subject': 'user-expired',
+    'expiresAt': DateTime(2020, 1, 1).toIso8601String(),
+    'deviceId': deviceId,
+    'tokenType': 'Bearer',
+  });
+}
 
 UserSettings _settingsWithMood(NightMood mood) {
   return UserSettings(
