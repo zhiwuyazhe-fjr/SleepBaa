@@ -286,7 +286,7 @@ class CloudBaseAuthClient {
       <String, dynamic>{'phone': normalizedPhoneNumber, 'password': password},
     ];
 
-    CloudBaseAuthException? lastError;
+    CloudBaseAuthException? bestError;
     for (final Map<String, dynamic> payload in attempts) {
       try {
         final Map<String, dynamic> data = await _send(
@@ -299,14 +299,62 @@ class CloudBaseAuthClient {
         );
         return _tokenFromMap(data);
       } on CloudBaseAuthException catch (error) {
-        lastError = error;
+        bestError = _selectPreferredPasswordSignInError(bestError, error);
       }
     }
 
-    throw lastError ??
+    throw bestError ??
         const CloudBaseAuthException(
           message: 'CloudBase password sign-in failed.',
         );
+  }
+
+  CloudBaseAuthException _selectPreferredPasswordSignInError(
+    CloudBaseAuthException? current,
+    CloudBaseAuthException candidate,
+  ) {
+    if (current == null) {
+      return candidate;
+    }
+    return _passwordSignInErrorPriority(candidate) >=
+            _passwordSignInErrorPriority(current)
+        ? candidate
+        : current;
+  }
+
+  int _passwordSignInErrorPriority(CloudBaseAuthException error) {
+    final String message = error.message.toLowerCase();
+    final String code = (error.code ?? '').toLowerCase();
+    if (message.contains('captcha required') ||
+        message.contains('captcha_required') ||
+        code.contains('captcha_required')) {
+      return 4;
+    }
+    if (error.statusCode == 401 ||
+        message.contains('password') ||
+        message.contains('credential') ||
+        message.contains('invalid login') ||
+        code.contains('password') ||
+        code.contains('credential') ||
+        code.contains('unauthorized') ||
+        code.contains('invalid_credentials')) {
+      return 3;
+    }
+    if (message.contains('verification code') ||
+        message.contains('verification_code') ||
+        message.contains('otp') ||
+        message.contains('invalid code') ||
+        message.contains('code expired') ||
+        code.contains('verification') ||
+        code.contains('otp')) {
+      return 2;
+    }
+    if (message.contains('limit') ||
+        message.contains('too many') ||
+        code.contains('rate_limit')) {
+      return 1;
+    }
+    return 0;
   }
 
   Future<void> resetPasswordWithVerificationToken({

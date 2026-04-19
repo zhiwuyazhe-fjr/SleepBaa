@@ -1521,10 +1521,10 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     final String message = error.message.toLowerCase();
     final String code = (error.code ?? '').toLowerCase();
     final int? statusCode = error.statusCode;
-    if (message.contains('verification') ||
-        message.contains('otp') ||
-        message.contains('code') ||
-        code.contains('verification')) {
+    if (_isPasswordCredentialError(message, code, statusCode)) {
+      return '\u8bf7\u68c0\u67e5\u624b\u673a\u53f7\u548c\u5bc6\u7801\u3002';
+    }
+    if (_isVerificationFailure(message, code)) {
       return '\u9a8c\u8bc1\u7801\u9519\u8bef\u6216\u5df2\u8fc7\u671f\uff0c\u8bf7\u91cd\u65b0\u83b7\u53d6\u540e\u518d\u8bd5\u3002';
     }
     if (message.contains('already') ||
@@ -1542,15 +1542,6 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
         code.contains('not_found') ||
         code.contains('user_not_found')) {
       return '\u672a\u627e\u5230\u8be5\u624b\u673a\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002';
-    }
-    if (action == 'passwordSignIn' &&
-        (message.contains('password') ||
-            message.contains('credential') ||
-            code.contains('password') ||
-            code.contains('credential') ||
-            code.contains('unauthorized') ||
-            statusCode == 401)) {
-      return '\u8bf7\u68c0\u67e5\u624b\u673a\u53f7\u548c\u5bc6\u7801\u3002';
     }
     if (message.contains('password') || code.contains('password')) {
       if (action == 'passwordSignIn') {
@@ -1597,6 +1588,36 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
         message == '\u672a\u627e\u5230\u8be5\u624b\u673a\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002',
       PhoneVerificationTarget.any => false,
     };
+  }
+
+  bool _isPasswordCredentialError(
+    String message,
+    String code,
+    int? statusCode,
+  ) {
+    return message.contains('password') ||
+        message.contains('credential') ||
+        message.contains('invalid login') ||
+        message.contains('invalid_credentials') ||
+        code.contains('password') ||
+        code.contains('credential') ||
+        code.contains('unauthorized') ||
+        code.contains('invalid_credentials') ||
+        statusCode == 401;
+  }
+
+  bool _isVerificationFailure(String message, String code) {
+    return message.contains('verification code') ||
+        message.contains('verification_code') ||
+        message.contains('verification token') ||
+        message.contains('otp') ||
+        message.contains('one-time code') ||
+        message.contains('invalid code') ||
+        message.contains('code expired') ||
+        message.contains('expired code') ||
+        message.contains('sms code') ||
+        code.contains('verification') ||
+        code.contains('otp');
   }
 
   String _unexpectedPhoneAuthError(
