@@ -20,12 +20,13 @@ Future<void> main() async {
   );
   GoogleFonts.config.allowRuntimeFetching = false;
   final AppEnvironment environment = AppEnvironment.fromDefines();
-  final String? localHandledEveningPeriod =
-      await EveningWelcomeLocalStore.readHandledPeriodKey();
+  await EveningWelcomeLocalStore.pruneStaleAgainstNow();
+  final LocalEveningWelcomeBootState? localEveningWelcome =
+      await EveningWelcomeLocalStore.readBootState();
   runApp(
     SleepDormApp(
       environment: environment,
-      initialLocalHandledEveningPeriodKey: localHandledEveningPeriod,
+      initialLocalEveningWelcome: localEveningWelcome,
     ),
   );
 }

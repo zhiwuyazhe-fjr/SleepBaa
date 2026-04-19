@@ -55,13 +55,18 @@ class _NightWelcomeGatePageState extends State<NightWelcomeGatePage> {
     final AppServices services = context.appServices;
     final NightWelcomeController controller = services.nightWelcomeController;
     final String periodKey = eveningPeriodKey(DateTime.now());
-    await EveningWelcomeLocalStore.writeHandledPeriodKey(periodKey);
+    final String line = pickRandomEncouragementLine(mood: null);
+    await EveningWelcomeLocalStore.persistWelcomeOutcome(
+      periodKey: periodKey,
+      encouragementLine: line,
+      moodSnapshot: null,
+    );
     controller.recordWelcomeHandledForPeriod(periodKey);
     controller.clearSessionMoodOverride();
     controller.dismissForCurrentVisit();
     await services.profileFacade.saveEveningEncouragement(
       periodKey: periodKey,
-      line: pickRandomEncouragementLine(mood: null),
+      line: line,
       moodSnapshot: null,
     );
   }
@@ -72,13 +77,18 @@ class _NightWelcomeGatePageState extends State<NightWelcomeGatePage> {
     required NightMood mood,
   }) async {
     final String periodKey = eveningPeriodKey(DateTime.now());
-    await EveningWelcomeLocalStore.writeHandledPeriodKey(periodKey);
+    final String line = pickRandomEncouragementLine(mood: mood);
+    await EveningWelcomeLocalStore.persistWelcomeOutcome(
+      periodKey: periodKey,
+      encouragementLine: line,
+      moodSnapshot: mood,
+    );
     services.nightWelcomeController.recordWelcomeHandledForPeriod(periodKey);
     services.nightWelcomeController.setCompletedMood(mood);
     await services.profileFacade.saveNightWelcomeSelection(
       mood: mood,
       periodKey: periodKey,
-      encouragementLine: pickRandomEncouragementLine(mood: mood),
+      encouragementLine: line,
     );
   }
 }
