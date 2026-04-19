@@ -41,8 +41,17 @@ export interface ContextUserProfile {
   avatarStoragePath?: string | null;
 }
 
+export interface ContextTimeOfDay {
+  hour: number;
+  minute: number;
+}
+
 export interface ContextUserSettings {
   sleepGoalHours: number;
+  bedtimeReminderEnabled: boolean;
+  morningReminderEnabled: boolean;
+  dormAlertsEnabled: boolean;
+  bedtimeReminder: ContextTimeOfDay;
   preferredTrackTitle: string;
   smartSuggestionsEnabled: boolean;
   selectedNightMood?: string | null;
@@ -121,11 +130,13 @@ export interface ContextDorm {
 
 export interface ContextSleepSessionSummary {
   id: string;
+  sleepDayKey: string;
   startedAt?: string;
   endedAt?: string | null;
   status: string;
   awakeningsCount: number;
   totalSleepHours?: number | null;
+  sleepGoalMet?: boolean | null;
   sleepQuality?: number | null;
   restedLevel?: number | null;
   note?: string;

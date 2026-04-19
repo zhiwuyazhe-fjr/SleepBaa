@@ -138,6 +138,37 @@ function asString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
+function sleepDayKeyFromIso(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const shifted = new Date(date.getTime() + 4 * 60 * 60 * 1000);
+  const month = `${shifted.getMonth() + 1}`.padStart(2, "0");
+  const day = `${shifted.getDate()}`.padStart(2, "0");
+  return `${shifted.getFullYear()}-${month}-${day}`;
+}
+
+function sleepDayKeyOf(doc: JsonMap): string {
+  return (
+    asString(doc.sleepDayKey, sleepDayKeyFromIso(asString(doc.startedAt))) ||
+    asString(doc.id, asString(doc._id))
+  );
+}
+
+function sleepSessionSortTimestamp(doc: JsonMap): number {
+  const updatedAt = Date.parse(asString(doc.updatedAt));
+  if (!Number.isNaN(updatedAt)) {
+    return updatedAt;
+  }
+  const endedAt = Date.parse(asString(doc.endedAt));
+  if (!Number.isNaN(endedAt)) {
+    return endedAt;
+  }
+  const startedAt = Date.parse(asString(doc.startedAt));
+  return Number.isNaN(startedAt) ? 0 : startedAt;
+}
+
 function asNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" ? value : fallback;
 }
@@ -389,19 +420,76 @@ function unboundDormContext(): ContextDorm {
   };
 }
 
-function summarizeSleepSession(doc: JsonMap): ContextSleepSessionSummary {
+function resolvedSleepSessionHours(doc: JsonMap): number | null {
+  const summary = asMap(doc.summary);
+  const trackedDurationMinutes =
+    typeof doc.trackedDurationMinutes === "number"
+      ? doc.trackedDurationMinutes
+      : undefined;
+  if (typeof summary.totalSleepHours === "number") {
+    return summary.totalSleepHours;
+  }
+  if (typeof trackedDurationMinutes === "number") {
+    return trackedDurationMinutes / 60;
+  }
+  return null;
+}
+
+function isStableEndedSleepSession(doc: JsonMap): boolean {
+  const status = asString(doc.status, "drafted");
+  if (status !== "awaitingFeedback" && status !== "completed") {
+    return false;
+  }
+  if (asBoolean(doc.sleepModeActive, false)) {
+    return false;
+  }
+  const segments = Array.isArray(doc.segments) ? doc.segments.map(asMap) : [];
+  if (segments.some((segment) => !isMeaningfulString(segment.endedAt))) {
+    return false;
+  }
+  return segments.length > 0 || isMeaningfulString(doc.endedAt);
+}
+
+function deriveSleepGoalMet(
+  doc: JsonMap,
+  sleepGoalHours: number,
+): boolean | null {
+  if (!isStableEndedSleepSession(doc)) {
+    return null;
+  }
+  const totalSleepHours = resolvedSleepSessionHours(doc);
+  if (totalSleepHours == null || !Number.isFinite(totalSleepHours)) {
+    return null;
+  }
+  return totalSleepHours >= sleepGoalHours;
+}
+
+function withDerivedSleepGoalMet(
+  doc: JsonMap,
+  sleepGoalHours: number,
+): JsonMap {
+  return {
+    ...doc,
+    sleepGoalMet: deriveSleepGoalMet(doc, sleepGoalHours),
+  };
+}
+
+function summarizeSleepSession(
+  doc: JsonMap,
+  sleepGoalHours: number,
+): ContextSleepSessionSummary {
   const summary = asMap(doc.summary);
   const awakenings = Array.isArray(doc.awakenings) ? doc.awakenings : [];
+  const totalSleepHours = resolvedSleepSessionHours(doc);
   return {
     id: asString(doc.id, asString(doc._id)),
+    sleepDayKey: sleepDayKeyOf(doc),
     startedAt: asString(doc.startedAt),
     endedAt: asString(doc.endedAt),
     status: asString(doc.status, "drafted"),
     awakeningsCount: awakenings.length,
-    totalSleepHours:
-      typeof summary.totalSleepHours === "number"
-        ? summary.totalSleepHours
-        : undefined,
+    totalSleepHours: totalSleepHours ?? undefined,
+    sleepGoalMet: deriveSleepGoalMet(doc, sleepGoalHours),
     sleepQuality:
       typeof summary.sleepQuality === "number"
         ? summary.sleepQuality
@@ -749,6 +837,11 @@ export interface AssistantDataRepository {
     notificationId: string,
     payload: JsonMap,
   ): Promise<void>;
+  markNotificationRead(
+    uid: string,
+    notificationId: string,
+    readAt: string,
+  ): Promise<void>;
   createDormInvite(
     uid: string,
     expiresInHours?: number,
@@ -1041,14 +1134,31 @@ export class FirestoreRepository implements AssistantDataRepository {
 
   async listRecentSleepSessions(
     uid: string,
+    sleepGoalHours: number,
     count = 7,
   ): Promise<ContextSleepSessionSummary[]> {
     const docs = await this.store.query(Collections.sleepSessions, {
       filters: { uid },
-      orderBy: { field: "startedAt", direction: "desc" },
-      limit: count,
     });
-    return docs.map((doc) => summarizeSleepSession(withoutMeta(doc)));
+    const latestBySleepDayKey = new Map<string, JsonMap>();
+    for (const doc of docs) {
+      const value = withoutMeta(doc);
+      const sleepDayKey = sleepDayKeyOf(value);
+      const existing = latestBySleepDayKey.get(sleepDayKey);
+      if (!existing || sleepSessionSortTimestamp(existing) < sleepSessionSortTimestamp(value)) {
+        latestBySleepDayKey.set(sleepDayKey, value);
+      }
+    }
+    return Array.from(latestBySleepDayKey.values())
+      .sort((a, b) => {
+        const sleepDayCompare = sleepDayKeyOf(b).localeCompare(sleepDayKeyOf(a));
+        if (sleepDayCompare !== 0) {
+          return sleepDayCompare;
+        }
+        return sleepSessionSortTimestamp(b) - sleepSessionSortTimestamp(a);
+      })
+      .slice(0, count)
+      .map((doc) => summarizeSleepSession(doc, sleepGoalHours));
   }
 
   async listRecentDreamEntries(
@@ -1123,7 +1233,7 @@ export class FirestoreRepository implements AssistantDataRepository {
     ] =
       await Promise.all([
         this.getDorm(user.dormId, uid),
-        this.listRecentSleepSessions(uid),
+        this.listRecentSleepSessions(uid, settings.sleepGoalHours),
         this.listRecentDreamEntries(uid),
         this.listThreadMessages(resolvedThreadId),
         this.readAssistantThreadSummary(resolvedThreadId),
@@ -1222,7 +1332,9 @@ export class FirestoreRepository implements AssistantDataRepository {
         user: user as unknown as JsonMap,
         settings: settings as unknown as JsonMap,
         dorm: dorm as unknown as JsonMap,
-        sleepSessions: sleepSessions.map((doc) => withoutMeta(doc)),
+        sleepSessions: sleepSessions.map((doc) =>
+          withDerivedSleepGoalMet(withoutMeta(doc), settings.sleepGoalHours),
+        ),
         dreamEntries: dreamEntries.map((doc) => withoutMeta(doc)),
         sleepCaptureRecords: sleepCaptureRecords.map((doc) => withoutMeta(doc)),
         notifications: notifications.map((doc) => withoutMeta(doc)),
@@ -1958,6 +2070,19 @@ export class FirestoreRepository implements AssistantDataRepository {
         notificationId,
       },
     );
+  }
+
+  async markNotificationRead(
+    uid: string,
+    notificationId: string,
+    readAt: string,
+  ): Promise<void> {
+    await this.ensureUserBootstrap(uid);
+    await this.store.merge(Collections.notifications, `${uid}:${notificationId}`, {
+      readAt,
+      ownerUid: uid,
+      notificationId,
+    });
   }
 
   async createDormInvite(

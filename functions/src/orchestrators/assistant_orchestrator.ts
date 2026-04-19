@@ -520,11 +520,28 @@ export async function handleSleepSessionChange(
       category: "reminder",
       title: "晨间反馈待完成",
       body: "补完昨晚的晨间反馈后，AI 才能继续优化下一晚的睡眠建议。",
-      route: "/feedback/morning",
+      route: `/feedback/morning?sessionId=${encodeURIComponent(sessionId)}`,
       createdAt: nowIso(),
       ownerUid: uid,
       readAt: null,
     });
+    return;
+  }
+
+  if (afterStatus === "paused") {
+    const nextState: UserStateDoc = {
+      ...previous,
+      currentPhase: "home_pre_sleep",
+      activeSessionId: null,
+      updatedAt: nowIso(),
+    };
+    await repo.writeUserState(uid, nextState);
+    for (const snapshot of buildCardSnapshots(context, nextState, [
+      "home_pre_sleep",
+      "profile_report",
+    ])) {
+      await repo.writeCardSnapshot(uid, snapshot);
+    }
     return;
   }
 

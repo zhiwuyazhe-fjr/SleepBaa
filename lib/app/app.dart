@@ -1,15 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
-import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/app/theme/app_text_styles.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
+import 'package:sleep_dorm_app/core/notifications/notification_navigation_coordinator.dart';
 
-class SleepDormApp extends StatelessWidget {
+class SleepDormApp extends StatefulWidget {
   const SleepDormApp({
     super.key,
     this.initialLocation = AppRoutes.home,
@@ -18,6 +22,7 @@ class SleepDormApp extends StatelessWidget {
     this.clock,
     this.initialSettings,
     this.showNightWelcomeOutsideNightInDebug,
+    this.appNotificationService,
   });
 
   final String initialLocation;
@@ -26,17 +31,25 @@ class SleepDormApp extends StatelessWidget {
   final DateTime Function()? clock;
   final UserSettings? initialSettings;
   final bool? showNightWelcomeOutsideNightInDebug;
+  final AppNotificationService? appNotificationService;
 
+  @override
+  State<SleepDormApp> createState() => _SleepDormAppState();
+}
+
+class _SleepDormAppState extends State<SleepDormApp> {
   @override
   Widget build(BuildContext context) {
     final AppEnvironment resolvedEnvironment =
-        environment ?? AppEnvironment.inMemory();
+        widget.environment ?? AppEnvironment.inMemory();
 
     return AppScope(
       environment: resolvedEnvironment,
-      clock: clock,
-      initialSettings: initialSettings,
-      showNightWelcomeOutsideNightInDebug: showNightWelcomeOutsideNightInDebug,
+      clock: widget.clock,
+      initialSettings: widget.initialSettings,
+      showNightWelcomeOutsideNightInDebug:
+          widget.showNightWelcomeOutsideNightInDebug,
+      appNotificationService: widget.appNotificationService,
       child: Builder(
         builder: (BuildContext context) {
           final AppServices services = context.appServices;
@@ -54,8 +67,8 @@ class SleepDormApp extends StatelessWidget {
               return _RoutedSleepDormApp(
                 services: services,
                 usesCloudBase: resolvedEnvironment.usesCloudBase,
-                homeMode: homeMode,
-                initialLocation: initialLocation,
+                homeMode: widget.homeMode,
+                initialLocation: widget.initialLocation,
                 theme: _buildTheme(effectiveMood),
                 title: 'DormSleep',
               );
@@ -96,6 +109,46 @@ class SleepDormApp extends StatelessWidget {
       highlightColor: Colors.transparent,
     );
   }
+}
+
+class _NotificationBridge extends StatefulWidget {
+  const _NotificationBridge({required this.router, required this.child});
+
+  final GoRouter router;
+  final Widget child;
+
+  @override
+  State<_NotificationBridge> createState() => _NotificationBridgeState();
+}
+
+class _NotificationBridgeState extends State<_NotificationBridge> {
+  NotificationNavigationCoordinator? _coordinator;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_coordinator != null) {
+      return;
+    }
+    final AppServices services = context.appServices;
+    _coordinator = NotificationNavigationCoordinator(
+      router: widget.router,
+      notificationRepository: services.notificationRepository,
+      notificationService: services.appNotificationService,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_coordinator?.start());
+    });
+  }
+
+  @override
+  void dispose() {
+    unawaited(_coordinator?.dispose());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 bool shouldShowCloudBaseAuthBlockingScreen({
@@ -168,7 +221,7 @@ class _RoutedSleepDormAppState extends State<_RoutedSleepDormApp> {
         return _CloudBaseAuthGate(
           usesCloudBase: widget.usesCloudBase,
           authRepository: widget.services.authRepository,
-          child: routedChild,
+          child: _NotificationBridge(router: _router, child: routedChild),
         );
       },
     );

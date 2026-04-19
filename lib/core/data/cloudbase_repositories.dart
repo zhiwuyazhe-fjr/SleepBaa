@@ -102,6 +102,39 @@ double _doubleOf(dynamic value, [double fallback = 0]) {
   return fallback;
 }
 
+double? _nullableDoubleOf(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is num) {
+    return value.toDouble();
+  }
+  return null;
+}
+
+SleepTrendSeries _sleepTrendSeriesFromCard(
+  Map<String, dynamic> card, {
+  required String metricKey,
+  required String unit,
+}) {
+  final Map<String, dynamic> payload = _mapOf(card['payload']);
+  final List<SleepTrendPoint> points = _mapListOf(payload['points'])
+      .map(
+        (Map<String, dynamic> point) => SleepTrendPoint(
+          dateKey: _stringOf(point['dateKey']),
+          weekdayLabel: _stringOf(point['weekdayLabel']),
+          value: _nullableDoubleOf(point['value']),
+        ),
+      )
+      .where((SleepTrendPoint point) => point.dateKey.isNotEmpty)
+      .toList(growable: false);
+  return SleepTrendSeries(
+    metricKey: _stringOf(payload['metricKey'], metricKey),
+    unit: _stringOf(payload['unit'], unit),
+    points: points,
+  );
+}
+
 T? _firstWhereOrNull<T>(Iterable<T> values, bool Function(T value) test) {
   for (final T value in values) {
     if (test(value)) {
@@ -1935,6 +1968,127 @@ class _SerializedRemoteSyncQueue {
   }
 }
 
+bool _isActiveSleepSession(SleepSession session) {
+  return session.status == SleepSessionStatus.active && session.endedAt == null;
+}
+
+SleepSession _normalizeSleepSession(SleepSession session) {
+  SleepSession normalized = session;
+  if (normalized.status == SleepSessionStatus.active &&
+      normalized.endedAt != null) {
+    normalized = normalized.copyWith(
+      status: SleepSessionStatus.awaitingFeedback,
+      sleepModeActive: false,
+    );
+  }
+  if (normalized.status != SleepSessionStatus.active ||
+      !normalized.sleepModeActive) {
+    return _repairInactiveSleepSession(normalized);
+  }
+  return normalized;
+}
+
+SleepSession _normalizeSleepSessionForPhase(
+  SleepSession session, {
+  required String currentPhase,
+  required String activeSessionId,
+}) {
+  final SleepSession normalized = _normalizeSleepSession(session);
+  if (normalized.status != SleepSessionStatus.active) {
+    return normalized;
+  }
+  final bool isCurrentSleepModeSession =
+      currentPhase == 'sleep_mode' &&
+      (activeSessionId.isEmpty || activeSessionId == normalized.id);
+  if (isCurrentSleepModeSession) {
+    return normalized;
+  }
+  return _repairInactiveSleepSession(
+    normalized.copyWith(
+      status: SleepSessionStatus.awaitingFeedback,
+      sleepModeActive: false,
+    ),
+  );
+}
+
+SleepSession _repairInactiveSleepSession(SleepSession session) {
+  final List<SleepSegment> segments = _normalizedSleepSegments(session);
+  final DateTime? resolvedEndAt = _resolvedInactiveSessionEndAt(
+    session,
+    segments,
+  );
+  if (resolvedEndAt == null) {
+    return session;
+  }
+
+  bool changed = false;
+  final int openIndex = segments.lastIndexWhere(
+    (SleepSegment segment) => segment.isOpen,
+  );
+  if (openIndex != -1) {
+    segments[openIndex] = segments[openIndex].copyWith(endedAt: resolvedEndAt);
+    changed = true;
+  }
+
+  final int trackedDurationMinutes = session.isTrackingLocked
+      ? session.trackedDurationMinutes
+      : _closedSegmentsDurationMinutes(segments);
+  if (trackedDurationMinutes != session.trackedDurationMinutes) {
+    changed = true;
+  }
+  if (session.endedAt == null) {
+    changed = true;
+  }
+  if (!changed) {
+    return session;
+  }
+  return session.copyWith(
+    endedAt: resolvedEndAt,
+    segments: segments,
+    trackedDurationMinutes: trackedDurationMinutes,
+  );
+}
+
+List<SleepSegment> _normalizedSleepSegments(SleepSession session) {
+  if (session.segments.isNotEmpty) {
+    return List<SleepSegment>.from(session.segments);
+  }
+  return <SleepSegment>[
+    SleepSegment(
+      startedAt: session.startedAt,
+      endedAt: session.sleepModeActive ? null : session.endedAt,
+    ),
+  ];
+}
+
+DateTime? _resolvedInactiveSessionEndAt(
+  SleepSession session,
+  List<SleepSegment> segments,
+) {
+  if (session.endedAt != null) {
+    return session.endedAt;
+  }
+  for (int index = segments.length - 1; index >= 0; index--) {
+    final DateTime? endedAt = segments[index].endedAt;
+    if (endedAt != null) {
+      return endedAt;
+    }
+  }
+  return null;
+}
+
+int _closedSegmentsDurationMinutes(List<SleepSegment> segments) {
+  return segments.fold<int>(
+    0,
+    (int total, SleepSegment segment) =>
+        total + sleepSegmentDurationMinutes(segment),
+  );
+}
+
+bool _isValidAwaitingFeedbackSession(SleepSession session) {
+  return canSubmitMorningFeedbackForSession(session);
+}
+
 class CloudBaseSleepSessionRepository extends ChangeNotifier
     implements SleepSessionRepository {
   CloudBaseSleepSessionRepository({
@@ -1954,14 +2108,29 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
       _SerializedRemoteSyncQueue();
 
   List<SleepSession> _sessions = const <SleepSession>[];
+  String _currentPhase = '';
+  String _activeSessionId = '';
   int _latestRemoteSyncId = 0;
+  bool _hasObservedInitialSessionLookup = false;
+  bool _hasCompletedInitialSessionLookup = false;
 
   @override
   SleepSession? get activeSession {
-    try {
-      return _sessions.lastWhere(
-        (SleepSession session) => session.status == SleepSessionStatus.active,
+    if (_currentPhase.isNotEmpty && _currentPhase != 'sleep_mode') {
+      return null;
+    }
+    if (_activeSessionId.isNotEmpty) {
+      final SleepSession? activeById = _firstWhereOrNull(
+        _sessions,
+        (SleepSession session) => session.id == _activeSessionId,
       );
+      if (activeById != null && _isActiveSleepSession(activeById)) {
+        return activeById;
+      }
+      return null;
+    }
+    try {
+      return _sessions.lastWhere(_isActiveSleepSession);
     } on StateError {
       return null;
     }
@@ -1971,59 +2140,79 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
   List<SleepSession> get sessions => List<SleepSession>.unmodifiable(_sessions);
 
   @override
+  bool get isReadyForSessionLookup {
+    if (!_appApiClient.isConfigured || _snapshotStore.hasPayload) {
+      return true;
+    }
+    return _hasCompletedInitialSessionLookup;
+  }
+
+  @override
   SleepSession? get latestAwaitingFeedbackSession {
     final List<SleepSession> pending =
-        _sessions
+        _latestSleepDaySessions(_sessions)
             .where(
               (SleepSession session) =>
-                  session.status == SleepSessionStatus.awaitingFeedback,
+                  _isValidAwaitingFeedbackSession(session),
             )
             .toList()
           ..sort(
             (SleepSession a, SleepSession b) =>
-                b.startedAt.compareTo(a.startedAt),
+                b.sleepDayDate.compareTo(a.sleepDayDate),
           );
     return pending.isEmpty ? null : pending.first;
   }
 
   @override
   List<SleepSession> recentSessions({int count = 7}) {
-    final List<SleepSession> items = List<SleepSession>.from(_sessions)
-      ..sort(
-        (SleepSession a, SleepSession b) => a.startedAt.compareTo(b.startedAt),
-      );
+    final List<SleepSession> items = _latestSleepDaySessions(_sessions);
     return items.reversed.take(count).toList().reversed.toList();
   }
 
   @override
   List<SleepSession> sessionsForMonth(DateTime month) {
-    return _sessions
-        .where((SleepSession session) {
-          return session.startedAt.year == month.year &&
-              session.startedAt.month == month.month;
-        })
-        .toList(growable: false);
+    return _latestSleepDaySessions(
+      _sessions.where((SleepSession session) {
+        return session.sleepDayDate.year == month.year &&
+            session.sleepDayDate.month == month.month;
+      }),
+    );
   }
 
   @override
-  Future<SleepSession> startSleepSession({
+  Future<SleepSession> startOrResumeSleepSession({
     required List<NightRecommendation> recommendationSnapshot,
     required String? dormId,
+    DateTime? at,
   }) async {
-    final SleepSession? existing = activeSession;
-    if (existing != null) {
-      return existing;
+    final DateTime moment = at ?? DateTime.now();
+    final String sleepDayKey = sleepDayKeyFromDate(moment);
+    final SleepSession? currentActive = activeSession;
+    if (currentActive != null && currentActive.sleepDayKey == sleepDayKey) {
+      return currentActive;
     }
 
     final UserProfile user = _authRepository.currentUser.uid.isNotEmpty
         ? _authRepository.currentUser
         : await _authRepository.ensureAuthenticated();
-    final DateTime now = DateTime.now();
+    final SleepSession? existing = sessionForSleepDayKey(sleepDayKey);
+    if (existing != null) {
+      final SleepSession resumed = _resumeSession(
+        existing,
+        at: moment,
+        dormId: dormId,
+        recommendationSnapshot: recommendationSnapshot,
+      );
+      await saveSession(resumed);
+      return resumed;
+    }
+
     final SleepSession session = SleepSession(
       id: IdGenerator.next('session'),
       uid: user.uid,
-      startedAt: now,
+      startedAt: moment,
       endedAt: null,
+      sleepDayKey: sleepDayKey,
       status: SleepSessionStatus.active,
       sleepModeActive: true,
       dormId: dormId,
@@ -2035,10 +2224,12 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
           )
           .map((NightRecommendation item) => item.id)
           .toList(growable: false),
+      segments: <SleepSegment>[SleepSegment(startedAt: moment, endedAt: null)],
+      trackedDurationMinutes: 0,
       awakenings: const <NightAwakeningEntry>[],
       feedback: const <RecommendationFeedback>[],
       summary: null,
-      updatedAt: now,
+      updatedAt: moment,
     );
     _upsertLocalSession(session);
     if (_appApiClient.isConfigured) {
@@ -2048,39 +2239,200 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
   }
 
   @override
-  Future<void> updateActiveSession({
-    bool? sleepModeActive,
-    SleepSessionStatus? status,
-    DateTime? endedAt,
-    List<String>? selectedRecommendationIds,
-  }) async {
+  Future<SleepSession?> pauseActiveSleepSession({DateTime? at}) async {
     final SleepSession? existing = activeSession;
     if (existing == null) {
-      return;
+      return null;
     }
-    final SleepSession next = existing.copyWith(
-      sleepModeActive: sleepModeActive,
-      status: status,
-      endedAt: endedAt,
-      selectedRecommendationIds:
-          selectedRecommendationIds ?? existing.selectedRecommendationIds,
-      updatedAt: DateTime.now(),
+    final SleepSession paused = _closeActiveSession(
+      existing,
+      at: at ?? DateTime.now(),
+      targetStatus: existing.hasSubmittedFeedback
+          ? SleepSessionStatus.completed
+          : SleepSessionStatus.paused,
     );
-    await saveSession(next);
+    await saveSession(paused);
+    return paused;
   }
 
   @override
-  Future<void> saveSession(SleepSession session) async {
+  Future<SleepSession?> finishActiveSleepSession({DateTime? at}) async {
+    final SleepSession? existing = activeSession;
+    if (existing == null) {
+      return null;
+    }
+    final SleepSession finished = _closeActiveSession(
+      existing,
+      at: at ?? DateTime.now(),
+      targetStatus: existing.hasSubmittedFeedback
+          ? SleepSessionStatus.completed
+          : SleepSessionStatus.awaitingFeedback,
+    );
+    await saveSession(finished);
+    return finished;
+  }
+
+  @override
+  Future<void> saveSession(
+    SleepSession session, {
+    bool syncRemote = true,
+  }) async {
     _upsertLocalSession(session);
-    if (!_appApiClient.isConfigured) {
+    if (!_appApiClient.isConfigured || !syncRemote) {
       return;
     }
-    _enqueueSessionSync(
-      session: session,
-      path: session.status == SleepSessionStatus.active
-          ? '/api/sleep/enter'
-          : '/api/sleep/exit',
+    _enqueueSessionSync(session: session, path: _pathForSessionSync(session));
+  }
+
+  @override
+  SleepSession? sessionForSleepDayKey(String sleepDayKey) {
+    final List<SleepSession> matches =
+        _sessions
+            .where((SleepSession session) => session.sleepDayKey == sleepDayKey)
+            .toList()
+          ..sort(_compareSleepSessions);
+    return matches.isEmpty ? null : matches.last;
+  }
+
+  @override
+  Future<List<SleepSession>> archivePastCutoffSessions({
+    required DateTime now,
+  }) async {
+    final String currentSleepDayKey = sleepDayKeyFromDate(now);
+    final List<SleepSession> staleSessions =
+        _sessions
+            .where(
+              (SleepSession session) =>
+                  !session.hasSubmittedFeedback &&
+                  session.sleepDayKey != currentSleepDayKey,
+            )
+            .toList()
+          ..sort(_compareSleepSessions);
+    final List<SleepSession> archived = <SleepSession>[];
+    for (final SleepSession session in staleSessions) {
+      if (session.status != SleepSessionStatus.active &&
+          session.status != SleepSessionStatus.paused) {
+        continue;
+      }
+      final SleepSession normalized = _archivePastCutoffSession(
+        session,
+        now: now,
+      );
+      if (normalized.id == session.id &&
+          normalized.status == session.status &&
+          normalized.updatedAt == session.updatedAt &&
+          normalized.displayEndAt == session.displayEndAt) {
+        continue;
+      }
+      await saveSession(normalized);
+      archived.add(normalized);
+    }
+    return archived;
+  }
+
+  SleepSession _resumeSession(
+    SleepSession session, {
+    required DateTime at,
+    required String? dormId,
+    required List<NightRecommendation> recommendationSnapshot,
+  }) {
+    if (session.sleepModeActive) {
+      return session;
+    }
+    final List<SleepSegment> segments = _normalizedSegments(session);
+    if (segments.isEmpty || !segments.last.isOpen) {
+      segments.add(SleepSegment(startedAt: at, endedAt: null));
+    }
+    final List<NightRecommendation> recommendations =
+        session.recommendations.isNotEmpty
+        ? session.recommendations
+        : recommendationSnapshot;
+    final List<String> selectedRecommendationIds =
+        session.selectedRecommendationIds.isNotEmpty
+        ? session.selectedRecommendationIds
+        : recommendationSnapshot
+              .where(
+                (NightRecommendation item) =>
+                    item.executionState != RecommendationExecutionState.idle,
+              )
+              .map((NightRecommendation item) => item.id)
+              .toList(growable: false);
+    return session.copyWith(
+      startedAt: segments.first.startedAt,
+      clearEndedAt: true,
+      sleepModeActive: true,
+      status: session.hasSubmittedFeedback
+          ? SleepSessionStatus.completed
+          : SleepSessionStatus.active,
+      dormId: dormId ?? session.dormId,
+      recommendations: recommendations,
+      selectedRecommendationIds: selectedRecommendationIds,
+      segments: segments,
+      updatedAt: at,
     );
+  }
+
+  SleepSession _closeActiveSession(
+    SleepSession session, {
+    required DateTime at,
+    required SleepSessionStatus targetStatus,
+  }) {
+    final List<SleepSegment> segments = _normalizedSegments(session);
+    int trackedDurationMinutes = session.trackedDurationMinutes;
+    if (segments.isNotEmpty && segments.last.isOpen) {
+      final SleepSegment closed = segments.last.copyWith(endedAt: at);
+      segments[segments.length - 1] = closed;
+      if (!session.isTrackingLocked) {
+        trackedDurationMinutes += sleepSegmentDurationMinutes(closed);
+      }
+    }
+    return session.copyWith(
+      startedAt: segments.isNotEmpty
+          ? segments.first.startedAt
+          : session.startedAt,
+      endedAt: at,
+      status: targetStatus,
+      sleepModeActive: false,
+      segments: segments,
+      trackedDurationMinutes: session.isTrackingLocked
+          ? session.trackedDurationMinutes
+          : trackedDurationMinutes,
+      updatedAt: at,
+    );
+  }
+
+  SleepSession _archivePastCutoffSession(
+    SleepSession session, {
+    required DateTime now,
+  }) {
+    switch (session.status) {
+      case SleepSessionStatus.paused:
+        return session.copyWith(
+          status: SleepSessionStatus.awaitingFeedback,
+          sleepModeActive: false,
+          updatedAt: now,
+        );
+      case SleepSessionStatus.active:
+        return _closeActiveSession(
+          session,
+          at: _sleepDayCutoff(session),
+          targetStatus: SleepSessionStatus.awaitingFeedback,
+        );
+      case SleepSessionStatus.drafted:
+      case SleepSessionStatus.awaitingFeedback:
+      case SleepSessionStatus.completed:
+        return session;
+    }
+  }
+
+  String _pathForSessionSync(SleepSession session) {
+    if (session.sleepModeActive) {
+      return '/api/sleep/enter';
+    }
+    if (session.status == SleepSessionStatus.paused) {
+      return '/api/sleep/pause';
+    }
+    return '/api/sleep/exit';
   }
 
   void _enqueueSessionSync({
@@ -2106,33 +2458,192 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
   }
 
   void _upsertLocalSession(SleepSession session) {
+    final SleepSession normalized = _normalizeSleepSession(session);
+    _applyLocalSleepPhase(normalized);
     final int index = _sessions.indexWhere(
-      (SleepSession item) => item.id == session.id,
+      (SleepSession item) => item.id == normalized.id,
     );
     if (index == -1) {
-      _sessions = <SleepSession>[..._sessions, session];
+      _sessions = <SleepSession>[..._sessions, normalized];
     } else {
       final List<SleepSession> next = List<SleepSession>.from(_sessions);
-      next[index] = session;
+      next[index] = normalized;
       _sessions = next;
     }
-    _sessions = List<SleepSession>.from(_sessions)
-      ..sort(
-        (SleepSession a, SleepSession b) => a.startedAt.compareTo(b.startedAt),
-      );
+    _sessions = List<SleepSession>.from(_sessions)..sort(_compareSleepSessions);
     notifyListeners();
   }
 
+  static List<SleepSegment> _normalizedSegments(SleepSession session) {
+    if (session.segments.isNotEmpty) {
+      return List<SleepSegment>.from(session.segments);
+    }
+    return <SleepSegment>[
+      SleepSegment(
+        startedAt: session.startedAt,
+        endedAt: session.sleepModeActive ? null : session.endedAt,
+      ),
+    ];
+  }
+
+  static List<SleepSession> _latestSleepDaySessions(
+    Iterable<SleepSession> sessions,
+  ) {
+    final Map<String, SleepSession> latestByKey = <String, SleepSession>{};
+    for (final SleepSession session in sessions) {
+      final SleepSession? existing = latestByKey[session.sleepDayKey];
+      if (existing == null || _compareSleepSessions(existing, session) < 0) {
+        latestByKey[session.sleepDayKey] = session;
+      }
+    }
+    final List<SleepSession> items = latestByKey.values.toList()
+      ..sort(_compareSleepSessions);
+    return items;
+  }
+
+  static int _compareSleepSessions(SleepSession a, SleepSession b) {
+    final int dayCompare = a.sleepDayDate.compareTo(b.sleepDayDate);
+    if (dayCompare != 0) {
+      return dayCompare;
+    }
+    final DateTime aTimestamp = a.updatedAt ?? a.displayStartAt;
+    final DateTime bTimestamp = b.updatedAt ?? b.displayStartAt;
+    return aTimestamp.compareTo(bTimestamp);
+  }
+
+  static DateTime _sleepDayCutoff(SleepSession session) {
+    final DateTime sleepDayDate = session.sleepDayDate;
+    return DateTime(
+      sleepDayDate.year,
+      sleepDayDate.month,
+      sleepDayDate.day,
+      20,
+    );
+  }
+
   void _applySnapshot() {
+    if (_snapshotStore.isRefreshing) {
+      _hasObservedInitialSessionLookup = true;
+    } else if (_hasObservedInitialSessionLookup ||
+        _snapshotStore.hasPayload ||
+        _snapshotStore.lastError != null) {
+      _hasCompletedInitialSessionLookup = true;
+    }
     final _SnapshotData snapshot = _SnapshotData.fromPayload(
       _snapshotStore.payload,
       _authRepository.currentUser.uid,
     );
-    _sessions = List<SleepSession>.from(snapshot.sessions)
-      ..sort(
-        (SleepSession a, SleepSession b) => a.startedAt.compareTo(b.startedAt),
-      );
+    _currentPhase = _stringOf(snapshot.userState['currentPhase']);
+    _activeSessionId = _stringOf(snapshot.userState['activeSessionId']);
+    final List<SleepSession> snapshotSessions = snapshot.sessions
+        .map(
+          (SleepSession session) => _normalizeSleepSessionForPhase(
+            session,
+            currentPhase: _currentPhase,
+            activeSessionId: _activeSessionId,
+          ),
+        )
+        .toList(growable: false);
+    _sessions = _mergeSnapshotSessions(
+      previousLocalSessions: _sessions,
+      snapshotSessions: snapshotSessions,
+    )..sort(_compareSleepSessions);
     notifyListeners();
+  }
+
+  static List<SleepSession> _mergeSnapshotSessions({
+    required List<SleepSession> previousLocalSessions,
+    required List<SleepSession> snapshotSessions,
+  }) {
+    final Map<String, SleepSession> mergedById = <String, SleepSession>{
+      for (final SleepSession session in snapshotSessions) session.id: session,
+    };
+    for (final SleepSession localSession in previousLocalSessions) {
+      final SleepSession? snapshotSession = mergedById[localSession.id];
+      if (snapshotSession == null) {
+        mergedById[localSession.id] = localSession;
+        continue;
+      }
+      if (_shouldPreferLocalSession(localSession, snapshotSession)) {
+        mergedById[localSession.id] = localSession;
+      }
+    }
+    return mergedById.values.toList(growable: false);
+  }
+
+  static bool _shouldPreferLocalSession(
+    SleepSession localSession,
+    SleepSession snapshotSession,
+  ) {
+    if (_shouldPreferCompleteClosedLocalSession(
+      localSession,
+      snapshotSession,
+    )) {
+      return true;
+    }
+    final DateTime localTimestamp =
+        localSession.updatedAt ??
+        localSession.displayEndAt ??
+        localSession.displayStartAt;
+    final DateTime snapshotTimestamp =
+        snapshotSession.updatedAt ??
+        snapshotSession.displayEndAt ??
+        snapshotSession.displayStartAt;
+    if (localTimestamp.isAfter(snapshotTimestamp)) {
+      return true;
+    }
+    if (snapshotTimestamp.isAfter(localTimestamp)) {
+      return false;
+    }
+    if (localSession.hasSubmittedFeedback &&
+        !snapshotSession.hasSubmittedFeedback) {
+      return true;
+    }
+    if (localSession.status == SleepSessionStatus.completed &&
+        snapshotSession.status != SleepSessionStatus.completed) {
+      return true;
+    }
+    if (localSession.feedback.length > snapshotSession.feedback.length) {
+      return true;
+    }
+    return false;
+  }
+
+  static bool _shouldPreferCompleteClosedLocalSession(
+    SleepSession localSession,
+    SleepSession snapshotSession,
+  ) {
+    if (!canSubmitMorningFeedbackForSession(localSession) ||
+        canSubmitMorningFeedbackForSession(snapshotSession) ||
+        snapshotSession.sleepModeActive) {
+      return false;
+    }
+    final DateTime? localEndAt = resolveMorningFeedbackSessionEndAt(localSession);
+    final DateTime? snapshotEndAt = resolveMorningFeedbackSessionEndAt(
+      snapshotSession,
+    );
+    if (localEndAt == null || snapshotEndAt != null) {
+      return false;
+    }
+    return snapshotSession.openSegment != null ||
+        snapshotSession.trackedDurationMinutes < localSession.trackedDurationMinutes;
+  }
+
+  void _applyLocalSleepPhase(SleepSession session) {
+    if (_isActiveSleepSession(session) && session.sleepModeActive) {
+      _currentPhase = 'sleep_mode';
+      _activeSessionId = session.id;
+      return;
+    }
+    if (session.status == SleepSessionStatus.awaitingFeedback) {
+      _currentPhase = 'morning_feedback';
+      _activeSessionId = session.id;
+      return;
+    }
+    if (_activeSessionId == session.id) {
+      _currentPhase = 'home_pre_sleep';
+      _activeSessionId = '';
+    }
   }
 
   @override
@@ -2162,28 +2673,36 @@ class CloudBaseFeedbackRepository extends ChangeNotifier
     required MorningSummary summary,
     required List<RecommendationFeedback> recommendationFeedback,
   }) async {
+    final SleepSession completedSession = session.copyWith(
+      status: SleepSessionStatus.completed,
+      sleepModeActive: false,
+      summary: summary,
+      feedback: recommendationFeedback,
+      updatedAt: DateTime.now(),
+    );
     await _sleepSessionRepository.saveSession(
-      session.copyWith(
-        status: SleepSessionStatus.completed,
-        summary: summary,
-        feedback: recommendationFeedback,
-        updatedAt: DateTime.now(),
-      ),
+      completedSession,
+      syncRemote: false,
     );
     if (_appApiClient.isConfigured) {
       try {
         await _appApiClient.post(
           '/api/feedback/morning',
           body: <String, dynamic>{
-            'sessionId': session.id,
+            'sessionId': completedSession.id,
+            'session': ModelSerializers.sleepSessionToMap(completedSession),
             'summary': ModelSerializers.morningSummaryToMap(summary),
-            'recommendationFeedback': recommendationFeedback
+            'feedback': recommendationFeedback
                 .map(ModelSerializers.recommendationFeedbackToMap)
                 .toList(growable: false),
           },
         );
         await _snapshotStore.refresh();
-      } catch (_) {
+      } catch (error) {
+        debugPrint(
+          'CloudBase morning feedback sync failed for ${completedSession.id}: '
+          '$error',
+        );
         // Local state is already updated.
       }
     }
@@ -2471,15 +2990,17 @@ class CloudBaseNotificationRepository extends ChangeNotifier
   CloudBaseNotificationRepository({
     required AuthRepository authRepository,
     required CloudBaseSnapshotStore snapshotStore,
+    required CloudBaseAppApiClient appApiClient,
   }) : _authRepository = authRepository,
-       _snapshotStore = snapshotStore {
+       _snapshotStore = snapshotStore,
+       _appApiClient = appApiClient {
     _snapshotStore.addListener(_applySnapshot);
   }
 
   final AuthRepository _authRepository;
   final CloudBaseSnapshotStore _snapshotStore;
+  final CloudBaseAppApiClient _appApiClient;
   List<NotificationItem> _notifications = const <NotificationItem>[];
-  final Set<String> _tokens = <String>{};
 
   @override
   List<NotificationItem> get notifications {
@@ -2500,15 +3021,30 @@ class CloudBaseNotificationRepository extends ChangeNotifier
 
   @override
   Future<void> markRead(String notificationId) async {
+    final DateTime readAt = DateTime.now();
     _notifications = _notifications
         .map((NotificationItem item) {
           if (item.id != notificationId) {
             return item;
           }
-          return item.copyWith(readAt: DateTime.now());
+          return item.copyWith(readAt: readAt);
         })
         .toList(growable: false);
     notifyListeners();
+    if (_appApiClient.isConfigured) {
+      try {
+        await _authRepository.ensureAuthenticated();
+        await _appApiClient.post(
+          '/api/notifications/read',
+          body: <String, dynamic>{
+            'notificationId': notificationId,
+            'readAt': readAt.toIso8601String(),
+          },
+        );
+      } catch (_) {
+        // Keep the in-memory state responsive even if the remote sync fails.
+      }
+    }
   }
 
   @override
@@ -2525,15 +3061,6 @@ class CloudBaseNotificationRepository extends ChangeNotifier
       next[index] = notification;
       _notifications = next;
     }
-    notifyListeners();
-  }
-
-  @override
-  Future<void> registerDeviceToken({
-    required String token,
-    required String platform,
-  }) async {
-    _tokens.add('$platform:$token');
     notifyListeners();
   }
 
@@ -3350,6 +3877,7 @@ class CloudBaseInsightsRepository extends ChangeNotifier
   }) : _authRepository = authRepository,
        _snapshotStore = snapshotStore,
        _appApiClient = appApiClient,
+       _sleepSessionRepository = sleepSessionRepository,
        _fallback = InMemoryInsightsRepository(
          sleepSessionRepository: sleepSessionRepository,
          dormRepository: dormRepository,
@@ -3362,6 +3890,7 @@ class CloudBaseInsightsRepository extends ChangeNotifier
   final AuthRepository _authRepository;
   final CloudBaseSnapshotStore _snapshotStore;
   final CloudBaseAppApiClient _appApiClient;
+  final SleepSessionRepository _sleepSessionRepository;
   final InMemoryInsightsRepository _fallback;
 
   Map<String, Map<String, dynamic>> _snapshotData =
@@ -3397,11 +3926,12 @@ class CloudBaseInsightsRepository extends ChangeNotifier
   SleepReport get currentReport {
     final Map<String, dynamic>? profileReport =
         _snapshotData[BackendSurfaceIds.profileReport];
-    if (profileReport == null) {
+    if (_shouldPreferFallbackProfileReport(profileReport)) {
       return _fallback.currentReport;
     }
-    final Map<String, dynamic> summaryCard = _mapListOf(profileReport['cards'])
-        .firstWhere(
+    final Map<String, dynamic> resolvedProfileReport = profileReport!;
+    final Map<String, dynamic> summaryCard =
+        _mapListOf(resolvedProfileReport['cards']).firstWhere(
           (Map<String, dynamic> card) => card['type'] == 'sleep_report_summary',
           orElse: () => <String, dynamic>{},
         );
@@ -3417,8 +3947,56 @@ class CloudBaseInsightsRepository extends ChangeNotifier
       calmNights: _doubleOf(payload['calmNights']).round(),
       dreamEntriesCount: _doubleOf(payload['dreamEntriesCount']).round(),
       highlights: _stringListOf(payload['highlights']),
-      generatedAt: _dateOf(profileReport['generatedAt']),
+      generatedAt: _dateOf(resolvedProfileReport['generatedAt']),
     );
+  }
+
+  @override
+  SleepTrendSeries get profileSleepDurationTrend {
+    final Map<String, dynamic>? profileReport =
+        _snapshotData[BackendSurfaceIds.profileReport];
+    if (_shouldPreferFallbackProfileReport(profileReport)) {
+      return _fallback.profileSleepDurationTrend;
+    }
+    final Map<String, dynamic> resolvedProfileReport = profileReport!;
+    final Map<String, dynamic> card = _mapListOf(resolvedProfileReport['cards'])
+        .firstWhere(
+          (Map<String, dynamic> item) => item['type'] == 'sleep_duration_trend',
+          orElse: () => <String, dynamic>{},
+        );
+    if (card.isEmpty) {
+      return _fallback.profileSleepDurationTrend;
+    }
+    final SleepTrendSeries series = _sleepTrendSeriesFromCard(
+      card,
+      metricKey: 'sleep_duration',
+      unit: 'hours',
+    );
+    return series.points.isEmpty ? _fallback.profileSleepDurationTrend : series;
+  }
+
+  @override
+  SleepTrendSeries get profileSleepQualityTrend {
+    final Map<String, dynamic>? profileReport =
+        _snapshotData[BackendSurfaceIds.profileReport];
+    if (_shouldPreferFallbackProfileReport(profileReport)) {
+      return _fallback.profileSleepQualityTrend;
+    }
+    final Map<String, dynamic> resolvedProfileReport = profileReport!;
+    final Map<String, dynamic> card = _mapListOf(resolvedProfileReport['cards'])
+        .firstWhere(
+          (Map<String, dynamic> item) => item['type'] == 'sleep_quality_trend',
+          orElse: () => <String, dynamic>{},
+        );
+    if (card.isEmpty) {
+      return _fallback.profileSleepQualityTrend;
+    }
+    final SleepTrendSeries series = _sleepTrendSeriesFromCard(
+      card,
+      metricKey: 'sleep_quality',
+      unit: 'score',
+    );
+    return series.points.isEmpty ? _fallback.profileSleepQualityTrend : series;
   }
 
   @override
@@ -3451,6 +4029,37 @@ class CloudBaseInsightsRepository extends ChangeNotifier
     );
     _snapshotData = snapshot.cardSnapshots;
     notifyListeners();
+  }
+
+  bool _shouldPreferFallbackProfileReport(Map<String, dynamic>? profileReport) {
+    if (profileReport == null) {
+      return true;
+    }
+    final dynamic generatedAt = profileReport['generatedAt'];
+    if (generatedAt == null) {
+      return true;
+    }
+    final DateTime snapshotGeneratedAt = _dateOf(generatedAt);
+    final DateTime? latestLocalCompletedAt = _latestLocalCompletedSessionAt();
+    if (latestLocalCompletedAt == null) {
+      return false;
+    }
+    return latestLocalCompletedAt.isAfter(snapshotGeneratedAt);
+  }
+
+  DateTime? _latestLocalCompletedSessionAt() {
+    DateTime? latest;
+    for (final SleepSession session in _sleepSessionRepository.sessions) {
+      if (!session.hasSubmittedFeedback) {
+        continue;
+      }
+      final DateTime timestamp =
+          session.updatedAt ?? session.displayEndAt ?? session.displayStartAt;
+      if (latest == null || timestamp.isAfter(latest)) {
+        latest = timestamp;
+      }
+    }
+    return latest;
   }
 
   @override
