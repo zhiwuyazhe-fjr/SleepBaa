@@ -35,6 +35,7 @@ class AppScope extends StatefulWidget {
     this.initialSettings,
     this.showNightWelcomeOutsideNightInDebug,
     this.appNotificationService,
+    this.initialLocalHandledEveningPeriodKey,
   });
 
   final Widget child;
@@ -43,6 +44,9 @@ class AppScope extends StatefulWidget {
   final UserSettings? initialSettings;
   final bool? showNightWelcomeOutsideNightInDebug;
   final AppNotificationService? appNotificationService;
+
+  /// [eveningPeriodKey] read from device prefs in [main] before [runApp].
+  final String? initialLocalHandledEveningPeriodKey;
 
   static AppServices of(BuildContext context) {
     final _AppScopeInherited? inherited = context
@@ -131,6 +135,8 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
       clock: widget.clock ?? DateTime.now,
       showInDebugOutsideNight:
           widget.showNightWelcomeOutsideNightInDebug ?? kDebugMode,
+      initialLocalHandledEveningPeriodKey:
+          widget.initialLocalHandledEveningPeriodKey,
     );
     _sleepExperienceController = SleepExperienceController(
       authRepository: _authRepository,

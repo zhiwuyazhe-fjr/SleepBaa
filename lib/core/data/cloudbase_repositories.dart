@@ -1799,7 +1799,9 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
       _snapshotStore.payload,
       _authRepository.currentUser.uid,
     );
-    final UserSettings incoming = snapshot.settings;
+    UserSettings incoming = _mergeEveningEncouragementIfServerOmitted(
+      snapshot.settings,
+    );
     if (_pendingMoodOverride != null &&
         incoming.selectedNightMood != _pendingMoodOverride &&
         _settings.selectedNightMood == _pendingMoodOverride) {
@@ -1811,6 +1813,24 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
       }
     }
     notifyListeners();
+  }
+
+  /// Remote snapshot may omit `eveningEncouragement*` until the backend persists them;
+  /// keep the last local quote so the profile card does not clear after refresh.
+  UserSettings _mergeEveningEncouragementIfServerOmitted(UserSettings incoming) {
+    final String? prevLine = _settings.eveningEncouragementLine;
+    final String? prevKey = _settings.eveningEncouragementPeriodKey;
+    final NightMood? prevSnap = _settings.eveningEncouragementMoodSnapshot;
+    if (prevLine != null &&
+        prevKey != null &&
+        incoming.eveningEncouragementLine == null) {
+      return incoming.copyWith(
+        eveningEncouragementPeriodKey: prevKey,
+        eveningEncouragementLine: prevLine,
+        eveningEncouragementMoodSnapshot: prevSnap,
+      );
+    }
+    return incoming;
   }
 
   @override

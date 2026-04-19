@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sleep_dorm_app/app/app.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
@@ -37,6 +38,7 @@ import 'package:sleep_dorm_app/features/profile/presentation/pages/sleep_report_
 void main() {
   setUpAll(() {
     GoogleFonts.config.allowRuntimeFetching = false;
+    SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
   testWidgets(
@@ -758,7 +760,7 @@ void main() {
       clock: _dayClock,
     );
 
-    expect(find.text('每天都是成长和积极改变的新机会。'), findsOneWidget);
+    expect(find.text('完成今晚心情选择，解锁一句陪伴语'), findsOneWidget);
     expect(find.text('睡眠质量(分)'), findsOneWidget);
     expect(find.text('实验报告'), findsOneWidget);
     expect(find.text('梦记'), findsOneWidget);

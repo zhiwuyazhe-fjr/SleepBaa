@@ -347,6 +347,8 @@ DormHonorBadge? dormHonorBadgeById(String? badgeId) {
   return null;
 }
 
+const Object _unsetEveningEncouragementMoodSnapshot = Object();
+
 class UserSettings {
   const UserSettings({
     required this.sleepGoalHours,
@@ -357,6 +359,9 @@ class UserSettings {
     required this.preferredTrackTitle,
     required this.smartSuggestionsEnabled,
     this.selectedNightMood,
+    this.eveningEncouragementPeriodKey,
+    this.eveningEncouragementLine,
+    this.eveningEncouragementMoodSnapshot,
   });
 
   final double sleepGoalHours;
@@ -368,6 +373,15 @@ class UserSettings {
   final bool smartSuggestionsEnabled;
   final NightMood? selectedNightMood;
 
+  /// [eveningPeriodKey] for which [eveningEncouragementLine] was chosen.
+  final String? eveningEncouragementPeriodKey;
+
+  /// One persisted encouragement line (quote + attribution) for [eveningEncouragementPeriodKey].
+  final String? eveningEncouragementLine;
+
+  /// Mood bucket used when picking the line; `null` means the impatient/unknown quote pool.
+  final NightMood? eveningEncouragementMoodSnapshot;
+
   UserSettings copyWith({
     double? sleepGoalHours,
     bool? bedtimeReminderEnabled,
@@ -378,6 +392,11 @@ class UserSettings {
     bool? smartSuggestionsEnabled,
     NightMood? selectedNightMood,
     bool clearSelectedNightMood = false,
+    String? eveningEncouragementPeriodKey,
+    String? eveningEncouragementLine,
+    Object? eveningEncouragementMoodSnapshot =
+        _unsetEveningEncouragementMoodSnapshot,
+    bool clearEveningEncouragement = false,
   }) {
     return UserSettings(
       sleepGoalHours: sleepGoalHours ?? this.sleepGoalHours,
@@ -393,6 +412,20 @@ class UserSettings {
       selectedNightMood: clearSelectedNightMood
           ? null
           : selectedNightMood ?? this.selectedNightMood,
+      eveningEncouragementPeriodKey: clearEveningEncouragement
+          ? null
+          : eveningEncouragementPeriodKey ?? this.eveningEncouragementPeriodKey,
+      eveningEncouragementLine: clearEveningEncouragement
+          ? null
+          : eveningEncouragementLine ?? this.eveningEncouragementLine,
+      eveningEncouragementMoodSnapshot: clearEveningEncouragement
+          ? null
+          : identical(
+                  eveningEncouragementMoodSnapshot,
+                  _unsetEveningEncouragementMoodSnapshot,
+                )
+              ? this.eveningEncouragementMoodSnapshot
+              : eveningEncouragementMoodSnapshot as NightMood?,
     );
   }
 }

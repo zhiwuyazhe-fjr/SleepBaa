@@ -58,12 +58,17 @@ class _BottomNavShellState extends State<BottomNavShell> {
     final AppServices services = context.appServices;
 
     return ListenableBuilder(
-      listenable: services.nightWelcomeController,
+      listenable: Listenable.merge(<Listenable>[
+        services.nightWelcomeController,
+        services.settingsRepository,
+      ]),
       builder: (BuildContext context, Widget? child) {
         final bool hideShellChrome =
             widget.navigationShell.currentIndex == 0 &&
             services.nightWelcomeController.shouldShowWelcome(
               homeMode: HomeMode.preSleep,
+              persistedEveningWelcomePeriodKey: services
+                  .settingsRepository.currentSettings.eveningEncouragementPeriodKey,
             );
 
         return Scaffold(

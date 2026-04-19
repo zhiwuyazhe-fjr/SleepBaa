@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sleep_dorm_app/app/app.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
+import 'package:sleep_dorm_app/core/state/evening_welcome_local_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,5 +20,12 @@ Future<void> main() async {
   );
   GoogleFonts.config.allowRuntimeFetching = false;
   final AppEnvironment environment = AppEnvironment.fromDefines();
-  runApp(SleepDormApp(environment: environment));
+  final String? localHandledEveningPeriod =
+      await EveningWelcomeLocalStore.readHandledPeriodKey();
+  runApp(
+    SleepDormApp(
+      environment: environment,
+      initialLocalHandledEveningPeriodKey: localHandledEveningPeriod,
+    ),
+  );
 }

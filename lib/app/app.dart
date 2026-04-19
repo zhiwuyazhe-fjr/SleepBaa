@@ -24,6 +24,7 @@ class SleepDormApp extends StatefulWidget {
     this.initialSettings,
     this.showNightWelcomeOutsideNightInDebug,
     this.appNotificationService,
+    this.initialLocalHandledEveningPeriodKey,
   });
 
   final String initialLocation;
@@ -33,6 +34,7 @@ class SleepDormApp extends StatefulWidget {
   final UserSettings? initialSettings;
   final bool? showNightWelcomeOutsideNightInDebug;
   final AppNotificationService? appNotificationService;
+  final String? initialLocalHandledEveningPeriodKey;
 
   @override
   State<SleepDormApp> createState() => _SleepDormAppState();
@@ -76,6 +78,8 @@ class _SleepDormAppState extends State<SleepDormApp> {
       showNightWelcomeOutsideNightInDebug:
           widget.showNightWelcomeOutsideNightInDebug,
       appNotificationService: widget.appNotificationService,
+      initialLocalHandledEveningPeriodKey:
+          widget.initialLocalHandledEveningPeriodKey,
       child: Builder(
         builder: (BuildContext context) {
           final AppServices services = context.appServices;

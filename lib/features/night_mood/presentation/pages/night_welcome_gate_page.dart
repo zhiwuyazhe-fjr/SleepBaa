@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/content/evening_encouragement_quotes.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/state/evening_welcome_local_store.dart';
+import 'package:sleep_dorm_app/core/state/night_welcome_controller.dart';
+import 'package:sleep_dorm_app/core/utils/evening_period.dart';
 import 'package:sleep_dorm_app/features/home/presentation/pages/home_pre_sleep_page.dart';
 import 'package:sleep_dorm_app/features/night_mood/presentation/widgets/night_mood_welcome_flow.dart';
 
@@ -26,7 +30,11 @@ class _NightWelcomeGatePageState extends State<NightWelcomeGatePage> {
         final UserSettings settings =
             services.settingsRepository.currentSettings;
         final bool shouldShowWelcome = services.nightWelcomeController
-            .shouldShowWelcome(homeMode: HomeMode.preSleep);
+            .shouldShowWelcome(
+              homeMode: HomeMode.preSleep,
+              persistedEveningWelcomePeriodKey:
+                  settings.eveningEncouragementPeriodKey,
+            );
 
         if (!shouldShowWelcome) {
           return HomePreSleepPage(notice: widget.notice);
@@ -42,17 +50,35 @@ class _NightWelcomeGatePageState extends State<NightWelcomeGatePage> {
     );
   }
 
+  /// Skips welcome; encouragement uses the impatient pool only here (not from settings).
   Future<void> _dismissLocally() async {
-    final controller = context.appServices.nightWelcomeController;
+    final AppServices services = context.appServices;
+    final NightWelcomeController controller = services.nightWelcomeController;
+    final String periodKey = eveningPeriodKey(DateTime.now());
+    await EveningWelcomeLocalStore.writeHandledPeriodKey(periodKey);
+    controller.recordWelcomeHandledForPeriod(periodKey);
     controller.clearSessionMoodOverride();
     controller.dismissForCurrentVisit();
+    await services.profileFacade.saveEveningEncouragement(
+      periodKey: periodKey,
+      line: pickRandomEncouragementLine(mood: null),
+      moodSnapshot: null,
+    );
   }
 
+  /// Persists mood + encouragement in one save so the profile quote survives CloudBase snapshot refresh.
   Future<void> _completeWelcome({
     required AppServices services,
     required NightMood mood,
   }) async {
+    final String periodKey = eveningPeriodKey(DateTime.now());
+    await EveningWelcomeLocalStore.writeHandledPeriodKey(periodKey);
+    services.nightWelcomeController.recordWelcomeHandledForPeriod(periodKey);
     services.nightWelcomeController.setCompletedMood(mood);
-    await services.profileFacade.saveNightMood(mood);
+    await services.profileFacade.saveNightWelcomeSelection(
+      mood: mood,
+      periodKey: periodKey,
+      encouragementLine: pickRandomEncouragementLine(mood: mood),
+    );
   }
 }

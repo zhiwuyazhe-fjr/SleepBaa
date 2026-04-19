@@ -106,6 +106,10 @@ class ProfileFacade extends ChangeNotifier {
     }
   }
 
+  /// Saves [UserSettings.selectedNightMood] (theme + tonight recommendations).
+  ///
+  /// Used by settings. Does **not** write `eveningEncouragement*`. The welcome
+  /// completion path uses [saveNightWelcomeSelection] instead.
   Future<void> saveNightMood(NightMood? mood) async {
     await _settingsRepository.saveSettings(
       mood == null
@@ -113,6 +117,45 @@ class ProfileFacade extends ChangeNotifier {
           : currentSettings.copyWith(selectedNightMood: mood),
     );
     await _recommendationRepository?.resetForTonight();
+  }
+
+  /// One atomic save after the user **completes** the night welcome flow:
+  /// night mood + encouragement quote for the profile card.
+  ///
+  /// Prefer this over [saveNightMood] + [saveEveningEncouragement] to avoid a
+  /// double remote round-trip. Settings mood changes must not call this.
+  Future<void> saveNightWelcomeSelection({
+    required NightMood mood,
+    required String periodKey,
+    required String encouragementLine,
+  }) async {
+    await _settingsRepository.saveSettings(
+      currentSettings.copyWith(
+        selectedNightMood: mood,
+        eveningEncouragementPeriodKey: periodKey,
+        eveningEncouragementLine: encouragementLine,
+        eveningEncouragementMoodSnapshot: mood,
+      ),
+    );
+    await _recommendationRepository?.resetForTonight();
+  }
+
+  /// Persists the encouragement line for [eveningEncouragementPeriodKey].
+  ///
+  /// Call only from [NightWelcomeGatePage] (complete or skip). Settings mood
+  /// changes must not use this method.
+  Future<void> saveEveningEncouragement({
+    required String periodKey,
+    required String line,
+    required NightMood? moodSnapshot,
+  }) async {
+    await _settingsRepository.saveSettings(
+      currentSettings.copyWith(
+        eveningEncouragementPeriodKey: periodKey,
+        eveningEncouragementLine: line,
+        eveningEncouragementMoodSnapshot: moodSnapshot,
+      ),
+    );
   }
 
   Future<void> updateAvatar({

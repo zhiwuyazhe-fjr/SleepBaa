@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/utils/evening_period.dart';
 
 typedef AppClock = DateTime Function();
 
@@ -7,18 +8,24 @@ class NightWelcomeController extends ChangeNotifier {
   NightWelcomeController({
     required AppClock clock,
     bool showInDebugOutsideNight = kDebugMode,
+    String? initialLocalHandledEveningPeriodKey,
   }) : _clock = clock,
-       _showInDebugOutsideNight = showInDebugOutsideNight;
+       _showInDebugOutsideNight = showInDebugOutsideNight,
+       _handledEveningPeriodKey = initialLocalHandledEveningPeriodKey;
 
   final AppClock _clock;
   final bool _showInDebugOutsideNight;
+
+  /// Last [eveningPeriodKey] for which welcome was completed/skipped (device
+  /// prefs at startup + updates here). Survives process death.
+  String? _handledEveningPeriodKey;
   String? _completedNightKey;
   String? _dismissedNightKey;
   String? _themeOverrideNightKey;
   NightMood? _activeNightMood;
   bool _isHomeVisible = false;
 
-  String get currentNightKey => nightWindowKey(_clock());
+  String get currentNightKey => eveningPeriodKey(_clock());
 
   DateTime get now => _clock();
 
@@ -29,11 +36,34 @@ class NightWelcomeController extends ChangeNotifier {
     return persistedMood;
   }
 
-  bool shouldShowWelcome({required HomeMode homeMode}) {
-    return homeMode == HomeMode.preSleep &&
-        _completedNightKey != currentNightKey &&
-        _dismissedNightKey != currentNightKey &&
-        (_showInDebugOutsideNight || isNightTime(_clock()));
+  /// [persistedEveningWelcomePeriodKey] is [UserSettings.eveningEncouragementPeriodKey]
+  /// when the cloud snapshot includes it (may be null on cold start before sync).
+  bool shouldShowWelcome({
+    required HomeMode homeMode,
+    String? persistedEveningWelcomePeriodKey,
+  }) {
+    if (homeMode != HomeMode.preSleep) {
+      return false;
+    }
+    if (_handledEveningPeriodKey != null &&
+        _handledEveningPeriodKey == currentNightKey) {
+      return false;
+    }
+    if (persistedEveningWelcomePeriodKey != null &&
+        persistedEveningWelcomePeriodKey == currentNightKey) {
+      return false;
+    }
+    if (_completedNightKey == currentNightKey ||
+        _dismissedNightKey == currentNightKey) {
+      return false;
+    }
+    return _showInDebugOutsideNight || isNightTime(_clock());
+  }
+
+  /// Call after persisting the handled period to device storage so UI updates.
+  void recordWelcomeHandledForPeriod(String eveningPeriodKey) {
+    _handledEveningPeriodKey = eveningPeriodKey;
+    notifyListeners();
   }
 
   void dismissForCurrentVisit() {
@@ -89,14 +119,5 @@ class NightWelcomeController extends ChangeNotifier {
 }
 
 bool isNightTime(DateTime value) {
-  return value.hour >= 18 || value.hour < 5;
-}
-
-String nightWindowKey(DateTime value) {
-  final DateTime anchor = value.hour < 5
-      ? value.subtract(const Duration(days: 1))
-      : value;
-  return '${anchor.year.toString().padLeft(4, '0')}-'
-      '${anchor.month.toString().padLeft(2, '0')}-'
-      '${anchor.day.toString().padLeft(2, '0')}';
+  return value.hour >= 20 || value.hour < 5;
 }

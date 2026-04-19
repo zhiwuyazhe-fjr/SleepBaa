@@ -55,6 +55,11 @@ abstract final class ModelSerializers {
       'preferredTrackTitle': settings.preferredTrackTitle,
       'smartSuggestionsEnabled': settings.smartSuggestionsEnabled,
       'selectedNightMood': settings.selectedNightMood?.name,
+      'eveningEncouragementPeriodKey': settings.eveningEncouragementPeriodKey,
+      'eveningEncouragementLine': settings.eveningEncouragementLine,
+      'eveningEncouragementMoodSnapshot': settings.eveningEncouragementLine == null
+          ? null
+          : (settings.eveningEncouragementMoodSnapshot?.name ?? 'unknown'),
     };
   }
 
@@ -72,6 +77,12 @@ abstract final class ModelSerializers {
       smartSuggestionsEnabled: map['smartSuggestionsEnabled'] as bool? ?? true,
       selectedNightMood: _nightMoodFromName(
         map['selectedNightMood'] as String?,
+      ),
+      eveningEncouragementPeriodKey:
+          map['eveningEncouragementPeriodKey'] as String?,
+      eveningEncouragementLine: map['eveningEncouragementLine'] as String?,
+      eveningEncouragementMoodSnapshot: _eveningEncouragementMoodSnapshotFromMap(
+        map,
       ),
     );
   }
@@ -794,6 +805,21 @@ abstract final class ModelSerializers {
       NightMood.values,
       (NightMood item) => item.name == value,
     );
+  }
+
+  /// `null` snapshot means the impatient/unknown quote pool; persisted as `'unknown'`.
+  static NightMood? _eveningEncouragementMoodSnapshotFromMap(
+    Map<String, dynamic> map,
+  ) {
+    final String? line = map['eveningEncouragementLine'] as String?;
+    if (line == null || line.isEmpty) {
+      return null;
+    }
+    final String? raw = map['eveningEncouragementMoodSnapshot'] as String?;
+    if (raw == null || raw.isEmpty || raw == 'unknown') {
+      return null;
+    }
+    return _nightMoodFromName(raw);
   }
 
   static SleepSessionStatus? _sleepStatusFromName(String? value) {
