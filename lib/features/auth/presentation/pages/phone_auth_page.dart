@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
-import 'package:sleep_dorm_app/core/backend/cloudbase_auth_client.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
@@ -15,8 +14,6 @@ import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dar
 enum _AuthView { login, register, forgotPassword, resetPassword, resetSuccess }
 
 enum _LoginMethod { password, smsCode }
-
-enum _CodeCooldownTarget { login, register, reset }
 
 enum _PageTransitionDirection { forward, backward }
 
@@ -33,10 +30,14 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
   static const Color _accentBlue = Color(0xFF90DDF2);
   static const Color _accentBlueSoft = Color(0xFFE8F7FB);
   static const Color _accentBlueDeep = Color(0xFF004F5D);
+  static const Color _accentBluePressed = Color(0xFF7CCDE5);
+  static const Color _accentBlueDisabled = Color(0xFFCFE4EB);
+  static const Color _accentBlueDisabledText = Color(0xFF6F8890);
   static const Color _navyBlue = Color(0xFF204F96);
   static const Color _successBlue = Color(0xFF4EA8C2);
   static const Color _surfaceMuted = Color(0xFFF2F4F6);
   static const Color _surfaceSoft = Color(0xFFECEEF1);
+  static const Color _surfaceSoftDisabled = Color(0xFFE9EFF2);
   static const Color _textPrimary = Color(0xFF2F3336);
   static const Color _textSecondary = Color(0xFF5B6063);
   static const Color _textMuted = Color(0xFF57606B);
@@ -78,13 +79,11 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
   PhoneVerificationChallenge? _resetChallenge;
   PhoneVerificationProof? _resetVerificationProof;
   Timer? _codeCooldownTimer;
+  final Map<String, int> _codeCooldownsByPhone = <String, int>{};
   bool _isSendingLoginCode = false;
   bool _isSendingRegisterCode = false;
   bool _isSendingResetCode = false;
   bool _isSubmitting = false;
-  int _loginCodeCooldown = 0;
-  int _registerCodeCooldown = 0;
-  int _resetCodeCooldown = 0;
   final List<_AuthView> _viewHistory = <_AuthView>[_AuthView.login];
   _PageTransitionDirection _pageTransitionDirection =
       _PageTransitionDirection.forward;
@@ -119,6 +118,9 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     ]);
     _resetPhoneController.addListener(_handleResetVerificationInputChanged);
     _resetCodeController.addListener(_handleResetVerificationInputChanged);
+    _loginPhoneController.addListener(_handleCooldownPhoneChanged);
+    _registerPhoneController.addListener(_handleCooldownPhoneChanged);
+    _resetPhoneController.addListener(_handleCooldownPhoneChanged);
   }
 
   @override
@@ -133,6 +135,9 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     _registerConfirmPasswordController.dispose();
     _resetPhoneController.removeListener(_handleResetVerificationInputChanged);
     _resetCodeController.removeListener(_handleResetVerificationInputChanged);
+    _loginPhoneController.removeListener(_handleCooldownPhoneChanged);
+    _registerPhoneController.removeListener(_handleCooldownPhoneChanged);
+    _resetPhoneController.removeListener(_handleCooldownPhoneChanged);
     _resetPhoneController.dispose();
     _resetCodeController.dispose();
     _resetPasswordController.dispose();
@@ -151,16 +156,20 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     });
   }
 
-  void _startCodeCooldown(_CodeCooldownTarget target) {
+  void _handleCooldownPhoneChanged() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
+  }
+
+  void _startCodeCooldown(String phoneNumber) {
+    final String? phoneKey = _mainlandPhoneKey(phoneNumber);
+    if (phoneKey == null) {
+      return;
+    }
     setState(() {
-      switch (target) {
-        case _CodeCooldownTarget.login:
-          _loginCodeCooldown = 60;
-        case _CodeCooldownTarget.register:
-          _registerCodeCooldown = 60;
-        case _CodeCooldownTarget.reset:
-          _resetCodeCooldown = 60;
-      }
+      _codeCooldownsByPhone[phoneKey] = 60;
     });
     _ensureCodeCooldownTicker();
   }
@@ -176,25 +185,58 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         timer.cancel();
         return;
       }
-      if (_loginCodeCooldown == 0 &&
-          _registerCodeCooldown == 0 &&
-          _resetCodeCooldown == 0) {
+      if (_codeCooldownsByPhone.isEmpty) {
         timer.cancel();
         _codeCooldownTimer = null;
         return;
       }
       setState(() {
-        if (_loginCodeCooldown > 0) {
-          _loginCodeCooldown -= 1;
-        }
-        if (_registerCodeCooldown > 0) {
-          _registerCodeCooldown -= 1;
-        }
-        if (_resetCodeCooldown > 0) {
-          _resetCodeCooldown -= 1;
+        final List<String> expiredKeys = <String>[];
+        _codeCooldownsByPhone.forEach((String key, int value) {
+          if (value <= 1) {
+            expiredKeys.add(key);
+          } else {
+            _codeCooldownsByPhone[key] = value - 1;
+          }
+        });
+        for (final String key in expiredKeys) {
+          _codeCooldownsByPhone.remove(key);
         }
       });
     });
+  }
+
+  int get _loginCodeCooldown => _cooldownForPhone(_loginPhoneController.text);
+
+  int get _registerCodeCooldown =>
+      _cooldownForPhone(_registerPhoneController.text);
+
+  int get _resetCodeCooldown => _cooldownForPhone(_resetPhoneController.text);
+
+  int _cooldownForPhone(String phoneNumber) {
+    final String? phoneKey = _mainlandPhoneKey(phoneNumber);
+    if (phoneKey == null) {
+      return 0;
+    }
+    return _codeCooldownsByPhone[phoneKey] ?? 0;
+  }
+
+  String? _mainlandPhoneKey(String value) {
+    final String digits = value.replaceAll(RegExp(r'\D'), '');
+    if (digits.length == 13 && digits.startsWith('86')) {
+      final String mainlandDigits = digits.substring(2);
+      if (_isValidMainlandPhoneDigits(mainlandDigits)) {
+        return mainlandDigits;
+      }
+    }
+    if (_isValidMainlandPhoneDigits(digits)) {
+      return digits;
+    }
+    return null;
+  }
+
+  bool _isValidMainlandPhoneDigits(String digits) {
+    return RegExp(r'^1[3-9]\d{9}$').hasMatch(digits);
   }
 
   String _codeButtonLabel({required bool isSending, required int cooldown}) {
@@ -429,7 +471,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         return;
       }
       setState(() => _loginChallenge = challenge);
-      _startCodeCooldown(_CodeCooldownTarget.login);
+      _startCodeCooldown(_loginPhoneController.text);
     } on AuthPhoneTargetMismatchException catch (error) {
       if (!mounted) {
         return;
@@ -479,7 +521,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         return;
       }
       setState(() => _registerChallenge = challenge);
-      _startCodeCooldown(_CodeCooldownTarget.register);
+      _startCodeCooldown(_registerPhoneController.text);
     } on AuthPhoneTargetMismatchException catch (error) {
       if (!mounted) {
         return;
@@ -538,7 +580,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         return;
       }
       setState(() => _resetChallenge = challenge);
-      _startCodeCooldown(_CodeCooldownTarget.reset);
+      _startCodeCooldown(_resetPhoneController.text);
     } on AuthPhoneTargetMismatchException catch (error) {
       if (!mounted) {
         return;
@@ -825,32 +867,34 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     }
   }
 
-  Future<void> _resendResetFromSuccess(AppServices services) async {
-    _switchToForgotPassword(
-      phoneNumber: _resetPhoneController.text.trim(),
-      resetStack: true,
-    );
-    await _sendResetCode(services);
-  }
-
   String? _validatePhone(String value) {
-    final String normalized = normalizeCloudBasePhoneNumber(value);
-    final String digits = normalized.replaceAll(RegExp(r'\D'), '');
-    if (digits.length < 8) {
-      return '请输入正确的手机号。';
+    final String trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return '请输入手机号。';
+    }
+    if (_mainlandPhoneKey(trimmed) == null) {
+      return '请输入正确的大陆手机号。';
     }
     return null;
   }
 
   String? _validatePassword(String value) {
-    if (value.trim().length < 6) {
+    final String trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return '请输入密码。';
+    }
+    if (trimmed.length < 6) {
       return '密码至少需要 6 位。';
     }
     return null;
   }
 
   String? _validateCode(String value) {
-    if (value.trim().length < 4) {
+    final String trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return '请输入验证码。';
+    }
+    if (trimmed.length < 4) {
       return '请输入正确的验证码。';
     }
     return null;
@@ -904,10 +948,6 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     );
   }
 
-  bool get _canSubmitLoginWithPassword =>
-      _validatePhone(_loginPhoneController.text) == null &&
-      _validatePassword(_loginPasswordController.text) == null;
-
   bool get _canSubmitLoginWithCode =>
       _loginChallenge != null &&
       _validatePhone(_loginPhoneController.text) == null &&
@@ -921,11 +961,6 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
       _registerPasswordController.text ==
           _registerConfirmPasswordController.text &&
       _registerConfirmPasswordController.text.isNotEmpty;
-
-  bool get _canVerifyResetCode =>
-      _resetChallenge != null &&
-      _validatePhone(_resetPhoneController.text) == null &&
-      _validateCode(_resetCodeController.text) == null;
 
   bool get _canSubmitResetPassword =>
       _resetVerificationProof != null &&
@@ -1081,13 +1116,13 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
             return _PencilFilledButton(
               buttonKey: const ValueKey<String>('auth-login-submit'),
               label: '登录',
+              loadingLabel: '登录中...',
+              isLoading: _isSubmitting,
               unit: unit,
               onPressed: _isSubmitting
                   ? null
                   : usePassword
-                  ? (_canSubmitLoginWithPassword
-                        ? () => _submitLoginWithPassword(services)
-                        : null)
+                  ? () => _submitLoginWithPassword(services)
                   : (_canSubmitLoginWithCode
                         ? () => _submitLoginWithCode(services)
                         : null),
@@ -1123,7 +1158,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         ),
         SizedBox(height: 20 * unit),
         Text(
-          '免费注册',
+          '注册',
           style: _textStyle(
             context,
             size: 32 * unit,
@@ -1194,6 +1229,8 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
             return _PencilFilledButton(
               buttonKey: const ValueKey<String>('auth-register-submit'),
               label: '注册并进入',
+              loadingLabel: '注册中...',
+              isLoading: _isSubmitting,
               unit: unit,
               onPressed: _isSubmitting
                   ? null
@@ -1279,10 +1316,12 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
             return _PencilFilledButton(
               buttonKey: const ValueKey<String>('auth-reset-verify'),
               label: '验证并继续',
+              loadingLabel: '验证中...',
+              isLoading: _isSubmitting,
               unit: unit,
               onPressed: _isSubmitting
                   ? null
-                  : (_canVerifyResetCode ? _verifyResetCode : null),
+                  : _verifyResetCode,
             );
           },
         ),
@@ -1362,6 +1401,8 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
             return _PencilFilledButton(
               buttonKey: const ValueKey<String>('auth-reset-submit'),
               label: '确认重置密码',
+              loadingLabel: '重置中...',
+              isLoading: _isSubmitting,
               unit: unit,
               onPressed: _isSubmitting
                   ? null
@@ -1416,13 +1457,6 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
           label: '返回登录',
           unit: unit,
           onPressed: () => _returnToLoginFromSuccess(services),
-        ),
-        SizedBox(height: 12 * unit),
-        _PencilSoftSurfaceButton(
-          buttonKey: const ValueKey<String>('auth-reset-success-resend'),
-          label: '重新发送重置短信',
-          unit: unit,
-          onPressed: () => _resendResetFromSuccess(services),
         ),
       ],
     );
@@ -1910,15 +1944,20 @@ class _PencilFilledButton extends StatelessWidget {
     required this.label,
     required this.unit,
     required this.onPressed,
+    this.isLoading = false,
+    this.loadingLabel,
   });
 
   final Key buttonKey;
   final String label;
   final double unit;
   final VoidCallback? onPressed;
+  final bool isLoading;
+  final String? loadingLabel;
 
   @override
   Widget build(BuildContext context) {
+    final String resolvedLabel = loadingLabel ?? label;
     return SizedBox(
       key: buttonKey,
       width: double.infinity,
@@ -1939,19 +1978,62 @@ class _PencilFilledButton extends StatelessWidget {
           style: FilledButton.styleFrom(
             padding: EdgeInsets.zero,
             elevation: 0,
-            backgroundColor: _PhoneAuthPageState._accentBlue,
-            disabledBackgroundColor: _PhoneAuthPageState._accentBlue,
-            foregroundColor: _PhoneAuthPageState._accentBlueDeep,
-            disabledForegroundColor: _PhoneAuthPageState._accentBlueDeep,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18 * unit),
             ),
             textStyle: Theme.of(context).textTheme.bodyLarge!.copyWith(
-              fontSize: 16 * unit,
-              fontWeight: FontWeight.w700,
-            ),
+                  fontSize: 16 * unit,
+                  fontWeight: FontWeight.w700,
+                ),
+          ).copyWith(
+            backgroundColor: WidgetStateProperty.resolveWith<Color>((
+              Set<WidgetState> states,
+            ) {
+              if (states.contains(WidgetState.disabled)) {
+                return _PhoneAuthPageState._accentBlueDisabled;
+              }
+              if (states.contains(WidgetState.pressed)) {
+                return _PhoneAuthPageState._accentBluePressed;
+              }
+              return _PhoneAuthPageState._accentBlue;
+            }),
+            foregroundColor: WidgetStateProperty.resolveWith<Color>((
+              Set<WidgetState> states,
+            ) {
+              if (states.contains(WidgetState.disabled)) {
+                return _PhoneAuthPageState._accentBlueDisabledText;
+              }
+              return _PhoneAuthPageState._accentBlueDeep;
+            }),
+            overlayColor: WidgetStateProperty.resolveWith<Color?>((
+              Set<WidgetState> states,
+            ) {
+              if (states.contains(WidgetState.pressed)) {
+                return _PhoneAuthPageState._accentBlueDeep.withValues(
+                  alpha: 0.08,
+                );
+              }
+              return null;
+            }),
           ),
-          child: Text(label),
+          child: isLoading
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    SizedBox.square(
+                      dimension: 18 * unit,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          _PhoneAuthPageState._accentBlueDeep,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 12 * unit),
+                    Text(resolvedLabel),
+                  ],
+                )
+              : Text(label),
         ),
       ),
     );
@@ -1982,9 +2064,9 @@ class _PencilSoftButton extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: 10 * unit),
           elevation: 0,
           backgroundColor: _PhoneAuthPageState._accentBlueSoft,
-          disabledBackgroundColor: _PhoneAuthPageState._accentBlueSoft,
+          disabledBackgroundColor: _PhoneAuthPageState._surfaceSoftDisabled,
           foregroundColor: _PhoneAuthPageState._actionText,
-          disabledForegroundColor: _PhoneAuthPageState._actionText,
+          disabledForegroundColor: _PhoneAuthPageState._textMuted,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18 * unit),
           ),
@@ -1997,46 +2079,6 @@ class _PencilSoftButton extends StatelessWidget {
           fit: BoxFit.scaleDown,
           child: Text(label, maxLines: 1),
         ),
-      ),
-    );
-  }
-}
-
-class _PencilSoftSurfaceButton extends StatelessWidget {
-  const _PencilSoftSurfaceButton({
-    required this.buttonKey,
-    required this.label,
-    required this.unit,
-    required this.onPressed,
-  });
-
-  final Key buttonKey;
-  final String label;
-  final double unit;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      key: buttonKey,
-      width: double.infinity,
-      height: 54 * unit,
-      child: FilledButton(
-        onPressed: onPressed,
-        style: FilledButton.styleFrom(
-          padding: EdgeInsets.zero,
-          elevation: 0,
-          backgroundColor: _PhoneAuthPageState._surfaceSoft,
-          foregroundColor: _PhoneAuthPageState._textSecondary,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18 * unit),
-          ),
-          textStyle: Theme.of(context).textTheme.bodyMedium!.copyWith(
-            fontSize: 14 * unit,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        child: Text(label),
       ),
     );
   }

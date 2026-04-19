@@ -188,6 +188,78 @@ void main() {
       expect(repository.currentUser.showDormPulseBadge, isFalse);
     },
   );
+
+  test(
+    'cloudbase auth repository maps invalid password sign-in to credential guidance',
+    () async {
+      final CloudBaseAuthRepository repository = _buildHarness(
+        MockClient((http.Request request) async {
+          if (request.url.path == '/auth/v1/signin') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'error': 'invalid_credentials',
+                'error_description': 'invalid credentials',
+              }),
+              401,
+            );
+          }
+          throw StateError('Unexpected path: ${request.url.path}');
+        }),
+      ).repository;
+
+      await expectLater(
+        repository.signInWithPassword(
+          phoneNumber: '13800138000',
+          password: 'wrongpass',
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (AuthFlowException error) => error.message,
+            'message',
+            '请检查手机号和密码。',
+          ),
+        ),
+      );
+
+      expect(repository.lastAuthError, '请检查手机号和密码。');
+    },
+  );
+
+  test(
+    'cloudbase auth repository maps signup send-code registered-phone errors to login guidance',
+    () async {
+      final CloudBaseAuthRepository repository = _buildHarness(
+        MockClient((http.Request request) async {
+          if (request.url.path == '/auth/v1/verification') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'error': 'user_exists',
+                'error_description': 'phone already registered',
+              }),
+              409,
+            );
+          }
+          throw StateError('Unexpected path: ${request.url.path}');
+        }),
+      ).repository;
+
+      await expectLater(
+        repository.sendPhoneVerificationCode(
+          '13800138000',
+          target: PhoneVerificationTarget.newUser,
+        ),
+        throwsA(
+          isA<AuthPhoneTargetMismatchException>().having(
+            (AuthPhoneTargetMismatchException error) => error.message,
+            'message',
+            '该手机号已注册，请直接登录。',
+          ),
+        ),
+      );
+
+      expect(repository.lastAuthError, '该手机号已注册，请直接登录。');
+    },
+  );
 }
 
 _AuthHarness _buildHarness(http.Client httpClient) {

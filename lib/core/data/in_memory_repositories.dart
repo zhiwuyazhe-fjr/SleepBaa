@@ -406,7 +406,7 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
     final String? savedPassword = _passwordsByPhone[normalizedPhoneNumber];
     if (!_registeredPhones.contains(normalizedPhoneNumber) ||
         (savedPassword != null && savedPassword != password)) {
-      throw const AuthFlowException('手机号或密码不正确，请重试。');
+      throw const AuthFlowException('请检查手机号和密码。');
     }
     _currentUser = _currentUser.copyWith(
       phoneNumber: normalizedPhoneNumber,

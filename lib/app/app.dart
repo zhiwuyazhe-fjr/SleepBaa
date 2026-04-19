@@ -127,15 +127,21 @@ class _NotificationBridgeState extends State<_NotificationBridge> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_coordinator != null) {
+    _coordinator ??= _createCoordinator();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_coordinator?.start());
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _NotificationBridge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.router == widget.router) {
       return;
     }
-    final AppServices services = context.appServices;
-    _coordinator = NotificationNavigationCoordinator(
-      router: widget.router,
-      notificationRepository: services.notificationRepository,
-      notificationService: services.appNotificationService,
-    );
+    final NotificationNavigationCoordinator? previous = _coordinator;
+    _coordinator = _createCoordinator();
+    unawaited(previous?.dispose());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_coordinator?.start());
     });
@@ -145,6 +151,15 @@ class _NotificationBridgeState extends State<_NotificationBridge> {
   void dispose() {
     unawaited(_coordinator?.dispose());
     super.dispose();
+  }
+
+  NotificationNavigationCoordinator _createCoordinator() {
+    final AppServices services = context.appServices;
+    return NotificationNavigationCoordinator(
+      router: widget.router,
+      notificationRepository: services.notificationRepository,
+      notificationService: services.appNotificationService,
+    );
   }
 
   @override

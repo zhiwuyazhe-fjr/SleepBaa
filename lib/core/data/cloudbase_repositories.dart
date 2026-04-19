@@ -1073,9 +1073,15 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       if (_isCaptchaRequired(error)) {
         _throwCaptchaRequired();
       }
-      _throwAuthFlowError(
-        _phoneAuthErrorMessage(error, action: 'sendCode', target: target),
+      final String userMessage = _phoneAuthErrorMessage(
+        error,
+        action: 'sendCode',
+        target: target,
       );
+      if (_isSendCodeTargetMismatchMessage(userMessage, target)) {
+        _throwPhoneTargetMismatch(userMessage);
+      }
+      _throwAuthFlowError(userMessage);
     } catch (error) {
       _throwAuthFlowError(
         _unexpectedPhoneAuthError(
@@ -1514,6 +1520,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   }) {
     final String message = error.message.toLowerCase();
     final String code = (error.code ?? '').toLowerCase();
+    final int? statusCode = error.statusCode;
     if (message.contains('verification') ||
         message.contains('otp') ||
         message.contains('code') ||
@@ -1522,18 +1529,32 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     }
     if (message.contains('already') ||
         message.contains('exists') ||
+        message.contains('duplicate') ||
         message.contains('registered') ||
-        code.contains('already')) {
-      return '\u8fd9\u4e2a\u624b\u673a\u53f7\u5df2\u7ecf\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002';
+        code.contains('already') ||
+        code.contains('exists') ||
+        code.contains('registered') ||
+        code.contains('duplicate')) {
+      return '\u8be5\u624b\u673a\u53f7\u5df2\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002';
     }
     if (message.contains('not found') ||
+        message.contains('not registered') ||
         code.contains('not_found') ||
         code.contains('user_not_found')) {
-      return '\u672a\u627e\u5230\u8fd9\u4e2a\u624b\u673a\u53f7\u5bf9\u5e94\u7684\u8d26\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002';
+      return '\u672a\u627e\u5230\u8be5\u624b\u673a\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002';
+    }
+    if (action == 'passwordSignIn' &&
+        (message.contains('password') ||
+            message.contains('credential') ||
+            code.contains('password') ||
+            code.contains('credential') ||
+            code.contains('unauthorized') ||
+            statusCode == 401)) {
+      return '\u8bf7\u68c0\u67e5\u624b\u673a\u53f7\u548c\u5bc6\u7801\u3002';
     }
     if (message.contains('password') || code.contains('password')) {
       if (action == 'passwordSignIn') {
-        return '\u624b\u673a\u53f7\u6216\u5bc6\u7801\u4e0d\u6b63\u786e\uff0c\u8bf7\u91cd\u8bd5\u3002';
+        return '\u8bf7\u68c0\u67e5\u624b\u673a\u53f7\u548c\u5bc6\u7801\u3002';
       }
       return '\u5bc6\u7801\u6821\u9a8c\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u540e\u91cd\u8bd5\u3002';
     }
@@ -1544,16 +1565,6 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
         message.contains('too many') ||
         code.contains('rate_limit')) {
       return '\u64cd\u4f5c\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002';
-    }
-    if (message.contains('phone') || code.contains('phone')) {
-      return switch (target ?? PhoneVerificationTarget.any) {
-        PhoneVerificationTarget.newUser =>
-          '\u8fd9\u4e2a\u624b\u673a\u53f7\u5df2\u7ecf\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002',
-        PhoneVerificationTarget.existingUser =>
-          '\u672a\u627e\u5230\u8fd9\u4e2a\u624b\u673a\u53f7\u5bf9\u5e94\u7684\u8d26\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002',
-        PhoneVerificationTarget.any =>
-          '\u624b\u673a\u53f7\u6821\u9a8c\u5931\u8d25\uff0c\u8bf7\u786e\u8ba4\u8f93\u5165\u65e0\u8bef\u3002',
-      };
     }
     return switch (action) {
       'sendCode' =>
@@ -1572,6 +1583,19 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
         '\u56fe\u5f62\u9a8c\u8bc1\u5931\u8d25\uff0c\u8bf7\u91cd\u65b0\u8f93\u5165\u3002',
       _ =>
         '\u624b\u673a\u53f7\u8ba4\u8bc1\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+    };
+  }
+
+  bool _isSendCodeTargetMismatchMessage(
+    String message,
+    PhoneVerificationTarget target,
+  ) {
+    return switch (target) {
+      PhoneVerificationTarget.newUser =>
+        message == '\u8be5\u624b\u673a\u53f7\u5df2\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002',
+      PhoneVerificationTarget.existingUser =>
+        message == '\u672a\u627e\u5230\u8be5\u624b\u673a\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002',
+      PhoneVerificationTarget.any => false,
     };
   }
 
