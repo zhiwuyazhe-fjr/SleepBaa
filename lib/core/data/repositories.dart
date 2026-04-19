@@ -91,6 +91,10 @@ abstract interface class AuthRepository implements Listenable {
 
 abstract interface class UserSettingsRepository implements Listenable {
   UserSettings get currentSettings;
+
+  /// Updates in-memory settings and notifies listeners immediately (no I/O).
+  void replaceLocalSettings(UserSettings settings);
+
   Future<void> saveSettings(UserSettings settings);
 }
 

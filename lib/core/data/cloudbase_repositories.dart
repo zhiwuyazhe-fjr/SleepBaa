@@ -1752,6 +1752,7 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
   @override
   UserSettings get currentSettings => _settings;
 
+  @override
   void replaceLocalSettings(UserSettings settings) {
     _settings = settings;
     notifyListeners();
