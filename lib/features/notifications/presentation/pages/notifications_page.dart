@@ -212,7 +212,7 @@ class _NotificationSection extends StatelessWidget {
   }
 
   bool _isLegacyMorningFeedback(NotificationItem item) {
-    if (item.route != AppRoutes.feedbackMorning) {
+    if (!AppRoutes.isFeedbackMorningRoute(item.route)) {
       return false;
     }
     final String combined = '${item.title} ${item.body}'.toLowerCase();

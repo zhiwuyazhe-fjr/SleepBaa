@@ -50,6 +50,17 @@ class NightWelcomeController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Drops welcome-flow theme lock so [effectiveMood] follows persisted settings.
+  ///
+  /// Call after the user explicitly picks a night mood in settings. Unlike
+  /// [clearSessionMoodOverride] (used when skipping welcome), this clears the
+  /// override key entirely so saved [UserSettings.selectedNightMood] drives the theme.
+  void releaseNightMoodThemeOverride() {
+    _themeOverrideNightKey = null;
+    _activeNightMood = null;
+    notifyListeners();
+  }
+
   void syncHomeVisibility(bool isVisible) {
     if (_isHomeVisible == isVisible) {
       return;

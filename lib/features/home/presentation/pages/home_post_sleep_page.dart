@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -9,11 +10,14 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/state/sleep_experience_controller.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/core/widgets/status_chip.dart';
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.dart';
+
+enum _SleepExitAction { back, pause, finish }
 
 class HomePostSleepPage extends StatelessWidget {
   const HomePostSleepPage({super.key});
@@ -31,7 +35,7 @@ class HomePostSleepPage extends StatelessWidget {
           services.sleepSessionRepository,
         ]),
         builder: (BuildContext context, Widget? child) {
-          final palette = context.nightMoodPalette;
+          final NightMoodPalette palette = context.nightMoodPalette;
           final SleepSession? session =
               services.sleepSessionRepository.activeSession;
           final Dorm dorm = services.dormRepository.currentDorm;
@@ -80,36 +84,52 @@ class HomePostSleepPage extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.xl),
-                      Wrap(
-                        spacing: AppSpacing.xs,
-                        runSpacing: AppSpacing.xs,
-                        alignment: WrapAlignment.center,
-                        children: <Widget>[
-                          StatusChip(
-                            label: session == null
-                                ? '刚刚进入睡眠模式'
-                                : '已运行 ${(DateTime.now().difference(session.startedAt).inMinutes).clamp(1, 240)} 分钟',
-                            backgroundColor: AppColors.darkBorder,
-                            foregroundColor: AppColors.onDark,
-                            borderColor: AppColors.darkBorder,
-                            showDot: true,
-                            dotColor: palette.primarySoft,
-                          ),
-                          StatusChip(
-                            label: '宿舍 ${dorm.quietLabel}',
-                            backgroundColor: AppColors.darkBorder,
-                            foregroundColor: AppColors.onDark,
-                            borderColor: AppColors.darkBorder,
-                            icon: Icons.volume_off_rounded,
-                          ),
-                          const StatusChip(
-                            label: 'AI 守护中',
-                            backgroundColor: AppColors.darkBorder,
-                            foregroundColor: AppColors.onDark,
-                            borderColor: AppColors.darkBorder,
-                            icon: Icons.security_rounded,
-                          ),
-                        ],
+                      StreamBuilder<int>(
+                        stream: Stream<int>.periodic(
+                          const Duration(seconds: 30),
+                          (int count) => count,
+                        ),
+                        initialData: 0,
+                        builder: (BuildContext context, AsyncSnapshot<int> _) {
+                          final String runtimeLabel;
+                          if (session == null) {
+                            runtimeLabel = '刚刚进入睡眠模式';
+                          } else if (session.hasSubmittedFeedback) {
+                            runtimeLabel = '晨间反馈已完成，本次不再累计';
+                          } else {
+                            runtimeLabel =
+                                '已运行 ${session.liveTrackedDurationMinutes().clamp(1, 24 * 60)} 分钟';
+                          }
+                          return Wrap(
+                            spacing: AppSpacing.xs,
+                            runSpacing: AppSpacing.xs,
+                            alignment: WrapAlignment.center,
+                            children: <Widget>[
+                              StatusChip(
+                                label: runtimeLabel,
+                                backgroundColor: AppColors.darkBorder,
+                                foregroundColor: AppColors.onDark,
+                                borderColor: AppColors.darkBorder,
+                                showDot: true,
+                                dotColor: palette.primarySoft,
+                              ),
+                              StatusChip(
+                                label: '宿舍 ${dorm.quietLabel}',
+                                backgroundColor: AppColors.darkBorder,
+                                foregroundColor: AppColors.onDark,
+                                borderColor: AppColors.darkBorder,
+                                icon: Icons.volume_off_rounded,
+                              ),
+                              const StatusChip(
+                                label: 'AI 守护中',
+                                backgroundColor: AppColors.darkBorder,
+                                foregroundColor: AppColors.onDark,
+                                borderColor: AppColors.darkBorder,
+                                icon: Icons.security_rounded,
+                              ),
+                            ],
+                          );
+                        },
                       ),
                       const SizedBox(height: AppSpacing.xxl),
                       SessionAudioCard(
@@ -158,8 +178,12 @@ class HomePostSleepPage extends StatelessWidget {
                             title: '晨间反馈',
                             subtitle: '醒来后逐条反馈昨晚建议',
                             icon: Icons.wb_sunny_rounded,
-                            onTap: () =>
-                                context.push(AppRoutes.feedbackMorning),
+                            onTap: () async {
+                              await _finishSleepModeAndOpenFeedback(
+                                context,
+                                services,
+                              );
+                            },
                           ),
                         ],
                       ),
@@ -170,17 +194,27 @@ class HomePostSleepPage extends StatelessWidget {
                         foregroundColor: AppColors.onDark,
                         borderColor: AppColors.darkBorder,
                         onPressed: () async {
-                          final bool shouldExit = await _showSleepExitDialog(
-                            context,
-                            palette,
-                          );
-                          if (!shouldExit) {
+                          final _SleepExitAction? action =
+                              await _showSleepExitDialog(context);
+                          if (!context.mounted || action == null) {
                             return;
                           }
-                          await services.sleepExperienceController
-                              .exitSleepMode();
-                          if (context.mounted) {
-                            context.go(AppRoutes.homePreSleep);
+                          switch (action) {
+                            case _SleepExitAction.back:
+                              return;
+                            case _SleepExitAction.pause:
+                              await services.sleepExperienceController
+                                  .pauseSleepMode();
+                              if (context.mounted) {
+                                context.go(AppRoutes.homePreSleep);
+                              }
+                              return;
+                            case _SleepExitAction.finish:
+                              await _finishSleepModeAndOpenFeedback(
+                                context,
+                                services,
+                              );
+                              return;
                           }
                         },
                       ),
@@ -202,11 +236,57 @@ class HomePostSleepPage extends StatelessWidget {
   }
 }
 
-Future<bool> _showSleepExitDialog(
+Future<void> _finishSleepModeAndOpenFeedback(
   BuildContext context,
-  NightMoodPalette palette,
+  AppServices services,
 ) async {
-  final bool? result = await showGeneralDialog<bool>(
+  final FinishSleepModeResult result = await services.sleepExperienceController
+      .finishSleepMode();
+  if (!context.mounted) {
+    return;
+  }
+  _routeAfterSleepModeFinish(
+    context,
+    services: services,
+    result: result,
+    resumeToSleep: true,
+  );
+}
+
+void _routeAfterSleepModeFinish(
+  BuildContext context, {
+  required AppServices services,
+  required FinishSleepModeResult result,
+  required bool resumeToSleep,
+}) {
+  final SleepSession? currentSleepDaySession = services.sleepSessionRepository
+      .sessionForSleepDayKey(
+        sleepDayKeyFromDate(services.sleepExperienceController.currentTime),
+      );
+  switch (result) {
+    case FinishSleepModeResult.noActiveSession:
+      context.go(AppRoutes.homePreSleep);
+      return;
+    case FinishSleepModeResult.goToFeedback:
+      context.go(
+        AppRoutes.feedbackMorningLocation(
+          sessionId: currentSleepDaySession?.id,
+          resumeToSleep: resumeToSleep,
+        ),
+      );
+      return;
+    case FinishSleepModeResult.goHomeFeedbackAlreadySubmitted:
+      context.go(
+        AppRoutes.homePreSleepLocation(
+          notice: AppRoutes.feedbackReceivedNotice,
+        ),
+      );
+      return;
+  }
+}
+
+Future<_SleepExitAction?> _showSleepExitDialog(BuildContext context) {
+  return showGeneralDialog<_SleepExitAction>(
     context: context,
     barrierDismissible: true,
     barrierLabel: 'sleep-exit-confirm',
@@ -230,7 +310,7 @@ Future<bool> _showSleepExitDialog(
                 ),
                 Center(
                   child: Container(
-                    width: 420,
+                    width: 440,
                     margin: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.xl,
                     ),
@@ -246,13 +326,13 @@ Future<bool> _showSleepExitDialog(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(
-                          '完成晨间反馈会更有帮助',
+                          '结束后怎么处理这段睡眠？',
                           style: Theme.of(context).textTheme.headlineSmall
                               ?.copyWith(color: AppColors.onDark),
                         ),
                         const SizedBox(height: AppSpacing.sm),
                         Text(
-                          '明早完成晨间反馈后，我会根据你今晚的情况继续优化建议，让后面的睡眠干预更贴近你的节奏。',
+                          '如果只是暂时离开睡眠模式，可以先退出；真正准备结束这一晚时，再进入晨间反馈补全记录。',
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
                                 color: AppColors.onDark.withAlpha(180),
@@ -268,20 +348,43 @@ Future<bool> _showSleepExitDialog(
                                 variant: PrimaryButtonVariant.ghost,
                                 foregroundColor: AppColors.onDark,
                                 borderColor: AppColors.darkBorder,
-                                onPressed: () =>
-                                    Navigator.of(context).pop(false),
+                                onPressed: () => Navigator.of(
+                                  context,
+                                ).pop(_SleepExitAction.back),
                               ),
                             ),
-                            const SizedBox(width: AppSpacing.md),
+                            const SizedBox(width: AppSpacing.sm),
                             Expanded(
                               child: PrimaryButton(
                                 label: '退出',
+                                variant: PrimaryButtonVariant.ghost,
+                                foregroundColor: AppColors.onDark,
+                                borderColor: AppColors.darkBorder,
+                                onPressed: () => Navigator.of(
+                                  context,
+                                ).pop(_SleepExitAction.pause),
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: PrimaryButton(
+                                label: '结束并去晨间反馈',
                                 foregroundColor: Colors.white,
-                                onPressed: () =>
-                                    Navigator.of(context).pop(true),
+                                onPressed: () => Navigator.of(
+                                  context,
+                                ).pop(_SleepExitAction.finish),
                               ),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        Text(
+                          '退出后再次进入，睡眠时长可累计，完成晨间反馈后该日时长就不再累计。',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppColors.onDark.withAlpha(140),
+                                height: 1.5,
+                              ),
                         ),
                       ],
                     ),
@@ -307,5 +410,4 @@ Future<bool> _showSleepExitDialog(
           );
         },
   );
-  return result ?? false;
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
@@ -8,9 +10,11 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
+import 'package:sleep_dorm_app/core/notifications/notification_navigation_coordinator.dart';
 import 'package:sleep_dorm_app/features/auth/presentation/pages/phone_auth_page.dart';
 
-class SleepDormApp extends StatelessWidget {
+class SleepDormApp extends StatefulWidget {
   const SleepDormApp({
     super.key,
     this.initialLocation = AppRoutes.home,
@@ -19,6 +23,7 @@ class SleepDormApp extends StatelessWidget {
     this.clock,
     this.initialSettings,
     this.showNightWelcomeOutsideNightInDebug,
+    this.appNotificationService,
   });
 
   final String initialLocation;
@@ -27,21 +32,50 @@ class SleepDormApp extends StatelessWidget {
   final DateTime Function()? clock;
   final UserSettings? initialSettings;
   final bool? showNightWelcomeOutsideNightInDebug;
+  final AppNotificationService? appNotificationService;
+
+  @override
+  State<SleepDormApp> createState() => _SleepDormAppState();
+}
+
+class _SleepDormAppState extends State<SleepDormApp> {
+  late GoRouter _router;
+
+  @override
+  void initState() {
+    super.initState();
+    _router = _createRouter();
+  }
+
+  @override
+  void didUpdateWidget(covariant SleepDormApp oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialLocation != widget.initialLocation ||
+        oldWidget.homeMode != widget.homeMode) {
+      _router.dispose();
+      _router = _createRouter();
+    }
+  }
+
+  GoRouter _createRouter() {
+    return createRouter(
+      homeMode: widget.homeMode,
+      initialLocation: widget.initialLocation,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final AppEnvironment resolvedEnvironment =
-        environment ?? AppEnvironment.inMemory();
-    final GoRouter router = createRouter(
-      homeMode: homeMode,
-      initialLocation: initialLocation,
-    );
+        widget.environment ?? AppEnvironment.inMemory();
 
     return AppScope(
       environment: resolvedEnvironment,
-      clock: clock,
-      initialSettings: initialSettings,
-      showNightWelcomeOutsideNightInDebug: showNightWelcomeOutsideNightInDebug,
+      clock: widget.clock,
+      initialSettings: widget.initialSettings,
+      showNightWelcomeOutsideNightInDebug:
+          widget.showNightWelcomeOutsideNightInDebug,
+      appNotificationService: widget.appNotificationService,
       child: Builder(
         builder: (BuildContext context) {
           final AppServices services = context.appServices;
@@ -60,13 +94,16 @@ class SleepDormApp extends StatelessWidget {
                 title: 'DormSleep',
                 debugShowCheckedModeBanner: false,
                 theme: _buildTheme(effectiveMood),
-                routerConfig: router,
+                routerConfig: _router,
                 builder: (BuildContext context, Widget? child) {
                   final Widget routedChild = child ?? const SizedBox.shrink();
                   return _CloudBaseAuthGate(
                     environment: resolvedEnvironment,
                     authRepository: services.authRepository,
-                    child: routedChild,
+                    child: _NotificationBridge(
+                      router: _router,
+                      child: routedChild,
+                    ),
                   );
                 },
               );
@@ -107,9 +144,55 @@ class SleepDormApp extends StatelessWidget {
       highlightColor: Colors.transparent,
     );
   }
+
+  @override
+  void dispose() {
+    _router.dispose();
+    super.dispose();
+  }
 }
 
-class _CloudBaseAuthGate extends StatelessWidget {
+class _NotificationBridge extends StatefulWidget {
+  const _NotificationBridge({required this.router, required this.child});
+
+  final GoRouter router;
+  final Widget child;
+
+  @override
+  State<_NotificationBridge> createState() => _NotificationBridgeState();
+}
+
+class _NotificationBridgeState extends State<_NotificationBridge> {
+  NotificationNavigationCoordinator? _coordinator;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_coordinator != null) {
+      return;
+    }
+    final AppServices services = context.appServices;
+    _coordinator = NotificationNavigationCoordinator(
+      router: widget.router,
+      notificationRepository: services.notificationRepository,
+      notificationService: services.appNotificationService,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_coordinator?.start());
+    });
+  }
+
+  @override
+  void dispose() {
+    unawaited(_coordinator?.dispose());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+class _CloudBaseAuthGate extends StatefulWidget {
   const _CloudBaseAuthGate({
     required this.environment,
     required this.authRepository,
@@ -121,25 +204,40 @@ class _CloudBaseAuthGate extends StatelessWidget {
   final Widget child;
 
   @override
+  State<_CloudBaseAuthGate> createState() => _CloudBaseAuthGateState();
+}
+
+class _CloudBaseAuthGateState extends State<_CloudBaseAuthGate> {
+  // A persistent PhoneAuthPage keeps verification challenges, text
+  // controllers, and focus alive across transient auth state notifications
+  // (e.g. when the user switches to the SMS app to copy a code and returns).
+  static const Widget _phoneAuthPage = PhoneAuthPage(
+    key: ValueKey<String>('persistent-phone-auth-page'),
+  );
+
+  @override
   Widget build(BuildContext context) {
-    if (!environment.usesCloudBase) {
-      return child;
+    if (!widget.environment.usesCloudBase) {
+      return widget.child;
     }
-    if (!authRepository.hasCompletedInitialAuthBootstrap) {
-      return const _AuthLoadingPage();
+    final AuthRepository auth = widget.authRepository;
+    if (auth.hasVerifiedPhoneIdentity == true) {
+      return widget.child;
     }
-    if (authRepository.hasVerifiedPhoneIdentity == true) {
-      return child;
-    }
-    if (authRepository.isAuthenticating == true) {
-      return const _AuthLoadingPage();
-    }
-    return const PhoneAuthPage();
+    final bool showLoadingOverlay =
+        !auth.hasCompletedInitialAuthBootstrap || auth.isAuthenticating;
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        _phoneAuthPage,
+        if (showLoadingOverlay) const _AuthLoadingOverlay(),
+      ],
+    );
   }
 }
 
-class _AuthLoadingPage extends StatelessWidget {
-  const _AuthLoadingPage();
+class _AuthLoadingOverlay extends StatelessWidget {
+  const _AuthLoadingOverlay();
 
   @override
   Widget build(BuildContext context) {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
+import 'package:sleep_dorm_app/core/utils/dorm_quiet_rating.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_invite_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
@@ -24,7 +26,7 @@ const List<String> _gentleReminderPresets = <String>[
 
 enum _GentleReminderTab { content, target }
 
-class DormPage extends StatelessWidget {
+class DormPage extends StatefulWidget {
   const DormPage({super.key});
 
   static const ValueKey<String> heroCardKey = ValueKey<String>(
@@ -47,6 +49,104 @@ class DormPage extends StatelessWidget {
   );
 
   @override
+  State<DormPage> createState() => _DormPageState();
+}
+
+class _DormPageState extends State<DormPage> with WidgetsBindingObserver {
+  Timer? _dormPollTimer;
+  AppServices? _dormNoiseRecordingServices;
+  bool _ledgerAggregateFlushScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _startDormPollTimerIfResumed();
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final AppServices services = context.appServices;
+    if (!identical(_dormNoiseRecordingServices, services)) {
+      _dormNoiseRecordingServices?.dormRepository.removeListener(
+        _scheduleDormAggregateRecordingAfterBuild,
+      );
+      _dormNoiseRecordingServices = services;
+      services.dormRepository.addListener(_scheduleDormAggregateRecordingAfterBuild);
+      _scheduleDormAggregateRecordingAfterBuild();
+    }
+  }
+
+  /// [maybeRecordDormAggregate] notifies the ledger; must not run inside [build].
+  void _scheduleDormAggregateRecordingAfterBuild() {
+    if (!mounted || _ledgerAggregateFlushScheduled) {
+      return;
+    }
+    _ledgerAggregateFlushScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ledgerAggregateFlushScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      final AppServices services = context.appServices;
+      services.dormNoiseSampleLedger.maybeRecordDormAggregate(
+        services.dormRepository.currentDorm.noiseDb,
+      );
+    });
+  }
+
+  void _startDormPollTimerIfResumed() {
+    if (!mounted || _dormPollTimer != null) {
+      return;
+    }
+    final AppLifecycleState? life = WidgetsBinding.instance.lifecycleState;
+    if (life != null && life != AppLifecycleState.resumed) {
+      return;
+    }
+    _dormPollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(context.appServices.dormRepository.refreshDormSnapshot());
+    });
+  }
+
+  void _stopDormPollTimer() {
+    _dormPollTimer?.cancel();
+    _dormPollTimer = null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _startDormPollTimerIfResumed();
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        _stopDormPollTimer();
+        break;
+    }
+  }
+
+  @override
+  void dispose() {
+    _dormNoiseRecordingServices?.dormRepository.removeListener(
+      _scheduleDormAggregateRecordingAfterBuild,
+    );
+    WidgetsBinding.instance.removeObserver(this);
+    _stopDormPollTimer();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     return Scaffold(
@@ -55,12 +155,30 @@ class DormPage extends StatelessWidget {
           services.authRepository,
           services.dormRepository,
           services.notificationRepository,
+          services.dormNoiseSampleLedger,
+          services.interferenceProbeController,
         ]),
         builder: (BuildContext context, Widget? child) {
           final Dorm dorm = services.dormRepository.currentDorm;
           if (dorm.id.isEmpty) {
             return const DormInvitePage();
           }
+          final double spatialAvgDb = averageNoiseDbForReturnedMembers(
+            members: dorm.members,
+            dormAggregateNoiseDb: dorm.noiseDb,
+          );
+          final List<DormNoiseSample> noiseSeries =
+              services.dormNoiseSampleLedger.samples;
+          final List<DormNoiseSample> forRating = noiseSeries.isEmpty
+              ? <DormNoiseSample>[
+                  DormNoiseSample(
+                    decibel: spatialAvgDb,
+                    timestamp: DateTime.now(),
+                  ),
+                ]
+              : noiseSeries;
+          final int quietStars =
+              computeDormQuietRating(forRating).stars;
           final UserProfile currentUser = services.authRepository.currentUser;
           final NightMoodPalette palette = context.nightMoodPalette;
           final String currentUserId = currentUser.uid;
@@ -75,7 +193,6 @@ class DormPage extends StatelessWidget {
               pendingProposal != null &&
               pendingProposal.proposerUid != currentUserId &&
               pendingProposal.needsReviewFrom(currentUserId);
-          final int onlineCount = returnedDormMemberCount(dorm.members);
           final int sleepingCount = sleepingDormMemberCount(dorm.members);
           final String? selectedDormBadgeId = currentUser.resolveDormBadgeId(
             dorm.earnedDormBadgeIds,
@@ -183,11 +300,11 @@ class DormPage extends StatelessWidget {
                               ),
                               const SizedBox(height: AppSpacing.lg),
                               _DormHeroCard(
-                                key: heroCardKey,
+                                key: DormPage.heroCardKey,
                                 palette: palette,
-                                onlineCount: onlineCount,
+                                onlineLabel: dormOnlineCountLabel(dorm.members),
                                 sleepingCount: sleepingCount,
-                                quietScore: _quietStarsFor(dorm.noiseDb),
+                                quietScore: quietStars,
                               ),
                             ],
                           ),
@@ -210,7 +327,7 @@ class DormPage extends StatelessWidget {
                                   ScrollController scrollController,
                                 ) {
                                   return Container(
-                                    key: drawerSheetKey,
+                                    key: DormPage.drawerSheetKey,
                                     decoration: BoxDecoration(
                                       color: AppColors.surface,
                                       borderRadius: const BorderRadius.vertical(
@@ -249,7 +366,7 @@ class DormPage extends StatelessWidget {
                                         ),
                                         const SizedBox(height: AppSpacing.md),
                                         SizedBox(
-                                          key: roommateListKey,
+                                          key: DormPage.roommateListKey,
                                           height: 188,
                                           child: ListView.separated(
                                             scrollDirection: Axis.horizontal,
@@ -313,7 +430,7 @@ class DormPage extends StatelessWidget {
                                         SectionTitle(
                                           title: '寝室状态记录',
                                           actionLabel: '查看更多',
-                                          actionKey: eventMoreKey,
+                                          actionKey: DormPage.eventMoreKey,
                                           onAction: () => context.push(
                                             AppRoutes.dormStatus,
                                           ),
@@ -361,13 +478,13 @@ class _DormHeroCard extends StatelessWidget {
   const _DormHeroCard({
     super.key,
     required this.palette,
-    required this.onlineCount,
+    required this.onlineLabel,
     required this.sleepingCount,
     required this.quietScore,
   });
 
   final NightMoodPalette palette;
-  final int onlineCount;
+  final String onlineLabel;
   final int sleepingCount;
   final int quietScore;
 
@@ -416,7 +533,7 @@ class _DormHeroCard extends StatelessWidget {
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
               children: <Widget>[
-                _HeroInfoPill(label: '在线 $onlineCount 人'),
+                _HeroInfoPill(label: onlineLabel),
                 _HeroInfoPill(label: '睡眠中 $sleepingCount 人'),
                 _HeroRatingPill(score: quietScore),
               ],
@@ -547,7 +664,6 @@ class _DormMemberCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color presenceColor = dormPresenceSleepColor(member);
-    final Color activityColor = dormActivityColor(member);
     final Color accentColor = _memberColor(member.status);
     final String? resolvedBadgeId =
         currentUserProfile?.displayBadgeId ?? member.displayBadgeId;
@@ -568,8 +684,9 @@ class _DormMemberCard extends StatelessWidget {
       boxShadow: const <BoxShadow>[],
       child: SizedBox(
         width: 136,
-        height: 172,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
             _DormMemberAvatar(
               key: ValueKey<String>('dorm-member-avatar-${member.uid}'),
@@ -588,19 +705,6 @@ class _DormMemberCard extends StatelessWidget {
               style: Theme.of(
                 context,
               ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            SizedBox(
-              height: 20,
-              child: Text(
-                member.note,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
-              ),
             ),
             if (badge != null) ...<Widget>[
               const SizedBox(height: AppSpacing.xs),
@@ -638,7 +742,7 @@ class _DormMemberCard extends StatelessWidget {
                 ),
               ),
             ],
-            const Spacer(),
+            SizedBox(height: badge != null ? AppSpacing.xs : AppSpacing.sm),
             Container(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.xs,
@@ -652,24 +756,6 @@ class _DormMemberCard extends StatelessWidget {
                 dormPresenceSleepLabel(member),
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: presenceColor,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.xs,
-                vertical: 1,
-              ),
-              decoration: BoxDecoration(
-                color: activityColor.withAlpha(24),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                dormActivityLabel(member),
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: activityColor,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -919,22 +1005,6 @@ Color _memberColor(DormMemberStatus status) {
     DormMemberStatus.away => const Color(0xFF8A8F9F),
     DormMemberStatus.active => const Color(0xFFF39A3C),
   };
-}
-
-int _quietStarsFor(int noiseDb) {
-  if (noiseDb <= 35) {
-    return 5;
-  }
-  if (noiseDb <= 45) {
-    return 4;
-  }
-  if (noiseDb <= 55) {
-    return 3;
-  }
-  if (noiseDb <= 65) {
-    return 2;
-  }
-  return 1;
 }
 
 Future<void> _showGentleReminderPicker({

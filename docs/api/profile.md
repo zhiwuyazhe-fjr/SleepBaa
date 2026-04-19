@@ -1,6 +1,6 @@
 # Profile 模块接口
 
-## 1. Flutter 入口
+## Flutter 入口
 
 - `ProfileFacade.saveProfile(...)`
 - `ProfileFacade.saveNightMood(...)`
@@ -8,15 +8,15 @@
 - `ProfileFacade.authenticateWithPhone(...)`
 - `ProfileFacade.signOut()`
 
-## 2. 当前后端路由
+## 后端路由
 
-### 2.1 `POST /api/app/bootstrap`
+### `POST /api/app/bootstrap`
 
 用途：
 
-- 拉取用户资料、设置、画像快照
+- 拉取用户资料、设置、睡眠记录、通知、宿舍信息和卡片快照。
 
-返回重点：
+当前重点返回字段：
 
 - `user.displayName`
 - `user.tagline`
@@ -24,16 +24,25 @@
 - `user.dormId`
 - `user.phoneNumber`
 - `user.phoneLinkedAt`
+- `settings.sleepGoalHours`
+- `settings.bedtimeReminderEnabled`
+- `settings.bedtimeReminder`
 - `settings.selectedNightMood`
+- `sleepSessions[].sleepGoalMet`
 - `userState`
 
-### 2.2 `POST /api/profile/save`
+说明：
+
+- `sleepSessions[].sleepGoalMet` 为后端派生字段，不直接持久化到 `sleep_sessions` 文档。
+- 派生规则基于当前 `settings.sleepGoalHours`，仅对已结束且时长稳定的睡眠记录返回 `true` / `false`；其余记录返回 `null`。
+
+### `POST /api/profile/save`
 
 用途：
 
-- 保存资料和偏好设置
+- 保存资料和偏好设置。
 
-请求：
+请求示例：
 
 ```json
 {
@@ -47,20 +56,21 @@
     "bedtimeReminderEnabled": true,
     "morningReminderEnabled": true,
     "dormAlertsEnabled": true,
+    "bedtimeReminder": { "hour": 23, "minute": 10 },
     "smartSuggestionsEnabled": true,
     "selectedNightMood": "calm"
   }
 }
 ```
 
-### 2.3 `POST /api/profile/night-mood`
+### `POST /api/profile/night-mood`
 
 用途：
 
-- 保存夜间心情
-- 触发今晚建议更新
+- 保存夜间心情。
+- 触发今晚建议刷新。
 
-请求：
+请求示例：
 
 ```json
 {
@@ -70,39 +80,16 @@
 }
 ```
 
-### 2.4 `POST /api/auth/link-phone`
+## 读写集合
 
-> 该接口已停用，仅为后向兼容保留。当前 App 首次进入必须直接走手机号验证码登录或注册，不再支持把旧匿名账号“绑定”到当前会话。
-
-用途：
-
-- 绑定手机号到当前资料
-
-请求：
-
-```json
-{
-  "phoneNumber": "13800138000",
-  "verificationToken": "客户端验证码校验结果",
-  "phoneAccessToken": "手机号会话 access token"
-}
-```
-
-说明：
-
-- 服务端真正校验依赖 `phoneAccessToken`
-- 验证通过后才会写入用户资料
-
-## 3. 读写集合
-
-读：
+读取：
 
 - `users`
 - `user_settings`
 - `user_state`
 - `card_snapshots`
 
-写：
+写入：
 
 - `users`
 - `user_settings`
@@ -110,18 +97,7 @@
 - `card_snapshots`
 - `assistant_runs`
 
-## 4. 当前数据约定
-
-### `users`
-
-核心字段：
-
-- `displayName`
-- `tagline`
-- `role`
-- `dormId`
-- `phoneNumber`
-- `phoneLinkedAt`
+## 数据约定
 
 ### `user_settings`
 
@@ -131,22 +107,29 @@
 - `bedtimeReminderEnabled`
 - `morningReminderEnabled`
 - `dormAlertsEnabled`
+- `bedtimeReminder`
 - `smartSuggestionsEnabled`
 - `selectedNightMood`
 
-### `user_state`
+### `sleep_sessions`
 
-核心字段：
+持久化核心字段：
 
-- `latestNightMood`
-- `tonightPlan`
-- `profileSummary`
-- `feedbackLoop`
+- `startedAt`
+- `endedAt`
+- `sleepDayKey`
+- `status`
+- `sleepModeActive`
+- `trackedDurationMinutes`
+- `segments`
+- `summary`
 
-## 5. 前端注意事项
+bootstrap / 上下文派生字段：
 
-- 页面不要直接依赖后端返回原始字段结构
-- 一律通过 `ProfileFacade` 和 repository 更新
-- 设置页已经去掉 Firebase 调试信息，不要再加回去
-- CloudBase 模式下首次进入必须先手机号验证码登录或注册
-- 设置页只保留手机号展示、首登说明和退出登录入口
+- `sleepGoalMet`
+
+## 前端注意事项
+
+- 页面不要直接依赖后端原始字段结构之外的隐式语义。
+- 统一通过 `ProfileFacade` 和 repository 更新资料与设置。
+- 睡前提醒是本地定时通知链路，依赖 `user_settings.bedtimeReminder*` 字段。

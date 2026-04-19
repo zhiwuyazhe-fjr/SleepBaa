@@ -509,7 +509,7 @@ class _ProfileBadgeGridTile extends StatelessWidget {
           borderRadius: AppRadius.card,
           child: LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
-              final double labelGap = constraints.maxWidth * 0.08;
+              final double labelGap = constraints.maxWidth * 0.05;
               return Padding(
                 padding: EdgeInsets.symmetric(
                   vertical: constraints.maxWidth * 0.02,
@@ -525,8 +525,8 @@ class _ProfileBadgeGridTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontSize: 13,
-                        height: 1.25,
+                        fontSize: 12,
+                        height: 1.18,
                         fontWeight: FontWeight.w800,
                         color: badge.unlocked
                             ? AppColors.textPrimary
@@ -600,7 +600,7 @@ class _ProfileBadgeTileVisual extends StatelessWidget {
 
         return SizedBox(
           width: tileSize,
-          height: tileSize,
+          height: visualSize,
           child: Center(
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
