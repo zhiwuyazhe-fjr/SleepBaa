@@ -85,10 +85,14 @@ class DormPresenceSyncController {
       final DormPresenceStatus nextPresence = distance <= anchor.radiusMeters
           ? DormPresenceStatus.returned
           : DormPresenceStatus.away;
-      final DormMember? currentMember = dorm.members.cast<DormMember?>().firstWhere(
-        (DormMember? member) => member?.uid == _authRepository.currentUser.uid,
-        orElse: () => null,
-      );
+      final String uid = currentUser.uid;
+      DormMember? currentMember;
+      for (final DormMember member in dorm.members) {
+        if (member.uid == uid) {
+          currentMember = member;
+          break;
+        }
+      }
       if (currentMember != null &&
           currentMember.presenceStatus == nextPresence) {
         return;
