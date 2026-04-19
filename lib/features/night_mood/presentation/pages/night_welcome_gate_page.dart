@@ -5,7 +5,9 @@ import 'package:sleep_dorm_app/features/home/presentation/pages/home_pre_sleep_p
 import 'package:sleep_dorm_app/features/night_mood/presentation/widgets/night_mood_welcome_flow.dart';
 
 class NightWelcomeGatePage extends StatefulWidget {
-  const NightWelcomeGatePage({super.key});
+  const NightWelcomeGatePage({super.key, this.notice});
+
+  final String? notice;
 
   @override
   State<NightWelcomeGatePage> createState() => _NightWelcomeGatePageState();
@@ -27,7 +29,7 @@ class _NightWelcomeGatePageState extends State<NightWelcomeGatePage> {
             .shouldShowWelcome(homeMode: HomeMode.preSleep);
 
         if (!shouldShowWelcome) {
-          return const HomePreSleepPage();
+          return HomePreSleepPage(notice: widget.notice);
         }
 
         return NightMoodWelcomeFlow(

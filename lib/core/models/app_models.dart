@@ -12,7 +12,7 @@ enum RecommendationExecutionState { idle, selected, playing, completed }
 
 enum RecommendationFeedbackStatus { effective, neutral, ineffective, skipped }
 
-enum SleepSessionStatus { drafted, active, awaitingFeedback, completed }
+enum SleepSessionStatus { drafted, active, paused, awaitingFeedback, completed }
 
 enum NotificationCategory { reminder, session, dorm, system }
 
@@ -573,20 +573,44 @@ class MorningSummary {
   }
 }
 
+class SleepSegment {
+  const SleepSegment({required this.startedAt, required this.endedAt});
+
+  final DateTime startedAt;
+  final DateTime? endedAt;
+
+  bool get isOpen => endedAt == null;
+
+  SleepSegment copyWith({
+    DateTime? startedAt,
+    DateTime? endedAt,
+    bool clearEndedAt = false,
+  }) {
+    return SleepSegment(
+      startedAt: startedAt ?? this.startedAt,
+      endedAt: clearEndedAt ? null : endedAt ?? this.endedAt,
+    );
+  }
+}
+
 class SleepSession {
   const SleepSession({
     required this.id,
     this.uid = 'anon-paul',
     required this.startedAt,
     required this.endedAt,
+    required this.sleepDayKey,
     required this.status,
     required this.sleepModeActive,
     required this.dormId,
     required this.recommendations,
     required this.selectedRecommendationIds,
+    required this.segments,
+    required this.trackedDurationMinutes,
     required this.awakenings,
     required this.feedback,
     required this.summary,
+    this.sleepGoalMet,
     this.updatedAt,
   });
 
@@ -594,15 +618,89 @@ class SleepSession {
   final String uid;
   final DateTime startedAt;
   final DateTime? endedAt;
+  final String sleepDayKey;
   final SleepSessionStatus status;
   final bool sleepModeActive;
   final String? dormId;
   final List<NightRecommendation> recommendations;
   final List<String> selectedRecommendationIds;
+  final List<SleepSegment> segments;
+  final int trackedDurationMinutes;
   final List<NightAwakeningEntry> awakenings;
   final List<RecommendationFeedback> feedback;
   final MorningSummary? summary;
+  final bool? sleepGoalMet;
   final DateTime? updatedAt;
+
+  bool get hasSubmittedFeedback => summary != null;
+
+  bool get isTrackingLocked => hasSubmittedFeedback;
+
+  SleepSegment? get openSegment {
+    for (int index = segments.length - 1; index >= 0; index--) {
+      final SleepSegment segment = segments[index];
+      if (segment.isOpen) {
+        return segment;
+      }
+    }
+    return null;
+  }
+
+  DateTime get displayStartAt =>
+      segments.isNotEmpty ? segments.first.startedAt : startedAt;
+
+  DateTime? get displayEndAt {
+    if (sleepModeActive) {
+      return null;
+    }
+    for (int index = segments.length - 1; index >= 0; index--) {
+      final DateTime? segmentEndedAt = segments[index].endedAt;
+      if (segmentEndedAt != null) {
+        return segmentEndedAt;
+      }
+    }
+    return endedAt;
+  }
+
+  DateTime get sleepDayDate {
+    final DateTime? parsed = sleepDayDateFromKey(sleepDayKey);
+    return parsed ?? DateTime(startedAt.year, startedAt.month, startedAt.day);
+  }
+
+  int liveTrackedDurationMinutes({DateTime? now}) {
+    if (isTrackingLocked) {
+      return trackedDurationMinutes;
+    }
+    final SleepSegment? currentOpenSegment = openSegment;
+    if (!sleepModeActive || currentOpenSegment == null) {
+      return trackedDurationMinutes;
+    }
+    final int extraMinutes = (now ?? DateTime.now())
+        .difference(currentOpenSegment.startedAt)
+        .inMinutes
+        .clamp(0, 24 * 60)
+        .toInt();
+    return trackedDurationMinutes + extraMinutes;
+  }
+
+  double displaySleepHours({DateTime? now}) {
+    final MorningSummary? currentSummary = summary;
+    if (currentSummary != null) {
+      return currentSummary.totalSleepHours;
+    }
+    return liveTrackedDurationMinutes(now: now) / 60;
+  }
+
+  bool? deriveSleepGoalMet(double sleepGoalHours) {
+    if (status != SleepSessionStatus.awaitingFeedback &&
+        status != SleepSessionStatus.completed) {
+      return null;
+    }
+    if (sleepModeActive) {
+      return null;
+    }
+    return displaySleepHours() >= sleepGoalHours;
+  }
 
   SleepSession copyWith({
     String? id,
@@ -610,15 +708,20 @@ class SleepSession {
     DateTime? startedAt,
     DateTime? endedAt,
     bool clearEndedAt = false,
+    String? sleepDayKey,
     SleepSessionStatus? status,
     bool? sleepModeActive,
     String? dormId,
     List<NightRecommendation>? recommendations,
     List<String>? selectedRecommendationIds,
+    List<SleepSegment>? segments,
+    int? trackedDurationMinutes,
     List<NightAwakeningEntry>? awakenings,
     List<RecommendationFeedback>? feedback,
     MorningSummary? summary,
     bool clearSummary = false,
+    bool? sleepGoalMet,
+    bool clearSleepGoalMet = false,
     DateTime? updatedAt,
   }) {
     return SleepSession(
@@ -626,18 +729,83 @@ class SleepSession {
       uid: uid ?? this.uid,
       startedAt: startedAt ?? this.startedAt,
       endedAt: clearEndedAt ? null : endedAt ?? this.endedAt,
+      sleepDayKey: sleepDayKey ?? this.sleepDayKey,
       status: status ?? this.status,
       sleepModeActive: sleepModeActive ?? this.sleepModeActive,
       dormId: dormId ?? this.dormId,
       recommendations: recommendations ?? this.recommendations,
       selectedRecommendationIds:
           selectedRecommendationIds ?? this.selectedRecommendationIds,
+      segments: segments ?? this.segments,
+      trackedDurationMinutes:
+          trackedDurationMinutes ?? this.trackedDurationMinutes,
       awakenings: awakenings ?? this.awakenings,
       feedback: feedback ?? this.feedback,
       summary: clearSummary ? null : summary ?? this.summary,
+      sleepGoalMet: clearSleepGoalMet
+          ? null
+          : sleepGoalMet ?? this.sleepGoalMet,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
+}
+
+String sleepDayKeyFromDate(DateTime value) {
+  final DateTime shifted = value.add(const Duration(hours: 4));
+  final String month = shifted.month.toString().padLeft(2, '0');
+  final String day = shifted.day.toString().padLeft(2, '0');
+  return '${shifted.year}-$month-$day';
+}
+
+DateTime? sleepDayDateFromKey(String? value) {
+  if (value == null || value.isEmpty) {
+    return null;
+  }
+  return DateTime.tryParse('${value}T00:00:00');
+}
+
+int sleepSegmentDurationMinutes(
+  SleepSegment segment, {
+  DateTime? fallbackEndedAt,
+}) {
+  final DateTime? effectiveEndedAt = segment.endedAt ?? fallbackEndedAt;
+  if (effectiveEndedAt == null) {
+    return 0;
+  }
+  return effectiveEndedAt
+      .difference(segment.startedAt)
+      .inMinutes
+      .clamp(0, 24 * 60)
+      .toInt();
+}
+
+DateTime? resolveMorningFeedbackSessionEndAt(SleepSession session) {
+  if (session.sleepModeActive) {
+    return null;
+  }
+  final DateTime? displayEndAt = session.displayEndAt;
+  if (displayEndAt != null) {
+    return displayEndAt;
+  }
+  for (int index = session.segments.length - 1; index >= 0; index--) {
+    final DateTime? endedAt = session.segments[index].endedAt;
+    if (endedAt != null) {
+      return endedAt;
+    }
+  }
+  return session.endedAt;
+}
+
+bool canSubmitMorningFeedbackForSession(SleepSession session) {
+  if (session.status != SleepSessionStatus.awaitingFeedback ||
+      session.sleepModeActive ||
+      session.hasSubmittedFeedback) {
+    return false;
+  }
+  if (session.openSegment != null) {
+    return false;
+  }
+  return resolveMorningFeedbackSessionEndAt(session) != null;
 }
 
 class NotificationItem {
@@ -683,6 +851,55 @@ class NotificationItem {
       route: route ?? this.route,
       readAt: clearReadAt ? null : readAt ?? this.readAt,
       ownerUid: ownerUid ?? this.ownerUid,
+    );
+  }
+}
+
+class SleepTrendPoint {
+  const SleepTrendPoint({
+    required this.dateKey,
+    required this.weekdayLabel,
+    required this.value,
+  });
+
+  final String dateKey;
+  final String weekdayLabel;
+  final double? value;
+
+  SleepTrendPoint copyWith({
+    String? dateKey,
+    String? weekdayLabel,
+    double? value,
+    bool clearValue = false,
+  }) {
+    return SleepTrendPoint(
+      dateKey: dateKey ?? this.dateKey,
+      weekdayLabel: weekdayLabel ?? this.weekdayLabel,
+      value: clearValue ? null : value ?? this.value,
+    );
+  }
+}
+
+class SleepTrendSeries {
+  const SleepTrendSeries({
+    required this.metricKey,
+    required this.unit,
+    required this.points,
+  });
+
+  final String metricKey;
+  final String unit;
+  final List<SleepTrendPoint> points;
+
+  SleepTrendSeries copyWith({
+    String? metricKey,
+    String? unit,
+    List<SleepTrendPoint>? points,
+  }) {
+    return SleepTrendSeries(
+      metricKey: metricKey ?? this.metricKey,
+      unit: unit ?? this.unit,
+      points: points ?? this.points,
     );
   }
 }
@@ -1334,8 +1551,7 @@ class InterferenceFactorSnapshot {
     if (measuredAt == null) {
       return false;
     }
-    return DateTime.now().difference(measuredAt!) <
-        const Duration(minutes: 15);
+    return DateTime.now().difference(measuredAt!) < const Duration(minutes: 15);
   }
 
   InterferenceFactorSnapshot copyWith({
@@ -1362,7 +1578,9 @@ class InterferenceFactorSnapshot {
       detail: detail ?? this.detail,
       source: source ?? this.source,
       measuredAt: clearMeasuredAt ? null : measuredAt ?? this.measuredAt,
-      numericValue: clearNumericValue ? null : numericValue ?? this.numericValue,
+      numericValue: clearNumericValue
+          ? null
+          : numericValue ?? this.numericValue,
       score: clearScore ? null : score ?? this.score,
     );
   }
@@ -1392,8 +1610,12 @@ class TonightInterferenceState {
     };
   }
 
-  List<InterferenceFactorSnapshot> get factors =>
-      <InterferenceFactorSnapshot>[noise, light, phoneUsage, emotion];
+  List<InterferenceFactorSnapshot> get factors => <InterferenceFactorSnapshot>[
+    noise,
+    light,
+    phoneUsage,
+    emotion,
+  ];
 
   TonightInterferenceState replaceFactor(InterferenceFactorSnapshot factor) {
     return switch (factor.type) {

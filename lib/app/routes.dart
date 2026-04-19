@@ -35,6 +35,8 @@ abstract final class AppRoutes {
   static const String home = '/home';
   static const String homePreSleep = '/home/pre_sleep';
   static const String homePostSleep = '/home/post_sleep';
+  static const String feedbackReceivedNotice = 'feedback_received';
+  static const String feedbackSubmittedNotice = 'feedback_submitted';
   static const String analysisInterferenceFactors =
       '/analysis/interference_factors';
   static const String interventionTask = '/intervention/task';
@@ -61,6 +63,40 @@ abstract final class AppRoutes {
   static const String assistant = '/assistant';
   static const String assistantHistory = '/assistant/history';
   static const String authPhone = '/auth/phone';
+
+  static String homePreSleepLocation({String? notice}) {
+    final String normalizedNotice = notice?.trim() ?? '';
+    if (normalizedNotice.isEmpty) {
+      return homePreSleep;
+    }
+    return Uri(
+      path: homePreSleep,
+      queryParameters: <String, String>{'notice': normalizedNotice},
+    ).toString();
+  }
+
+  static String feedbackMorningLocation({
+    String? sessionId,
+    bool resumeToSleep = false,
+  }) {
+    final String normalizedSessionId = sessionId?.trim() ?? '';
+    if (normalizedSessionId.isEmpty && !resumeToSleep) {
+      return feedbackMorning;
+    }
+    final Map<String, String> queryParameters = <String, String>{
+      if (normalizedSessionId.isNotEmpty) 'sessionId': normalizedSessionId,
+      if (resumeToSleep) 'resumeToSleep': '1',
+    };
+    return Uri(
+      path: feedbackMorning,
+      queryParameters: queryParameters,
+    ).toString();
+  }
+
+  static bool isFeedbackMorningRoute(String route) {
+    final Uri? parsed = Uri.tryParse(route);
+    return (parsed?.path ?? route) == feedbackMorning;
+  }
 }
 
 GoRouter createRouter({
@@ -98,7 +134,9 @@ GoRouter createRouter({
                 pageBuilder: (BuildContext context, GoRouterState state) =>
                     _noTransitionPage(
                       state: state,
-                      child: const NightWelcomeGatePage(),
+                      child: NightWelcomeGatePage(
+                        notice: state.uri.queryParameters['notice'],
+                      ),
                     ),
               ),
             ],
@@ -140,8 +178,14 @@ GoRouter createRouter({
       ),
       GoRoute(
         path: AppRoutes.feedbackMorning,
-        builder: (BuildContext context, GoRouterState state) =>
-            const MorningFeedbackPage(),
+        builder: (BuildContext context, GoRouterState state) => MorningFeedbackPage(
+          key: ValueKey<String>(
+            '${state.uri.queryParameters['sessionId'] ?? '__latest__'}:'
+            '${state.uri.queryParameters['resumeToSleep'] == '1' ? 'resume' : 'plain'}',
+          ),
+          sessionId: state.uri.queryParameters['sessionId'],
+          allowReturnToSleep: state.uri.queryParameters['resumeToSleep'] == '1',
+        ),
       ),
       GoRoute(
         path: AppRoutes.logNightAwakening,
