@@ -335,7 +335,10 @@ class _HonorHeader extends StatelessWidget {
                 borderRadius: BorderRadius.circular(AppRadius.xl),
                 child: const Padding(
                   padding: EdgeInsets.all(AppSpacing.xs),
-                  child: Icon(Icons.menu_rounded, color: Color(0xFF076B5E)),
+                  child: Icon(
+                    Icons.arrow_back_rounded,
+                    color: Color(0xFF076B5E),
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),

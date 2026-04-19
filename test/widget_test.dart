@@ -411,7 +411,7 @@ void main() {
 
       expect(find.byType(PhoneAuthPage), findsOneWidget);
       expect(
-        find.byKey(const ValueKey<String>('auth-login-password')),
+        find.byKey(const ValueKey<String>('auth-login-password-0')),
         findsOneWidget,
       );
       expect(tester.takeException(), isNull);
@@ -429,7 +429,7 @@ void main() {
 
       expect(find.textContaining('首次进入需要'), findsNothing);
       expect(
-        find.byKey(const ValueKey<String>('auth-login-phone')),
+        find.byKey(const ValueKey<String>('auth-login-phone-0')),
         findsOneWidget,
       );
       expect(
@@ -443,11 +443,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const ValueKey<String>('auth-register-phone')),
+        find.byKey(const ValueKey<String>('auth-register-phone-0')),
         findsOneWidget,
       );
       await tester.enterText(
-        find.byKey(const ValueKey<String>('auth-register-phone')),
+        find.byKey(const ValueKey<String>('auth-register-phone-0')),
         '13800138000',
       );
       await tester.tap(find.widgetWithText(FilledButton, '发送验证码').first);
@@ -462,7 +462,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const ValueKey<String>('auth-reset-phone')),
+        find.byKey(const ValueKey<String>('auth-reset-phone-0')),
         findsOneWidget,
       );
       expect(find.text('返回登录'), findsOneWidget);
@@ -484,16 +484,16 @@ void main() {
       await tester.pumpAndSettle();
 
       final Finder phoneField = find.byKey(
-        const ValueKey<String>('auth-register-phone'),
+        const ValueKey<String>('auth-register-phone-0'),
       );
       final Finder passwordField = find.byKey(
-        const ValueKey<String>('auth-register-password'),
+        const ValueKey<String>('auth-register-password-0'),
       );
       final Finder confirmField = find.byKey(
-        const ValueKey<String>('auth-register-password-confirm'),
+        const ValueKey<String>('auth-register-password-confirm-0'),
       );
       final Finder codeField = find.byKey(
-        const ValueKey<String>('auth-register-code'),
+        const ValueKey<String>('auth-register-code-0'),
       );
       final Finder submitButton = find.byKey(
         const ValueKey<String>('auth-register-submit'),
@@ -525,7 +525,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final Finder passwordField = find.byKey(
-      const ValueKey<String>('auth-register-password'),
+      const ValueKey<String>('auth-register-password-0'),
     );
 
     await tester.enterText(passwordField, 'wrongpass');
@@ -556,7 +556,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(
-      find.byKey(const ValueKey<String>('auth-login-phone')),
+      find.byKey(const ValueKey<String>('auth-login-phone-0')),
       '13900139000',
     );
     await tester.tap(
@@ -565,7 +565,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final TextField registerPhoneField = tester.widget<TextField>(
-      find.byKey(const ValueKey<String>('auth-register-phone')),
+      find.byKey(const ValueKey<String>('auth-register-phone-0')),
     );
     expect(registerPhoneField.controller?.text, '13900139000');
     expect(
@@ -598,14 +598,14 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(
-      find.byKey(const ValueKey<String>('auth-register-phone')),
+      find.byKey(const ValueKey<String>('auth-register-phone-0')),
       '13800138000',
     );
     await tester.tap(find.byKey(const ValueKey<String>('auth-register-send')));
     await tester.pumpAndSettle();
 
     final TextField loginPhoneField = tester.widget<TextField>(
-      find.byKey(const ValueKey<String>('auth-login-phone')),
+      find.byKey(const ValueKey<String>('auth-login-phone-0')),
     );
     expect(loginPhoneField.controller?.text, '13800138000');
     expect(
@@ -727,6 +727,24 @@ void main() {
     expect(find.text('月度全勤'), findsOneWidget);
     expect(find.text('安静守护者'), findsOneWidget);
   });
+
+  testWidgets(
+    'dorm page hides sleep mode notes and keeps online count aligned',
+    (WidgetTester tester) async {
+      await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+
+      expect(find.text('在线 2 人'), findsOneWidget);
+      expect(find.text('已开启睡眠模式。'), findsNothing);
+      expect(find.text('已回到宿舍，状态已同步'), findsOneWidget);
+
+      final BuildContext context = tester.element(find.byType(DormPage));
+      GoRouter.of(context).go(AppRoutes.dormStatus);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DormStatusPage), findsOneWidget);
+      expect(find.text('在线 2 人'), findsOneWidget);
+    },
+  );
 
   testWidgets('profile page shows redesigned modules', (
     WidgetTester tester,

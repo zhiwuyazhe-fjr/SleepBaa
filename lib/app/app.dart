@@ -192,7 +192,7 @@ class _NotificationBridgeState extends State<_NotificationBridge> {
   Widget build(BuildContext context) => widget.child;
 }
 
-class _CloudBaseAuthGate extends StatelessWidget {
+class _CloudBaseAuthGate extends StatefulWidget {
   const _CloudBaseAuthGate({
     required this.environment,
     required this.authRepository,
@@ -204,25 +204,40 @@ class _CloudBaseAuthGate extends StatelessWidget {
   final Widget child;
 
   @override
+  State<_CloudBaseAuthGate> createState() => _CloudBaseAuthGateState();
+}
+
+class _CloudBaseAuthGateState extends State<_CloudBaseAuthGate> {
+  // A persistent PhoneAuthPage keeps verification challenges, text
+  // controllers, and focus alive across transient auth state notifications
+  // (e.g. when the user switches to the SMS app to copy a code and returns).
+  static const Widget _phoneAuthPage = PhoneAuthPage(
+    key: ValueKey<String>('persistent-phone-auth-page'),
+  );
+
+  @override
   Widget build(BuildContext context) {
-    if (!environment.usesCloudBase) {
-      return child;
+    if (!widget.environment.usesCloudBase) {
+      return widget.child;
     }
-    if (!authRepository.hasCompletedInitialAuthBootstrap) {
-      return const _AuthLoadingPage();
+    final AuthRepository auth = widget.authRepository;
+    if (auth.hasVerifiedPhoneIdentity == true) {
+      return widget.child;
     }
-    if (authRepository.hasVerifiedPhoneIdentity == true) {
-      return child;
-    }
-    if (authRepository.isAuthenticating == true) {
-      return const _AuthLoadingPage();
-    }
-    return const PhoneAuthPage();
+    final bool showLoadingOverlay =
+        !auth.hasCompletedInitialAuthBootstrap || auth.isAuthenticating;
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        _phoneAuthPage,
+        if (showLoadingOverlay) const _AuthLoadingOverlay(),
+      ],
+    );
   }
 }
 
-class _AuthLoadingPage extends StatelessWidget {
-  const _AuthLoadingPage();
+class _AuthLoadingOverlay extends StatelessWidget {
+  const _AuthLoadingOverlay();
 
   @override
   Widget build(BuildContext context) {
