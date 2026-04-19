@@ -357,6 +357,8 @@ Dorm _unboundDorm() {
 }
 
 DormMember _dormMemberFromMap(Map<String, dynamic> map) {
+  final int? noise =
+      map['noiseDb'] == null ? null : (map['noiseDb'] as num?)?.round();
   return DormMember(
     uid: _stringOf(map['uid']),
     name: _stringOf(map['name']),
@@ -367,6 +369,7 @@ DormMember _dormMemberFromMap(Map<String, dynamic> map) {
     note: _stringOf(map['note']),
     avatarUrl: map['avatarUrl'] as String?,
     displayBadgeId: map['displayBadgeId'] as String?,
+    noiseDb: noise,
   );
 }
 
@@ -634,6 +637,8 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   bool _isAuthenticating = false;
   bool _hasCompletedInitialAuthBootstrap = false;
   String? _lastAuthError;
+  DateTime? _lastSuccessfulAuthAt;
+  static const Duration _authRevalidationInterval = Duration(minutes: 5);
 
   @override
   UserProfile get currentUser => _currentUser;
@@ -678,6 +683,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     _snapshotStore.clear();
     _currentUser = _signedOutProfile();
     _lastAuthError = message;
+    _lastSuccessfulAuthAt = null;
     return _currentUser;
   }
 
@@ -721,7 +727,9 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   Future<UserProfile> signInAnonymously() => ensureAuthenticated();
 
   @override
-  Future<UserProfile> ensureAuthenticated() async {
+  Future<UserProfile> ensureAuthenticated() => _ensureAuthenticated();
+
+  Future<UserProfile> _ensureAuthenticated({bool forceRefresh = false}) async {
     if (_isAuthenticating) {
       return _currentUser;
     }
@@ -730,6 +738,9 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       return _currentUser.uid.isNotEmpty
           ? _currentUser
           : buildDefaultUserProfile();
+    }
+    if (!forceRefresh && _canReuseCachedAuthState()) {
+      return _currentUser;
     }
     _isAuthenticating = true;
     _lastAuthError = null;
@@ -741,10 +752,12 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
         return _currentUser;
       }
       final String restoredDeviceId = await _sessionStore.ensureDeviceId();
-      CloudBaseSession? restoredSession = await _sessionStore.readSession();
-      if (restoredSession == null) {
+      final CloudBaseSession? readSession = await _sessionStore.readSession();
+      if (readSession == null) {
         return _clearSessionAndReset();
       }
+      CloudBaseSession restoredSession = readSession;
+      bool tokenRefreshFailed = false;
       if (restoredSession.isExpired) {
         try {
           final CloudBaseAuthTokenResponse refreshed = await _authClient
@@ -764,13 +777,26 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
             tokenType: refreshed.tokenType,
           );
           await _sessionStore.writeSession(restoredSession);
+        } on CloudBaseAuthException catch (error) {
+          if (_isSessionInvalidError(error)) {
+            return _clearSessionAndReset(
+              message:
+                  '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
+            );
+          }
+          tokenRefreshFailed = true;
+          _lastAuthError = _transientAuthWarningMessage();
         } catch (_) {
-          return _clearSessionAndReset(
-            message:
-                '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
-          );
+          tokenRefreshFailed = true;
+          _lastAuthError = _transientAuthWarningMessage();
         }
       }
+      // Even when the token refresh failed due to a transient error we must
+      // still hydrate _currentUser from the stored session so the auth gate
+      // can recognise a returning user and avoid forcing re-login on cold
+      // start.  The old (possibly expired) token may still work for reading
+      // /user/me; if it doesn't, _readCurrentCloudBaseUser returns null and
+      // we fall back to the session subject only.
       final CloudBaseUserInfo? restoredInfo =
           !hasVerifiedPhoneIdentity || _currentUser.uid.isEmpty
           ? await _readCurrentCloudBaseUser(restoredSession)
@@ -795,19 +821,65 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           avatarUrl: restoredInfo.picture ?? _currentUser.avatarUrl,
         );
       }
+      if (tokenRefreshFailed) {
+        // We hydrated the user from the stored session but the token is
+        // stale.  Return now — do NOT attempt snapshot refresh with an
+        // expired token, but keep the user profile we restored.
+        return _currentUser;
+      }
+      bool snapshotRefreshed = false;
+      bool softSnapshotFailure = false;
       if (_appApiClient.isConfigured) {
-        await _snapshotStore.refresh();
+        try {
+          await _snapshotStore.refresh();
+          // CloudBaseSnapshotStore swallows transport failures and stores
+          // them on lastError. Treat a populated lastError as a soft failure
+          // so we keep the login state and just surface a warning.
+          if (_snapshotStore.lastError != null) {
+            softSnapshotFailure = true;
+            _lastAuthError = _transientAuthWarningMessage();
+          } else {
+            snapshotRefreshed = true;
+          }
+        } catch (_) {
+          // Snapshot refresh failures must not invalidate the login state.
+          softSnapshotFailure = true;
+          _lastAuthError = _transientAuthWarningMessage();
+        }
+      } else {
+        snapshotRefreshed = true;
       }
       _syncFromSnapshot();
-      if (!hasVerifiedPhoneIdentity) {
+      final bool serverConfirmedMissingPhone =
+          snapshotRefreshed &&
+          restoredInfo != null &&
+          (restoredInfo.phoneNumber?.trim().isNotEmpty != true);
+      if (serverConfirmedMissingPhone && !hasVerifiedPhoneIdentity) {
         return _clearSessionAndReset(
           message:
               '\u5f53\u524d\u767b\u5f55\u72b6\u6001\u7f3a\u5c11\u5df2\u9a8c\u8bc1\u624b\u673a\u53f7\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
         );
       }
+      if (hasVerifiedPhoneIdentity) {
+        _lastSuccessfulAuthAt = DateTime.now();
+        if (!softSnapshotFailure) {
+          _lastAuthError = null;
+        }
+      }
       return _currentUser;
-    } catch (error) {
-      return _clearSessionAndReset(message: error.toString());
+    } on CloudBaseAuthException catch (error) {
+      if (_isSessionInvalidError(error)) {
+        return _clearSessionAndReset(
+          message:
+              '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
+        );
+      }
+      _lastAuthError = _transientAuthWarningMessage();
+      return _currentUser;
+    } catch (_) {
+      // Network / serialization blips must not wipe the persisted session.
+      _lastAuthError = _transientAuthWarningMessage();
+      return _currentUser;
     } finally {
       _isAuthenticating = false;
       _hasCompletedInitialAuthBootstrap = true;
@@ -815,11 +887,48 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     }
   }
 
+  bool _canReuseCachedAuthState() {
+    if (!_hasCompletedInitialAuthBootstrap) {
+      return false;
+    }
+    if (!hasVerifiedPhoneIdentity) {
+      return false;
+    }
+    final DateTime? lastSuccess = _lastSuccessfulAuthAt;
+    if (lastSuccess == null) {
+      return false;
+    }
+    return DateTime.now().difference(lastSuccess) < _authRevalidationInterval;
+  }
+
+  bool _isSessionInvalidError(CloudBaseAuthException error) {
+    if (error.statusCode == 401 || error.statusCode == 403) {
+      return true;
+    }
+    final String code = (error.code ?? '').toLowerCase();
+    if (code.contains('invalid_grant') ||
+        code.contains('invalid_token') ||
+        code.contains('unauthorized') ||
+        code.contains('token_revoked') ||
+        code.contains('refresh_token_expired')) {
+      return true;
+    }
+    final String message = error.message.toLowerCase();
+    return message.contains('invalid_grant') ||
+        message.contains('invalid refresh token') ||
+        message.contains('refresh token expired');
+  }
+
+  String _transientAuthWarningMessage() {
+    return '\u7f51\u7edc\u6ce2\u52a8\u5bfc\u81f4\u767b\u5f55\u72b6\u6001\u540c\u6b65\u5931\u8d25\uff0c\u5df2\u4fdd\u7559\u767b\u5f55\u72b6\u6001\uff0c\u7a0d\u540e\u4f1a\u81ea\u52a8\u91cd\u8bd5\u3002';
+  }
+
   @override
   Future<UserProfile> retryAuthentication() async {
     _lastAuthError = null;
+    _lastSuccessfulAuthAt = null;
     notifyListeners();
-    return ensureAuthenticated();
+    return _ensureAuthenticated(forceRefresh: true);
   }
 
   @override
@@ -1459,6 +1568,8 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       avatarUrl: info?.picture ?? baseProfile.avatarUrl,
       clearDormId: !hadCurrentUser,
     );
+    _lastSuccessfulAuthAt = DateTime.now();
+    _hasCompletedInitialAuthBootstrap = true;
     notifyListeners();
     await _persistVerifiedPhoneIdentityIfNeeded();
     await _safeRefreshSnapshot();
@@ -1729,6 +1840,7 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
   @override
   UserSettings get currentSettings => _settings;
 
+  @override
   void replaceLocalSettings(UserSettings settings) {
     _settings = settings;
     notifyListeners();
@@ -3734,6 +3846,19 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
         : _currentDorm.copyWith(members: remainingMembers);
     _emitCurrentState();
     notifyListeners();
+  }
+
+  @override
+  Future<void> refreshDormSnapshot() async {
+    if (!_appApiClient.isConfigured) {
+      return;
+    }
+    try {
+      await _authRepository.ensureAuthenticated();
+      await _snapshotStore.refresh();
+    } catch (_) {
+      // Keep showing last known dorm; next poll will retry.
+    }
   }
 
   @override

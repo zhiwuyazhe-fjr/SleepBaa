@@ -448,7 +448,7 @@ void main() {
 
       expect(find.byType(PhoneAuthPage), findsOneWidget);
       expect(
-        find.byKey(const ValueKey<String>('auth-login-password')),
+        find.byKey(const ValueKey<String>('auth-login-password-0')),
         findsOneWidget,
       );
       expect(tester.takeException(), isNull);
@@ -469,7 +469,7 @@ void main() {
       await _pumpUntilFound(tester, find.byType(PhoneAuthPage));
 
       final Finder loginPhoneField = find.byKey(
-        const ValueKey<String>('auth-login-phone'),
+        const ValueKey<String>('auth-login-phone-0'),
       );
       expect(loginPhoneField, findsOneWidget);
 
@@ -514,7 +514,7 @@ void main() {
 
       expect(find.textContaining('首次进入需要'), findsNothing);
       expect(
-        find.byKey(const ValueKey<String>('auth-login-phone')),
+        find.byKey(const ValueKey<String>('auth-login-phone-0')),
         findsOneWidget,
       );
       expect(
@@ -528,11 +528,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const ValueKey<String>('auth-register-phone')),
+        find.byKey(const ValueKey<String>('auth-register-phone-0')),
         findsOneWidget,
       );
       await tester.enterText(
-        find.byKey(const ValueKey<String>('auth-register-phone')),
+        find.byKey(const ValueKey<String>('auth-register-phone-0')),
         '13900139000',
       );
       await tester.tap(find.widgetWithText(FilledButton, '发送验证码').first);
@@ -546,7 +546,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const ValueKey<String>('auth-reset-phone')),
+        find.byKey(const ValueKey<String>('auth-reset-phone-0')),
         findsOneWidget,
       );
       expect(
@@ -556,14 +556,14 @@ void main() {
       expect(find.text('联系客服协助处理'), findsOneWidget);
 
       await tester.enterText(
-        find.byKey(const ValueKey<String>('auth-reset-phone')),
+        find.byKey(const ValueKey<String>('auth-reset-phone-0')),
         '13800138000',
       );
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey<String>('auth-reset-send')));
       await tester.pumpAndSettle();
       await tester.enterText(
-        find.byKey(const ValueKey<String>('auth-reset-code')),
+        find.byKey(const ValueKey<String>('auth-reset-code-0')),
         '123456',
       );
       await tester.pump();
@@ -572,19 +572,19 @@ void main() {
 
       expect(find.text('重置密码'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey<String>('auth-reset-password')),
+        find.byKey(const ValueKey<String>('auth-reset-password-0')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey<String>('auth-reset-password-confirm')),
+        find.byKey(const ValueKey<String>('auth-reset-password-confirm-0')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey<String>('auth-reset-phone')),
+        find.byKey(const ValueKey<String>('auth-reset-phone-0')),
         findsNothing,
       );
       expect(
-        find.byKey(const ValueKey<String>('auth-reset-code')),
+        find.byKey(const ValueKey<String>('auth-reset-code-0')),
         findsNothing,
       );
       expect(
@@ -594,11 +594,11 @@ void main() {
       expect(find.text('密码建议'), findsNothing);
 
       await tester.enterText(
-        find.byKey(const ValueKey<String>('auth-reset-password')),
+        find.byKey(const ValueKey<String>('auth-reset-password-0')),
         'renewed123',
       );
       await tester.enterText(
-        find.byKey(const ValueKey<String>('auth-reset-password-confirm')),
+        find.byKey(const ValueKey<String>('auth-reset-password-confirm-0')),
         'renewed123',
       );
       await tester.pump();
@@ -616,21 +616,22 @@ void main() {
     },
   );
 
-  testWidgets('phone auth password login shows required phone toast on empty submit', (
-    WidgetTester tester,
-  ) async {
-    await _pumpApp(
-      tester,
-      initialLocation: AppRoutes.authPhone,
-      clock: _dayClock,
-    );
+  testWidgets(
+    'phone auth password login shows required phone toast on empty submit',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.authPhone,
+        clock: _dayClock,
+      );
 
-    await tester.tap(find.byKey(const ValueKey<String>('auth-login-submit')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.byKey(const ValueKey<String>('auth-login-submit')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
 
-    expect(find.text('请输入手机号。'), findsOneWidget);
-  });
+      expect(find.text('请输入手机号。'), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'phone auth password login shows mainland phone validation toast for short numbers',
@@ -642,11 +643,11 @@ void main() {
       );
 
       await tester.enterText(
-        find.byKey(const ValueKey<String>('auth-login-phone')),
+        find.byKey(const ValueKey<String>('auth-login-phone-0')),
         '12345',
       );
       await tester.enterText(
-        find.byKey(const ValueKey<String>('auth-login-password')),
+        find.byKey(const ValueKey<String>('auth-login-password-0')),
         'secret123',
       );
       await tester.pump();
@@ -668,17 +669,19 @@ void main() {
         clock: _dayClock,
       );
 
-      final BuildContext authContext = tester.element(find.byType(PhoneAuthPage));
+      final BuildContext authContext = tester.element(
+        find.byType(PhoneAuthPage),
+      );
       final AppServices authServices = AppScope.of(authContext);
       await _seedRegisteredPhoneUser(authServices);
       await tester.pump();
 
       await tester.enterText(
-        find.byKey(const ValueKey<String>('auth-login-phone')),
+        find.byKey(const ValueKey<String>('auth-login-phone-0')),
         '13800138000',
       );
       await tester.enterText(
-        find.byKey(const ValueKey<String>('auth-login-password')),
+        find.byKey(const ValueKey<String>('auth-login-password-0')),
         'wrongpass',
       );
       await tester.pump();
@@ -713,13 +716,13 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.enterText(
-        find.byKey(const ValueKey<String>('auth-reset-phone')),
+        find.byKey(const ValueKey<String>('auth-reset-phone-0')),
         '13800138000',
       );
       await tester.tap(find.byKey(const ValueKey<String>('auth-reset-send')));
       await tester.pumpAndSettle();
       await tester.enterText(
-        find.byKey(const ValueKey<String>('auth-reset-code')),
+        find.byKey(const ValueKey<String>('auth-reset-code-0')),
         '654321',
       );
       await tester.pump();
@@ -727,11 +730,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const ValueKey<String>('auth-reset-password')),
+        find.byKey(const ValueKey<String>('auth-reset-password-0')),
         findsNothing,
       );
       expect(
-        find.byKey(const ValueKey<String>('auth-reset-password-confirm')),
+        find.byKey(const ValueKey<String>('auth-reset-password-confirm-0')),
         findsNothing,
       );
       expect(
@@ -756,7 +759,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey<String>('auth-reset-phone')),
+      find.byKey(const ValueKey<String>('auth-reset-phone-0')),
       findsOneWidget,
     );
 
@@ -765,7 +768,7 @@ void main() {
 
     expect(find.byType(PhoneAuthPage), findsOneWidget);
     expect(
-      find.byKey(const ValueKey<String>('auth-login-phone')),
+      find.byKey(const ValueKey<String>('auth-login-phone-0')),
       findsOneWidget,
     );
   });
@@ -792,13 +795,13 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.enterText(
-        find.byKey(const ValueKey<String>('auth-reset-phone')),
+        find.byKey(const ValueKey<String>('auth-reset-phone-0')),
         '13800138000',
       );
       await tester.tap(find.byKey(const ValueKey<String>('auth-reset-send')));
       await tester.pumpAndSettle();
       await tester.enterText(
-        find.byKey(const ValueKey<String>('auth-reset-code')),
+        find.byKey(const ValueKey<String>('auth-reset-code-0')),
         '123456',
       );
       await tester.pump();
@@ -807,11 +810,11 @@ void main() {
 
       expect(find.text('重置密码'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey<String>('auth-reset-password')),
+        find.byKey(const ValueKey<String>('auth-reset-password-0')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey<String>('auth-reset-phone')),
+        find.byKey(const ValueKey<String>('auth-reset-phone-0')),
         findsNothing,
       );
 
@@ -819,11 +822,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const ValueKey<String>('auth-reset-phone')),
+        find.byKey(const ValueKey<String>('auth-reset-phone-0')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey<String>('auth-reset-password')),
+        find.byKey(const ValueKey<String>('auth-reset-password-0')),
         findsNothing,
       );
       expect(
@@ -836,7 +839,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const ValueKey<String>('auth-login-phone')),
+        find.byKey(const ValueKey<String>('auth-login-phone-0')),
         findsOneWidget,
       );
     },
@@ -857,16 +860,16 @@ void main() {
       await tester.pumpAndSettle();
 
       final Finder phoneField = find.byKey(
-        const ValueKey<String>('auth-register-phone'),
+        const ValueKey<String>('auth-register-phone-0'),
       );
       final Finder passwordField = find.byKey(
-        const ValueKey<String>('auth-register-password'),
+        const ValueKey<String>('auth-register-password-0'),
       );
       final Finder confirmField = find.byKey(
-        const ValueKey<String>('auth-register-password-confirm'),
+        const ValueKey<String>('auth-register-password-confirm-0'),
       );
       final Finder codeField = find.byKey(
-        const ValueKey<String>('auth-register-code'),
+        const ValueKey<String>('auth-register-code-0'),
       );
       final Finder submitButton = find.byKey(
         const ValueKey<String>('auth-register-submit'),
@@ -905,7 +908,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(
-      find.byKey(const ValueKey<String>('auth-register-phone')),
+      find.byKey(const ValueKey<String>('auth-register-phone-0')),
       '13900139000',
     );
     await tester.tap(find.byKey(const ValueKey<String>('auth-register-send')));
@@ -935,68 +938,71 @@ void main() {
     expect(find.text('发送验证码'), findsOneWidget);
   });
 
-  testWidgets('phone auth shares verification cooldown for the same phone across subpages', (
-    WidgetTester tester,
-  ) async {
-    await _pumpApp(
-      tester,
-      initialLocation: AppRoutes.authPhone,
-      clock: _dayClock,
-    );
+  testWidgets(
+    'phone auth shares verification cooldown for the same phone across subpages',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.authPhone,
+        clock: _dayClock,
+      );
 
-    final BuildContext authContext = tester.element(find.byType(PhoneAuthPage));
-    final AppServices authServices = AppScope.of(authContext);
-    await _seedRegisteredPhoneUser(authServices);
-    await tester.pump();
+      final BuildContext authContext = tester.element(
+        find.byType(PhoneAuthPage),
+      );
+      final AppServices authServices = AppScope.of(authContext);
+      await _seedRegisteredPhoneUser(authServices);
+      await tester.pump();
 
-    await tester.tap(
-      find.byKey(const ValueKey<String>('auth-forgot-password')),
-    );
-    await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('auth-forgot-password')),
+      );
+      await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.byKey(const ValueKey<String>('auth-reset-phone')),
-      '13800138000',
-    );
-    await tester.tap(find.byKey(const ValueKey<String>('auth-reset-send')));
-    await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-reset-phone-0')),
+        '13800138000',
+      );
+      await tester.tap(find.byKey(const ValueKey<String>('auth-reset-send')));
+      await tester.pumpAndSettle();
 
-    expect(find.text('60s'), findsOneWidget);
+      expect(find.text('60s'), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.chevron_left_rounded));
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey<String>('auth-login-method-code')),
-    );
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey<String>('auth-login-phone')),
-      '13800138000',
-    );
-    await tester.pump();
+      await tester.tap(find.byIcon(Icons.chevron_left_rounded));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('auth-login-method-code')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-login-phone-0')),
+        '13800138000',
+      );
+      await tester.pump();
 
-    final FilledButton loginSendButton = tester.widget<FilledButton>(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('auth-login-code-send')),
-        matching: find.byType(FilledButton),
-      ),
-    );
-    final List<String> cooldownLabels = tester
-        .widgetList<Text>(
-          find.descendant(
-            of: find.byKey(const ValueKey<String>('auth-login-code-send')),
-            matching: find.byType(Text),
-          ),
-        )
-        .map((Text widget) => widget.data ?? '')
-        .toList();
+      final FilledButton loginSendButton = tester.widget<FilledButton>(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('auth-login-code-send')),
+          matching: find.byType(FilledButton),
+        ),
+      );
+      final List<String> cooldownLabels = tester
+          .widgetList<Text>(
+            find.descendant(
+              of: find.byKey(const ValueKey<String>('auth-login-code-send')),
+              matching: find.byType(Text),
+            ),
+          )
+          .map((Text widget) => widget.data ?? '')
+          .toList();
 
-    expect(
-      cooldownLabels.any((String label) => RegExp(r'^\d+s$').hasMatch(label)),
-      isTrue,
-    );
-    expect(loginSendButton.onPressed, isNull);
-  });
+      expect(
+        cooldownLabels.any((String label) => RegExp(r'^\d+s$').hasMatch(label)),
+        isTrue,
+      );
+      expect(loginSendButton.onPressed, isNull);
+    },
+  );
 
   testWidgets('phone auth keeps a usable width in short mobile heights', (
     WidgetTester tester,
@@ -1012,7 +1018,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final Rect phoneRect = tester.getRect(
-      find.byKey(const ValueKey<String>('auth-login-phone')),
+      find.byKey(const ValueKey<String>('auth-login-phone-0')),
     );
     final Rect submitRect = tester.getRect(
       find.byKey(const ValueKey<String>('auth-login-submit')),
@@ -1035,7 +1041,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final Finder passwordField = find.byKey(
-      const ValueKey<String>('auth-register-password'),
+      const ValueKey<String>('auth-register-password-0'),
     );
 
     await tester.enterText(passwordField, 'wrongpass');
@@ -1066,7 +1072,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(
-      find.byKey(const ValueKey<String>('auth-login-phone')),
+      find.byKey(const ValueKey<String>('auth-login-phone-0')),
       '13900139000',
     );
     await tester.tap(
@@ -1075,7 +1081,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final TextField registerPhoneField = tester.widget<TextField>(
-      find.byKey(const ValueKey<String>('auth-register-phone')),
+      find.byKey(const ValueKey<String>('auth-register-phone-0')),
     );
     expect(registerPhoneField.controller?.text, '13900139000');
     expect(
@@ -1102,14 +1108,14 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(
-      find.byKey(const ValueKey<String>('auth-register-phone')),
+      find.byKey(const ValueKey<String>('auth-register-phone-0')),
       '13800138000',
     );
     await tester.tap(find.byKey(const ValueKey<String>('auth-register-send')));
     await tester.pumpAndSettle();
 
     final TextField loginPhoneField = tester.widget<TextField>(
-      find.byKey(const ValueKey<String>('auth-login-phone')),
+      find.byKey(const ValueKey<String>('auth-login-phone-0')),
     );
     expect(loginPhoneField.controller?.text, '13800138000');
     expect(

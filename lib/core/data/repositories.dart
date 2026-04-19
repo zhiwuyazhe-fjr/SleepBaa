@@ -100,6 +100,10 @@ abstract interface class AuthRepository implements Listenable {
 
 abstract interface class UserSettingsRepository implements Listenable {
   UserSettings get currentSettings;
+
+  /// Updates in-memory settings and notifies listeners immediately (no I/O).
+  void replaceLocalSettings(UserSettings settings);
+
   Future<void> saveSettings(UserSettings settings);
 }
 
@@ -210,6 +214,9 @@ abstract interface class DormRepository implements Listenable {
     bool anonymous = true,
     required String message,
   });
+
+  /// Pulls latest dorm snapshot from the server (no-op for in-memory).
+  Future<void> refreshDormSnapshot();
 }
 
 abstract interface class DreamRepository implements Listenable {

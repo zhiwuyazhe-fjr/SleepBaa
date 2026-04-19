@@ -12,6 +12,7 @@ import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
 import 'package:sleep_dorm_app/core/notifications/notification_navigation_coordinator.dart';
+import 'package:sleep_dorm_app/features/auth/presentation/pages/phone_auth_page.dart';
 
 class SleepDormApp extends StatefulWidget {
   const SleepDormApp({
@@ -243,7 +244,7 @@ class _RoutedSleepDormAppState extends State<_RoutedSleepDormApp> {
   }
 }
 
-class _CloudBaseAuthGate extends StatelessWidget {
+class _CloudBaseAuthGate extends StatefulWidget {
   const _CloudBaseAuthGate({
     required this.usesCloudBase,
     required this.authRepository,
@@ -255,20 +256,40 @@ class _CloudBaseAuthGate extends StatelessWidget {
   final Widget child;
 
   @override
+  State<_CloudBaseAuthGate> createState() => _CloudBaseAuthGateState();
+}
+
+class _CloudBaseAuthGateState extends State<_CloudBaseAuthGate> {
+  // A persistent PhoneAuthPage keeps verification challenges, text
+  // controllers, and focus alive across transient auth state notifications
+  // (e.g. when the user switches to the SMS app to copy a code and returns).
+  static const Widget _phoneAuthPage = PhoneAuthPage(
+    key: ValueKey<String>('persistent-phone-auth-page'),
+  );
+
+  @override
   Widget build(BuildContext context) {
-    if (shouldShowCloudBaseAuthBlockingScreen(
-      usesCloudBase: usesCloudBase,
-      hasCompletedInitialAuthBootstrap:
-          authRepository.hasCompletedInitialAuthBootstrap,
-    )) {
-      return const _AuthLoadingPage();
+    if (!widget.usesCloudBase) {
+      return widget.child;
     }
-    return child;
+    final AuthRepository auth = widget.authRepository;
+    if (auth.hasVerifiedPhoneIdentity == true) {
+      return widget.child;
+    }
+    final bool showLoadingOverlay =
+        !auth.hasCompletedInitialAuthBootstrap || auth.isAuthenticating;
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        _phoneAuthPage,
+        if (showLoadingOverlay) const _AuthLoadingOverlay(),
+      ],
+    );
   }
 }
 
-class _AuthLoadingPage extends StatelessWidget {
-  const _AuthLoadingPage();
+class _AuthLoadingOverlay extends StatelessWidget {
+  const _AuthLoadingOverlay();
 
   @override
   Widget build(BuildContext context) {

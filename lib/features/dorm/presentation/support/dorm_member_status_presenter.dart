@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 
+/// Members currently within the dorm geofence ("已返").
 int returnedDormMemberCount(List<DormMember> members) {
   return members
       .where(
@@ -10,8 +11,53 @@ int returnedDormMemberCount(List<DormMember> members) {
       .length;
 }
 
+/// Max idle duration to still count as "APP 在线" (recent heartbeat).
+const Duration kDormAppOnlineMaxIdle = Duration(minutes: 15);
+
+/// Roommates considered online: same dorm list entry, app recently active.
+int dormAppOnlineMemberCount(
+  List<DormMember> members, {
+  DateTime? now,
+  Duration maxIdle = kDormAppOnlineMaxIdle,
+}) {
+  final DateTime clock = now ?? DateTime.now();
+  return members
+      .where(
+        (DormMember m) =>
+            clock.difference(m.lastActiveAt) <= maxIdle,
+      )
+      .length;
+}
+
+String dormOnlineCountLabel(List<DormMember> members) {
+  return '在线 ${dormAppOnlineMemberCount(members)} 人';
+}
+
 int sleepingDormMemberCount(List<DormMember> members) {
   return members.where((DormMember member) => member.sleepModeActive).length;
+}
+
+/// Mean noise (dB) for members currently in dorm range who reported a level.
+/// Falls back to [dormAggregateNoiseDb] when no per-member data exists.
+double averageNoiseDbForReturnedMembers({
+  required List<DormMember> members,
+  required int dormAggregateNoiseDb,
+}) {
+  final List<DormMember> inRange = members
+      .where(
+        (DormMember m) => m.presenceStatus == DormPresenceStatus.returned,
+      )
+      .toList(growable: false);
+  final List<int> levels = inRange
+      .map((DormMember m) => m.noiseDb)
+      .whereType<int>()
+      .where((int db) => db >= 0)
+      .toList(growable: false);
+  if (levels.isEmpty) {
+    return dormAggregateNoiseDb.toDouble();
+  }
+  final int sum = levels.fold<int>(0, (int a, int b) => a + b);
+  return sum / levels.length;
 }
 
 String dormPresenceSleepLabel(DormMember member) {

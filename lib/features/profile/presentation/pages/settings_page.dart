@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/utils/avatar_picker.dart';
@@ -23,6 +27,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _boundUid;
   bool _isSavingSettings = false;
   bool _isSavingDormAnchor = false;
+  bool _isApplyingNightMood = false;
   double _sleepGoalHours = 7.5;
   bool _bedtimeReminderEnabled = true;
   bool _morningReminderEnabled = true;
@@ -69,6 +74,51 @@ class _SettingsPageState extends State<SettingsPage> {
       if (mounted) {
         setState(() => _isSavingSettings = false);
       }
+    }
+  }
+
+  Future<void> _applyNightMood(AppServices services, NightMood? mood) async {
+    if (_isApplyingNightMood) {
+      return;
+    }
+    setState(() => _isApplyingNightMood = true);
+    try {
+      final UserSettings next = mood == null
+          ? services.profileFacade.currentSettings.copyWith(
+              clearSelectedNightMood: true,
+            )
+          : services.profileFacade.currentSettings.copyWith(
+              selectedNightMood: mood,
+            );
+      services.settingsRepository.replaceLocalSettings(next);
+      services.nightWelcomeController.releaseNightMoodThemeOverride();
+      if (mounted) {
+        setState(() => _isApplyingNightMood = false);
+      }
+      unawaited(notifyPassiveToast(context, message: '已切换心情主题。'));
+      unawaited(_persistNightMoodInBackground(services, mood));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await notifyPassiveToast(context, message: '保存失败：$error');
+      if (mounted) {
+        setState(() => _isApplyingNightMood = false);
+      }
+    }
+  }
+
+  Future<void> _persistNightMoodInBackground(
+    AppServices services,
+    NightMood? mood,
+  ) async {
+    try {
+      await services.profileFacade.saveNightMood(mood);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await notifyPassiveToast(context, message: '同步到云端失败：$error');
     }
   }
 
@@ -237,6 +287,7 @@ class _SettingsPageState extends State<SettingsPage> {
             services.authRepository,
             services.settingsRepository,
             services.dormRepository,
+            services.nightWelcomeController,
           ]),
           builder: (BuildContext context, Widget? child) {
             final UserProfile profile = services.profileFacade.currentUser;
@@ -313,6 +364,81 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                 ],
+                const SizedBox(height: AppSpacing.xl),
+                Text('切换心情', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  '选择后整应用配色会立即切换。',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppCard(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: AppSpacing.lg,
+                    horizontal: AppSpacing.md,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Expanded(
+                        child: _MoodAssistantFabSlot(
+                          label: '开心',
+                          palette: NightMoodPalette.fromMood(NightMood.happy),
+                          keySuffix: '-settings-happy',
+                          selected:
+                              settings.selectedNightMood == NightMood.happy,
+                          enabled: !_isApplyingNightMood,
+                          onTap: () => unawaited(
+                            _applyNightMood(services, NightMood.happy),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Expanded(
+                        child: _MoodAssistantFabSlot(
+                          label: '低落',
+                          palette: NightMoodPalette.fromMood(NightMood.sad),
+                          keySuffix: '-settings-sad',
+                          selected: settings.selectedNightMood == NightMood.sad,
+                          enabled: !_isApplyingNightMood,
+                          onTap: () => unawaited(
+                            _applyNightMood(services, NightMood.sad),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Expanded(
+                        child: _MoodAssistantFabSlot(
+                          label: '平静',
+                          palette: NightMoodPalette.fromMood(NightMood.calm),
+                          keySuffix: '-settings-calm',
+                          selected:
+                              settings.selectedNightMood == NightMood.calm,
+                          enabled: !_isApplyingNightMood,
+                          onTap: () => unawaited(
+                            _applyNightMood(services, NightMood.calm),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Expanded(
+                        child: _MoodAssistantFabSlot(
+                          label: '未知',
+                          palette: NightMoodPalette.fromMood(null),
+                          keySuffix: '-settings-unknown',
+                          selected: settings.selectedNightMood == null,
+                          enabled: !_isApplyingNightMood,
+                          onTap: () => unawaited(
+                            _applyNightMood(services, null),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: AppSpacing.xl),
                 Text('睡眠偏好', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: AppSpacing.md),
@@ -494,6 +620,86 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+/// Uses [AssistantFabVisual] so each option matches the floating assistant glyph.
+class _MoodAssistantFabSlot extends StatelessWidget {
+  const _MoodAssistantFabSlot({
+    required this.label,
+    required this.palette,
+    required this.keySuffix,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final NightMoodPalette palette;
+  final String keySuffix;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+
+    return Opacity(
+      opacity: enabled ? 1 : 0.5,
+      child: Semantics(
+        button: true,
+        label: label,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: enabled ? onTap : null,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Container(
+                padding: EdgeInsets.all(selected ? 3 : 0),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    width: selected ? 2.5 : 0,
+                    color: selected ? palette.primary : Colors.transparent,
+                  ),
+                  boxShadow: selected
+                      ? <BoxShadow>[
+                          BoxShadow(
+                            color: palette.primary.withAlpha(55),
+                            blurRadius: 10,
+                            spreadRadius: 0,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.center,
+                  child: AssistantFabVisual(
+                    palette: palette,
+                    keySuffix: keySuffix,
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.labelMedium?.copyWith(
+                  color: palette.primaryDeep,
+                  fontWeight: FontWeight.w700,
+                  height: 1.2,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

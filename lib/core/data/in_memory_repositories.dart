@@ -526,9 +526,14 @@ class InMemoryUserSettingsRepository extends ChangeNotifier
   UserSettings get currentSettings => _settings;
 
   @override
-  Future<void> saveSettings(UserSettings settings) async {
+  void replaceLocalSettings(UserSettings settings) {
     _settings = settings;
     notifyListeners();
+  }
+
+  @override
+  Future<void> saveSettings(UserSettings settings) async {
+    replaceLocalSettings(settings);
   }
 }
 
@@ -1861,6 +1866,9 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
     _emitCurrentState();
     notifyListeners();
   }
+
+  @override
+  Future<void> refreshDormSnapshot() async {}
 
   @override
   Future<void> sendGentleReminder({

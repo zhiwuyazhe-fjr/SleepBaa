@@ -91,6 +91,20 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
   bool get _isAtAuthRoot =>
       _currentView == _AuthView.login && _viewHistory.length <= 1;
 
+  // Only bumped when a field is explicitly cleared so Android IME/autofill
+  // drops remembered text without causing normal focus changes to wipe input.
+  int _loginPhoneRemount = 0;
+  int _loginCodeRemount = 0;
+  int _loginPasswordRemount = 0;
+  int _registerPhoneRemount = 0;
+  int _registerCodeRemount = 0;
+  int _registerPasswordRemount = 0;
+  int _registerConfirmPasswordRemount = 0;
+  int _resetPhoneRemount = 0;
+  int _resetCodeRemount = 0;
+  int _resetPasswordRemount = 0;
+  int _resetConfirmPasswordRemount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -1056,22 +1070,35 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         _buildLoginMethodSwitch(context, unit),
         SizedBox(height: 20 * unit),
         _PencilInputField(
-          fieldKey: const ValueKey<String>('auth-login-phone'),
+          fieldKey: ValueKey<String>('auth-login-phone-$_loginPhoneRemount'),
           label: '手机号',
           hintText: '请输入手机号',
           controller: _loginPhoneController,
           icon: Icons.smartphone_rounded,
-          keyboardType: TextInputType.phone,
+          keyboardType: TextInputType.number,
+          inputFormatters: <TextInputFormatter>[
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(11),
+          ],
           textInputAction: usePassword
               ? TextInputAction.next
               : TextInputAction.done,
           scaleUnit: unit,
           forceHighlightedBorder: true,
+          clearSemanticsLabel: '清除手机号',
+          onChanged: (_) {
+            if (_loginChallenge != null) {
+              setState(() => _loginChallenge = null);
+            }
+          },
+          onImeRemount: () => setState(() => _loginPhoneRemount += 1),
         ),
         SizedBox(height: 12 * unit),
         if (usePassword)
           _PencilInputField(
-            fieldKey: const ValueKey<String>('auth-login-password'),
+            fieldKey: ValueKey<String>(
+              'auth-login-password-$_loginPasswordRemount',
+            ),
             label: '密码',
             hintText: '请输入密码',
             controller: _loginPasswordController,
@@ -1079,6 +1106,8 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
             textInputAction: TextInputAction.done,
             obscureText: true,
             scaleUnit: unit,
+            clearSemanticsLabel: '清除密码',
+            onImeRemount: () => setState(() => _loginPasswordRemount += 1),
           )
         else
           _buildCodeFieldRow(
@@ -1086,7 +1115,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
             label: '短信验证码',
             hintText: '请输入验证码',
             controller: _loginCodeController,
-            fieldKey: const ValueKey<String>('auth-login-code'),
+            fieldKey: ValueKey<String>('auth-login-code-$_loginCodeRemount'),
             actionKey: const ValueKey<String>('auth-login-code-send'),
             buttonLabel: _codeButtonLabel(
               isSending: _isSendingLoginCode,
@@ -1096,6 +1125,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
                 ? null
                 : () => _sendLoginCode(services),
             unit: unit,
+            onImeRemount: () => setState(() => _loginCodeRemount += 1),
           ),
         SizedBox(height: 12 * unit),
         Align(
@@ -1168,14 +1198,27 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         ),
         SizedBox(height: 20 * unit),
         _PencilInputField(
-          fieldKey: const ValueKey<String>('auth-register-phone'),
+          fieldKey: ValueKey<String>(
+            'auth-register-phone-$_registerPhoneRemount',
+          ),
           label: '手机号',
           hintText: '请输入手机号',
           controller: _registerPhoneController,
           icon: Icons.smartphone_rounded,
-          keyboardType: TextInputType.phone,
+          keyboardType: TextInputType.number,
+          inputFormatters: <TextInputFormatter>[
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(11),
+          ],
           textInputAction: TextInputAction.next,
           scaleUnit: unit,
+          clearSemanticsLabel: '清除手机号',
+          onChanged: (_) {
+            if (_registerChallenge != null) {
+              setState(() => _registerChallenge = null);
+            }
+          },
+          onImeRemount: () => setState(() => _registerPhoneRemount += 1),
         ),
         SizedBox(height: 12 * unit),
         _buildCodeFieldRow(
@@ -1183,7 +1226,9 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
           label: '短信验证码',
           hintText: '请输入验证码',
           controller: _registerCodeController,
-          fieldKey: const ValueKey<String>('auth-register-code'),
+          fieldKey: ValueKey<String>(
+            'auth-register-code-$_registerCodeRemount',
+          ),
           actionKey: const ValueKey<String>('auth-register-send'),
           buttonLabel: _codeButtonLabel(
             isSending: _isSendingRegisterCode,
@@ -1193,10 +1238,13 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
               ? null
               : () => _sendRegisterCode(services),
           unit: unit,
+          onImeRemount: () => setState(() => _registerCodeRemount += 1),
         ),
         SizedBox(height: 12 * unit),
         _PencilInputField(
-          fieldKey: const ValueKey<String>('auth-register-password'),
+          fieldKey: ValueKey<String>(
+            'auth-register-password-$_registerPasswordRemount',
+          ),
           label: '密码',
           hintText: '请设置登录密码',
           controller: _registerPasswordController,
@@ -1204,10 +1252,14 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
           textInputAction: TextInputAction.next,
           obscureText: true,
           scaleUnit: unit,
+          clearSemanticsLabel: '清除密码',
+          onImeRemount: () => setState(() => _registerPasswordRemount += 1),
         ),
         SizedBox(height: 12 * unit),
         _PencilInputField(
-          fieldKey: const ValueKey<String>('auth-register-password-confirm'),
+          fieldKey: ValueKey<String>(
+            'auth-register-password-confirm-$_registerConfirmPasswordRemount',
+          ),
           label: '确认密码',
           hintText: '请再次输入密码',
           controller: _registerConfirmPasswordController,
@@ -1215,6 +1267,9 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
           textInputAction: TextInputAction.done,
           obscureText: true,
           scaleUnit: unit,
+          clearSemanticsLabel: '清除确认密码',
+          onImeRemount: () =>
+              setState(() => _registerConfirmPasswordRemount += 1),
         ),
         SizedBox(height: 12 * unit),
         _PencilInfoStrip(
@@ -1283,14 +1338,25 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         ),
         SizedBox(height: 20 * unit),
         _PencilInputField(
-          fieldKey: const ValueKey<String>('auth-reset-phone'),
+          fieldKey: ValueKey<String>('auth-reset-phone-$_resetPhoneRemount'),
           label: '手机号',
           hintText: '请输入已绑定手机号',
           controller: _resetPhoneController,
           icon: Icons.smartphone_rounded,
-          keyboardType: TextInputType.phone,
+          keyboardType: TextInputType.number,
+          inputFormatters: <TextInputFormatter>[
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(11),
+          ],
           textInputAction: TextInputAction.next,
           scaleUnit: unit,
+          clearSemanticsLabel: '清除手机号',
+          onChanged: (_) {
+            if (_resetChallenge != null) {
+              setState(() => _resetChallenge = null);
+            }
+          },
+          onImeRemount: () => setState(() => _resetPhoneRemount += 1),
         ),
         SizedBox(height: 12 * unit),
         _buildCodeFieldRow(
@@ -1298,7 +1364,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
           label: '短信验证码',
           hintText: '请输入验证码',
           controller: _resetCodeController,
-          fieldKey: const ValueKey<String>('auth-reset-code'),
+          fieldKey: ValueKey<String>('auth-reset-code-$_resetCodeRemount'),
           actionKey: const ValueKey<String>('auth-reset-send'),
           buttonLabel: _codeButtonLabel(
             isSending: _isSendingResetCode,
@@ -1308,6 +1374,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
               ? null
               : () => _sendResetCode(services),
           unit: unit,
+          onImeRemount: () => setState(() => _resetCodeRemount += 1),
         ),
         SizedBox(height: 12 * unit),
         ListenableBuilder(
@@ -1319,9 +1386,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
               loadingLabel: '验证中...',
               isLoading: _isSubmitting,
               unit: unit,
-              onPressed: _isSubmitting
-                  ? null
-                  : _verifyResetCode,
+              onPressed: _isSubmitting ? null : _verifyResetCode,
             );
           },
         ),
@@ -1374,7 +1439,9 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         ),
         SizedBox(height: 20 * unit),
         _PencilInputField(
-          fieldKey: const ValueKey<String>('auth-reset-password'),
+          fieldKey: ValueKey<String>(
+            'auth-reset-password-$_resetPasswordRemount',
+          ),
           label: '新密码',
           hintText: '请输入新的登录密码',
           controller: _resetPasswordController,
@@ -1382,10 +1449,14 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
           textInputAction: TextInputAction.next,
           obscureText: true,
           scaleUnit: unit,
+          clearSemanticsLabel: '清除新密码',
+          onImeRemount: () => setState(() => _resetPasswordRemount += 1),
         ),
         SizedBox(height: 12 * unit),
         _PencilInputField(
-          fieldKey: const ValueKey<String>('auth-reset-password-confirm'),
+          fieldKey: ValueKey<String>(
+            'auth-reset-password-confirm-$_resetConfirmPasswordRemount',
+          ),
           label: '确认新密码',
           hintText: '再次输入新密码',
           controller: _resetConfirmPasswordController,
@@ -1393,6 +1464,8 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
           textInputAction: TextInputAction.done,
           obscureText: true,
           scaleUnit: unit,
+          clearSemanticsLabel: '清除确认新密码',
+          onImeRemount: () => setState(() => _resetConfirmPasswordRemount += 1),
         ),
         SizedBox(height: 12 * unit),
         ListenableBuilder(
@@ -1468,6 +1541,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
       children: <Widget>[
         Expanded(
           child: _PencilSegmentButton(
+            segmentKey: const ValueKey<String>('auth-login-method-password'),
             label: '密码登录',
             unit: unit,
             selected: usePassword,
@@ -1506,6 +1580,8 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     required String buttonLabel,
     required VoidCallback? onPressed,
     required double unit,
+    VoidCallback? onImeRemount,
+    ValueChanged<String>? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1531,8 +1607,15 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
                 controller: controller,
                 icon: Icons.sms_outlined,
                 keyboardType: TextInputType.number,
+                inputFormatters: <TextInputFormatter>[
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(6),
+                ],
                 textInputAction: TextInputAction.done,
                 scaleUnit: unit,
+                clearSemanticsLabel: '清除验证码',
+                onImeRemount: onImeRemount,
+                onChanged: onChanged,
               ),
             ),
             SizedBox(width: 10 * unit),
@@ -1764,6 +1847,10 @@ class _PencilInputField extends StatelessWidget {
     this.textInputAction,
     this.obscureText = false,
     this.forceHighlightedBorder = false,
+    this.inputFormatters,
+    this.onChanged,
+    this.clearSemanticsLabel,
+    this.onImeRemount,
   });
 
   final Key fieldKey;
@@ -1776,6 +1863,10 @@ class _PencilInputField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final bool obscureText;
   final bool forceHighlightedBorder;
+  final List<TextInputFormatter>? inputFormatters;
+  final ValueChanged<String>? onChanged;
+  final String? clearSemanticsLabel;
+  final VoidCallback? onImeRemount;
 
   @override
   Widget build(BuildContext context) {
@@ -1801,6 +1892,10 @@ class _PencilInputField extends StatelessWidget {
           obscureText: obscureText,
           scaleUnit: scaleUnit,
           forceHighlightedBorder: forceHighlightedBorder,
+          inputFormatters: inputFormatters,
+          onChanged: onChanged,
+          clearSemanticsLabel: clearSemanticsLabel,
+          onImeRemount: onImeRemount,
         ),
       ],
     );
@@ -1818,6 +1913,10 @@ class _PencilBareInput extends StatefulWidget {
     this.textInputAction,
     this.obscureText = false,
     this.forceHighlightedBorder = false,
+    this.inputFormatters,
+    this.onChanged,
+    this.clearSemanticsLabel,
+    this.onImeRemount,
   });
 
   final Key fieldKey;
@@ -1829,6 +1928,10 @@ class _PencilBareInput extends StatefulWidget {
   final TextInputAction? textInputAction;
   final bool obscureText;
   final bool forceHighlightedBorder;
+  final List<TextInputFormatter>? inputFormatters;
+  final ValueChanged<String>? onChanged;
+  final String? clearSemanticsLabel;
+  final VoidCallback? onImeRemount;
 
   @override
   State<_PencilBareInput> createState() => _PencilBareInputState();
@@ -1859,6 +1962,35 @@ class _PencilBareInputState extends State<_PencilBareInput> {
     final double borderWidth = widget.forceHighlightedBorder
         ? 2 * widget.scaleUnit
         : widget.scaleUnit;
+    final bool showsClearButton = widget.clearSemanticsLabel != null;
+    final Widget? suffixIcon = showsClearButton || widget.obscureText
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (showsClearButton)
+                _ClearFieldButton(
+                  controller: widget.controller,
+                  semanticsLabel: widget.clearSemanticsLabel!,
+                  onCleared: widget.onChanged,
+                  onImeRemount: widget.onImeRemount,
+                ),
+              if (widget.obscureText)
+                IconButton(
+                  onPressed: () {
+                    setState(() => _obscured = !_obscured);
+                  },
+                  splashRadius: 18 * widget.scaleUnit,
+                  icon: Icon(
+                    _obscured
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                    size: 20 * widget.scaleUnit,
+                    color: _PhoneAuthPageState._textHint,
+                  ),
+                ),
+            ],
+          )
+        : null;
 
     return Container(
       height: 56 * widget.scaleUnit,
@@ -1883,8 +2015,15 @@ class _PencilBareInputState extends State<_PencilBareInput> {
         obscuringCharacter: '•',
         keyboardType: widget.keyboardType,
         textInputAction: widget.textInputAction,
-        enableSuggestions: !widget.obscureText,
+        spellCheckConfiguration: const SpellCheckConfiguration.disabled(),
+        enableSuggestions: false,
         autocorrect: false,
+        enableIMEPersonalizedLearning: false,
+        smartDashesType: SmartDashesType.disabled,
+        smartQuotesType: SmartQuotesType.disabled,
+        autofillHints: const <String>[],
+        inputFormatters: widget.inputFormatters,
+        onChanged: widget.onChanged,
         style: Theme.of(context).textTheme.bodyMedium!.copyWith(
           fontSize: 14 * widget.scaleUnit,
           fontWeight: FontWeight.w500,
@@ -1913,21 +2052,7 @@ class _PencilBareInputState extends State<_PencilBareInput> {
             minWidth: 48 * widget.scaleUnit,
             minHeight: 56 * widget.scaleUnit,
           ),
-          suffixIcon: widget.obscureText
-              ? IconButton(
-                  onPressed: () {
-                    setState(() => _obscured = !_obscured);
-                  },
-                  splashRadius: 18 * widget.scaleUnit,
-                  icon: Icon(
-                    _obscured
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                    size: 20 * widget.scaleUnit,
-                    color: _PhoneAuthPageState._textHint,
-                  ),
-                )
-              : null,
+          suffixIcon: suffixIcon,
           suffixIconConstraints: BoxConstraints(
             minWidth: 48 * widget.scaleUnit,
             minHeight: 56 * widget.scaleUnit,
@@ -1975,47 +2100,48 @@ class _PencilFilledButton extends StatelessWidget {
         ),
         child: FilledButton(
           onPressed: onPressed,
-          style: FilledButton.styleFrom(
-            padding: EdgeInsets.zero,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18 * unit),
-            ),
-            textStyle: Theme.of(context).textTheme.bodyLarge!.copyWith(
+          style:
+              FilledButton.styleFrom(
+                padding: EdgeInsets.zero,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18 * unit),
+                ),
+                textStyle: Theme.of(context).textTheme.bodyLarge!.copyWith(
                   fontSize: 16 * unit,
                   fontWeight: FontWeight.w700,
                 ),
-          ).copyWith(
-            backgroundColor: WidgetStateProperty.resolveWith<Color>((
-              Set<WidgetState> states,
-            ) {
-              if (states.contains(WidgetState.disabled)) {
-                return _PhoneAuthPageState._accentBlueDisabled;
-              }
-              if (states.contains(WidgetState.pressed)) {
-                return _PhoneAuthPageState._accentBluePressed;
-              }
-              return _PhoneAuthPageState._accentBlue;
-            }),
-            foregroundColor: WidgetStateProperty.resolveWith<Color>((
-              Set<WidgetState> states,
-            ) {
-              if (states.contains(WidgetState.disabled)) {
-                return _PhoneAuthPageState._accentBlueDisabledText;
-              }
-              return _PhoneAuthPageState._accentBlueDeep;
-            }),
-            overlayColor: WidgetStateProperty.resolveWith<Color?>((
-              Set<WidgetState> states,
-            ) {
-              if (states.contains(WidgetState.pressed)) {
-                return _PhoneAuthPageState._accentBlueDeep.withValues(
-                  alpha: 0.08,
-                );
-              }
-              return null;
-            }),
-          ),
+              ).copyWith(
+                backgroundColor: WidgetStateProperty.resolveWith<Color>((
+                  Set<WidgetState> states,
+                ) {
+                  if (states.contains(WidgetState.disabled)) {
+                    return _PhoneAuthPageState._accentBlueDisabled;
+                  }
+                  if (states.contains(WidgetState.pressed)) {
+                    return _PhoneAuthPageState._accentBluePressed;
+                  }
+                  return _PhoneAuthPageState._accentBlue;
+                }),
+                foregroundColor: WidgetStateProperty.resolveWith<Color>((
+                  Set<WidgetState> states,
+                ) {
+                  if (states.contains(WidgetState.disabled)) {
+                    return _PhoneAuthPageState._accentBlueDisabledText;
+                  }
+                  return _PhoneAuthPageState._accentBlueDeep;
+                }),
+                overlayColor: WidgetStateProperty.resolveWith<Color?>((
+                  Set<WidgetState> states,
+                ) {
+                  if (states.contains(WidgetState.pressed)) {
+                    return _PhoneAuthPageState._accentBlueDeep.withValues(
+                      alpha: 0.08,
+                    );
+                  }
+                  return null;
+                }),
+              ),
           child: isLoading
               ? Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -2396,6 +2522,46 @@ class _PencilSuccessIllustration extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+class _ClearFieldButton extends StatelessWidget {
+  const _ClearFieldButton({
+    required this.controller,
+    required this.semanticsLabel,
+    this.onCleared,
+    this.onImeRemount,
+  });
+
+  final TextEditingController controller;
+  final String semanticsLabel;
+  final ValueChanged<String>? onCleared;
+  final VoidCallback? onImeRemount;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (BuildContext context, TextEditingValue value, Widget? _) {
+        if (value.text.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return Semantics(
+          button: true,
+          label: semanticsLabel,
+          child: IconButton(
+            splashRadius: 18,
+            icon: const Icon(Icons.close_rounded),
+            onPressed: () {
+              controller.clear();
+              TextInput.finishAutofillContext(shouldSave: false);
+              onCleared?.call('');
+              onImeRemount?.call();
+            },
+          ),
+        );
+      },
     );
   }
 }
