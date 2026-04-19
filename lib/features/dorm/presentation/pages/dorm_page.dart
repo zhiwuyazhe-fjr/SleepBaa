@@ -52,28 +52,97 @@ class DormPage extends StatefulWidget {
   State<DormPage> createState() => _DormPageState();
 }
 
-class _DormPageState extends State<DormPage> {
+class _DormPageState extends State<DormPage> with WidgetsBindingObserver {
   Timer? _dormPollTimer;
+  AppServices? _dormNoiseRecordingServices;
+  bool _ledgerAggregateFlushScheduled = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        _startDormPollTimerIfResumed();
       }
-      _dormPollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-        if (!mounted) {
-          return;
-        }
-        unawaited(context.appServices.dormRepository.refreshDormSnapshot());
-      });
     });
   }
 
   @override
-  void dispose() {
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final AppServices services = context.appServices;
+    if (!identical(_dormNoiseRecordingServices, services)) {
+      _dormNoiseRecordingServices?.dormRepository.removeListener(
+        _scheduleDormAggregateRecordingAfterBuild,
+      );
+      _dormNoiseRecordingServices = services;
+      services.dormRepository.addListener(_scheduleDormAggregateRecordingAfterBuild);
+      _scheduleDormAggregateRecordingAfterBuild();
+    }
+  }
+
+  /// [maybeRecordDormAggregate] notifies the ledger; must not run inside [build].
+  void _scheduleDormAggregateRecordingAfterBuild() {
+    if (!mounted || _ledgerAggregateFlushScheduled) {
+      return;
+    }
+    _ledgerAggregateFlushScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ledgerAggregateFlushScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      final AppServices services = context.appServices;
+      services.dormNoiseSampleLedger.maybeRecordDormAggregate(
+        services.dormRepository.currentDorm.noiseDb,
+      );
+    });
+  }
+
+  void _startDormPollTimerIfResumed() {
+    if (!mounted || _dormPollTimer != null) {
+      return;
+    }
+    final AppLifecycleState? life = WidgetsBinding.instance.lifecycleState;
+    if (life != null && life != AppLifecycleState.resumed) {
+      return;
+    }
+    _dormPollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(context.appServices.dormRepository.refreshDormSnapshot());
+    });
+  }
+
+  void _stopDormPollTimer() {
     _dormPollTimer?.cancel();
+    _dormPollTimer = null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _startDormPollTimerIfResumed();
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        _stopDormPollTimer();
+        break;
+    }
+  }
+
+  @override
+  void dispose() {
+    _dormNoiseRecordingServices?.dormRepository.removeListener(
+      _scheduleDormAggregateRecordingAfterBuild,
+    );
+    WidgetsBinding.instance.removeObserver(this);
+    _stopDormPollTimer();
     super.dispose();
   }
 
@@ -94,7 +163,6 @@ class _DormPageState extends State<DormPage> {
           if (dorm.id.isEmpty) {
             return const DormInvitePage();
           }
-          services.dormNoiseSampleLedger.maybeRecordDormAggregate(dorm.noiseDb);
           final double spatialAvgDb = averageNoiseDbForReturnedMembers(
             members: dorm.members,
             dormAggregateNoiseDb: dorm.noiseDb,

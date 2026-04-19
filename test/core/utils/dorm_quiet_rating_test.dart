@@ -22,6 +22,24 @@ void main() {
     expect(r.stars, 5);
   });
 
+  test('night weight scales level by weight sum, not sample count', () {
+    final DateTime night = DateTime(2026, 4, 18, 23, 30);
+    final DormQuietRatingResult r = computeDormQuietRating(<DormNoiseSample>[
+      DormNoiseSample(decibel: 30, timestamp: night),
+    ]);
+    expect(r.lEq, 30);
+    expect(r.sampleCount, 1);
+  });
+
+  test('mixed day and night weights use true weighted mean', () {
+    final DormQuietRatingResult r = computeDormQuietRating(<DormNoiseSample>[
+      DormNoiseSample(decibel: 40, timestamp: _day),
+      DormNoiseSample(decibel: 40, timestamp: DateTime(2026, 4, 18, 23, 0)),
+    ]);
+    expect(r.lEq, 40);
+    expect(r.sampleCount, 2);
+  });
+
   test('invalid decibel values are skipped', () {
     final DormQuietRatingResult r = computeDormQuietRating(<DormNoiseSample>[
       DormNoiseSample(decibel: -1, timestamp: _day),

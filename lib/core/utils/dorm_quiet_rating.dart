@@ -38,12 +38,13 @@ double dormNoiseTimeWeight(DateTime local) {
   return isNight ? 1.5 : 1.0;
 }
 
-/// L_eq = Σ(Lᵢ × Wᵢ) / n
+/// L_eq = Σ(Lᵢ × Wᵢ) / Σ(Wᵢ)  (time-weighted mean; weights from [dormNoiseTimeWeight])
 DormQuietRatingResult computeDormQuietRating(List<DormNoiseSample> samples) {
   if (samples.isEmpty) {
     return const DormQuietRatingResult(lEq: 0, stars: 3, sampleCount: 0);
   }
   double sumWeighted = 0;
+  double sumWeights = 0;
   int n = 0;
   for (final DormNoiseSample s in samples) {
     if (!s.decibel.isFinite || s.decibel < 0) {
@@ -51,12 +52,13 @@ DormQuietRatingResult computeDormQuietRating(List<DormNoiseSample> samples) {
     }
     final double w = dormNoiseTimeWeight(s.timestamp.toLocal());
     sumWeighted += s.decibel * w;
+    sumWeights += w;
     n += 1;
   }
-  if (n == 0) {
+  if (n == 0 || sumWeights <= 0) {
     return const DormQuietRatingResult(lEq: 0, stars: 3, sampleCount: 0);
   }
-  final double lEq = sumWeighted / n;
+  final double lEq = sumWeighted / sumWeights;
   return DormQuietRatingResult(
     lEq: lEq,
     stars: starsFromEquivalentNoise(lEq),
