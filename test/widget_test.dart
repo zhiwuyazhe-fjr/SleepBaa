@@ -735,7 +735,7 @@ void main() {
 
       expect(find.text('在线 2 人'), findsOneWidget);
       expect(find.text('已开启睡眠模式。'), findsNothing);
-      expect(find.text('已回到宿舍，状态已同步'), findsOneWidget);
+      expect(find.text('已回到宿舍，状态已同步'), findsNothing);
 
       final BuildContext context = tester.element(find.byType(DormPage));
       GoRouter.of(context).go(AppRoutes.dormStatus);

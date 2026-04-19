@@ -678,15 +678,15 @@ class _DormMemberCard extends StatelessWidget {
         currentUserProfile?.avatarFallbackSeed?.trim().isNotEmpty == true
         ? currentUserProfile!.avatarFallbackSeed!
         : member.name;
-    final String note = dormRoommateDynamicNote(member);
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.sm),
       border: Border.all(color: AppColors.divider),
       boxShadow: const <BoxShadow>[],
       child: SizedBox(
         width: 136,
-        height: 172,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
             _DormMemberAvatar(
               key: ValueKey<String>('dorm-member-avatar-${member.uid}'),
@@ -705,19 +705,6 @@ class _DormMemberCard extends StatelessWidget {
               style: Theme.of(
                 context,
               ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            SizedBox(
-              height: 20,
-              child: Text(
-                note,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
-              ),
             ),
             if (badge != null) ...<Widget>[
               const SizedBox(height: AppSpacing.xs),
@@ -755,7 +742,7 @@ class _DormMemberCard extends StatelessWidget {
                 ),
               ),
             ],
-            const Spacer(),
+            SizedBox(height: badge != null ? AppSpacing.xs : AppSpacing.sm),
             Container(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.xs,
