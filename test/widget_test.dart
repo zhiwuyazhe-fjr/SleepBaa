@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sleep_dorm_app/app/app.dart';
+import 'package:sleep_dorm_app/main.dart' as app_main;
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
@@ -76,6 +77,41 @@ void main() {
         hasCompletedInitialAuthBootstrap: false,
       ),
       isFalse,
+    );
+  });
+
+  test('system chrome config locks the app to portrait orientations', () async {
+    final List<MethodCall> calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (MethodCall call) async {
+          calls.add(call);
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await app_main.configureSleepDormSystemChrome();
+
+    expect(
+      calls,
+      contains(
+        isA<MethodCall>()
+            .having(
+              (MethodCall call) => call.method,
+              'method',
+              'SystemChrome.setPreferredOrientations',
+            )
+            .having(
+              (MethodCall call) => call.arguments,
+              'arguments',
+              <String>[
+                'DeviceOrientation.portraitUp',
+                'DeviceOrientation.portraitDown',
+              ],
+            ),
+      ),
     );
   });
 
@@ -239,6 +275,26 @@ void main() {
     await tester.tap(find.byIcon(Icons.person_rounded).last);
     await tester.pumpAndSettle();
     expect(find.byType(ProfilePage), findsOneWidget);
+  });
+
+  testWidgets('bottom navigation stays fixed when the keyboard appears', (
+    WidgetTester tester,
+  ) async {
+    addTearDown(tester.view.resetViewInsets);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+    );
+
+    final Finder navBarFinder = find.byKey(BottomNavShell.navBarKey);
+    final Rect initialRect = tester.getRect(navBarFinder);
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+    await tester.pump();
+
+    expect(tester.getRect(navBarFinder), initialRect);
   });
 
   testWidgets('assistant fab opens assistant page', (
