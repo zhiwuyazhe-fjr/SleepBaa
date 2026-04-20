@@ -2171,6 +2171,8 @@ class InMemoryAssistantRepository extends ChangeNotifier
   late List<AssistantThread> _threads;
   final Map<String, List<AssistantMessage>> _messagesByThread =
       <String, List<AssistantMessage>>{};
+  final Map<String, AssistantThreadTurnState> _turnStatesByThread =
+      <String, AssistantThreadTurnState>{};
   String? _currentThreadId;
 
   @override
@@ -2212,6 +2214,11 @@ class InMemoryAssistantRepository extends ChangeNotifier
   }
 
   @override
+  AssistantThreadTurnState? turnStateForThread(String threadId) {
+    return _turnStatesByThread[threadId];
+  }
+
+  @override
   Future<AssistantThread> createThread({String? title}) async {
     final AssistantThread thread = AssistantThread(
       id: IdGenerator.next('assistant-thread'),
@@ -2248,6 +2255,7 @@ class InMemoryAssistantRepository extends ChangeNotifier
         .where((AssistantThread item) => item.id != threadId)
         .toList(growable: false);
     _messagesByThread.remove(threadId);
+    _turnStatesByThread.remove(threadId);
     if (_currentThreadId == threadId) {
       _currentThreadId = _threads.isEmpty ? null : _threads.first.id;
     }
@@ -2278,6 +2286,55 @@ class InMemoryAssistantRepository extends ChangeNotifier
     _messagesByThread[thread.id] = <AssistantMessage>[];
     notifyListeners();
     return thread;
+  }
+
+  @override
+  Future<bool> tryStartThreadTurn({
+    required String threadId,
+    required String turnId,
+  }) async {
+    final AssistantThreadTurnState? current = _turnStatesByThread[threadId];
+    if (current != null && current.status != AssistantThreadTurnStatus.idle) {
+      return false;
+    }
+    _turnStatesByThread[threadId] = AssistantThreadTurnState(
+      threadId: threadId,
+      turnId: turnId,
+      status: AssistantThreadTurnStatus.streaming,
+      startedAt: DateTime.now(),
+    );
+    notifyListeners();
+    return true;
+  }
+
+  @override
+  Future<void> markThreadTurnFinalizing({
+    required String threadId,
+    required String turnId,
+  }) async {
+    final AssistantThreadTurnState? current = _turnStatesByThread[threadId];
+    if (current == null || current.turnId != turnId) {
+      return;
+    }
+    _turnStatesByThread[threadId] = current.copyWith(
+      status: AssistantThreadTurnStatus.finalizing,
+    );
+    notifyListeners();
+  }
+
+  @override
+  Future<void> finishThreadTurn({
+    required String threadId,
+    required String turnId,
+  }) async {
+    final AssistantThreadTurnState? current = _turnStatesByThread[threadId];
+    if (current == null || current.turnId != turnId) {
+      return;
+    }
+    _turnStatesByThread[threadId] = current.copyWith(
+      status: AssistantThreadTurnStatus.idle,
+    );
+    notifyListeners();
   }
 
   @override

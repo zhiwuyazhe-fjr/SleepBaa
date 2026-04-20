@@ -6,14 +6,17 @@
 import {
   AssistantContext,
   AssistantIntent,
+  AssistantPromptMode,
   DreamAnalysis,
   InterferenceFactor,
+  InterferenceSnapshotDoc,
   MorningReviewResult,
   RecommendedAction,
   SleepCaptureDraft,
   SleepCaptureKind,
   StructuredAssistantReply,
   SurfaceId,
+  TurnInsightExtraction,
   TonightPlan,
 } from "../shared/types";
 
@@ -51,12 +54,107 @@ function errorMessageOf(error: unknown): string {
     const cause = asMap((error as Error & { cause?: unknown }).cause);
     const causeCode = asString(cause.code);
     const causeMessage = asString(cause.message);
-    const details = [causeCode, causeMessage].filter((item) => item.trim().length > 0);
+    const details = [causeCode, causeMessage].filter(
+      (item) => item.trim().length > 0,
+    );
     return details.length > 0
       ? `${error.message}: ${details.join(" ")}`
       : error.message;
   }
   return String(error ?? "Unknown AI provider error.");
+}
+
+function extractOpenAICompatibleTextContent(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (!Array.isArray(value)) {
+    return "";
+  }
+  return value
+    .map((item) => {
+      const itemMap = asMap(item);
+      return asString(itemMap.text);
+    })
+    .join("");
+}
+
+function extractOpenAICompatibleMessageContent(payloadMap: JsonMap): string {
+  const choices = Array.isArray(payloadMap.choices) ? payloadMap.choices : [];
+  const firstChoice = asMap(choices[0]);
+  const message = asMap(firstChoice.message);
+  const delta = asMap(firstChoice.delta);
+  return (
+    extractOpenAICompatibleTextContent(delta.content) ||
+    extractOpenAICompatibleTextContent(message.content)
+  );
+}
+
+async function consumeOpenAICompatibleSseTextStream(params: {
+  response: Response;
+  onDelta?: (delta: string) => Promise<void> | void;
+}): Promise<string> {
+  if (!params.response.body) {
+    return "";
+  }
+
+  const reader = params.response.body.getReader();
+  const decoder = new TextDecoder();
+  const dataLines: string[] = [];
+  let reply = "";
+  let buffer = "";
+
+  const flushFrame = async (): Promise<void> => {
+    if (dataLines.length == 0) {
+      return;
+    }
+    const data = dataLines.join("\n").trim();
+    dataLines.length = 0;
+    if (!data || data === "[DONE]") {
+      return;
+    }
+    const payloadMap = asMap(JSON.parse(data));
+    const delta = extractOpenAICompatibleMessageContent(payloadMap);
+    if (!delta) {
+      return;
+    }
+    reply += delta;
+    if (params.onDelta) {
+      await params.onDelta(delta);
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    buffer = buffer.replace(/\r\n/g, "\n");
+
+    while (true) {
+      const newlineIndex = buffer.indexOf("\n");
+      if (newlineIndex == -1) {
+        break;
+      }
+      const line = buffer.slice(0, newlineIndex);
+      buffer = buffer.slice(newlineIndex + 1);
+      if (!line) {
+        await flushFrame();
+        continue;
+      }
+      if (line.startsWith("data:")) {
+        dataLines.push(line.slice("data:".length).trimStart());
+      }
+    }
+
+    if (done) {
+      break;
+    }
+  }
+
+  if (buffer.startsWith("data:")) {
+    dataLines.push(buffer.slice("data:".length).trimStart());
+  }
+  await flushFrame();
+  return reply;
 }
 
 function normalizeSurfaceIds(
@@ -191,10 +289,7 @@ function normalizeDreamAnalysis(
   const data = asMap(value);
   return {
     summary: asString(data.summary, fallback.summary),
-    dominantEmotion: asString(
-      data.dominantEmotion,
-      fallback.dominantEmotion,
-    ),
+    dominantEmotion: asString(data.dominantEmotion, fallback.dominantEmotion),
     suggestedFocus: asString(data.suggestedFocus, fallback.suggestedFocus),
     sourceRefs: asStringArray(data.sourceRefs, fallback.sourceRefs),
   };
@@ -260,6 +355,126 @@ function normalizeSleepCaptureDraft(
   };
 }
 
+function normalizeInterferenceSignals(
+  value: unknown,
+  fallback: InterferenceSnapshotDoc[] = [],
+): InterferenceSnapshotDoc[] {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+  const next: InterferenceSnapshotDoc[] = [];
+  for (const [index, item] of value.entries()) {
+    const data = asMap(item);
+    const fallbackItem = fallback[index];
+    const type = asString(data.type, fallbackItem?.type ?? "emotion");
+    if (
+      type !== "noise" &&
+      type !== "light" &&
+      type !== "phoneUsage" &&
+      type !== "emotion"
+    ) {
+      continue;
+    }
+    next.push({
+      type,
+      title: asString(data.title, fallbackItem?.title ?? ""),
+      value: asString(data.value, fallbackItem?.value ?? ""),
+      gradeLabel: asString(data.gradeLabel, fallbackItem?.gradeLabel ?? "low"),
+      status: asString(
+        data.status,
+        fallbackItem?.status ?? "ready",
+      ) as InterferenceSnapshotDoc["status"],
+      detail: asString(data.detail, fallbackItem?.detail ?? ""),
+      source: asString(
+        data.source,
+        fallbackItem?.source ?? "assistant_turn_extract",
+      ),
+      measuredAt:
+        asString(data.measuredAt, fallbackItem?.measuredAt ?? "") || null,
+      numericValue:
+        typeof data.numericValue === "number"
+          ? data.numericValue
+          : (fallbackItem?.numericValue ?? null),
+      score:
+        typeof data.score === "number"
+          ? data.score
+          : (fallbackItem?.score ?? null),
+    });
+  }
+  return next;
+}
+
+function normalizeMemoryCandidates(
+  value: unknown,
+  fallback: TurnInsightExtraction["memoryCandidates"] = [],
+): TurnInsightExtraction["memoryCandidates"] {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+  const next: TurnInsightExtraction["memoryCandidates"] = [];
+  for (const [index, item] of value.entries()) {
+    const data = asMap(item);
+    const fallbackItem = fallback[index];
+    const kind = asString(data.kind, fallbackItem?.kind ?? "");
+    const content = asString(data.content, fallbackItem?.content ?? "");
+    const canonicalKey = asString(
+      data.canonicalKey,
+      fallbackItem?.canonicalKey ?? "",
+    );
+    if (!kind || !content || !canonicalKey) {
+      continue;
+    }
+    next.push({
+      kind,
+      content,
+      canonicalKey,
+      keywords: asStringArray(data.keywords, fallbackItem?.keywords ?? []),
+      confidence: asNumber(data.confidence, fallbackItem?.confidence ?? 0.7),
+      salience: asNumber(data.salience, fallbackItem?.salience ?? 0.7),
+      sourceThreadId:
+        asString(data.sourceThreadId, fallbackItem?.sourceThreadId ?? "") ||
+        null,
+      sourceMessageId:
+        asString(data.sourceMessageId, fallbackItem?.sourceMessageId ?? "") ||
+        null,
+      sourceRefs: asStringArray(
+        data.sourceRefs,
+        fallbackItem?.sourceRefs ?? [],
+      ),
+    });
+  }
+  return next;
+}
+
+function normalizeTurnInsightExtraction(
+  value: unknown,
+  fallback: TurnInsightExtraction,
+): TurnInsightExtraction {
+  const data = asMap(value);
+  return {
+    interferenceSignals: normalizeInterferenceSignals(
+      data.interferenceSignals,
+      fallback.interferenceSignals,
+    ),
+    actionSuggestions: normalizeActions(
+      data.actionSuggestions,
+      fallback.actionSuggestions,
+    ),
+    memoryCandidates: normalizeMemoryCandidates(
+      data.memoryCandidates,
+      fallback.memoryCandidates,
+    ),
+    shouldRefreshPlan: asBoolean(
+      data.shouldRefreshPlan,
+      fallback.shouldRefreshPlan,
+    ),
+    updatedSurfaces: normalizeSurfaceIds(
+      data.updatedSurfaces,
+      fallback.updatedSurfaces,
+    ),
+  };
+}
+
 const ASSISTANT_INTENTS: AssistantIntent[] = [
   "general_support",
   "sleep_difficulty",
@@ -302,11 +517,7 @@ function missingTonightPlanFields(data: JsonMap): string[] {
     missing.push("coachSummary");
   }
   const riskLevel = asString(data.riskLevel);
-  if (
-    riskLevel !== "low" &&
-    riskLevel !== "medium" &&
-    riskLevel !== "high"
-  ) {
+  if (riskLevel !== "low" && riskLevel !== "medium" && riskLevel !== "high") {
     missing.push("riskLevel");
   }
   if (!Array.isArray(data.topFactors)) {
@@ -400,6 +611,26 @@ function missingSleepCaptureDraftFields(data: JsonMap): string[] {
   return missing;
 }
 
+function missingTurnInsightFields(data: JsonMap): string[] {
+  const missing: string[] = [];
+  if (!Array.isArray(data.interferenceSignals)) {
+    missing.push("interferenceSignals");
+  }
+  if (!Array.isArray(data.actionSuggestions)) {
+    missing.push("actionSuggestions");
+  }
+  if (!Array.isArray(data.memoryCandidates)) {
+    missing.push("memoryCandidates");
+  }
+  if (typeof data.shouldRefreshPlan !== "boolean") {
+    missing.push("shouldRefreshPlan");
+  }
+  if (!Array.isArray(data.updatedSurfaces)) {
+    missing.push("updatedSurfaces");
+  }
+  return missing;
+}
+
 function ensureStructuredReplyCandidate(value: unknown): JsonMap {
   const data = asMap(value);
   const missing = missingStructuredReplyFields(data);
@@ -450,6 +681,17 @@ function ensureSleepCaptureCandidate(value: unknown): JsonMap {
   if (missing.length > 0) {
     throw new Error(
       `Remote sleep capture draft missing required fields: ${missing.join(", ")}`,
+    );
+  }
+  return data;
+}
+
+function ensureTurnInsightCandidate(value: unknown): JsonMap {
+  const data = asMap(value);
+  const missing = missingTurnInsightFields(data);
+  if (missing.length > 0) {
+    throw new Error(
+      `Remote turn insight extraction missing required fields: ${missing.join(", ")}`,
     );
   }
   return data;
@@ -509,23 +751,224 @@ function plainReplyText(text: string): string {
   return cleaned;
 }
 
-function buildSystemPrompt(context: AssistantContext): string {
-  const profile = context.assistantProfile;
+function buildCompactRuntimeContext(context: AssistantContext): JsonMap {
+  return {
+    user: {
+      displayName: context.user.displayName,
+      role: context.user.role,
+      dormId: context.user.dormId ?? null,
+    },
+    settings: {
+      sleepGoalHours: context.settings.sleepGoalHours,
+      bedtimeReminderEnabled: context.settings.bedtimeReminderEnabled,
+      bedtimeReminder: context.settings.bedtimeReminder,
+      preferredTrackTitle: context.settings.preferredTrackTitle,
+      selectedNightMood: context.settings.selectedNightMood ?? null,
+    },
+    dorm: {
+      name: context.dorm.name,
+      noiseDb: context.dorm.noiseDb,
+      lightLabel: context.dorm.lightLabel,
+      quietLabel: context.dorm.quietLabel,
+      members: context.dorm.members.slice(0, 4).map((member) => ({
+        name: member.name,
+        status: member.status,
+        sleepModeActive: member.sleepModeActive,
+      })),
+    },
+    recentSessions: context.recentSessions.slice(-5),
+    recentDreams: context.recentDreams.slice(-3),
+    recentMessages: context.recentMessages.slice(-8),
+    threadSummary: context.threadSummary ?? null,
+    longTermMemory: (context.longTermMemory ?? []).slice(0, 6).map((item) => ({
+      kind: item.kind,
+      content: item.content,
+      canonicalKey: item.canonicalKey ?? null,
+      keywords: item.keywords ?? [],
+      confidence: item.confidence ?? null,
+      updatedAt: item.updatedAt,
+    })),
+    userState:
+      context.userState == null
+        ? null
+        : {
+            currentPhase: context.userState.currentPhase,
+            latestNightMood: context.userState.latestNightMood ?? null,
+            profileSummary: context.userState.profileSummary,
+            tonightPlan: context.userState.tonightPlan ?? null,
+          },
+  };
+}
+
+function truncatePromptText(value: string, maxLength: number): string {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function buildReplyRuntimeContext(params: {
+  context: AssistantContext;
+  intent: AssistantIntent;
+}): JsonMap {
+  const { context, intent } = params;
+  const latestSession = context.recentSessions[0];
+  const latestDream = context.recentDreams[0];
+  const tonightPlan = context.userState?.tonightPlan;
+  return {
+    user: {
+      displayName: context.user.displayName,
+      role: context.user.role,
+    },
+    settings: {
+      sleepGoalHours: context.settings.sleepGoalHours,
+      selectedNightMood: context.settings.selectedNightMood ?? null,
+      preferredTrackTitle: context.settings.preferredTrackTitle,
+    },
+    dorm: {
+      name: context.dorm.name,
+      noiseDb: context.dorm.noiseDb,
+      lightLabel: context.dorm.lightLabel,
+      quietLabel: context.dorm.quietLabel,
+      activeMemberCount:
+        context.dorm.activeMemberCount ??
+        context.dorm.members.filter(
+          (member) => member.status !== "quiet" || member.sleepModeActive,
+        ).length,
+    },
+    phase: context.userState?.currentPhase ?? null,
+    latestSession:
+      latestSession == null
+        ? null
+        : {
+            sleepDayKey: latestSession.sleepDayKey,
+            status: latestSession.status,
+            totalSleepHours: latestSession.totalSleepHours ?? null,
+            sleepGoalMet: latestSession.sleepGoalMet ?? null,
+          },
+    recentMessages: context.recentMessages.slice(-4).map((message) => ({
+      role: message.role,
+      content: truncatePromptText(message.content, 140),
+    })),
+    threadSummary:
+      context.threadSummary == null
+        ? null
+        : {
+            summary: truncatePromptText(context.threadSummary.summary, 180),
+            keywords: context.threadSummary.keywords.slice(0, 6),
+          },
+    longTermMemory: (context.longTermMemory ?? []).slice(0, 2).map((item) => ({
+      kind: item.kind,
+      content: truncatePromptText(item.content, 100),
+      confidence: item.confidence ?? null,
+    })),
+    latestDream:
+      intent === "dream_reflection" && latestDream != null
+        ? {
+            title: truncatePromptText(latestDream.title, 40),
+            emotionLabel: latestDream.emotionLabel,
+            body: truncatePromptText(latestDream.body, 120),
+          }
+        : null,
+    tonightPlan:
+      intent === "plan_review" && tonightPlan != null
+        ? {
+            riskLevel: tonightPlan.riskLevel,
+            topFactors: tonightPlan.topFactors
+              .slice(0, 2)
+              .map((factor) => factor.label),
+            recommendedActions: tonightPlan.recommendedActions
+              .slice(0, 2)
+              .map((action) => action.title),
+          }
+        : null,
+  };
+}
+
+function buildModePolicy(mode: AssistantPromptMode): string {
+  switch (mode) {
+    case "chat_reply":
+      return [
+        "Mode: chat_reply.",
+        "Respond in plain text only.",
+        "Prioritize low-pressure, concise, emotionally steady companionship.",
+        "Use short paragraphs and avoid rigid checklists unless the user asks.",
+      ].join("\n");
+    case "turn_insight_extract":
+      return [
+        "Mode: turn_insight_extract.",
+        "Return strict JSON only.",
+        "Extract structured interference signals, action suggestions, memory candidates, and whether tonight plan should refresh.",
+      ].join("\n");
+    case "sleep_capture_dream":
+      return [
+        "Mode: sleep_capture_dream.",
+        "Return strict JSON only.",
+        "Organize the user's dream capture faithfully with a gentle, brief reply.",
+      ].join("\n");
+    case "sleep_capture_memo":
+      return [
+        "Mode: sleep_capture_memo.",
+        "Return strict JSON only.",
+        "Organize the user's memo faithfully with a gentle, brief reply.",
+      ].join("\n");
+  }
+}
+
+function buildStaticPersonaPrompt(context: AssistantContext): string {
   return [
-    `You are ${profile.assistantName}.`,
-    `Role: ${profile.relationshipRole}.`,
-    `Persona: ${profile.identityPrompt}`,
-    `Tone: ${profile.tone}.`,
-    "You support a dorm sleep companion application.",
-    "Use the supplied context carefully and return strict JSON only.",
-    "Do not include markdown fences or any explanation outside JSON.",
+    "Static persona:",
+    "You are a dorm sleep companion assistant focused on helping the user settle before sleep.",
+    "You are warm, calm, non-judgmental, and practical.",
+    "You should protect the user's emotional safety, avoid pressure, and prefer small actionable steps.",
+    "You can remember stable user preferences and patterns, but you should not fabricate facts.",
+    `Assistant display name: ${context.assistantProfile.assistantName}.`,
+    `Relationship role: ${context.assistantProfile.relationshipRole}.`,
+    `Tone override: ${context.assistantProfile.tone}.`,
+    `User override persona note: ${context.assistantProfile.identityPrompt}.`,
   ].join("\n");
 }
 
-function buildUserPayloadPrompt(
-  instruction: string,
-  payload: JsonMap,
+function buildSystemPrompt(
+  context: AssistantContext,
+  mode: AssistantPromptMode = "turn_insight_extract",
 ): string {
+  const profile = context.assistantProfile;
+  return [
+    buildStaticPersonaPrompt(context),
+    buildModePolicy(mode),
+    `Current assistant name: ${profile.assistantName}.`,
+    `Current relationship role: ${profile.relationshipRole}.`,
+    `Current tone: ${profile.tone}.`,
+    "Use the supplied runtime context carefully.",
+    mode === "chat_reply"
+      ? "Do not output JSON, markdown fences, or role labels."
+      : "Return strict JSON only and do not include markdown fences or extra explanation.",
+  ].join("\n");
+}
+
+function buildChatReplyUserPrompt(params: {
+  context: AssistantContext;
+  prompt: string;
+  intent: AssistantIntent;
+}): string {
+  return [
+    "User asks for a sleep companion reply.",
+    `Intent: ${params.intent}`,
+    `Runtime context: ${JSON.stringify(
+      buildReplyRuntimeContext({
+        context: params.context,
+        intent: params.intent,
+      }),
+    )}`,
+    `User message: ${params.prompt}`,
+    "Reply directly to the user in natural language.",
+    "Keep it grounded, emotionally steady, and actionable.",
+  ].join("\n");
+}
+
+function buildUserPayloadPrompt(instruction: string, payload: JsonMap): string {
   return `${instruction}\n${JSON.stringify(payload)}`;
 }
 
@@ -749,6 +1192,122 @@ const SLEEP_CAPTURE_SCHEMA: JsonMap = {
   },
 };
 
+const INTERFERENCE_SIGNAL_SCHEMA: JsonMap = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "type",
+    "title",
+    "value",
+    "gradeLabel",
+    "status",
+    "detail",
+    "source",
+    "measuredAt",
+    "numericValue",
+    "score",
+  ],
+  properties: {
+    type: {
+      type: "string",
+      enum: ["noise", "light", "phoneUsage", "emotion"],
+    },
+    title: { type: "string" },
+    value: { type: "string" },
+    gradeLabel: { type: "string" },
+    status: {
+      type: "string",
+      enum: [
+        "idle",
+        "measuring",
+        "ready",
+        "denied",
+        "unavailable",
+        "unsupported",
+        "error",
+      ],
+    },
+    detail: { type: "string" },
+    source: { type: "string" },
+    measuredAt: { type: ["string", "null"] },
+    numericValue: { type: ["number", "null"] },
+    score: { type: ["number", "null"] },
+  },
+};
+
+const MEMORY_CANDIDATE_SCHEMA: JsonMap = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "kind",
+    "content",
+    "canonicalKey",
+    "keywords",
+    "confidence",
+    "salience",
+    "sourceThreadId",
+    "sourceMessageId",
+    "sourceRefs",
+  ],
+  properties: {
+    kind: { type: "string" },
+    content: { type: "string" },
+    canonicalKey: { type: "string" },
+    keywords: {
+      type: "array",
+      items: { type: "string" },
+    },
+    confidence: { type: "number" },
+    salience: { type: "number" },
+    sourceThreadId: { type: ["string", "null"] },
+    sourceMessageId: { type: ["string", "null"] },
+    sourceRefs: {
+      type: "array",
+      items: { type: "string" },
+    },
+  },
+};
+
+const TURN_INSIGHT_SCHEMA: JsonMap = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "interferenceSignals",
+    "actionSuggestions",
+    "memoryCandidates",
+    "shouldRefreshPlan",
+    "updatedSurfaces",
+  ],
+  properties: {
+    interferenceSignals: {
+      type: "array",
+      items: INTERFERENCE_SIGNAL_SCHEMA,
+    },
+    actionSuggestions: {
+      type: "array",
+      items: ACTION_SCHEMA,
+    },
+    memoryCandidates: {
+      type: "array",
+      items: MEMORY_CANDIDATE_SCHEMA,
+    },
+    shouldRefreshPlan: { type: "boolean" },
+    updatedSurfaces: {
+      type: "array",
+      items: {
+        type: "string",
+        enum: [
+          "home_pre_sleep",
+          "sleep_mode",
+          "morning_feedback",
+          "profile_report",
+          "assistant_context",
+        ],
+      },
+    },
+  },
+};
+
 const STRUCTURED_REPLY_EXAMPLE: JsonMap = {
   reply: "先把注意力放回今晚最小、最容易完成的一步。",
   intent: "general_support",
@@ -791,9 +1350,18 @@ const MORNING_REVIEW_EXAMPLE: JsonMap = {
 const SLEEP_CAPTURE_EXAMPLE: JsonMap = {
   type: "dream",
   title: "梦记 02:13 · 桥上的风",
-  outline: "AI整理：梦里重点出现了“高桥、冷风与不害怕的感觉”，适合稍后回看情绪和场景。",
+  outline:
+    "AI整理：梦里重点出现了“高桥、冷风与不害怕的感觉”，适合稍后回看情绪和场景。",
   content: "我梦见自己站在很高的桥上，风很冷，但并不害怕。",
   reply: "我轻轻帮你收好了这段梦境，等你清醒些时可以再回来补充。",
+};
+
+const TURN_INSIGHT_EXAMPLE: JsonMap = {
+  interferenceSignals: [],
+  actionSuggestions: [],
+  memoryCandidates: [],
+  shouldRefreshPlan: false,
+  updatedSurfaces: ["assistant_context"],
 };
 
 abstract class BaseRemoteProvider implements AIProvider {
@@ -807,6 +1375,7 @@ abstract class BaseRemoteProvider implements AIProvider {
   protected async withFallback<T>(params: {
     fallback: Promise<AIProviderResult<T>>;
     remoteCall: () => Promise<T>;
+    modelName?: string;
   }): Promise<AIProviderResult<T>> {
     const fallbackResult = await params.fallback;
     try {
@@ -814,7 +1383,7 @@ abstract class BaseRemoteProvider implements AIProvider {
       return {
         value,
         providerName: this.providerName,
-        modelName: this.modelName,
+        modelName: params.modelName ?? this.modelName,
         sourceMode: "remoteSuccess",
         errorMessage: null,
       };
@@ -822,7 +1391,7 @@ abstract class BaseRemoteProvider implements AIProvider {
       return {
         ...fallbackResult,
         providerName: this.providerName,
-        modelName: this.modelName,
+        modelName: params.modelName ?? this.modelName,
         sourceMode: "fallbackSuccess",
         errorMessage: errorMessageOf(error),
       };
@@ -834,6 +1403,24 @@ abstract class BaseRemoteProvider implements AIProvider {
     intent: AssistantIntent,
     prompt: string,
   ): Promise<AIProviderResult<StructuredAssistantReply>>;
+
+  abstract streamReplyText(
+    context: AssistantContext,
+    intent: AssistantIntent,
+    prompt: string,
+    onDelta?: (delta: string) => Promise<void> | void,
+  ): Promise<AIProviderResult<string>>;
+
+  abstract extractTurnInsights(
+    context: AssistantContext,
+    params: {
+      threadId: string;
+      prompt: string;
+      reply: string;
+      intent: AssistantIntent;
+      sourceMessageId?: string;
+    },
+  ): Promise<AIProviderResult<TurnInsightExtraction>>;
 
   abstract generateTonightPlan(
     context: AssistantContext,
@@ -866,11 +1453,31 @@ interface XAIResponsesProviderConfig {
   providerName: string;
   modelName: string;
   timeoutMs: number;
+  replyModelName?: string;
+  structuredModelName?: string;
+  replyTimeoutMs?: number;
+  structuredTimeoutMs?: number;
 }
 
 class XAIResponsesProvider extends BaseRemoteProvider {
   constructor(private readonly config: XAIResponsesProviderConfig) {
     super(config.providerName, config.modelName);
+  }
+
+  private replyModelName(): string {
+    return this.config.replyModelName?.trim() || this.config.modelName;
+  }
+
+  private structuredModelName(): string {
+    return this.config.structuredModelName?.trim() || this.config.modelName;
+  }
+
+  private replyTimeoutMs(): number {
+    return this.config.replyTimeoutMs ?? this.config.timeoutMs;
+  }
+
+  private structuredTimeoutMs(): number {
+    return this.config.structuredTimeoutMs ?? this.config.timeoutMs;
   }
 
   private fallbackRegionalBaseUrl(): string | null {
@@ -887,6 +1494,7 @@ class XAIResponsesProvider extends BaseRemoteProvider {
     fetchFn: typeof fetch,
     baseUrl: string,
     body: string,
+    timeoutMs: number,
   ): Promise<Response> {
     return fetchFn(baseUrl, {
       method: "POST",
@@ -895,7 +1503,7 @@ class XAIResponsesProvider extends BaseRemoteProvider {
         authorization: `Bearer ${this.config.apiKey}`,
       },
       body,
-      signal: AbortSignal.timeout(this.config.timeoutMs),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   }
 
@@ -906,6 +1514,7 @@ class XAIResponsesProvider extends BaseRemoteProvider {
   ): Promise<AIProviderResult<StructuredAssistantReply>> {
     return this.withFallback({
       fallback: this.fallback.generateStructuredReply(context, intent, prompt),
+      modelName: this.structuredModelName(),
       remoteCall: async () => {
         const value = await this.requestJson({
           schemaName: "structured_assistant_reply",
@@ -915,6 +1524,8 @@ class XAIResponsesProvider extends BaseRemoteProvider {
             "Return a structured assistant reply as JSON that matches the schema.",
             { context, intent, prompt },
           ),
+          modelName: this.structuredModelName(),
+          timeoutMs: this.structuredTimeoutMs(),
         });
         return normalizeStructuredReply(
           ensureStructuredReplyCandidate(value),
@@ -931,6 +1542,7 @@ class XAIResponsesProvider extends BaseRemoteProvider {
   ): Promise<AIProviderResult<TonightPlan>> {
     return this.withFallback({
       fallback: this.fallback.generateTonightPlan(context, runId),
+      modelName: this.structuredModelName(),
       remoteCall: async () => {
         const value = await this.requestJson({
           schemaName: "tonight_plan",
@@ -940,6 +1552,8 @@ class XAIResponsesProvider extends BaseRemoteProvider {
             "Return tonight plan JSON that matches the schema.",
             { context, runId },
           ),
+          modelName: this.structuredModelName(),
+          timeoutMs: this.structuredTimeoutMs(),
         });
         return normalizeTonightPlan(
           ensureTonightPlanCandidate(value),
@@ -955,6 +1569,7 @@ class XAIResponsesProvider extends BaseRemoteProvider {
   ): Promise<AIProviderResult<DreamAnalysis>> {
     return this.withFallback({
       fallback: this.fallback.summarizeDream(body, context),
+      modelName: this.structuredModelName(),
       remoteCall: async () => {
         const value = await this.requestJson({
           schemaName: "dream_analysis",
@@ -964,10 +1579,73 @@ class XAIResponsesProvider extends BaseRemoteProvider {
             "Return dream analysis JSON that matches the schema.",
             { body, context },
           ),
+          modelName: this.structuredModelName(),
+          timeoutMs: this.structuredTimeoutMs(),
         });
         return normalizeDreamAnalysis(
           ensureDreamAnalysisCandidate(value),
           (await this.fallback.summarizeDream(body, context)).value,
+        );
+      },
+    });
+  }
+
+  async streamReplyText(
+    context: AssistantContext,
+    intent: AssistantIntent,
+    prompt: string,
+    onDelta?: (delta: string) => Promise<void> | void,
+  ): Promise<AIProviderResult<string>> {
+    const modelName = this.replyModelName();
+    const reply = await this.requestPlainText({
+      systemPrompt: buildSystemPrompt(context, "chat_reply"),
+      userPrompt: buildChatReplyUserPrompt({ context, prompt, intent }),
+      modelName,
+      timeoutMs: this.replyTimeoutMs(),
+    });
+    if (onDelta && reply.trim()) {
+      await onDelta(reply);
+    }
+    return {
+      value: reply,
+      providerName: this.providerName,
+      modelName,
+      sourceMode: "remoteSuccess",
+      errorMessage: null,
+    };
+  }
+
+  async extractTurnInsights(
+    context: AssistantContext,
+    params: {
+      threadId: string;
+      prompt: string;
+      reply: string;
+      intent: AssistantIntent;
+      sourceMessageId?: string;
+    },
+  ): Promise<AIProviderResult<TurnInsightExtraction>> {
+    return this.withFallback({
+      fallback: this.fallback.extractTurnInsights(context, params),
+      modelName: this.structuredModelName(),
+      remoteCall: async () => {
+        const value = await this.requestJson({
+          schemaName: "turn_insight_extract",
+          schema: TURN_INSIGHT_SCHEMA,
+          systemPrompt: buildSystemPrompt(context, "turn_insight_extract"),
+          userPrompt: buildUserPayloadPrompt(
+            "Return turn insight extraction JSON that matches the schema.",
+            {
+              context: buildCompactRuntimeContext(context),
+              ...params,
+            },
+          ),
+          modelName: this.structuredModelName(),
+          timeoutMs: this.structuredTimeoutMs(),
+        });
+        return normalizeTurnInsightExtraction(
+          ensureTurnInsightCandidate(value),
+          (await this.fallback.extractTurnInsights(context, params)).value,
         );
       },
     });
@@ -983,15 +1661,23 @@ class XAIResponsesProvider extends BaseRemoteProvider {
   ): Promise<AIProviderResult<SleepCaptureDraft>> {
     return this.withFallback({
       fallback: this.fallback.generateSleepCapture(context, params),
+      modelName: this.structuredModelName(),
       remoteCall: async () => {
         const value = await this.requestJson({
           schemaName: "sleep_capture",
           schema: SLEEP_CAPTURE_SCHEMA,
-          systemPrompt: buildSystemPrompt(context),
+          systemPrompt: buildSystemPrompt(
+            context,
+            params.captureType === "dream"
+              ? "sleep_capture_dream"
+              : "sleep_capture_memo",
+          ),
           userPrompt: buildUserPayloadPrompt(
             "Return sleep capture JSON that matches the schema. Keep title concise, outline useful, content faithful to the user's input, and reply warm and brief.",
             params,
           ),
+          modelName: this.structuredModelName(),
+          timeoutMs: this.structuredTimeoutMs(),
         });
         return normalizeSleepCaptureDraft(
           ensureSleepCaptureCandidate(value),
@@ -1007,6 +1693,7 @@ class XAIResponsesProvider extends BaseRemoteProvider {
   ): Promise<AIProviderResult<MorningReviewResult>> {
     return this.withFallback({
       fallback: this.fallback.analyzeFeedback(context, sessionId),
+      modelName: this.structuredModelName(),
       remoteCall: async () => {
         const value = await this.requestJson({
           schemaName: "morning_review",
@@ -1016,6 +1703,8 @@ class XAIResponsesProvider extends BaseRemoteProvider {
             "Return morning review JSON that matches the schema.",
             { context, sessionId },
           ),
+          modelName: this.structuredModelName(),
+          timeoutMs: this.structuredTimeoutMs(),
         });
         return normalizeMorningReview(
           ensureMorningReviewCandidate(value),
@@ -1030,6 +1719,8 @@ class XAIResponsesProvider extends BaseRemoteProvider {
     schema: JsonMap;
     systemPrompt: string;
     userPrompt: string;
+    modelName: string;
+    timeoutMs: number;
   }): Promise<JsonMap> {
     if (!this.config.apiKey?.trim()) {
       throw new Error("xAI API key is missing.");
@@ -1041,7 +1732,7 @@ class XAIResponsesProvider extends BaseRemoteProvider {
     }
 
     const requestBody = JSON.stringify({
-      model: this.config.modelName,
+      model: params.modelName,
       store: false,
       input: [
         {
@@ -1075,14 +1766,24 @@ class XAIResponsesProvider extends BaseRemoteProvider {
 
     let response: Response;
     try {
-      response = await this.postResponses(fetchFn, this.config.baseUrl, requestBody);
+      response = await this.postResponses(
+        fetchFn,
+        this.config.baseUrl,
+        requestBody,
+        params.timeoutMs,
+      );
     } catch (error) {
       const regionalBaseUrl = this.fallbackRegionalBaseUrl();
       if (!regionalBaseUrl) {
         throw error;
       }
       try {
-        response = await this.postResponses(fetchFn, regionalBaseUrl, requestBody);
+        response = await this.postResponses(
+          fetchFn,
+          regionalBaseUrl,
+          requestBody,
+          params.timeoutMs,
+        );
       } catch (regionalError) {
         throw new Error(
           `xAI fetch failed on both global and regional endpoints. global=${errorMessageOf(
@@ -1104,6 +1805,75 @@ class XAIResponsesProvider extends BaseRemoteProvider {
     const payload = asMap(responseText ? JSON.parse(responseText) : {});
     const outputText = this.extractText(payload);
     return ensureStructuredJson(outputText);
+  }
+
+  private async requestPlainText(params: {
+    systemPrompt: string;
+    userPrompt: string;
+    modelName: string;
+    timeoutMs: number;
+  }): Promise<string> {
+    if (!this.config.apiKey?.trim()) {
+      throw new Error("xAI API key is missing.");
+    }
+
+    const fetchFn = globalThis.fetch;
+    if (typeof fetchFn !== "function") {
+      throw new Error("Global fetch is not available in this runtime.");
+    }
+
+    const requestBody = JSON.stringify({
+      model: params.modelName,
+      store: false,
+      input: [
+        {
+          role: "system",
+          content: [{ type: "input_text", text: params.systemPrompt }],
+        },
+        {
+          role: "user",
+          content: [{ type: "input_text", text: params.userPrompt }],
+        },
+      ],
+    });
+
+    let response: Response;
+    try {
+      response = await this.postResponses(
+        fetchFn,
+        this.config.baseUrl,
+        requestBody,
+        params.timeoutMs,
+      );
+    } catch (error) {
+      const regionalBaseUrl = this.fallbackRegionalBaseUrl();
+      if (!regionalBaseUrl) {
+        throw error;
+      }
+      response = await this.postResponses(
+        fetchFn,
+        regionalBaseUrl,
+        requestBody,
+        params.timeoutMs,
+      );
+    }
+
+    const responseText = await response.text();
+    if (!response.ok) {
+      throw new Error(
+        `xAI responses request failed with status ${
+          response.status
+        }: ${responseText.slice(0, 240)}`,
+      );
+    }
+    const payload = asMap(responseText ? JSON.parse(responseText) : {});
+    const text = this.extractText(payload).trim();
+    if (!text) {
+      throw new Error(
+        "xAI responses payload did not contain plain text output.",
+      );
+    }
+    return text;
   }
 
   private extractText(payload: JsonMap): string {
@@ -1150,6 +1920,10 @@ interface CloudBaseAIProviderConfig {
   apiKey?: string;
   baseUrl?: string;
   timeoutMs: number;
+  replyModelName?: string;
+  structuredModelName?: string;
+  replyTimeoutMs?: number;
+  structuredTimeoutMs?: number;
 }
 
 function cloudbaseProviderGroup(
@@ -1225,11 +1999,110 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
       )}/v1`;
   }
 
+  private replyModelName(): string {
+    return this.config.replyModelName?.trim() || this.config.modelName;
+  }
+
+  private structuredModelName(): string {
+    return this.config.structuredModelName?.trim() || this.config.modelName;
+  }
+
+  private replyTimeoutMs(): number {
+    return this.config.replyTimeoutMs ?? this.config.timeoutMs;
+  }
+
+  private structuredTimeoutMs(): number {
+    return this.config.structuredTimeoutMs ?? this.config.timeoutMs;
+  }
+
+  private async withSdkTimeout<T>(
+    operation: () => Promise<T>,
+    timeoutMs: number,
+    label: string,
+  ): Promise<T> {
+    let timer: NodeJS.Timeout | null = null;
+    try {
+      return await Promise.race<T>([
+        operation(),
+        new Promise<T>((_resolve, reject) => {
+          timer = setTimeout(() => {
+            reject(new Error(`CloudBase AI ${label} timeout after ${timeoutMs}ms.`));
+          }, timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    }
+  }
+
+  async streamReplyText(
+    context: AssistantContext,
+    intent: AssistantIntent,
+    prompt: string,
+    onDelta?: (delta: string) => Promise<void> | void,
+  ): Promise<AIProviderResult<string>> {
+    const modelName = this.replyModelName();
+    const reply = await this.streamPlainText(
+      context,
+      "chat_reply",
+      buildChatReplyUserPrompt({ context, prompt, intent }),
+      modelName,
+      this.replyTimeoutMs(),
+      onDelta,
+    );
+    return {
+      value: reply,
+      providerName: this.providerName,
+      modelName,
+      sourceMode: "remoteSuccess",
+      errorMessage: null,
+    };
+  }
+
+  async extractTurnInsights(
+    context: AssistantContext,
+    params: {
+      threadId: string;
+      prompt: string;
+      reply: string;
+      intent: AssistantIntent;
+      sourceMessageId?: string;
+    },
+  ): Promise<AIProviderResult<TurnInsightExtraction>> {
+    return this.withFallback({
+      fallback: this.fallback.extractTurnInsights(context, params),
+      modelName: this.structuredModelName(),
+      remoteCall: async () => {
+        const value = await this.generateJson(
+          context,
+          "Return turn insight extraction JSON that matches the schema.",
+          {
+            context: buildCompactRuntimeContext(context),
+            ...params,
+          },
+          "turn_insight_extract",
+          TURN_INSIGHT_SCHEMA,
+          TURN_INSIGHT_EXAMPLE,
+          "turn_insight_extract",
+          this.structuredModelName(),
+          this.structuredTimeoutMs(),
+        );
+        return normalizeTurnInsightExtraction(
+          ensureTurnInsightCandidate(value),
+          (await this.fallback.extractTurnInsights(context, params)).value,
+        );
+      },
+    });
+  }
+
   async generateStructuredReply(
     context: AssistantContext,
     intent: AssistantIntent,
     prompt: string,
   ): Promise<AIProviderResult<StructuredAssistantReply>> {
+    const modelName = this.structuredModelName();
     const fallbackResult = await this.fallback.generateStructuredReply(
       context,
       intent,
@@ -1243,6 +2116,9 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
         "structured_assistant_reply",
         STRUCTURED_REPLY_SCHEMA,
         STRUCTURED_REPLY_EXAMPLE,
+        "turn_insight_extract",
+        modelName,
+        this.structuredTimeoutMs(),
       );
       const candidate = extractJsonObject(rawText);
       const remoteReply =
@@ -1255,7 +2131,7 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
         return {
           value: normalizeStructuredReply(candidate, fallbackResult.value),
           providerName: this.providerName,
-          modelName: this.modelName,
+          modelName,
           sourceMode: "remoteSuccess",
           errorMessage: null,
         };
@@ -1264,7 +2140,7 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
         return {
           value: normalizeStructuredReply(candidate, fallbackResult.value),
           providerName: this.providerName,
-          modelName: this.modelName,
+          modelName,
           sourceMode: "fallbackSuccess",
           errorMessage: `Remote structured assistant reply missing required fields: ${missing.join(
             ", ",
@@ -1280,7 +2156,7 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
       return {
         ...fallbackResult,
         providerName: this.providerName,
-        modelName: this.modelName,
+        modelName,
         sourceMode: "fallbackSuccess",
         errorMessage: errorMessageOf(error),
       };
@@ -1293,6 +2169,7 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
   ): Promise<AIProviderResult<TonightPlan>> {
     return this.withFallback({
       fallback: this.fallback.generateTonightPlan(context, runId),
+      modelName: this.structuredModelName(),
       remoteCall: async () => {
         const value = await this.generateJson(
           context,
@@ -1301,6 +2178,9 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
           "tonight_plan",
           TONIGHT_PLAN_SCHEMA,
           TONIGHT_PLAN_EXAMPLE,
+          "turn_insight_extract",
+          this.structuredModelName(),
+          this.structuredTimeoutMs(),
         );
         return normalizeTonightPlan(
           ensureTonightPlanCandidate(value),
@@ -1316,6 +2196,7 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
   ): Promise<AIProviderResult<DreamAnalysis>> {
     return this.withFallback({
       fallback: this.fallback.summarizeDream(body, context),
+      modelName: this.structuredModelName(),
       remoteCall: async () => {
         const value = await this.generateJson(
           context,
@@ -1324,6 +2205,9 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
           "dream_analysis",
           DREAM_ANALYSIS_SCHEMA,
           DREAM_ANALYSIS_EXAMPLE,
+          "turn_insight_extract",
+          this.structuredModelName(),
+          this.structuredTimeoutMs(),
         );
         return normalizeDreamAnalysis(
           ensureDreamAnalysisCandidate(value),
@@ -1343,6 +2227,7 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
   ): Promise<AIProviderResult<SleepCaptureDraft>> {
     return this.withFallback({
       fallback: this.fallback.generateSleepCapture(context, params),
+      modelName: this.structuredModelName(),
       remoteCall: async () => {
         const value = await this.generateJson(
           context,
@@ -1351,6 +2236,11 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
           "sleep_capture",
           SLEEP_CAPTURE_SCHEMA,
           SLEEP_CAPTURE_EXAMPLE,
+          params.captureType === "dream"
+            ? "sleep_capture_dream"
+            : "sleep_capture_memo",
+          this.structuredModelName(),
+          this.structuredTimeoutMs(),
         );
         return normalizeSleepCaptureDraft(
           ensureSleepCaptureCandidate(value),
@@ -1366,6 +2256,7 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
   ): Promise<AIProviderResult<MorningReviewResult>> {
     return this.withFallback({
       fallback: this.fallback.analyzeFeedback(context, sessionId),
+      modelName: this.structuredModelName(),
       remoteCall: async () => {
         const value = await this.generateJson(
           context,
@@ -1374,6 +2265,9 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
           "morning_review",
           MORNING_REVIEW_SCHEMA,
           MORNING_REVIEW_EXAMPLE,
+          "turn_insight_extract",
+          this.structuredModelName(),
+          this.structuredTimeoutMs(),
         );
         return normalizeMorningReview(
           ensureMorningReviewCandidate(value),
@@ -1390,6 +2284,9 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
     schemaName: string,
     schema: JsonMap,
     example: JsonMap,
+    mode: AssistantPromptMode = "turn_insight_extract",
+    modelName = this.structuredModelName(),
+    timeoutMs = this.structuredTimeoutMs(),
   ): Promise<JsonMap> {
     return ensureStructuredJson(
       await this.generateText(
@@ -1399,6 +2296,9 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
         schemaName,
         schema,
         example,
+        mode,
+        modelName,
+        timeoutMs,
       ),
     );
   }
@@ -1410,31 +2310,39 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
     schemaName: string,
     schema: JsonMap,
     example: JsonMap,
+    mode: AssistantPromptMode = "turn_insight_extract",
+    modelName = this.structuredModelName(),
+    timeoutMs = this.structuredTimeoutMs(),
   ): Promise<string> {
     if (this.model) {
-      const result = await this.model.generateText({
-        model: this.config.modelName,
-        temperature: 0.1,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content: buildSystemPrompt(context),
-          },
-          {
-            role: "user",
-            content: buildSchemaAwareUserPayloadPrompt({
-              instruction,
-              payload,
-              schemaName,
-              schema,
-              example,
-            }),
-          },
-        ],
-      });
+      const result = await this.withSdkTimeout(
+        () =>
+          this.model.generateText({
+            model: modelName,
+            temperature: 0.1,
+            response_format: { type: "json_object" },
+            messages: [
+              {
+                role: "system",
+                content: buildSystemPrompt(context, mode),
+              },
+              {
+                role: "user",
+                content: buildSchemaAwareUserPayloadPrompt({
+                  instruction,
+                  payload,
+                  schemaName,
+                  schema,
+                  example,
+                }),
+              },
+            ],
+          }),
+        timeoutMs,
+        "generateText",
+      );
 
-      return asString(result?.text);
+      return asString((result as { text?: unknown } | null)?.text);
     }
 
     if (!this.gatewayBaseUrl) {
@@ -1452,13 +2360,13 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
     }
 
     const requestBody = JSON.stringify({
-      model: this.config.modelName,
+      model: modelName,
       temperature: 0.1,
       response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
-          content: buildSystemPrompt(context),
+          content: buildSystemPrompt(context, mode),
         },
         {
           role: "user",
@@ -1482,7 +2390,7 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
           authorization: `Bearer ${this.apiKey}`,
         },
         body: requestBody,
-        signal: AbortSignal.timeout(this.config.timeoutMs),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
       const message = errorMessageOf(error);
@@ -1492,7 +2400,7 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
         message.toLowerCase().includes("timeout")
       ) {
         throw new Error(
-          `CloudBase OpenAI-compatible request timeout after ${this.config.timeoutMs}ms.`,
+          `CloudBase OpenAI-compatible request timeout after ${timeoutMs}ms.`,
         );
       }
       throw error;
@@ -1508,35 +2416,175 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
     }
 
     const payloadMap = asMap(responseText ? JSON.parse(responseText) : {});
-    const choices = Array.isArray(payloadMap.choices) ? payloadMap.choices : [];
-    const message = asMap(asMap(choices[0]).message);
-    const content = message.content;
-
-    if (typeof content === "string" && content.trim()) {
+    const content = extractOpenAICompatibleMessageContent(payloadMap).trim();
+    if (content) {
       return content;
-    }
-    if (Array.isArray(content)) {
-      const joined = content
-        .map((item) => {
-          const itemMap = asMap(item);
-          return asString(itemMap.text);
-        })
-        .join("")
-        .trim();
-      if (joined) {
-        return joined;
-      }
     }
 
     throw new Error(
       "CloudBase OpenAI-compatible payload did not contain choices[0].message.content.",
     );
   }
+
+  private async streamPlainText(
+    context: AssistantContext,
+    mode: AssistantPromptMode,
+    userPrompt: string,
+    modelName: string,
+    timeoutMs: number,
+    onDelta?: (delta: string) => Promise<void> | void,
+  ): Promise<string> {
+    if (this.model && typeof this.model.streamText === "function") {
+      const streamedReply = await this.withSdkTimeout(async () => {
+        const result = await this.model.streamText({
+          model: modelName,
+          temperature: 0.35,
+          messages: [
+            {
+              role: "system",
+              content: buildSystemPrompt(context, mode),
+            },
+            {
+              role: "user",
+              content: userPrompt,
+            },
+          ],
+        });
+
+        let reply = "";
+        for await (const chunk of result.textStream) {
+          const delta = asString(chunk);
+          if (!delta) {
+            continue;
+          }
+          reply += delta;
+          if (onDelta) {
+            await onDelta(delta);
+          }
+        }
+        return reply;
+      }, timeoutMs, "streamText");
+      if (streamedReply.trim()) {
+        return streamedReply;
+      }
+    }
+
+    if (this.model) {
+      const result = await this.withSdkTimeout(
+        () =>
+          this.model.generateText({
+            model: modelName,
+            temperature: 0.35,
+            messages: [
+              {
+                role: "system",
+                content: buildSystemPrompt(context, mode),
+              },
+              {
+                role: "user",
+                content: userPrompt,
+              },
+            ],
+          }),
+        timeoutMs,
+        "generateText",
+      );
+      const reply = asString((result as { text?: unknown } | null)?.text).trim();
+      if (!reply) {
+        throw new Error("CloudBase AI model returned empty plain text.");
+      }
+      if (onDelta) {
+        await onDelta(reply);
+      }
+      return reply;
+    }
+
+    if (!this.gatewayBaseUrl) {
+      throw new Error("CloudBase AI gateway base URL is missing.");
+    }
+    if (!this.apiKey) {
+      throw new Error(
+        `CloudBase API key is missing for provider group "${this.providerGroup}". Custom provider groups must use the OpenAI-compatible CloudBase gateway with API key auth.`,
+      );
+    }
+
+    const fetchFn = globalThis.fetch;
+    if (typeof fetchFn !== "function") {
+      throw new Error("Global fetch is not available in this runtime.");
+    }
+
+    const requestBody = JSON.stringify({
+      model: modelName,
+      temperature: 0.35,
+      stream: true,
+      messages: [
+        {
+          role: "system",
+          content: buildSystemPrompt(context, mode),
+        },
+        {
+          role: "user",
+          content: userPrompt,
+        },
+      ],
+    });
+
+    const response = await fetchFn(`${this.gatewayBaseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${this.apiKey}`,
+        accept: "text/event-stream, application/json",
+      },
+      body: requestBody,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok) {
+      const responseText = await response.text();
+      throw new Error(
+        `CloudBase OpenAI-compatible request failed with status ${
+          response.status
+        }: ${responseText.slice(0, 240)}`,
+      );
+    }
+
+    const contentType =
+      response.headers.get("content-type")?.toLowerCase() || "";
+    if (response.body && contentType.includes("text/event-stream")) {
+      const streamedReply = await consumeOpenAICompatibleSseTextStream({
+        response,
+        onDelta,
+      });
+      if (streamedReply.trim()) {
+        return streamedReply;
+      }
+      throw new Error(
+        "CloudBase OpenAI-compatible SSE payload did not contain plain message content.",
+      );
+    }
+
+    const responseText = await response.text();
+    const payloadMap = asMap(responseText ? JSON.parse(responseText) : {});
+    const reply = extractOpenAICompatibleMessageContent(payloadMap).trim();
+    if (reply) {
+      if (onDelta) {
+        await onDelta(reply);
+      }
+      return reply;
+    }
+    throw new Error(
+      "CloudBase OpenAI-compatible payload did not contain plain message content.",
+    );
+  }
+}
+
+function positiveTimeoutMsOrNull(value: unknown): number | null {
+  const parsed = Number(value ?? "");
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 function timeoutMsOf(env: NodeJS.ProcessEnv): number {
-  const parsed = Number(env.AI_PROVIDER_TIMEOUT_MS ?? "60000");
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60000;
+  return positiveTimeoutMsOrNull(env.AI_PROVIDER_TIMEOUT_MS) ?? 60000;
 }
 
 export function createAIProviderFromEnv(
@@ -1548,18 +2596,32 @@ export function createAIProviderFromEnv(
     env.TCB_ENV?.trim() ||
     env.SCF_NAMESPACE?.trim() ||
     "";
+  const replyModelName = env.AI_PROVIDER_MODEL_REPLY?.trim() || undefined;
+  const structuredModelName =
+    env.AI_PROVIDER_MODEL_STRUCTURED?.trim() || undefined;
+  const sharedTimeoutMs = positiveTimeoutMsOrNull(env.AI_PROVIDER_TIMEOUT_MS);
+  const replyTimeoutMs =
+    positiveTimeoutMsOrNull(env.AI_PROVIDER_TIMEOUT_MS_REPLY) ??
+    sharedTimeoutMs ??
+    20000;
+  const structuredTimeoutMs =
+    positiveTimeoutMsOrNull(env.AI_PROVIDER_TIMEOUT_MS_STRUCTURED) ??
+    sharedTimeoutMs ??
+    40000;
 
   switch (mode) {
     case "xai_responses":
       return new XAIResponsesProvider({
         baseUrl:
-          env.AI_PROVIDER_BASE_URL?.trim() ||
-          "https://api.x.ai/v1/responses",
+          env.AI_PROVIDER_BASE_URL?.trim() || "https://api.x.ai/v1/responses",
         apiKey: env.AI_PROVIDER_API_KEY?.trim(),
         providerName: env.AI_PROVIDER_NAME?.trim() || "xai_responses",
-        modelName:
-          env.AI_PROVIDER_MODEL?.trim() || "grok-4-1-fast-reasoning",
+        modelName: env.AI_PROVIDER_MODEL?.trim() || "grok-4-1-fast-reasoning",
         timeoutMs: timeoutMsOf(env),
+        replyModelName,
+        structuredModelName,
+        replyTimeoutMs,
+        structuredTimeoutMs,
       });
     case "cloudbase_ai":
       if (envId) {
@@ -1570,9 +2632,12 @@ export function createAIProviderFromEnv(
           apiKey: env.AI_PROVIDER_API_KEY?.trim(),
           baseUrl: env.AI_PROVIDER_BASE_URL?.trim(),
           modelName:
-            env.AI_PROVIDER_MODEL?.trim() ||
-            "hunyuan-2.0-instruct-20251111",
+            env.AI_PROVIDER_MODEL?.trim() || "hunyuan-2.0-instruct-20251111",
           timeoutMs: timeoutMsOf(env),
+          replyModelName,
+          structuredModelName,
+          replyTimeoutMs,
+          structuredTimeoutMs,
         });
       }
       console.warn(

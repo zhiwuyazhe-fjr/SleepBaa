@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   AssistantContext,
+  AssistantMemoryCandidate,
   AssistantProfileDoc,
   AssistantMemoryItem,
   AssistantRunDoc,
@@ -29,6 +30,26 @@ interface QueryOptions {
     direction: SortDirection;
   };
   limit?: number;
+}
+
+interface AssistantContextBuildOptions {
+  profile?: "reply_lite" | "insight_full" | "capture_full";
+  recentSessionCount?: number;
+  recentDreamCount?: number;
+  messageCount?: number;
+  memoryLimit?: number;
+  memoryQuery?: string;
+  memoryKinds?: string[];
+}
+
+interface ResolvedAssistantContextBuildOptions {
+  profile: "reply_lite" | "insight_full" | "capture_full";
+  recentSessionCount: number;
+  recentDreamCount: number;
+  messageCount: number;
+  memoryLimit: number;
+  memoryQuery?: string;
+  memoryKinds?: string[];
 }
 
 interface DocumentStore {
@@ -115,6 +136,8 @@ const AUDIO_TRACK_CATALOG = [
   },
 ] as const;
 
+const ASSISTANT_THREAD_TURN_LEASE_MS = 60 * 1000;
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -184,6 +207,36 @@ function asStringArray(value: unknown): string[] {
   return value
     .map((item) => String(item).trim())
     .filter((item) => item.length > 0);
+}
+
+function tokenizeSearchText(value: string): string[] {
+  const normalized = value.toLowerCase();
+  const matches = normalized.match(/[a-z0-9\u4e00-\u9fff]+/g) ?? [];
+  return Array.from(new Set(matches.filter((item) => item.length >= 2)));
+}
+
+function stableAssistantMemoryId(
+  uid: string,
+  item: {
+    id?: string | null;
+    kind: string;
+    canonicalKey?: string | null;
+    content: string;
+  },
+): string {
+  const explicitId = asString(item.id).trim();
+  if (explicitId) {
+    return explicitId;
+  }
+  const rawKey =
+    asString(item.canonicalKey).trim() ||
+    item.content.trim().toLowerCase().slice(0, 64) ||
+    randomUUID();
+  const normalizedKey = rawKey
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+  return `${uid}:${item.kind}:${normalizedKey || "memory"}`;
 }
 
 function toJsonValue(value: unknown): unknown {
@@ -407,6 +460,7 @@ function unboundDormContext(): ContextDorm {
     name: "未加入宿舍",
     overview: "你还没有加入宿舍，先创建宿舍或使用邀请码加入吧。",
     noiseDb: 0,
+    activeMemberCount: 0,
     status: "active",
     archivedAt: null,
     lightLabel: "未设置",
@@ -417,6 +471,36 @@ function unboundDormContext(): ContextDorm {
     invites: [],
     rulesSettings: defaultDormRulesSettings(),
     earnedDormBadgeIds: [],
+  };
+}
+
+function resolveAssistantContextBuildOptions(
+  options: AssistantContextBuildOptions,
+): ResolvedAssistantContextBuildOptions {
+  const profile = options.profile ?? "insight_full";
+  const defaults =
+    profile === "reply_lite"
+      ? {
+          recentSessionCount: 0,
+          recentDreamCount: 0,
+          messageCount: 4,
+          memoryLimit: 2,
+        }
+      : {
+          recentSessionCount: 5,
+          recentDreamCount: 3,
+          messageCount: 8,
+          memoryLimit: 6,
+        };
+  return {
+    profile,
+    recentSessionCount:
+      options.recentSessionCount ?? defaults.recentSessionCount,
+    recentDreamCount: options.recentDreamCount ?? defaults.recentDreamCount,
+    messageCount: options.messageCount ?? defaults.messageCount,
+    memoryLimit: options.memoryLimit ?? defaults.memoryLimit,
+    memoryQuery: options.memoryQuery,
+    memoryKinds: options.memoryKinds,
   };
 }
 
@@ -777,6 +861,7 @@ export interface AssistantDataRepository {
   buildAssistantContext(
     uid: string,
     threadId?: string,
+    options?: AssistantContextBuildOptions,
   ): Promise<AssistantContext>;
   getBootstrapPayload(uid: string): Promise<AppBootstrapPayload>;
   diagnoseBootstrap(uid: string): Promise<JsonMap>;
@@ -793,28 +878,66 @@ export interface AssistantDataRepository {
   createAssistantThread(
     uid: string,
     title?: string,
-  ): Promise<{ id: string; userId: string; title: string; createdAt: string; updatedAt: string }>;
+  ): Promise<{
+    id: string;
+    userId: string;
+    title: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
   renameAssistantThread(
     uid: string,
     threadId: string,
     title: string,
-  ): Promise<{ id: string; userId: string; title: string; createdAt: string; updatedAt: string }>;
+  ): Promise<{
+    id: string;
+    userId: string;
+    title: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
   deleteAssistantThread(uid: string, threadId: string): Promise<void>;
   ensureAssistantThread(
     uid: string,
     threadId: string,
     title?: string,
   ): Promise<void>;
+  tryAcquireAssistantThreadTurn(params: {
+    uid: string;
+    threadId: string;
+    turnId: string;
+    status?: string;
+    leaseMs?: number;
+  }): Promise<boolean>;
+  renewAssistantThreadTurn(params: {
+    uid: string;
+    threadId: string;
+    turnId: string;
+    status?: string;
+    leaseMs?: number;
+  }): Promise<boolean>;
+  markAssistantThreadCommittedTurn(params: {
+    uid: string;
+    threadId: string;
+    turnId: string;
+  }): Promise<boolean>;
+  isAssistantThreadCommittedTurn(params: {
+    uid: string;
+    threadId: string;
+    turnId: string;
+  }): Promise<boolean>;
+  releaseAssistantThreadTurn(params: {
+    uid: string;
+    threadId: string;
+    turnId: string;
+  }): Promise<void>;
   appendAssistantMessage(message: JsonMap): Promise<void>;
   recoverPhoneAccount(params: {
     sourceUid: string;
     canonicalUid: string;
     phoneNumber: string;
   }): Promise<JsonMap>;
-  updateAvatar(
-    uid: string,
-    payload: JsonMap,
-  ): Promise<JsonMap>;
+  updateAvatar(uid: string, payload: JsonMap): Promise<JsonMap>;
   createDorm(
     uid: string,
     payload: JsonMap,
@@ -869,10 +992,7 @@ export interface AssistantDataRepository {
     proposalId: string,
     reason: string,
   ): Promise<{ dormId: string; rejectedAt: string; reason: string }>;
-  updateDormMemberStatus(
-    uid: string,
-    payload: JsonMap,
-  ): Promise<JsonMap>;
+  updateDormMemberStatus(uid: string, payload: JsonMap): Promise<JsonMap>;
   getAudioTrackCatalog(uid: string): Promise<JsonMap>;
   saveTonightInterference(uid: string, patch: JsonMap): Promise<JsonMap>;
   saveDormLocationAnchor(uid: string, anchor: JsonMap): Promise<JsonMap>;
@@ -913,9 +1033,11 @@ export class FirestoreRepository implements AssistantDataRepository {
   }
 
   async getAudioTrackCatalog(_uid: string): Promise<JsonMap> {
-    const collectionTracks = (await this.store.query(Collections.audioTracks, {
-      limit: 50,
-    }))
+    const collectionTracks = (
+      await this.store.query(Collections.audioTracks, {
+        limit: 50,
+      })
+    )
       .filter((doc) => asBoolean(withoutMeta(doc).enabled, false))
       .sort((a, b) => {
         const left = asNumber(withoutMeta(a).sortOrder, 0);
@@ -1053,9 +1175,8 @@ export class FirestoreRepository implements AssistantDataRepository {
         let fallbackAvatarUrl = asString(userDoc.avatarUrl) || null;
         if (!fallbackAvatarUrl && avatarStoragePath && this.fileStorage) {
           try {
-            fallbackAvatarUrl = await this.fileStorage.getTemporaryUrl(
-              avatarStoragePath,
-            );
+            fallbackAvatarUrl =
+              await this.fileStorage.getTemporaryUrl(avatarStoragePath);
           } catch {
             fallbackAvatarUrl = null;
           }
@@ -1124,11 +1245,78 @@ export class FirestoreRepository implements AssistantDataRepository {
       pendingRuleProposal:
         dormDoc.pendingRuleProposal == null
           ? null
-          : ((asMap(
+          : (asMap(
               dormDoc.pendingRuleProposal,
-            ) as unknown) as ContextDorm["pendingRuleProposal"]),
+            ) as unknown as ContextDorm["pendingRuleProposal"]),
       rules: (Array.isArray(dormDoc.rules) ? dormDoc.rules : []) as JsonMap[],
       invites: invites.map((doc) => withoutMeta(doc)),
+    } as ContextDorm;
+  }
+
+  async getDormLite(
+    dormId: string | null | undefined,
+    uid = "",
+  ): Promise<ContextDorm> {
+    const resolvedDormId =
+      dormId && dormId.trim().length > 0 ? dormId.trim() : "";
+    if (!resolvedDormId) {
+      return unboundDormContext();
+    }
+    const dormDoc = withoutMeta(
+      ((await this.store.get(Collections.dorms, resolvedDormId)) ??
+        defaultDormDoc(resolvedDormId)) as JsonMap,
+    );
+    const members = await this.store.query(Collections.dormMembers, {
+      filters: { dormId: resolvedDormId },
+      orderBy: { field: "lastActiveAt", direction: "desc" },
+      limit: 4,
+    });
+    const summarizedMembers = members.map((doc) => {
+      const value = withoutMeta(doc);
+      return {
+        uid: asString(value.uid),
+        name: asString(value.name, "Dorm member"),
+        status: asString(value.status, "quiet"),
+        presenceStatus: asString(value.presenceStatus, "returned"),
+        sleepModeActive: asBoolean(value.sleepModeActive, false),
+        lastActiveAt: asString(value.lastActiveAt, nowIso()),
+        note: asString(value.note) || undefined,
+      } satisfies ContextDormMember;
+    });
+    const activeMemberCount = summarizedMembers.filter(
+      (member) => member.status !== "quiet" || member.sleepModeActive,
+    ).length;
+
+    return {
+      id: asString(dormDoc.id, resolvedDormId),
+      name: asString(
+        dormDoc.name,
+        `Dorm ${resolvedDormId.slice(-4).toUpperCase()}`,
+      ),
+      overview: asString(dormDoc.overview, "Dorm context summary."),
+      noiseDb: asNumber(dormDoc.noiseDb, 32),
+      activeMemberCount,
+      status: asString(dormDoc.status, "active"),
+      archivedAt: asString(dormDoc.archivedAt) || null,
+      lightLabel: asString(dormDoc.lightLabel, "Dim"),
+      quietLabel: asString(dormDoc.quietLabel, "Stable"),
+      members: summarizedMembers,
+      events: [],
+      ...("rulesSettings" in dormDoc
+        ? { rulesSettings: dormDoc.rulesSettings }
+        : {}),
+      ...("locationAnchor" in dormDoc
+        ? { locationAnchor: dormDoc.locationAnchor }
+        : {}),
+      pendingRuleProposal:
+        dormDoc.pendingRuleProposal == null
+          ? null
+          : (asMap(
+              dormDoc.pendingRuleProposal,
+            ) as unknown as ContextDorm["pendingRuleProposal"]),
+      earnedDormBadgeIds: asStringArray(dormDoc.earnedDormBadgeIds),
+      rules: [],
+      invites: [],
     } as ContextDorm;
   }
 
@@ -1137,21 +1325,31 @@ export class FirestoreRepository implements AssistantDataRepository {
     sleepGoalHours: number,
     count = 7,
   ): Promise<ContextSleepSessionSummary[]> {
+    if (count <= 0) {
+      return [];
+    }
     const docs = await this.store.query(Collections.sleepSessions, {
       filters: { uid },
+      orderBy: { field: "startedAt", direction: "desc" },
+      limit: Math.max(count * 4, 20),
     });
     const latestBySleepDayKey = new Map<string, JsonMap>();
     for (const doc of docs) {
       const value = withoutMeta(doc);
       const sleepDayKey = sleepDayKeyOf(value);
       const existing = latestBySleepDayKey.get(sleepDayKey);
-      if (!existing || sleepSessionSortTimestamp(existing) < sleepSessionSortTimestamp(value)) {
+      if (
+        !existing ||
+        sleepSessionSortTimestamp(existing) < sleepSessionSortTimestamp(value)
+      ) {
         latestBySleepDayKey.set(sleepDayKey, value);
       }
     }
     return Array.from(latestBySleepDayKey.values())
       .sort((a, b) => {
-        const sleepDayCompare = sleepDayKeyOf(b).localeCompare(sleepDayKeyOf(a));
+        const sleepDayCompare = sleepDayKeyOf(b).localeCompare(
+          sleepDayKeyOf(a),
+        );
         if (sleepDayCompare !== 0) {
           return sleepDayCompare;
         }
@@ -1165,6 +1363,9 @@ export class FirestoreRepository implements AssistantDataRepository {
     uid: string,
     count = 5,
   ): Promise<ContextDreamSummary[]> {
+    if (count <= 0) {
+      return [];
+    }
     const docs = await this.store.query(Collections.dreamEntries, {
       filters: { userId: uid },
       orderBy: { field: "createdAt", direction: "desc" },
@@ -1186,24 +1387,24 @@ export class FirestoreRepository implements AssistantDataRepository {
     threadId: string | null | undefined,
     count = 20,
   ): Promise<ContextAssistantMessage[]> {
-    if (!threadId) {
+    if (!threadId || count <= 0) {
       return [];
     }
     const docs = await this.store.query(Collections.assistantMessages, {
       filters: { threadId },
-      orderBy: { field: "createdAt", direction: "asc" },
+      orderBy: { field: "createdAt", direction: "desc" },
       limit: count,
     });
-    return docs.map((doc) => {
+    return docs.reverse().map((doc) => {
       const value = withoutMeta(doc);
-        return {
-          id: asString(value.id, asString(value._id)),
-          role: asString(value.role, "assistant"),
-          content: asString(value.content),
-          status: asString(value.status, "complete"),
-          sourceMode: asString(value.sourceMode) || undefined,
-          createdAt: asString(value.createdAt),
-        };
+      return {
+        id: asString(value.id, asString(value._id)),
+        role: asString(value.role, "assistant"),
+        content: asString(value.content),
+        status: asString(value.status, "complete"),
+        sourceMode: asString(value.sourceMode) || undefined,
+        createdAt: asString(value.createdAt),
+      };
     });
   }
 
@@ -1215,7 +1416,9 @@ export class FirestoreRepository implements AssistantDataRepository {
   async buildAssistantContext(
     uid: string,
     threadId?: string,
+    options: AssistantContextBuildOptions = {},
   ): Promise<AssistantContext> {
+    const resolvedOptions = resolveAssistantContextBuildOptions(options);
     const [assistantProfile, user, settings, userState] = await Promise.all([
       this.readAssistantProfile(uid),
       this.readUserProfile(uid),
@@ -1230,15 +1433,24 @@ export class FirestoreRepository implements AssistantDataRepository {
       recentMessages,
       threadSummary,
       longTermMemory,
-    ] =
-      await Promise.all([
-        this.getDorm(user.dormId, uid),
-        this.listRecentSleepSessions(uid, settings.sleepGoalHours),
-        this.listRecentDreamEntries(uid),
-        this.listThreadMessages(resolvedThreadId),
-        this.readAssistantThreadSummary(resolvedThreadId),
-        this.listAssistantMemory(uid),
-      ]);
+    ] = await Promise.all([
+      resolvedOptions.profile === "reply_lite"
+        ? this.getDormLite(user.dormId, uid)
+        : this.getDorm(user.dormId, uid),
+      this.listRecentSleepSessions(
+        uid,
+        settings.sleepGoalHours,
+        resolvedOptions.recentSessionCount,
+      ),
+      this.listRecentDreamEntries(uid, resolvedOptions.recentDreamCount),
+      this.listThreadMessages(resolvedThreadId, resolvedOptions.messageCount),
+      this.readAssistantThreadSummary(resolvedThreadId),
+      this.listAssistantMemory(uid, {
+        limit: resolvedOptions.memoryLimit,
+        query: resolvedOptions.memoryQuery,
+        kinds: resolvedOptions.memoryKinds,
+      }),
+    ]);
     return {
       assistantProfile,
       user,
@@ -1439,7 +1651,9 @@ export class FirestoreRepository implements AssistantDataRepository {
       uid,
       updatedAt: nowIso(),
     });
-    const user = withoutMeta((await this.store.get(Collections.users, uid)) ?? {});
+    const user = withoutMeta(
+      (await this.store.get(Collections.users, uid)) ?? {},
+    );
     const dormId = asString(user.dormId);
     if (dormId) {
       const memberId = `${dormId}:${uid}`;
@@ -1485,14 +1699,20 @@ export class FirestoreRepository implements AssistantDataRepository {
     );
   }
 
-  async updateDormMemberStatus(uid: string, payload: JsonMap): Promise<JsonMap> {
+  async updateDormMemberStatus(
+    uid: string,
+    payload: JsonMap,
+  ): Promise<JsonMap> {
     const user = await this.getUserProfile(uid);
     const dormId = user.dormId ? user.dormId.trim() : "";
     if (!dormId) {
       throw new Error("Create or join a dorm before updating member status.");
     }
     const memberId = `${dormId}:${uid}`;
-    const existingMember = await this.store.get(Collections.dormMembers, memberId);
+    const existingMember = await this.store.get(
+      Collections.dormMembers,
+      memberId,
+    );
     const nextStatus = asString(payload.status, "quiet");
     const nextPresenceStatus = asString(
       payload.presenceStatus,
@@ -1531,7 +1751,9 @@ export class FirestoreRepository implements AssistantDataRepository {
       actorUid: uid,
       createdAt: updatedAt,
     });
-    return withoutMeta((await this.store.get(Collections.dormMembers, memberId)) ?? {});
+    return withoutMeta(
+      (await this.store.get(Collections.dormMembers, memberId)) ?? {},
+    );
   }
 
   async saveTonightInterference(uid: string, patch: JsonMap): Promise<JsonMap> {
@@ -1546,7 +1768,8 @@ export class FirestoreRepository implements AssistantDataRepository {
       updatedAt: nowIso(),
     };
     await this.writeUserState(uid, {
-      tonightInterference: nextInterference as UserStateDoc["tonightInterference"],
+      tonightInterference:
+        nextInterference as UserStateDoc["tonightInterference"],
     });
     return nextInterference;
   }
@@ -1574,7 +1797,9 @@ export class FirestoreRepository implements AssistantDataRepository {
     const user = await this.getUserProfile(uid);
     const dormId = user.dormId ? user.dormId.trim() : "";
     if (!dormId) {
-      throw new Error("Create or join a dorm before updating dorm environment.");
+      throw new Error(
+        "Create or join a dorm before updating dorm environment.",
+      );
     }
     await this.store.merge(Collections.dorms, dormId, {
       ...(Object.prototype.hasOwnProperty.call(patch, "noiseDb")
@@ -1667,7 +1892,10 @@ export class FirestoreRepository implements AssistantDataRepository {
     createdAt: string;
     updatedAt: string;
   }> {
-    const existing = await this.store.get(Collections.assistantThreads, threadId);
+    const existing = await this.store.get(
+      Collections.assistantThreads,
+      threadId,
+    );
     if (!existing || asString(existing.userId) != uid) {
       throw new Error(`Assistant thread "${threadId}" was not found.`);
     }
@@ -1684,7 +1912,10 @@ export class FirestoreRepository implements AssistantDataRepository {
   }
 
   async deleteAssistantThread(uid: string, threadId: string): Promise<void> {
-    const existing = await this.store.get(Collections.assistantThreads, threadId);
+    const existing = await this.store.get(
+      Collections.assistantThreads,
+      threadId,
+    );
     if (!existing || asString(existing.userId) != uid) {
       return;
     }
@@ -1726,6 +1957,166 @@ export class FirestoreRepository implements AssistantDataRepository {
       createdAt: nowIso(),
       updatedAt: nowIso(),
     });
+  }
+
+  async tryAcquireAssistantThreadTurn(params: {
+    uid: string;
+    threadId: string;
+    turnId: string;
+    status?: string;
+    leaseMs?: number;
+  }): Promise<boolean> {
+    await this.ensureUserBootstrap(params.uid);
+    const existing = await this.store.get(
+      Collections.assistantThreads,
+      params.threadId,
+    );
+    if (!existing || asString(existing.userId) !== params.uid) {
+      return false;
+    }
+    const now = Date.now();
+    const activeTurnId = asString(existing.activeTurnId);
+    const activeTurnOwnerUid = asString(existing.activeTurnOwnerUid);
+    const activeTurnStatus = asString(existing.activeTurnStatus, "idle");
+    const activeTurnLeaseExpiresAt = Date.parse(
+      asString(existing.activeTurnLeaseExpiresAt),
+    );
+    const leaseActive =
+      activeTurnStatus !== "idle" &&
+      activeTurnId.length > 0 &&
+      activeTurnOwnerUid.length > 0 &&
+      !Number.isNaN(activeTurnLeaseExpiresAt) &&
+      activeTurnLeaseExpiresAt > now;
+    if (
+      leaseActive &&
+      (activeTurnId !== params.turnId || activeTurnOwnerUid !== params.uid)
+    ) {
+      return false;
+    }
+
+    const startedAt = nowIso();
+    const nextLeaseExpiresAt = new Date(
+      now + (params.leaseMs ?? ASSISTANT_THREAD_TURN_LEASE_MS),
+    ).toISOString();
+    await this.store.merge(Collections.assistantThreads, params.threadId, {
+      activeTurnId: params.turnId,
+      activeTurnOwnerUid: params.uid,
+      activeTurnStartedAt: startedAt,
+      activeTurnLeaseExpiresAt: nextLeaseExpiresAt,
+      activeTurnStatus: params.status ?? "streaming",
+      updatedAt: startedAt,
+    });
+
+    const confirmed = await this.store.get(
+      Collections.assistantThreads,
+      params.threadId,
+    );
+    return (
+      asString(confirmed?.activeTurnId) === params.turnId &&
+      asString(confirmed?.activeTurnOwnerUid) === params.uid
+    );
+  }
+
+  async renewAssistantThreadTurn(params: {
+    uid: string;
+    threadId: string;
+    turnId: string;
+    status?: string;
+    leaseMs?: number;
+  }): Promise<boolean> {
+    const existing = await this.store.get(
+      Collections.assistantThreads,
+      params.threadId,
+    );
+    if (
+      !existing ||
+      asString(existing.userId) !== params.uid ||
+      asString(existing.activeTurnId) !== params.turnId ||
+      asString(existing.activeTurnOwnerUid) !== params.uid
+    ) {
+      return false;
+    }
+    const updatedAt = nowIso();
+    await this.store.merge(Collections.assistantThreads, params.threadId, {
+      activeTurnLeaseExpiresAt: new Date(
+        Date.now() + (params.leaseMs ?? ASSISTANT_THREAD_TURN_LEASE_MS),
+      ).toISOString(),
+      activeTurnStatus:
+        params.status ?? asString(existing.activeTurnStatus, "streaming"),
+      updatedAt,
+    });
+    const confirmed = await this.store.get(
+      Collections.assistantThreads,
+      params.threadId,
+    );
+    return (
+      asString(confirmed?.activeTurnId) === params.turnId &&
+      asString(confirmed?.activeTurnOwnerUid) === params.uid
+    );
+  }
+
+  async releaseAssistantThreadTurn(params: {
+    uid: string;
+    threadId: string;
+    turnId: string;
+  }): Promise<void> {
+    const existing = await this.store.get(
+      Collections.assistantThreads,
+      params.threadId,
+    );
+    if (
+      !existing ||
+      asString(existing.userId) !== params.uid ||
+      asString(existing.activeTurnId) !== params.turnId ||
+      asString(existing.activeTurnOwnerUid) !== params.uid
+    ) {
+      return;
+    }
+    await this.store.merge(Collections.assistantThreads, params.threadId, {
+      activeTurnId: "",
+      activeTurnOwnerUid: "",
+      activeTurnStartedAt: "",
+      activeTurnLeaseExpiresAt: "",
+      activeTurnStatus: "idle",
+      updatedAt: nowIso(),
+    });
+  }
+
+  async markAssistantThreadCommittedTurn(params: {
+    uid: string;
+    threadId: string;
+    turnId: string;
+  }): Promise<boolean> {
+    const existing = await this.store.get(
+      Collections.assistantThreads,
+      params.threadId,
+    );
+    if (!existing || asString(existing.userId) !== params.uid) {
+      return false;
+    }
+    const committedAt = nowIso();
+    await this.store.merge(Collections.assistantThreads, params.threadId, {
+      committedTurnId: params.turnId,
+      committedTurnAt: committedAt,
+      updatedAt: committedAt,
+    });
+    return this.isAssistantThreadCommittedTurn(params);
+  }
+
+  async isAssistantThreadCommittedTurn(params: {
+    uid: string;
+    threadId: string;
+    turnId: string;
+  }): Promise<boolean> {
+    const existing = await this.store.get(
+      Collections.assistantThreads,
+      params.threadId,
+    );
+    return (
+      !!existing &&
+      asString(existing.userId) === params.uid &&
+      asString(existing.committedTurnId) === params.turnId
+    );
   }
 
   async appendAssistantMessage(message: JsonMap): Promise<void> {
@@ -1954,7 +2345,9 @@ export class FirestoreRepository implements AssistantDataRepository {
       limit: 30,
     });
     const currentItems = records
-      .map((doc) => asString(withoutMeta(doc).content).replace(/\s+/g, " ").trim())
+      .map((doc) =>
+        asString(withoutMeta(doc).content).replace(/\s+/g, " ").trim(),
+      )
       .filter((item) => item.length > 0);
     const currentState =
       ((await this.getUserState(uid)) as unknown as JsonMap) ?? {};
@@ -2078,11 +2471,15 @@ export class FirestoreRepository implements AssistantDataRepository {
     readAt: string,
   ): Promise<void> {
     await this.ensureUserBootstrap(uid);
-    await this.store.merge(Collections.notifications, `${uid}:${notificationId}`, {
-      readAt,
-      ownerUid: uid,
-      notificationId,
-    });
+    await this.store.merge(
+      Collections.notifications,
+      `${uid}:${notificationId}`,
+      {
+        readAt,
+        ownerUid: uid,
+        notificationId,
+      },
+    );
   }
 
   async createDormInvite(
@@ -2270,7 +2667,9 @@ export class FirestoreRepository implements AssistantDataRepository {
       ...asMap(settings),
     };
     const proposedRules = buildDormRules(nextSettings);
-    const reviewerUids = members.map((member) => asString(member.uid)).filter(Boolean);
+    const reviewerUids = members
+      .map((member) => asString(member.uid))
+      .filter(Boolean);
     const proposerName =
       asString(
         members.find((member) => asString(member.uid) == uid)?.name,
@@ -2291,7 +2690,9 @@ export class FirestoreRepository implements AssistantDataRepository {
       rejectedReason: null,
       resolvedAt: null,
     };
-    const pendingReviewers = reviewerUids.filter((memberUid) => memberUid && memberUid !== uid);
+    const pendingReviewers = reviewerUids.filter(
+      (memberUid) => memberUid && memberUid !== uid,
+    );
     if (pendingReviewers.length === 0) {
       await this.store.merge(Collections.dorms, dormId, {
         rulesSettings: nextSettings,
@@ -2324,16 +2725,20 @@ export class FirestoreRepository implements AssistantDataRepository {
       });
       await Promise.all(
         pendingReviewers.map((targetUid) =>
-          this.store.set(Collections.notifications, `${targetUid}:dorm-rule-${proposalId}`, {
-            id: `dorm-rule-${proposalId}`,
-            category: "dorm",
-            title: "宿舍公约有新规则待确认",
-            body: `${proposerName} 更新了宿舍公约，等你确认后才会正式生效。`,
-            route: "/dorm/rules?review=1",
-            createdAt,
-            ownerUid: targetUid,
-            readAt: null,
-          }),
+          this.store.set(
+            Collections.notifications,
+            `${targetUid}:dorm-rule-${proposalId}`,
+            {
+              id: `dorm-rule-${proposalId}`,
+              category: "dorm",
+              title: "宿舍公约有新规则待确认",
+              body: `${proposerName} 更新了宿舍公约，等你确认后才会正式生效。`,
+              route: "/dorm/rules?review=1",
+              createdAt,
+              ownerUid: targetUid,
+              readAt: null,
+            },
+          ),
         ),
       );
     }
@@ -2373,12 +2778,13 @@ export class FirestoreRepository implements AssistantDataRepository {
       : buildDormRules(proposedSettings);
     const actorName =
       asString(
-        (
-          await this.store.get(Collections.dormMembers, `${dormId}:${uid}`)
-        )?.name,
+        (await this.store.get(Collections.dormMembers, `${dormId}:${uid}`))
+          ?.name,
         user.displayName,
       ) || "舍友";
-    const allApproved = reviewerUids.every((reviewerUid) => approvedUids.has(reviewerUid));
+    const allApproved = reviewerUids.every((reviewerUid) =>
+      approvedUids.has(reviewerUid),
+    );
     if (allApproved) {
       await this.store.merge(Collections.dorms, dormId, {
         rulesSettings: proposedSettings,
@@ -2445,9 +2851,8 @@ export class FirestoreRepository implements AssistantDataRepository {
     const rejectedAt = nowIso();
     const actorName =
       asString(
-        (
-          await this.store.get(Collections.dormMembers, `${dormId}:${uid}`)
-        )?.name,
+        (await this.store.get(Collections.dormMembers, `${dormId}:${uid}`))
+          ?.name,
         user.displayName,
       ) || "舍友";
     await this.store.merge(Collections.dorms, dormId, {
@@ -2506,7 +2911,9 @@ export class FirestoreRepository implements AssistantDataRepository {
       `${dormId}:${targetUid}`,
     );
     if (!targetMember) {
-      throw new Error("The selected roommate was not found in the current dorm.");
+      throw new Error(
+        "The selected roommate was not found in the current dorm.",
+      );
     }
     const actorMember =
       (await this.store.get(Collections.dormMembers, `${dormId}:${uid}`)) ??
@@ -2515,16 +2922,20 @@ export class FirestoreRepository implements AssistantDataRepository {
     const senderName = anonymous
       ? "您的舍友"
       : asString(actorMember.name, user.displayName || "舍友");
-    await this.store.set(Collections.notifications, `${targetUid}:gentle-${createdAt}`, {
-      id: `gentle-${createdAt}`,
-      category: "dorm",
-      title: "舍友提醒你稍微放轻一点",
-      body: `${senderName} 给你发来一条温和提醒：${trimmedMessage}`,
-      route: "/dorm",
-      createdAt,
-      ownerUid: targetUid,
-      readAt: null,
-    });
+    await this.store.set(
+      Collections.notifications,
+      `${targetUid}:gentle-${createdAt}`,
+      {
+        id: `gentle-${createdAt}`,
+        category: "dorm",
+        title: "舍友提醒你稍微放轻一点",
+        body: `${senderName} 给你发来一条温和提醒：${trimmedMessage}`,
+        route: "/dorm",
+        createdAt,
+        ownerUid: targetUid,
+        readAt: null,
+      },
+    );
     await this.store.set(Collections.dormEvents, randomUUID(), {
       id: randomUUID(),
       dormId,
@@ -2555,8 +2966,10 @@ export class FirestoreRepository implements AssistantDataRepository {
   ): Promise<void> {
     await this.ensureUserBootstrap(uid);
     for (const item of items) {
-      await this.store.set(Collections.assistantMemoryItems, item.id, {
+      const memoryId = stableAssistantMemoryId(uid, item);
+      await this.store.set(Collections.assistantMemoryItems, memoryId, {
         ...(item as unknown as JsonMap),
+        id: memoryId,
         userId: uid,
       });
     }
@@ -2719,11 +3132,9 @@ export class FirestoreRepository implements AssistantDataRepository {
     });
 
     const sourceState =
-      (await this.store.get(Collections.userState, sourceUid)) ??
-      null;
+      (await this.store.get(Collections.userState, sourceUid)) ?? null;
     const canonicalState =
-      (await this.store.get(Collections.userState, canonicalUid)) ??
-      null;
+      (await this.store.get(Collections.userState, canonicalUid)) ?? null;
     if (!canonicalState && sourceState) {
       await this.store.set(Collections.userState, canonicalUid, {
         ...withoutMeta(sourceState),
@@ -2816,10 +3227,12 @@ export class FirestoreRepository implements AssistantDataRepository {
     for (const notification of notifications) {
       const originalId = asString(notification.id, asString(notification._id));
       const nextId =
-        (await this.store.get(Collections.notifications, `${canonicalUid}:${originalId}`)) ==
-        null
-            ? originalId
-            : `${originalId}-${sourceUid.slice(0, 6)}`;
+        (await this.store.get(
+          Collections.notifications,
+          `${canonicalUid}:${originalId}`,
+        )) == null
+          ? originalId
+          : `${originalId}-${sourceUid.slice(0, 6)}`;
       await this.store.set(
         Collections.notifications,
         `${canonicalUid}:${nextId}`,
@@ -2853,11 +3266,15 @@ export class FirestoreRepository implements AssistantDataRepository {
       if (existing) {
         continue;
       }
-      await this.store.set(Collections.cardSnapshots, `${canonicalUid}:${surfaceId}`, {
-        ...withoutMeta(snapshot),
-        uid: canonicalUid,
-        generatedAt: asString(snapshot.generatedAt, migratedAt),
-      });
+      await this.store.set(
+        Collections.cardSnapshots,
+        `${canonicalUid}:${surfaceId}`,
+        {
+          ...withoutMeta(snapshot),
+          uid: canonicalUid,
+          generatedAt: asString(snapshot.generatedAt, migratedAt),
+        },
+      );
     }
   }
 
@@ -2955,13 +3372,20 @@ export class FirestoreRepository implements AssistantDataRepository {
     migratedAt: string,
   ): Promise<void> {
     const sourceMemberId = `${dormId}:${sourceUid}`;
-    const sourceMember = await this.store.get(Collections.dormMembers, sourceMemberId);
+    const sourceMember = await this.store.get(
+      Collections.dormMembers,
+      sourceMemberId,
+    );
     if (sourceMember) {
-      await this.store.set(Collections.dormMembers, `${dormId}:${canonicalUid}`, {
-        ...withoutMeta(sourceMember),
-        uid: canonicalUid,
-        lastActiveAt: migratedAt,
-      });
+      await this.store.set(
+        Collections.dormMembers,
+        `${dormId}:${canonicalUid}`,
+        {
+          ...withoutMeta(sourceMember),
+          uid: canonicalUid,
+          lastActiveAt: migratedAt,
+        },
+      );
       await this.store.delete(Collections.dormMembers, sourceMemberId);
     }
     const invites = await this.store.query(Collections.dormInvites, {
@@ -2976,7 +3400,11 @@ export class FirestoreRepository implements AssistantDataRepository {
         patch.acceptedByUid = canonicalUid;
       }
       if (Object.keys(patch).length > 0) {
-        await this.store.merge(Collections.dormInvites, asString(invite._id), patch);
+        await this.store.merge(
+          Collections.dormInvites,
+          asString(invite._id),
+          patch,
+        );
       }
     }
   }
@@ -3042,7 +3470,10 @@ export class FirestoreRepository implements AssistantDataRepository {
     if (!threadId) {
       return null;
     }
-    const doc = await this.store.get(Collections.assistantThreadSummaries, threadId);
+    const doc = await this.store.get(
+      Collections.assistantThreadSummaries,
+      threadId,
+    );
     if (!doc) {
       return null;
     }
@@ -3055,26 +3486,75 @@ export class FirestoreRepository implements AssistantDataRepository {
     };
   }
 
-  private async listAssistantMemory(uid: string): Promise<AssistantMemoryItem[]> {
+  private async listAssistantMemory(
+    uid: string,
+    options: {
+      limit?: number;
+      query?: string;
+      kinds?: string[];
+    } = {},
+  ): Promise<AssistantMemoryItem[]> {
+    const limit = options.limit ?? 20;
+    if (limit <= 0) {
+      return [];
+    }
     const docs = await this.store.query(Collections.assistantMemoryItems, {
       filters: { userId: uid },
       orderBy: { field: "updatedAt", direction: "desc" },
-      limit: 20,
+      limit: Math.max(limit * 4, 12),
     });
-    return docs.map((doc) => {
+    const queryTokens = tokenizeSearchText(options.query ?? "");
+    const allowedKinds = new Set(
+      (options.kinds ?? []).map((item) => item.trim()).filter(Boolean),
+    );
+
+    const scored = docs.map((doc) => {
       const value = withoutMeta(doc);
+      const keywords = asStringArray(value.keywords);
+      const contentTokens =
+        keywords.length > 0
+          ? keywords
+          : tokenizeSearchText(asString(value.content));
+      const overlapCount = queryTokens.filter((item) =>
+        contentTokens.some(
+          (token) => token.includes(item) || item.includes(token),
+        ),
+      ).length;
+      const kind = asString(value.kind, "profile");
+      const updatedAt = Date.parse(asString(value.updatedAt));
+      const ageDays = Number.isNaN(updatedAt)
+        ? 365
+        : Math.max(0, (Date.now() - updatedAt) / (24 * 60 * 60 * 1000));
+      const recencyScore = Math.max(0, 15 - ageDays);
+      const kindScore =
+        allowedKinds.size === 0 || allowedKinds.has(kind) ? 8 : 0;
+      const overlapScore = queryTokens.length === 0 ? 0 : overlapCount * 12;
+      const salienceScore = asNumber(value.salience, 0.5) * 20;
       return {
-        id: asString(value.id, asString(value._id)),
-        kind: asString(value.kind, "profile"),
-        content: asString(value.content),
-        sourceThreadId: asString(value.sourceThreadId) || null,
-        salience: asNumber(value.salience, 0.5),
-        lastUsedAt: asString(value.lastUsedAt) || null,
-        sourceRefs: asStringArray(value.sourceRefs),
-        createdAt: asString(value.createdAt, nowIso()),
-        updatedAt: asString(value.updatedAt, nowIso()),
+        score: salienceScore + overlapScore + recencyScore + kindScore,
+        item: {
+          id: asString(value.id, asString(value._id)),
+          kind: asString(value.kind, "profile"),
+          content: asString(value.content),
+          canonicalKey: asString(value.canonicalKey) || null,
+          keywords,
+          confidence:
+            value.confidence == null ? null : asNumber(value.confidence, 0.5),
+          sourceThreadId: asString(value.sourceThreadId) || null,
+          sourceMessageId: asString(value.sourceMessageId) || null,
+          salience: asNumber(value.salience, 0.5),
+          lastUsedAt: asString(value.lastUsedAt) || null,
+          sourceRefs: asStringArray(value.sourceRefs),
+          createdAt: asString(value.createdAt, nowIso()),
+          updatedAt: asString(value.updatedAt, nowIso()),
+        } satisfies AssistantMemoryItem,
       };
     });
+
+    return scored
+      .sort((left, right) => right.score - left.score)
+      .slice(0, limit)
+      .map((entry) => entry.item);
   }
 
   private async ensureUserBootstrap(uid: string): Promise<void> {
@@ -3148,8 +3628,8 @@ export class FirestoreRepository implements AssistantDataRepository {
           asString(user.displayName, "宿舍成员"),
           asString(user.avatarUrl),
           asString(user.equippedBadgeId) ||
-              asStringArray(user.earnedBadgeIds).slice(-1)[0] ||
-              null,
+            asStringArray(user.earnedBadgeIds).slice(-1)[0] ||
+            null,
         ),
       });
     }

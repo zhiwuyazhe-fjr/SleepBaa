@@ -50,6 +50,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
   int _restedLevel = 4;
   String? _boundSessionId;
   bool _isReturningToSleep = false;
+  bool _isSubmittingFeedback = false;
 
   @override
   void dispose() {
@@ -74,6 +75,9 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
         builder: (BuildContext context, Widget? child) {
           if (_isReturningToSleep) {
             return _ReturningToSleepLoading(palette: palette);
+          }
+          if (_isSubmittingFeedback) {
+            return _SubmittingMorningFeedbackLoading(palette: palette);
           }
           final SleepSessionRepository repository =
               services.sleepSessionRepository;
@@ -258,6 +262,10 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
               PrimaryButton(
                 label: '提交反馈',
                 onPressed: () async {
+                  if (_isSubmittingFeedback) {
+                    return;
+                  }
+                  setState(() => _isSubmittingFeedback = true);
                   final GoRouter router = GoRouter.of(context);
                   final List<RecommendationFeedback> feedback = session
                       .recommendations
@@ -272,26 +280,36 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                         );
                       })
                       .toList(growable: false);
-                  await services.sleepExperienceController
-                      .submitMorningFeedback(
-                        session: session,
-                        summary: MorningSummary(
-                          sleepQuality: _sleepQuality,
-                          restedLevel: _restedLevel,
-                          totalSleepHours: actualSleepHours,
-                          awakeningsCount: session.awakenings.length,
-                          note: _noteController.text.trim(),
-                        ),
-                        feedback: feedback,
-                      );
-                  if (!context.mounted) {
-                    return;
+                  try {
+                    await services.sleepExperienceController
+                        .submitMorningFeedback(
+                          session: session,
+                          summary: MorningSummary(
+                            sleepQuality: _sleepQuality,
+                            restedLevel: _restedLevel,
+                            totalSleepHours: actualSleepHours,
+                            awakeningsCount: session.awakenings.length,
+                            note: _noteController.text.trim(),
+                          ),
+                          feedback: feedback,
+                        );
+                    if (!context.mounted) {
+                      return;
+                    }
+                    router.go(
+                      AppRoutes.homePreSleepLocation(
+                        notice: AppRoutes.feedbackSubmittedNotice,
+                      ),
+                    );
+                  } catch (_) {
+                    if (!context.mounted) {
+                      return;
+                    }
+                    setState(() => _isSubmittingFeedback = false);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('提交晨间反馈失败，请重试')),
+                    );
                   }
-                  router.go(
-                    AppRoutes.homePreSleepLocation(
-                      notice: AppRoutes.feedbackSubmittedNotice,
-                    ),
-                  );
                 },
               ),
               if (widget.allowReturnToSleep) ...<Widget>[
@@ -511,6 +529,29 @@ class _MorningFeedbackTarget {
 
   final SleepSession? session;
   final String message;
+}
+
+class _SubmittingMorningFeedbackLoading extends StatelessWidget {
+  const _SubmittingMorningFeedbackLoading({required this.palette});
+
+  final NightMoodPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            CircularProgressIndicator(color: palette.primary),
+            const SizedBox(height: AppSpacing.lg),
+            Text('正在提交晨间反馈...', style: Theme.of(context).textTheme.titleMedium),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _ReturningToSleepLoading extends StatelessWidget {

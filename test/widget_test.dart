@@ -1352,6 +1352,8 @@ void main() {
       expect(find.byType(HomePreSleepPage), findsOneWidget);
       expect(find.text('小眠已经收到你的晨间反馈❤️'), findsOneWidget);
 
+      expect(find.text('这条睡眠记录已完成晨间反馈，可在我的页查看同步结果。'), findsNothing);
+
       final SleepSession completed = services.sleepSessionRepository
           .sessionForSleepDayKey(targetSession.sleepDayKey)!;
       expect(completed.id, targetSession.id);
@@ -1723,97 +1725,95 @@ void main() {
     },
   );
 
-  testWidgets(
-    'sleep-mode morning feedback entry shows the feedback form',
-    (WidgetTester tester) async {
-      final _FakeAppNotificationService notificationService =
-          _FakeAppNotificationService();
-      DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
+  testWidgets('sleep-mode morning feedback entry shows the feedback form', (
+    WidgetTester tester,
+  ) async {
+    final _FakeAppNotificationService notificationService =
+        _FakeAppNotificationService();
+    DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
 
-      await _pumpApp(
-        tester,
-        initialLocation: AppRoutes.homePreSleep,
-        clock: () => currentTime,
-        appNotificationService: notificationService,
-      );
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: () => currentTime,
+      appNotificationService: notificationService,
+    );
 
-      await tester.tap(find.byType(StartSleepModeCard));
-      await tester.pump();
-      expect(find.text('这条睡眠记录当前不可继续补反馈。'), findsNothing);
-      await tester.pump(const Duration(milliseconds: 400));
-      currentTime = DateTime(2030, 4, 5, 15, 10);
-      await tester.ensureVisible(find.byIcon(Icons.wb_sunny_rounded).first);
-      await tester.tap(find.byIcon(Icons.wb_sunny_rounded).first);
-      await tester.pump();
-      await tester.pumpAndSettle();
+    await tester.tap(find.byType(StartSleepModeCard));
+    await tester.pump();
+    expect(find.text('这条睡眠记录当前不可继续补反馈。'), findsNothing);
+    await tester.pump(const Duration(milliseconds: 400));
+    currentTime = DateTime(2030, 4, 5, 15, 10);
+    await tester.ensureVisible(find.byIcon(Icons.wb_sunny_rounded).first);
+    await tester.tap(find.byIcon(Icons.wb_sunny_rounded).first);
+    await tester.pump();
+    await tester.pumpAndSettle();
 
-      expect(find.byType(MorningFeedbackPage), findsOneWidget);
-      expect(find.byType(TextField), findsWidgets);
-      return;
+    expect(find.byType(MorningFeedbackPage), findsOneWidget);
+    expect(find.byType(TextField), findsWidgets);
+    return;
 
-      await tester.dragUntilVisible(
-        find.text('鏅ㄩ棿鍙嶉'),
-        find.byType(Scrollable).first,
-        const Offset(0, -220),
-      );
-      await tester.pump();
-      await tester.tap(find.text('鏅ㄩ棿鍙嶉').first);
-      await tester.pump();
-      await tester.pumpAndSettle();
+    await tester.dragUntilVisible(
+      find.text('鏅ㄩ棿鍙嶉'),
+      find.byType(Scrollable).first,
+      const Offset(0, -220),
+    );
+    await tester.pump();
+    await tester.tap(find.text('鏅ㄩ棿鍙嶉').first);
+    await tester.pump();
+    await tester.pumpAndSettle();
 
-      expect(find.byType(MorningFeedbackPage), findsOneWidget);
-      expect(find.widgetWithText(PrimaryButton, '鎻愪氦鍙嶉'), findsOneWidget);
-    },
-  );
+    expect(find.byType(MorningFeedbackPage), findsOneWidget);
+    expect(find.widgetWithText(PrimaryButton, '鎻愪氦鍙嶉'), findsOneWidget);
+  });
 
-  testWidgets(
-    'finish-and-feedback entry shows the feedback form',
-    (WidgetTester tester) async {
-      final _FakeAppNotificationService notificationService =
-          _FakeAppNotificationService();
-      DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
+  testWidgets('finish-and-feedback entry shows the feedback form', (
+    WidgetTester tester,
+  ) async {
+    final _FakeAppNotificationService notificationService =
+        _FakeAppNotificationService();
+    DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
 
-      await _pumpApp(
-        tester,
-        initialLocation: AppRoutes.homePreSleep,
-        clock: () => currentTime,
-        appNotificationService: notificationService,
-      );
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: () => currentTime,
+      appNotificationService: notificationService,
+    );
 
-      await tester.tap(find.byType(StartSleepModeCard));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      currentTime = DateTime(2030, 4, 5, 15, 10);
-      expect(find.byType(HomePostSleepPage), findsOneWidget);
-      await tester.ensureVisible(find.byType(PrimaryButton).last);
-      await tester.tap(find.byType(PrimaryButton).last);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-      await tester.ensureVisible(find.byType(PrimaryButton).last);
-      await tester.tap(find.byType(PrimaryButton).last);
-      await tester.pump();
-      await tester.pumpAndSettle();
+    await tester.tap(find.byType(StartSleepModeCard));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    currentTime = DateTime(2030, 4, 5, 15, 10);
+    expect(find.byType(HomePostSleepPage), findsOneWidget);
+    await tester.ensureVisible(find.byType(PrimaryButton).last);
+    await tester.tap(find.byType(PrimaryButton).last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.ensureVisible(find.byType(PrimaryButton).last);
+    await tester.tap(find.byType(PrimaryButton).last);
+    await tester.pump();
+    await tester.pumpAndSettle();
 
-      expect(find.byType(MorningFeedbackPage), findsOneWidget);
-      expect(find.byType(TextField), findsWidgets);
-      return;
+    expect(find.byType(MorningFeedbackPage), findsOneWidget);
+    expect(find.byType(TextField), findsWidgets);
+    return;
 
-      final Finder endSleepModeButton = find.widgetWithText(
-        PrimaryButton,
-        '缁撴潫鐫＄湢妯″紡',
-      );
-      await tester.ensureVisible(endSleepModeButton);
-      await tester.tap(endSleepModeButton);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-      await tester.tap(find.widgetWithText(PrimaryButton, '缁撴潫骞跺幓鏅ㄩ棿鍙嶉'));
-      await tester.pump();
-      await tester.pumpAndSettle();
+    final Finder endSleepModeButton = find.widgetWithText(
+      PrimaryButton,
+      '缁撴潫鐫＄湢妯″紡',
+    );
+    await tester.ensureVisible(endSleepModeButton);
+    await tester.tap(endSleepModeButton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.widgetWithText(PrimaryButton, '缁撴潫骞跺幓鏅ㄩ棿鍙嶉'));
+    await tester.pump();
+    await tester.pumpAndSettle();
 
-      expect(find.byType(MorningFeedbackPage), findsOneWidget);
-      expect(find.widgetWithText(PrimaryButton, '鎻愪氦鍙嶉'), findsOneWidget);
-    },
-  );
+    expect(find.byType(MorningFeedbackPage), findsOneWidget);
+    expect(find.widgetWithText(PrimaryButton, '鎻愪氦鍙嶉'), findsOneWidget);
+  });
 
   testWidgets(
     'sleep-mode morning feedback still opens for zero-minute same-day sessions',
