@@ -962,11 +962,6 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     );
   }
 
-  bool get _canSubmitLoginWithCode =>
-      _loginChallenge != null &&
-      _validatePhone(_loginPhoneController.text) == null &&
-      _validateCode(_loginCodeController.text) == null;
-
   bool get _canSubmitRegister =>
       _registerChallenge != null &&
       _validatePhone(_registerPhoneController.text) == null &&
@@ -1153,9 +1148,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
                   ? null
                   : usePassword
                   ? () => _submitLoginWithPassword(services)
-                  : (_canSubmitLoginWithCode
-                        ? () => _submitLoginWithCode(services)
-                        : null),
+                  : () => _submitLoginWithCode(services),
             );
           },
         ),
