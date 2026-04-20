@@ -17,7 +17,7 @@ void main() {
     await tester.tap(find.text('编辑'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(ChoiceChip, '早起的鸟儿有虫吃'));
+    await tester.tap(find.text('早起的鸟儿有虫吃'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, '保存'));
     await tester.pumpAndSettle();

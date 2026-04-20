@@ -138,6 +138,16 @@ class ProfileFacade extends ChangeNotifier {
     );
   }
 
+  Future<PhoneVerificationProof> verifyPhoneCode({
+    required String verificationId,
+    required String code,
+  }) {
+    return _authRepository.verifyPhoneCode(
+      verificationId: verificationId,
+      code: code,
+    );
+  }
+
   Future<AuthCaptchaChallenge> createCaptchaChallenge() {
     return _authRepository.createCaptchaChallenge();
   }
@@ -199,6 +209,18 @@ class ProfileFacade extends ChangeNotifier {
       phoneNumber: phoneNumber,
       verificationId: verificationId,
       code: code,
+      newPassword: newPassword,
+    );
+  }
+
+  Future<void> resetPasswordWithVerificationToken({
+    required String phoneNumber,
+    required String verificationToken,
+    required String newPassword,
+  }) {
+    return _authRepository.resetPasswordWithVerificationToken(
+      phoneNumber: phoneNumber,
+      verificationToken: verificationToken,
       newPassword: newPassword,
     );
   }

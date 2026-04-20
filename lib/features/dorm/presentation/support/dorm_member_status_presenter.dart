@@ -71,16 +71,6 @@ String dormActivityLabel(DormMember member) {
   return member.status == DormMemberStatus.active ? '活动中' : '安静中';
 }
 
-String dormRoommateDynamicNote(DormMember member) {
-  final String note = member.note.trim();
-  if (note.isEmpty || _isSleepModeNote(note)) {
-    return member.presenceStatus == DormPresenceStatus.returned
-        ? '已回到宿舍，状态已同步'
-        : '暂时不在宿舍';
-  }
-  return note;
-}
-
 Color dormActivityColor(DormMember member) {
   return member.status == DormMemberStatus.active
       ? const Color(0xFFF39A3C)
@@ -95,12 +85,4 @@ Color dormPresenceSleepColor(DormMember member) {
     return const Color(0xFF4458D8);
   }
   return const Color(0xFF2D9272);
-}
-
-bool _isSleepModeNote(String note) {
-  return note.contains('睡眠模式') ||
-      note.contains('睡眠计时') ||
-      note.contains('晨间反馈') ||
-      note.contains('已睡') ||
-      note.contains('未睡');
 }
