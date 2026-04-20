@@ -64,6 +64,16 @@ class PhoneVerificationChallenge {
   final bool isExistingUser;
 }
 
+class PhoneVerificationProof {
+  const PhoneVerificationProof({
+    required this.verificationToken,
+    required this.expiresIn,
+  });
+
+  final String verificationToken;
+  final int expiresIn;
+}
+
 class AuthCaptchaChallenge {
   const AuthCaptchaChallenge({
     required this.token,

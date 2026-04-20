@@ -364,6 +364,20 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
   }
 
   @override
+  Future<PhoneVerificationProof> verifyPhoneCode({
+    required String verificationId,
+    required String code,
+  }) async {
+    if (verificationId != 'local-verification-id' || code.trim() != '123456') {
+      throw const AuthFlowException('验证码不正确，请重新输入。');
+    }
+    return const PhoneVerificationProof(
+      verificationToken: 'local-verification-token',
+      expiresIn: 600,
+    );
+  }
+
+  @override
   Future<AuthCaptchaChallenge> createCaptchaChallenge() async {
     return const AuthCaptchaChallenge(
       token: 'local-captcha-token',
@@ -392,7 +406,7 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
     final String? savedPassword = _passwordsByPhone[normalizedPhoneNumber];
     if (!_registeredPhones.contains(normalizedPhoneNumber) ||
         (savedPassword != null && savedPassword != password)) {
-      throw const AuthFlowException('手机号或密码不正确，请重试。');
+      throw const AuthFlowException('请检查手机号和密码。');
     }
     _currentUser = _currentUser.copyWith(
       phoneNumber: normalizedPhoneNumber,
@@ -408,6 +422,7 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
     required String code,
     String? captchaToken,
   }) async {
+    await verifyPhoneCode(verificationId: verificationId, code: code);
     final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
       phoneNumber,
     );
@@ -428,6 +443,7 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
     required String code,
     required String password,
   }) async {
+    await verifyPhoneCode(verificationId: verificationId, code: code);
     final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
       phoneNumber,
     );
@@ -450,6 +466,23 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
     required String code,
     required String newPassword,
   }) async {
+    await verifyPhoneCode(verificationId: verificationId, code: code);
+    await resetPasswordWithVerificationToken(
+      phoneNumber: phoneNumber,
+      verificationToken: 'local-verification-token',
+      newPassword: newPassword,
+    );
+  }
+
+  @override
+  Future<void> resetPasswordWithVerificationToken({
+    required String phoneNumber,
+    required String verificationToken,
+    required String newPassword,
+  }) async {
+    if (verificationToken != 'local-verification-token') {
+      throw const AuthFlowException('验证码已失效，请重新验证。');
+    }
     final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
       phoneNumber,
     );

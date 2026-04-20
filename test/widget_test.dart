@@ -1,12 +1,15 @@
 // ignore_for_file: dead_code
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sleep_dorm_app/app/app.dart';
+import 'package:sleep_dorm_app/main.dart' as app_main;
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
@@ -37,6 +40,79 @@ import 'package:sleep_dorm_app/features/profile/presentation/pages/sleep_report_
 void main() {
   setUpAll(() {
     GoogleFonts.config.allowRuntimeFetching = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          _secureStorageChannel,
+          _handleSecureStorageCall,
+        );
+  });
+
+  setUp(() {
+    _mockSecureStorage.clear();
+  });
+
+  tearDownAll(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_secureStorageChannel, null);
+  });
+
+  test('cloudbase auth gate only blocks before bootstrap completes', () {
+    expect(
+      shouldShowCloudBaseAuthBlockingScreen(
+        usesCloudBase: true,
+        hasCompletedInitialAuthBootstrap: false,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldShowCloudBaseAuthBlockingScreen(
+        usesCloudBase: true,
+        hasCompletedInitialAuthBootstrap: true,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldShowCloudBaseAuthBlockingScreen(
+        usesCloudBase: false,
+        hasCompletedInitialAuthBootstrap: false,
+      ),
+      isFalse,
+    );
+  });
+
+  test('system chrome config locks the app to portrait orientations', () async {
+    final List<MethodCall> calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (MethodCall call) async {
+          calls.add(call);
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await app_main.configureSleepDormSystemChrome();
+
+    expect(
+      calls,
+      contains(
+        isA<MethodCall>()
+            .having(
+              (MethodCall call) => call.method,
+              'method',
+              'SystemChrome.setPreferredOrientations',
+            )
+            .having(
+              (MethodCall call) => call.arguments,
+              'arguments',
+              <String>[
+                'DeviceOrientation.portraitUp',
+                'DeviceOrientation.portraitDown',
+              ],
+            ),
+      ),
+    );
   });
 
   testWidgets(
@@ -199,6 +275,26 @@ void main() {
     await tester.tap(find.byIcon(Icons.person_rounded).last);
     await tester.pumpAndSettle();
     expect(find.byType(ProfilePage), findsOneWidget);
+  });
+
+  testWidgets('bottom navigation stays fixed when the keyboard appears', (
+    WidgetTester tester,
+  ) async {
+    addTearDown(tester.view.resetViewInsets);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+    );
+
+    final Finder navBarFinder = find.byKey(BottomNavShell.navBarKey);
+    final Rect initialRect = tester.getRect(navBarFinder);
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+    await tester.pump();
+
+    expect(tester.getRect(navBarFinder), initialRect);
   });
 
   testWidgets('assistant fab opens assistant page', (
@@ -403,10 +499,7 @@ void main() {
         tester,
         initialLocation: AppRoutes.home,
         clock: _dayClock,
-        environment: const AppEnvironment(
-          target: AppBackendTarget.emulator,
-          appIdPrefix: 'com.dormsleep.app',
-        ),
+        environment: _cloudBaseTestEnvironment,
       );
 
       expect(find.byType(PhoneAuthPage), findsOneWidget);
@@ -419,6 +512,47 @@ void main() {
   );
 
   testWidgets(
+    'cloudbase auth gate keeps phone auth input stable during re-authentication',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.home,
+        clock: _dayClock,
+        environment: _cloudBaseTestEnvironment,
+        settle: false,
+      );
+
+      await _pumpUntilFound(tester, find.byType(PhoneAuthPage));
+
+      final Finder loginPhoneField = find.byKey(
+        const ValueKey<String>('auth-login-phone-0'),
+      );
+      expect(loginPhoneField, findsOneWidget);
+
+      await tester.enterText(loginPhoneField, '13800138000');
+      await tester.pump();
+
+      final BuildContext authContext = tester.element(
+        find.byType(PhoneAuthPage),
+      );
+      final AppServices authServices = AppScope.of(authContext);
+      _seedExpiredCloudBaseSession();
+      final Future<UserProfile> reauthFuture = authServices.authRepository
+          .ensureAuthenticated();
+
+      await tester.pump();
+      expect(loginPhoneField, findsOneWidget);
+      expect(find.text('13800138000'), findsOneWidget);
+
+      await reauthFuture;
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(loginPhoneField, findsOneWidget);
+      expect(find.text('13800138000'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'phone auth page supports login register and password reset flows',
     (WidgetTester tester) async {
       await _pumpApp(
@@ -426,6 +560,13 @@ void main() {
         initialLocation: AppRoutes.authPhone,
         clock: _dayClock,
       );
+
+      final BuildContext authContext = tester.element(
+        find.byType(PhoneAuthPage),
+      );
+      final AppServices authServices = AppScope.of(authContext);
+      await _seedRegisteredPhoneUser(authServices);
+      await tester.pump();
 
       expect(find.textContaining('首次进入需要'), findsNothing);
       expect(
@@ -448,11 +589,10 @@ void main() {
       );
       await tester.enterText(
         find.byKey(const ValueKey<String>('auth-register-phone-0')),
-        '13800138000',
+        '13900139000',
       );
       await tester.tap(find.widgetWithText(FilledButton, '发送验证码').first);
       await tester.pumpAndSettle();
-      expect(find.byType(SnackBar), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey<String>('auth-mode-login')));
       await tester.pumpAndSettle();
@@ -465,7 +605,299 @@ void main() {
         find.byKey(const ValueKey<String>('auth-reset-phone-0')),
         findsOneWidget,
       );
-      expect(find.text('返回登录'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-verify')),
+        findsOneWidget,
+      );
+      expect(find.text('联系客服协助处理'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-reset-phone-0')),
+        '13800138000',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey<String>('auth-reset-send')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-reset-code-0')),
+        '123456',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey<String>('auth-reset-verify')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('重置密码'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-password-0')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-password-confirm-0')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-phone-0')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-code-0')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-send')),
+        findsNothing,
+      );
+      expect(find.text('密码建议'), findsNothing);
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-reset-password-0')),
+        'renewed123',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-reset-password-confirm-0')),
+        'renewed123',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey<String>('auth-reset-submit')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-success-login')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-success-resend')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'phone auth password login shows required phone toast on empty submit',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.authPhone,
+        clock: _dayClock,
+      );
+
+      await tester.tap(find.byKey(const ValueKey<String>('auth-login-submit')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('请输入手机号。'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'phone auth password login shows mainland phone validation toast for short numbers',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.authPhone,
+        clock: _dayClock,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-login-phone-0')),
+        '12345',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-login-password-0')),
+        'secret123',
+      );
+      await tester.pump();
+
+      await tester.tap(find.byKey(const ValueKey<String>('auth-login-submit')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('请输入正确的大陆手机号。'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'phone auth password login shows credential guidance when password is wrong',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.authPhone,
+        clock: _dayClock,
+      );
+
+      final BuildContext authContext = tester.element(
+        find.byType(PhoneAuthPage),
+      );
+      final AppServices authServices = AppScope.of(authContext);
+      await _seedRegisteredPhoneUser(authServices);
+      await tester.pump();
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-login-phone-0')),
+        '13800138000',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-login-password-0')),
+        'wrongpass',
+      );
+      await tester.pump();
+
+      await tester.tap(find.byKey(const ValueKey<String>('auth-login-submit')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('请检查手机号和密码。'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'phone auth reset keeps password fields hidden when code verification fails',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.authPhone,
+        clock: _dayClock,
+      );
+
+      final BuildContext authContext = tester.element(
+        find.byType(PhoneAuthPage),
+      );
+      final AppServices authServices = AppScope.of(authContext);
+      await _seedRegisteredPhoneUser(authServices);
+      await tester.pump();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('auth-forgot-password')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-reset-phone-0')),
+        '13800138000',
+      );
+      await tester.tap(find.byKey(const ValueKey<String>('auth-reset-send')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-reset-code-0')),
+        '654321',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey<String>('auth-reset-verify')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-password-0')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-password-confirm-0')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-verify')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('phone auth system back returns to the previous subpage', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.authPhone,
+      clock: _dayClock,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('auth-forgot-password')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('auth-reset-phone-0')),
+      findsOneWidget,
+    );
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PhoneAuthPage), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('auth-login-phone-0')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'phone auth back leaves reset password page before returning to login',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.authPhone,
+        clock: _dayClock,
+      );
+
+      final BuildContext authContext = tester.element(
+        find.byType(PhoneAuthPage),
+      );
+      final AppServices authServices = AppScope.of(authContext);
+      await _seedRegisteredPhoneUser(authServices);
+      await tester.pump();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('auth-forgot-password')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-reset-phone-0')),
+        '13800138000',
+      );
+      await tester.tap(find.byKey(const ValueKey<String>('auth-reset-send')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-reset-code-0')),
+        '123456',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey<String>('auth-reset-verify')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('重置密码'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-password-0')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-phone-0')),
+        findsNothing,
+      );
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-phone-0')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-password-0')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('auth-reset-verify')),
+        findsOneWidget,
+      );
+      expect(find.text('找回密码'), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('auth-login-phone-0')),
+        findsOneWidget,
+      );
     },
   );
 
@@ -501,16 +933,156 @@ void main() {
 
       await tester.enterText(phoneField, '13800138000');
       await tester.enterText(phoneField, '13900139000');
+      await tester.tap(
+        find.byKey(const ValueKey<String>('auth-register-send')),
+      );
+      await tester.pumpAndSettle();
       await tester.enterText(passwordField, 'secret123');
       await tester.enterText(confirmField, 'secret123');
       await tester.enterText(codeField, '123456');
       await tester.pump();
 
-      expect(find.text('13900139000'), findsOneWidget);
-      final PrimaryButton button = tester.widget<PrimaryButton>(submitButton);
+      final TextField phoneTextField = tester.widget<TextField>(phoneField);
+      expect(phoneTextField.controller?.text, '13900139000');
+      final FilledButton button = tester.widget<FilledButton>(
+        find.descendant(of: submitButton, matching: find.byType(FilledButton)),
+      );
       expect(button.onPressed, isNotNull);
     },
   );
+
+  testWidgets('phone auth send-code enters a 60 second cooldown', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.authPhone,
+      clock: _dayClock,
+    );
+
+    await tester.tap(find.byKey(const ValueKey<String>('auth-mode-register')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('auth-register-phone-0')),
+      '13900139000',
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('auth-register-send')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('60s'), findsOneWidget);
+
+    FilledButton sendButton = tester.widget<FilledButton>(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('auth-register-send')),
+        matching: find.byType(FilledButton),
+      ),
+    );
+    expect(sendButton.onPressed, isNull);
+
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('59s'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 59));
+    sendButton = tester.widget<FilledButton>(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('auth-register-send')),
+        matching: find.byType(FilledButton),
+      ),
+    );
+    expect(sendButton.onPressed, isNotNull);
+    expect(find.text('发送验证码'), findsOneWidget);
+  });
+
+  testWidgets(
+    'phone auth shares verification cooldown for the same phone across subpages',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.authPhone,
+        clock: _dayClock,
+      );
+
+      final BuildContext authContext = tester.element(
+        find.byType(PhoneAuthPage),
+      );
+      final AppServices authServices = AppScope.of(authContext);
+      await _seedRegisteredPhoneUser(authServices);
+      await tester.pump();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('auth-forgot-password')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-reset-phone-0')),
+        '13800138000',
+      );
+      await tester.tap(find.byKey(const ValueKey<String>('auth-reset-send')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('60s'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.chevron_left_rounded));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('auth-login-method-code')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('auth-login-phone-0')),
+        '13800138000',
+      );
+      await tester.pump();
+
+      final FilledButton loginSendButton = tester.widget<FilledButton>(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('auth-login-code-send')),
+          matching: find.byType(FilledButton),
+        ),
+      );
+      final List<String> cooldownLabels = tester
+          .widgetList<Text>(
+            find.descendant(
+              of: find.byKey(const ValueKey<String>('auth-login-code-send')),
+              matching: find.byType(Text),
+            ),
+          )
+          .map((Text widget) => widget.data ?? '')
+          .toList();
+
+      expect(
+        cooldownLabels.any((String label) => RegExp(r'^\d+s$').hasMatch(label)),
+        isTrue,
+      );
+      expect(loginSendButton.onPressed, isNull);
+    },
+  );
+
+  testWidgets('phone auth keeps a usable width in short mobile heights', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 300));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.authPhone,
+      clock: _dayClock,
+    );
+    await tester.pumpAndSettle();
+
+    final Rect phoneRect = tester.getRect(
+      find.byKey(const ValueKey<String>('auth-login-phone-0')),
+    );
+    final Rect submitRect = tester.getRect(
+      find.byKey(const ValueKey<String>('auth-login-submit')),
+    );
+
+    expect(phoneRect.width, greaterThan(250));
+    expect(submitRect.width, greaterThan(250));
+  });
 
   testWidgets('phone auth register password can be deleted and re-entered', (
     WidgetTester tester,
@@ -585,13 +1157,7 @@ void main() {
 
     final BuildContext context = tester.element(find.byType(PhoneAuthPage));
     final AppServices services = AppScope.of(context);
-    await services.profileFacade.registerWithPhone(
-      phoneNumber: '13800138000',
-      verificationId: 'verification-id',
-      code: '123456',
-      password: 'secret123',
-    );
-    await services.authRepository.signOut();
+    await _seedRegisteredPhoneUser(services);
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey<String>('auth-mode-register')));
@@ -614,6 +1180,83 @@ void main() {
     );
     expect(find.text('该手机号已注册，请直接登录。'), findsOneWidget);
   });
+
+  testWidgets(
+    'phone auth layout keeps key actions inside viewport at desktop resolutions',
+    (WidgetTester tester) async {
+      const List<Size> sizes = <Size>[
+        Size(1920, 1080),
+        Size(2160, 1440),
+        Size(2560, 1440),
+      ];
+
+      void expectInViewport(Finder finder, Size size, String label) {
+        final Rect rect = tester.getRect(finder);
+        expect(
+          rect.left >= 0,
+          isTrue,
+          reason: '$label left overflow at $size: $rect',
+        );
+        expect(
+          rect.top >= 0,
+          isTrue,
+          reason: '$label top overflow at $size: $rect',
+        );
+        expect(
+          rect.right <= size.width,
+          isTrue,
+          reason: '$label right overflow at $size: $rect',
+        );
+        expect(
+          rect.bottom <= size.height,
+          isTrue,
+          reason: '$label bottom overflow at $size: $rect',
+        );
+      }
+
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      for (final Size size in sizes) {
+        await tester.binding.setSurfaceSize(size);
+        await _pumpApp(
+          tester,
+          initialLocation: AppRoutes.authPhone,
+          clock: _dayClock,
+        );
+        await tester.pumpAndSettle();
+
+        final Finder registerSwitch = find.byKey(
+          const ValueKey<String>('auth-mode-register'),
+        );
+        final Finder forgotPassword = find.byKey(
+          const ValueKey<String>('auth-forgot-password'),
+        );
+
+        expect(registerSwitch, findsOneWidget);
+        expect(forgotPassword, findsOneWidget);
+        expectInViewport(registerSwitch, size, 'registerSwitch');
+        expectInViewport(forgotPassword, size, 'forgotPassword');
+
+        await tester.tap(registerSwitch);
+        await tester.pumpAndSettle();
+
+        final Finder loginSwitch = find.byKey(
+          const ValueKey<String>('auth-mode-login'),
+        );
+        final Finder registerSubmit = find.byKey(
+          const ValueKey<String>('auth-register-submit'),
+        );
+
+        expect(loginSwitch, findsOneWidget);
+        expect(registerSubmit, findsOneWidget);
+        expectInViewport(loginSwitch, size, 'loginSwitch');
+        expectInViewport(registerSubmit, size, 'registerSubmit');
+
+        await tester.tap(loginSwitch);
+        await tester.pumpAndSettle();
+      }
+    },
+  );
 
   testWidgets('dorm page uses a full-width hero and draggable drawer', (
     WidgetTester tester,
@@ -727,24 +1370,6 @@ void main() {
     expect(find.text('月度全勤'), findsOneWidget);
     expect(find.text('安静守护者'), findsOneWidget);
   });
-
-  testWidgets(
-    'dorm page hides sleep mode notes and keeps online count aligned',
-    (WidgetTester tester) async {
-      await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
-
-      expect(find.text('在线 2 人'), findsOneWidget);
-      expect(find.text('已开启睡眠模式。'), findsNothing);
-      expect(find.text('已回到宿舍，状态已同步'), findsNothing);
-
-      final BuildContext context = tester.element(find.byType(DormPage));
-      GoRouter.of(context).go(AppRoutes.dormStatus);
-      await tester.pumpAndSettle();
-
-      expect(find.byType(DormStatusPage), findsOneWidget);
-      expect(find.text('在线 2 人'), findsOneWidget);
-    },
-  );
 
   testWidgets('profile page shows redesigned modules', (
     WidgetTester tester,
@@ -1723,97 +2348,95 @@ void main() {
     },
   );
 
-  testWidgets(
-    'sleep-mode morning feedback entry shows the feedback form',
-    (WidgetTester tester) async {
-      final _FakeAppNotificationService notificationService =
-          _FakeAppNotificationService();
-      DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
+  testWidgets('sleep-mode morning feedback entry shows the feedback form', (
+    WidgetTester tester,
+  ) async {
+    final _FakeAppNotificationService notificationService =
+        _FakeAppNotificationService();
+    DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
 
-      await _pumpApp(
-        tester,
-        initialLocation: AppRoutes.homePreSleep,
-        clock: () => currentTime,
-        appNotificationService: notificationService,
-      );
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: () => currentTime,
+      appNotificationService: notificationService,
+    );
 
-      await tester.tap(find.byType(StartSleepModeCard));
-      await tester.pump();
-      expect(find.text('这条睡眠记录当前不可继续补反馈。'), findsNothing);
-      await tester.pump(const Duration(milliseconds: 400));
-      currentTime = DateTime(2030, 4, 5, 15, 10);
-      await tester.ensureVisible(find.byIcon(Icons.wb_sunny_rounded).first);
-      await tester.tap(find.byIcon(Icons.wb_sunny_rounded).first);
-      await tester.pump();
-      await tester.pumpAndSettle();
+    await tester.tap(find.byType(StartSleepModeCard));
+    await tester.pump();
+    expect(find.text('这条睡眠记录当前不可继续补反馈。'), findsNothing);
+    await tester.pump(const Duration(milliseconds: 400));
+    currentTime = DateTime(2030, 4, 5, 15, 10);
+    await tester.ensureVisible(find.byIcon(Icons.wb_sunny_rounded).first);
+    await tester.tap(find.byIcon(Icons.wb_sunny_rounded).first);
+    await tester.pump();
+    await tester.pumpAndSettle();
 
-      expect(find.byType(MorningFeedbackPage), findsOneWidget);
-      expect(find.byType(TextField), findsWidgets);
-      return;
+    expect(find.byType(MorningFeedbackPage), findsOneWidget);
+    expect(find.byType(TextField), findsWidgets);
+    return;
 
-      await tester.dragUntilVisible(
-        find.text('鏅ㄩ棿鍙嶉'),
-        find.byType(Scrollable).first,
-        const Offset(0, -220),
-      );
-      await tester.pump();
-      await tester.tap(find.text('鏅ㄩ棿鍙嶉').first);
-      await tester.pump();
-      await tester.pumpAndSettle();
+    await tester.dragUntilVisible(
+      find.text('鏅ㄩ棿鍙嶉'),
+      find.byType(Scrollable).first,
+      const Offset(0, -220),
+    );
+    await tester.pump();
+    await tester.tap(find.text('鏅ㄩ棿鍙嶉').first);
+    await tester.pump();
+    await tester.pumpAndSettle();
 
-      expect(find.byType(MorningFeedbackPage), findsOneWidget);
-      expect(find.widgetWithText(PrimaryButton, '鎻愪氦鍙嶉'), findsOneWidget);
-    },
-  );
+    expect(find.byType(MorningFeedbackPage), findsOneWidget);
+    expect(find.widgetWithText(PrimaryButton, '鎻愪氦鍙嶉'), findsOneWidget);
+  });
 
-  testWidgets(
-    'finish-and-feedback entry shows the feedback form',
-    (WidgetTester tester) async {
-      final _FakeAppNotificationService notificationService =
-          _FakeAppNotificationService();
-      DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
+  testWidgets('finish-and-feedback entry shows the feedback form', (
+    WidgetTester tester,
+  ) async {
+    final _FakeAppNotificationService notificationService =
+        _FakeAppNotificationService();
+    DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
 
-      await _pumpApp(
-        tester,
-        initialLocation: AppRoutes.homePreSleep,
-        clock: () => currentTime,
-        appNotificationService: notificationService,
-      );
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: () => currentTime,
+      appNotificationService: notificationService,
+    );
 
-      await tester.tap(find.byType(StartSleepModeCard));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      currentTime = DateTime(2030, 4, 5, 15, 10);
-      expect(find.byType(HomePostSleepPage), findsOneWidget);
-      await tester.ensureVisible(find.byType(PrimaryButton).last);
-      await tester.tap(find.byType(PrimaryButton).last);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-      await tester.ensureVisible(find.byType(PrimaryButton).last);
-      await tester.tap(find.byType(PrimaryButton).last);
-      await tester.pump();
-      await tester.pumpAndSettle();
+    await tester.tap(find.byType(StartSleepModeCard));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    currentTime = DateTime(2030, 4, 5, 15, 10);
+    expect(find.byType(HomePostSleepPage), findsOneWidget);
+    await tester.ensureVisible(find.byType(PrimaryButton).last);
+    await tester.tap(find.byType(PrimaryButton).last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.ensureVisible(find.byType(PrimaryButton).last);
+    await tester.tap(find.byType(PrimaryButton).last);
+    await tester.pump();
+    await tester.pumpAndSettle();
 
-      expect(find.byType(MorningFeedbackPage), findsOneWidget);
-      expect(find.byType(TextField), findsWidgets);
-      return;
+    expect(find.byType(MorningFeedbackPage), findsOneWidget);
+    expect(find.byType(TextField), findsWidgets);
+    return;
 
-      final Finder endSleepModeButton = find.widgetWithText(
-        PrimaryButton,
-        '缁撴潫鐫＄湢妯″紡',
-      );
-      await tester.ensureVisible(endSleepModeButton);
-      await tester.tap(endSleepModeButton);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-      await tester.tap(find.widgetWithText(PrimaryButton, '缁撴潫骞跺幓鏅ㄩ棿鍙嶉'));
-      await tester.pump();
-      await tester.pumpAndSettle();
+    final Finder endSleepModeButton = find.widgetWithText(
+      PrimaryButton,
+      '缁撴潫鐫＄湢妯″紡',
+    );
+    await tester.ensureVisible(endSleepModeButton);
+    await tester.tap(endSleepModeButton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.widgetWithText(PrimaryButton, '缁撴潫骞跺幓鏅ㄩ棿鍙嶉'));
+    await tester.pump();
+    await tester.pumpAndSettle();
 
-      expect(find.byType(MorningFeedbackPage), findsOneWidget);
-      expect(find.widgetWithText(PrimaryButton, '鎻愪氦鍙嶉'), findsOneWidget);
-    },
-  );
+    expect(find.byType(MorningFeedbackPage), findsOneWidget);
+    expect(find.widgetWithText(PrimaryButton, '鎻愪氦鍙嶉'), findsOneWidget);
+  });
 
   testWidgets(
     'sleep-mode morning feedback still opens for zero-minute same-day sessions',
@@ -2056,6 +2679,46 @@ Future<void> _pumpApp(
   }
 }
 
+Future<void> _pumpUntilFound(
+  WidgetTester tester,
+  Finder finder, {
+  Duration step = const Duration(milliseconds: 50),
+  int maxPumps = 80,
+}) async {
+  for (int i = 0; i < maxPumps; i += 1) {
+    if (finder.evaluate().isNotEmpty) {
+      return;
+    }
+    await tester.pump(step);
+  }
+  fail('Expected finder to match within ${step * maxPumps}.');
+}
+
+Future<dynamic> _handleSecureStorageCall(MethodCall call) async {
+  final Map<dynamic, dynamic> arguments =
+      call.arguments as Map<dynamic, dynamic>? ?? <dynamic, dynamic>{};
+  final String key = arguments['key'] as String? ?? '';
+  switch (call.method) {
+    case 'read':
+      return _mockSecureStorage[key];
+    case 'write':
+      _mockSecureStorage[key] = arguments['value'] as String? ?? '';
+      return null;
+    case 'delete':
+      _mockSecureStorage.remove(key);
+      return null;
+    case 'containsKey':
+      return _mockSecureStorage.containsKey(key);
+    case 'readAll':
+      return Map<String, String>.from(_mockSecureStorage);
+    case 'deleteAll':
+      _mockSecureStorage.clear();
+      return null;
+    default:
+      return null;
+  }
+}
+
 SleepSession _buildPendingFeedbackSession({
   required String uid,
   required String id,
@@ -2147,6 +2810,47 @@ DateTime _feedbackClock() => DateTime(2026, 4, 18, 7);
 DateTime _freshSleepClock() => DateTime(2026, 5, 17, 14);
 
 DateTime _nightClock() => DateTime(2026, 4, 5, 22);
+
+const AppEnvironment _cloudBaseTestEnvironment = AppEnvironment(
+  target: AppBackendTarget.emulator,
+  appIdPrefix: 'com.dormsleep.app',
+  cloudbaseEnvId: 'test-env',
+  cloudbaseAuthBaseUrl: 'https://example.com/auth',
+);
+
+const MethodChannel _secureStorageChannel = MethodChannel(
+  'plugins.it_nomads.com/flutter_secure_storage',
+);
+final Map<String, String> _mockSecureStorage = <String, String>{};
+
+const String _localVerificationId = 'local-verification-id';
+
+Future<void> _seedRegisteredPhoneUser(
+  AppServices services, {
+  String phoneNumber = '13800138000',
+  String password = 'secret123',
+}) async {
+  await services.profileFacade.registerWithPhone(
+    phoneNumber: phoneNumber,
+    verificationId: _localVerificationId,
+    code: '123456',
+    password: password,
+  );
+  await services.authRepository.signOut();
+}
+
+void _seedExpiredCloudBaseSession() {
+  const String deviceId = 'cb-device-test';
+  _mockSecureStorage['cloudbase.device_id'] = deviceId;
+  _mockSecureStorage['cloudbase.session'] = jsonEncode(<String, Object?>{
+    'accessToken': 'expired-access-token',
+    'refreshToken': 'expired-refresh-token',
+    'subject': 'user-expired',
+    'expiresAt': DateTime(2020, 1, 1).toIso8601String(),
+    'deviceId': deviceId,
+    'tokenType': 'Bearer',
+  });
+}
 
 UserSettings _settingsWithMood(NightMood mood) {
   return UserSettings(

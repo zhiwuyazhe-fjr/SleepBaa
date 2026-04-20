@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/widgets/bottom_nav_shell.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/features/analysis/presentation/pages/interference_factor_page.dart';
@@ -100,11 +101,31 @@ abstract final class AppRoutes {
 }
 
 GoRouter createRouter({
+  required bool usesCloudBase,
+  required AuthRepository authRepository,
   HomeMode homeMode = HomeMode.preSleep,
   String initialLocation = AppRoutes.home,
 }) {
   return GoRouter(
     initialLocation: initialLocation,
+    refreshListenable: authRepository,
+    redirect: (BuildContext context, GoRouterState state) {
+      if (!usesCloudBase) {
+        return null;
+      }
+      if (!authRepository.hasCompletedInitialAuthBootstrap ||
+          authRepository.isAuthenticating) {
+        return null;
+      }
+
+      final bool isAuthRoute = state.uri.path == AppRoutes.authPhone;
+      final bool hasVerifiedPhoneIdentity =
+          authRepository.hasVerifiedPhoneIdentity == true;
+      if (!hasVerifiedPhoneIdentity && !isAuthRoute) {
+        return AppRoutes.authPhone;
+      }
+      return null;
+    },
     routes: <RouteBase>[
       GoRoute(
         path: AppRoutes.root,

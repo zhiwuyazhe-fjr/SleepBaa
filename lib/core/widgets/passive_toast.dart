@@ -163,10 +163,11 @@ class _PassiveToastSession {
   void show() {
     _entry = OverlayEntry(
       builder: (BuildContext context) {
+        final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
         return Positioned(
           left: 16,
           right: 16,
-          bottom: 12,
+          bottom: keyboardInset > 0 ? keyboardInset + 12 : 12,
           child: SafeArea(
             top: false,
             child: ValueListenableBuilder<bool>(

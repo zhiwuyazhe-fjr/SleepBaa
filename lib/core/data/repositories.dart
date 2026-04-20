@@ -53,6 +53,10 @@ abstract interface class AuthRepository implements Listenable {
     PhoneVerificationTarget target = PhoneVerificationTarget.any,
     String? captchaToken,
   });
+  Future<PhoneVerificationProof> verifyPhoneCode({
+    required String verificationId,
+    required String code,
+  });
   Future<AuthCaptchaChallenge> createCaptchaChallenge();
   Future<String> verifyCaptchaChallenge({
     required String token,
@@ -79,6 +83,11 @@ abstract interface class AuthRepository implements Listenable {
     required String phoneNumber,
     required String verificationId,
     required String code,
+    required String newPassword,
+  });
+  Future<void> resetPasswordWithVerificationToken({
+    required String phoneNumber,
+    required String verificationToken,
     required String newPassword,
   });
   Future<void> authenticateWithPhone({
