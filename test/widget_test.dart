@@ -1560,6 +1560,9 @@ void main() {
   testWidgets('profile badge card opens overview and badge sheet', (
     WidgetTester tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await _pumpApp(
       tester,
       initialLocation: AppRoutes.profile,
@@ -1575,11 +1578,26 @@ void main() {
       find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
       findsOneWidget,
     );
-    expect(find.text('当前展示：安睡大师'), findsOneWidget);
-
-    await tester.tap(
-      find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
+    expect(find.text('当前佩戴：安睡大师'), findsOneWidget);
+    expect(find.text('当前展示：安睡大师'), findsNothing);
+    expect(find.text('点击任意勋章可查看说明，并把已获得勋章切换为当前展示。'), findsNothing);
+    expect(find.widgetWithText(FilledButton, '已同步最新'), findsOneWidget);
+    expect(find.text('佩戴最新获得'), findsNothing);
+    expect(find.text('3 / 10'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('profile-badge-summary-card')),
+        matching: find.text('3 / 10'),
+      ),
+      findsNothing,
     );
+    expect(find.text('已获得的勋章会高亮显示，未解锁的勋章也可以先查看说明。'), findsNothing);
+
+    final Finder earlySleeperTile = find.byKey(
+      const ValueKey<String>('profile-badge-grid-early-sleeper'),
+    );
+    await tester.ensureVisible(earlySleeperTile);
+    await tester.tap(earlySleeperTile);
     await tester.pumpAndSettle();
 
     expect(
@@ -1590,9 +1608,39 @@ void main() {
     expect(find.text('勋章详情'), findsNothing);
   });
 
+  testWidgets('badge gallery summary reflects automatic latest badge mode', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    await tester.ensureVisible(find.text('我的勋章'));
+    await tester.tap(find.text('我的勋章'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('profile-badge-summary-card')),
+      findsOneWidget,
+    );
+    expect(find.text('当前佩戴：安睡大师'), findsOneWidget);
+    expect(find.text('自动同步最新'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, '已同步最新'), findsOneWidget);
+    expect(find.text('当前展示：安睡大师'), findsNothing);
+    expect(find.text('佩戴最新获得'), findsNothing);
+  });
+
   testWidgets(
     'badge equip and restore sync between gallery and profile preview',
     (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 932));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
       await _pumpApp(
         tester,
         initialLocation: AppRoutes.profile,
@@ -1613,16 +1661,23 @@ void main() {
       await tester.tap(find.text('我的勋章'));
       await tester.pumpAndSettle();
 
-      await tester.tap(
-        find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
+      final Finder earlySleeperTile = find.byKey(
+        const ValueKey<String>('profile-badge-grid-early-sleeper'),
       );
+      await tester.ensureVisible(earlySleeperTile);
+      await tester.tap(earlySleeperTile);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('佩戴此勋章'));
+      final Finder equipButton = find.widgetWithText(FilledButton, '佩戴此勋章');
+      await tester.ensureVisible(equipButton);
+      await tester.tap(equipButton);
       await tester.pumpAndSettle();
 
       expect(find.text('当前佩戴：早睡先锋'), findsOneWidget);
+      expect(find.text('手动佩戴中'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, '恢复默认最新'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, '已同步最新'), findsNothing);
 
-      await tester.pageBack();
+      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
       await tester.pumpAndSettle();
 
       expect(
@@ -1638,14 +1693,21 @@ void main() {
       await tester.ensureVisible(find.text('我的勋章'));
       await tester.tap(find.text('我的勋章'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('恢复最新获得'));
+      final Finder restoreLatestButton = find.widgetWithText(
+        FilledButton,
+        '恢复默认最新',
+      );
+      await tester.ensureVisible(restoreLatestButton);
+      await tester.tap(restoreLatestButton);
       await tester.pumpAndSettle();
 
-      expect(find.text('当前展示：安睡大师'), findsOneWidget);
+      expect(find.text('当前佩戴：安睡大师'), findsOneWidget);
+      expect(find.text('自动同步最新'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, '已同步最新'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, '恢复默认最新'), findsNothing);
 
-      await tester.pageBack();
+      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
       await tester.pumpAndSettle();
-
       expect(
         find.descendant(
           of: find.byKey(
