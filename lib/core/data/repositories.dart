@@ -239,11 +239,24 @@ abstract interface class AssistantRepository implements Listenable {
   AssistantThread? get currentThread;
   AssistantProfile get assistantProfile;
   List<AssistantMessage> messagesForThread(String threadId);
+  AssistantThreadTurnState? turnStateForThread(String threadId);
   Future<AssistantThread> createThread({String? title});
   Future<void> renameThread({required String threadId, required String title});
   Future<void> deleteThread(String threadId);
   Future<void> selectMostRecentThread();
   Future<AssistantThread> ensureThread({String? title});
+  Future<bool> tryStartThreadTurn({
+    required String threadId,
+    required String turnId,
+  });
+  Future<void> markThreadTurnFinalizing({
+    required String threadId,
+    required String turnId,
+  });
+  Future<void> finishThreadTurn({
+    required String threadId,
+    required String turnId,
+  });
   Future<void> sendUserMessage({
     required String threadId,
     required String content,

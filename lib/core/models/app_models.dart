@@ -1781,3 +1781,33 @@ class AssistantMessage {
     );
   }
 }
+
+enum AssistantThreadTurnStatus { idle, streaming, finalizing }
+
+class AssistantThreadTurnState {
+  const AssistantThreadTurnState({
+    required this.threadId,
+    required this.turnId,
+    required this.status,
+    required this.startedAt,
+  });
+
+  final String threadId;
+  final String turnId;
+  final AssistantThreadTurnStatus status;
+  final DateTime startedAt;
+
+  AssistantThreadTurnState copyWith({
+    String? threadId,
+    String? turnId,
+    AssistantThreadTurnStatus? status,
+    DateTime? startedAt,
+  }) {
+    return AssistantThreadTurnState(
+      threadId: threadId ?? this.threadId,
+      turnId: turnId ?? this.turnId,
+      status: status ?? this.status,
+      startedAt: startedAt ?? this.startedAt,
+    );
+  }
+}

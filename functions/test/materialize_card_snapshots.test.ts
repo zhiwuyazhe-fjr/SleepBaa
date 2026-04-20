@@ -3,6 +3,24 @@ import test from "node:test";
 import { buildCardSnapshots } from "../src/services/materialize_card_snapshots";
 import { AssistantContext, UserStateDoc } from "../src/shared/types";
 
+function dateKeyDaysAgo(daysAgo: number): string {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - daysAgo);
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function sessionStartIsoForSleepDay(daysAgo: number, hour: number, minute: number): string {
+  const sleepDay = new Date();
+  sleepDay.setHours(0, 0, 0, 0);
+  sleepDay.setDate(sleepDay.getDate() - daysAgo);
+  sleepDay.setDate(sleepDay.getDate() - 1);
+  sleepDay.setHours(hour, minute, 0, 0);
+  return sleepDay.toISOString();
+}
+
 function buildContext(): AssistantContext {
   return {
     assistantProfile: {
@@ -47,8 +65,8 @@ function buildContext(): AssistantContext {
     recentSessions: [
       {
         id: "session-1",
-        sleepDayKey: "2026-04-11",
-        startedAt: "2026-04-10T23:10:00.000Z",
+        sleepDayKey: dateKeyDaysAgo(6),
+        startedAt: sessionStartIsoForSleepDay(6, 23, 10),
         status: "completed",
         awakeningsCount: 0,
         totalSleepHours: 7.2,
@@ -57,8 +75,8 @@ function buildContext(): AssistantContext {
       },
       {
         id: "session-2",
-        sleepDayKey: "2026-04-13",
-        startedAt: "2026-04-12T23:20:00.000Z",
+        sleepDayKey: dateKeyDaysAgo(4),
+        startedAt: sessionStartIsoForSleepDay(4, 23, 20),
         status: "completed",
         awakeningsCount: 1,
         totalSleepHours: 6.4,

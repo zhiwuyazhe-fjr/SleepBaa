@@ -2039,6 +2039,8 @@ void main() {
       expect(find.byType(HomePreSleepPage), findsOneWidget);
       expect(find.text('小眠已经收到你的晨间反馈❤️'), findsOneWidget);
 
+      expect(find.text('这条睡眠记录已完成晨间反馈，可在我的页查看同步结果。'), findsNothing);
+
       final SleepSession completed = services.sleepSessionRepository
           .sessionForSleepDayKey(targetSession.sleepDayKey)!;
       expect(completed.id, targetSession.id);

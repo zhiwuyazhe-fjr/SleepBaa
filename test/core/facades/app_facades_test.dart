@@ -47,6 +47,79 @@ class _RecordingRecommendationRepository extends ChangeNotifier
 
 class _FakeAssistantGateway implements AssistantReplyGateway {
   @override
+  Stream<AssistantStreamEvent> streamReply({
+    required String prompt,
+    required String threadId,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  }) async* {
+    yield AssistantStreamEvent(
+      type: AssistantStreamEventType.ack,
+      assistantMessageId: clientAssistantMessageId,
+    );
+    yield const AssistantStreamEvent(
+      type: AssistantStreamEventType.messageDelta,
+      delta: 'Backend reply',
+    );
+    yield AssistantStreamEvent(
+      type: AssistantStreamEventType.messageCompleted,
+      reply: 'Backend reply',
+      sourceMode: AssistantReplySourceMode.remoteSuccess,
+      runId: 'run-1',
+      intent: 'general_support',
+      provider: 'xai_responses',
+      model: 'grok-4-1-fast-reasoning',
+      assistantMessageId: clientAssistantMessageId,
+      updatedSurfaces: const <String>['assistant_context'],
+    );
+    yield const AssistantStreamEvent(type: AssistantStreamEventType.done);
+  }
+
+  @override
+  Stream<AssistantStreamEvent> streamCapture({
+    required String prompt,
+    required String threadId,
+    required String sessionId,
+    required SleepCaptureType captureType,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  }) async* {
+    final SleepCaptureRecord record = SleepCaptureRecord(
+      id: 'capture-1',
+      type: captureType,
+      sessionId: sessionId,
+      createdAt: DateTime(2026, 1, 1),
+      title: 'Capture title',
+      outline: 'Capture outline',
+      content: prompt,
+    );
+    yield AssistantStreamEvent(
+      type: AssistantStreamEventType.ack,
+      assistantMessageId: clientAssistantMessageId,
+    );
+    yield const AssistantStreamEvent(
+      type: AssistantStreamEventType.messageDelta,
+      delta: 'Capture reply',
+    );
+    yield AssistantStreamEvent(
+      type: AssistantStreamEventType.messageCompleted,
+      reply: 'Capture reply',
+      sourceMode: AssistantReplySourceMode.remoteSuccess,
+      provider: 'xai_responses',
+      model: 'grok-4-1-fast-reasoning',
+      assistantMessageId: clientAssistantMessageId,
+      updatedSurfaces: const <String>['assistant_context'],
+    );
+    yield AssistantStreamEvent(
+      type: AssistantStreamEventType.captureRecord,
+      record: record,
+    );
+    yield const AssistantStreamEvent(type: AssistantStreamEventType.done);
+  }
+
+  @override
   Future<AssistantReplyResult> generateReply({
     required String prompt,
     required String threadId,
@@ -99,6 +172,38 @@ class _FakeAssistantGateway implements AssistantReplyGateway {
 
 class _ErrorAssistantGateway implements AssistantReplyGateway {
   @override
+  Stream<AssistantStreamEvent> streamReply({
+    required String prompt,
+    required String threadId,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  }) async* {
+    yield const AssistantStreamEvent(
+      type: AssistantStreamEventType.error,
+      errorMessage: 'gateway failure',
+      sourceMode: AssistantReplySourceMode.error,
+    );
+  }
+
+  @override
+  Stream<AssistantStreamEvent> streamCapture({
+    required String prompt,
+    required String threadId,
+    required String sessionId,
+    required SleepCaptureType captureType,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  }) async* {
+    yield const AssistantStreamEvent(
+      type: AssistantStreamEventType.error,
+      errorMessage: 'gateway failure',
+      sourceMode: AssistantReplySourceMode.error,
+    );
+  }
+
+  @override
   Future<AssistantReplyResult> generateReply({
     required String prompt,
     required String threadId,
@@ -127,6 +232,89 @@ class _ErrorAssistantGateway implements AssistantReplyGateway {
       reply: '暂时没有收到整理结果，请稍后再试。',
       sourceMode: AssistantReplySourceMode.error,
       errorMessage: 'gateway failure',
+      record: SleepCaptureRecord(
+        id: '',
+        type: captureType,
+        sessionId: sessionId,
+        createdAt: DateTime(2026, 1, 1),
+        title: '',
+        outline: '',
+        content: prompt,
+      ),
+      recordPersistedRemotely: false,
+    );
+  }
+}
+
+class _TimeoutAssistantGateway implements AssistantReplyGateway {
+  @override
+  Stream<AssistantStreamEvent> streamReply({
+    required String prompt,
+    required String threadId,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  }) async* {
+    yield const AssistantStreamEvent(
+      type: AssistantStreamEventType.error,
+      errorCode: assistantReplyTimeoutCode,
+      errorMessage:
+          'Assistant reply timed out before completion. Please try again.',
+      sourceMode: AssistantReplySourceMode.error,
+    );
+  }
+
+  @override
+  Stream<AssistantStreamEvent> streamCapture({
+    required String prompt,
+    required String threadId,
+    required String sessionId,
+    required SleepCaptureType captureType,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  }) async* {
+    yield const AssistantStreamEvent(
+      type: AssistantStreamEventType.error,
+      errorCode: assistantReplyTimeoutCode,
+      errorMessage:
+          'Assistant reply timed out before completion. Please try again.',
+      sourceMode: AssistantReplySourceMode.error,
+    );
+  }
+
+  @override
+  Future<AssistantReplyResult> generateReply({
+    required String prompt,
+    required String threadId,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  }) async {
+    return const AssistantReplyResult(
+      reply: '这次回复超时了，请重试。',
+      sourceMode: AssistantReplySourceMode.error,
+      errorMessage:
+          'Assistant reply timed out before completion. Please try again.',
+      errorCode: assistantReplyTimeoutCode,
+    );
+  }
+
+  @override
+  Future<AssistantCaptureResult> generateCapture({
+    required String prompt,
+    required String threadId,
+    required String sessionId,
+    required SleepCaptureType captureType,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  }) async {
+    return AssistantCaptureResult(
+      reply: '暂时没有收到整理结果，请稍后再试。',
+      sourceMode: AssistantReplySourceMode.error,
+      errorMessage:
+          'Assistant reply timed out before completion. Please try again.',
       record: SleepCaptureRecord(
         id: '',
         type: captureType,
@@ -308,7 +496,6 @@ void main() {
       final InMemorySleepCaptureRepository sleepCaptureRepository =
           InMemorySleepCaptureRepository();
       final AssistantFacade facade = AssistantFacade(
-        authRepository: authRepository,
         assistantRepository: assistantRepository,
         sleepCaptureRepository: sleepCaptureRepository,
         dormRepository: dormRepository,
@@ -351,7 +538,6 @@ void main() {
       final InMemorySleepCaptureRepository sleepCaptureRepository =
           InMemorySleepCaptureRepository();
       final AssistantFacade facade = AssistantFacade(
-        authRepository: authRepository,
         assistantRepository: assistantRepository,
         sleepCaptureRepository: sleepCaptureRepository,
         dormRepository: dormRepository,
@@ -367,7 +553,7 @@ void main() {
           .last;
       expect(latest.status, AssistantMessageStatus.error);
       expect(latest.sourceMode, AssistantReplySourceMode.error);
-      expect(latest.errorMessage, 'gateway failure');
+      expect(latest.errorMessage, '请直接重试上一条消息。');
       expect(latest.content, '暂时没有收到回复，请稍后再试。');
       facade.dispose();
       authRepository.dispose();
@@ -376,4 +562,40 @@ void main() {
       dormRepository.dispose();
     },
   );
+
+  test('assistant facade preserves timeout-specific assistant copy', () async {
+    final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+      initialProfile: buildDefaultUserProfile().copyWith(uid: 'assistant-user'),
+    );
+    final InMemoryAssistantRepository assistantRepository =
+        InMemoryAssistantRepository(userId: 'assistant-user');
+    final InMemoryDormRepository dormRepository = InMemoryDormRepository(
+      currentUserId: 'assistant-user',
+    );
+    final InMemorySleepCaptureRepository sleepCaptureRepository =
+        InMemorySleepCaptureRepository();
+    final AssistantFacade facade = AssistantFacade(
+      assistantRepository: assistantRepository,
+      sleepCaptureRepository: sleepCaptureRepository,
+      dormRepository: dormRepository,
+      assistantReplyGateway: _TimeoutAssistantGateway(),
+    );
+
+    await facade.sendPrompt('Can you help me settle down?');
+
+    final AssistantThread? thread = assistantRepository.currentThread;
+    expect(thread, isNotNull);
+    final AssistantMessage latest = assistantRepository
+        .messagesForThread(thread!.id)
+        .last;
+    expect(latest.status, AssistantMessageStatus.error);
+    expect(latest.sourceMode, AssistantReplySourceMode.error);
+    expect(latest.errorMessage, '这次回复超时了，请直接重试上一条消息。');
+    expect(latest.content, '这次回复超时了，请重试。');
+    facade.dispose();
+    authRepository.dispose();
+    assistantRepository.dispose();
+    sleepCaptureRepository.dispose();
+    dormRepository.dispose();
+  });
 }
