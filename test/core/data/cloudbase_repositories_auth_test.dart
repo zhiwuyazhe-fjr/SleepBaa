@@ -302,6 +302,100 @@ void main() {
   );
 
   test(
+    'ensureAuthenticated reuses the same in-flight authentication work',
+    () async {
+      final Completer<void> refreshGate = Completer<void>();
+      int refreshCalls = 0;
+      int userMeCalls = 0;
+      int bootstrapCalls = 0;
+      final _AuthHarness harness = _buildHarness(
+        MockClient((http.Request request) async {
+          if (request.url.path == '/auth/v1/token') {
+            refreshCalls += 1;
+            await refreshGate.future;
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'access_token': 'fresh-access',
+                'refresh_token': 'fresh-refresh',
+                'sub': 'tester',
+                'expires_in': 7200,
+                'token_type': 'Bearer',
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/auth/v1/user/me') {
+            userMeCalls += 1;
+            expect(
+              request.headers['authorization'] ??
+                  request.headers['Authorization'],
+              'Bearer fresh-access',
+            );
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'sub': 'tester',
+                'name': 'Tester',
+                'phone_number': '+86 13800138000',
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/app/bootstrap') {
+            bootstrapCalls += 1;
+            expect(
+              request.headers['authorization'] ??
+                  request.headers['Authorization'],
+              'Bearer fresh-access',
+            );
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'user': <String, dynamic>{
+                  'uid': 'tester',
+                  'displayName': 'Tester',
+                  'tagline': 'tagline',
+                  'role': 'role',
+                  'phoneNumber': '+86 13800138000',
+                  'phoneLinkedAt': DateTime.now().toIso8601String(),
+                  'showDormPulseBadge': true,
+                },
+              }),
+              200,
+            );
+          }
+          throw StateError('Unexpected path: ${request.url.path}');
+        }),
+      );
+      harness.sessionStore._session = CloudBaseSession(
+        accessToken: 'stale-access',
+        refreshToken: 'stale-refresh',
+        subject: 'tester',
+        expiresAt: DateTime.now().subtract(const Duration(minutes: 5)),
+        deviceId: 'test-device-id',
+      );
+      final CloudBaseAuthRepository repository = harness.repository;
+
+      final Future<UserProfile> first = repository.ensureAuthenticated();
+      final Future<UserProfile> second = repository.ensureAuthenticated();
+
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(refreshCalls, 1);
+      refreshGate.complete();
+
+      final List<UserProfile> users = await Future.wait(<Future<UserProfile>>[
+        first,
+        second,
+      ]);
+
+      expect(users, hasLength(2));
+      expect(users.first.uid, 'tester');
+      expect(users.last.uid, 'tester');
+      expect(refreshCalls, 1);
+      expect(userMeCalls, 1);
+      expect(bootstrapCalls, 1);
+    },
+  );
+
+  test(
     'cloudbase auth repository keeps dorm badge visibility off after queued snapshot refresh',
     () async {
       final Completer<void> firstBootstrapCompleter = Completer<void>();
@@ -377,6 +471,78 @@ void main() {
       expect(repository.currentUser.showDormPulseBadge, isFalse);
     },
   );
+
+  test(
+    'cloudbase auth repository maps invalid password sign-in to credential guidance',
+    () async {
+      final CloudBaseAuthRepository repository = _buildHarness(
+        MockClient((http.Request request) async {
+          if (request.url.path == '/auth/v1/signin') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'error': 'invalid_credentials',
+                'error_description': 'invalid credentials',
+              }),
+              401,
+            );
+          }
+          throw StateError('Unexpected path: ${request.url.path}');
+        }),
+      ).repository;
+
+      await expectLater(
+        repository.signInWithPassword(
+          phoneNumber: '13800138000',
+          password: 'wrongpass',
+        ),
+        throwsA(
+          isA<AuthFlowException>().having(
+            (AuthFlowException error) => error.message,
+            'message',
+            '请检查手机号和密码。',
+          ),
+        ),
+      );
+
+      expect(repository.lastAuthError, '请检查手机号和密码。');
+    },
+  );
+
+  test(
+    'cloudbase auth repository maps signup send-code registered-phone errors to login guidance',
+    () async {
+      final CloudBaseAuthRepository repository = _buildHarness(
+        MockClient((http.Request request) async {
+          if (request.url.path == '/auth/v1/verification') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'error': 'user_exists',
+                'error_description': 'phone already registered',
+              }),
+              409,
+            );
+          }
+          throw StateError('Unexpected path: ${request.url.path}');
+        }),
+      ).repository;
+
+      await expectLater(
+        repository.sendPhoneVerificationCode(
+          '13800138000',
+          target: PhoneVerificationTarget.newUser,
+        ),
+        throwsA(
+          isA<AuthPhoneTargetMismatchException>().having(
+            (AuthPhoneTargetMismatchException error) => error.message,
+            'message',
+            '该手机号已注册，请直接登录。',
+          ),
+        ),
+      );
+
+      expect(repository.lastAuthError, '该手机号已注册，请直接登录。');
+    },
+  );
 }
 
 _AuthHarness _buildHarness(http.Client httpClient) {
@@ -412,14 +578,20 @@ _AuthHarness _buildHarness(http.Client httpClient) {
       snapshotStore: snapshotStore,
     ),
     snapshotStore: snapshotStore,
+    sessionStore: sessionStore,
   );
 }
 
 class _AuthHarness {
-  const _AuthHarness({required this.repository, required this.snapshotStore});
+  const _AuthHarness({
+    required this.repository,
+    required this.snapshotStore,
+    required this.sessionStore,
+  });
 
   final CloudBaseAuthRepository repository;
   final CloudBaseSnapshotStore snapshotStore;
+  final _FakeSessionStore sessionStore;
 }
 
 class _MemoryVerifiedPhoneStore extends VerifiedPhoneIdentityStore {

@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
-import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/app/theme/app_text_styles.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
@@ -13,7 +13,6 @@ import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/state/evening_welcome_local_store.dart';
 import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
 import 'package:sleep_dorm_app/core/notifications/notification_navigation_coordinator.dart';
-import 'package:sleep_dorm_app/features/auth/presentation/pages/phone_auth_page.dart';
 
 class SleepDormApp extends StatefulWidget {
   const SleepDormApp({
@@ -44,31 +43,6 @@ class SleepDormApp extends StatefulWidget {
 }
 
 class _SleepDormAppState extends State<SleepDormApp> {
-  late GoRouter _router;
-
-  @override
-  void initState() {
-    super.initState();
-    _router = _createRouter();
-  }
-
-  @override
-  void didUpdateWidget(covariant SleepDormApp oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialLocation != widget.initialLocation ||
-        oldWidget.homeMode != widget.homeMode) {
-      _router.dispose();
-      _router = _createRouter();
-    }
-  }
-
-  GoRouter _createRouter() {
-    return createRouter(
-      homeMode: widget.homeMode,
-      initialLocation: widget.initialLocation,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final AppEnvironment resolvedEnvironment =
@@ -96,22 +70,13 @@ class _SleepDormAppState extends State<SleepDormApp> {
                   services.settingsRepository.currentSettings;
               final NightMood? effectiveMood = services.nightWelcomeController
                   .effectiveMood(settings.selectedNightMood);
-              return MaterialApp.router(
-                title: 'DormSleep',
-                debugShowCheckedModeBanner: false,
+              return _RoutedSleepDormApp(
+                services: services,
+                usesCloudBase: resolvedEnvironment.usesCloudBase,
+                homeMode: widget.homeMode,
+                initialLocation: widget.initialLocation,
                 theme: _buildTheme(effectiveMood),
-                routerConfig: _router,
-                builder: (BuildContext context, Widget? child) {
-                  final Widget routedChild = child ?? const SizedBox.shrink();
-                  return _CloudBaseAuthGate(
-                    environment: resolvedEnvironment,
-                    authRepository: services.authRepository,
-                    child: _NotificationBridge(
-                      router: _router,
-                      child: routedChild,
-                    ),
-                  );
-                },
+                title: 'DormSleep',
               );
             },
           );
@@ -150,12 +115,6 @@ class _SleepDormAppState extends State<SleepDormApp> {
       highlightColor: Colors.transparent,
     );
   }
-
-  @override
-  void dispose() {
-    _router.dispose();
-    super.dispose();
-  }
 }
 
 class _NotificationBridge extends StatefulWidget {
@@ -174,15 +133,21 @@ class _NotificationBridgeState extends State<_NotificationBridge> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_coordinator != null) {
+    _coordinator ??= _createCoordinator();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_coordinator?.start());
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _NotificationBridge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.router == widget.router) {
       return;
     }
-    final AppServices services = context.appServices;
-    _coordinator = NotificationNavigationCoordinator(
-      router: widget.router,
-      notificationRepository: services.notificationRepository,
-      notificationService: services.appNotificationService,
-    );
+    final NotificationNavigationCoordinator? previous = _coordinator;
+    _coordinator = _createCoordinator();
+    unawaited(previous?.dispose());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_coordinator?.start());
     });
@@ -194,48 +159,125 @@ class _NotificationBridgeState extends State<_NotificationBridge> {
     super.dispose();
   }
 
+  NotificationNavigationCoordinator _createCoordinator() {
+    final AppServices services = context.appServices;
+    return NotificationNavigationCoordinator(
+      router: widget.router,
+      notificationRepository: services.notificationRepository,
+      notificationService: services.appNotificationService,
+    );
+  }
+
   @override
   Widget build(BuildContext context) => widget.child;
 }
 
-class _CloudBaseAuthGate extends StatefulWidget {
+bool shouldShowCloudBaseAuthBlockingScreen({
+  required bool usesCloudBase,
+  required bool hasCompletedInitialAuthBootstrap,
+}) {
+  return usesCloudBase && !hasCompletedInitialAuthBootstrap;
+}
+
+class _RoutedSleepDormApp extends StatefulWidget {
+  const _RoutedSleepDormApp({
+    required this.services,
+    required this.usesCloudBase,
+    required this.homeMode,
+    required this.initialLocation,
+    required this.theme,
+    required this.title,
+  });
+
+  final AppServices services;
+  final bool usesCloudBase;
+  final HomeMode homeMode;
+  final String initialLocation;
+  final ThemeData theme;
+  final String title;
+
+  @override
+  State<_RoutedSleepDormApp> createState() => _RoutedSleepDormAppState();
+}
+
+class _RoutedSleepDormAppState extends State<_RoutedSleepDormApp> {
+  late GoRouter _router = _buildRouter();
+
+  GoRouter _buildRouter() {
+    return createRouter(
+      usesCloudBase: widget.usesCloudBase,
+      authRepository: widget.services.authRepository,
+      homeMode: widget.homeMode,
+      initialLocation: widget.initialLocation,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _RoutedSleepDormApp oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.usesCloudBase != widget.usesCloudBase ||
+        oldWidget.homeMode != widget.homeMode ||
+        oldWidget.initialLocation != widget.initialLocation ||
+        oldWidget.services.authRepository != widget.services.authRepository) {
+      _router.dispose();
+      _router = _buildRouter();
+    }
+  }
+
+  @override
+  void dispose() {
+    _router.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp.router(
+      title: widget.title,
+      debugShowCheckedModeBanner: false,
+      theme: widget.theme,
+      routerConfig: _router,
+      builder: (BuildContext context, Widget? child) {
+        final Widget routedChild = child ?? const SizedBox.shrink();
+        return _CloudBaseAuthGate(
+          usesCloudBase: widget.usesCloudBase,
+          authRepository: widget.services.authRepository,
+          child: _NotificationBridge(router: _router, child: routedChild),
+        );
+      },
+    );
+  }
+}
+
+class _CloudBaseAuthGate extends StatelessWidget {
   const _CloudBaseAuthGate({
-    required this.environment,
+    required this.usesCloudBase,
     required this.authRepository,
     required this.child,
   });
 
-  final AppEnvironment environment;
+  final bool usesCloudBase;
   final AuthRepository authRepository;
   final Widget child;
 
   @override
-  State<_CloudBaseAuthGate> createState() => _CloudBaseAuthGateState();
-}
-
-class _CloudBaseAuthGateState extends State<_CloudBaseAuthGate> {
-  // A persistent PhoneAuthPage keeps verification challenges, text
-  // controllers, and focus alive across transient auth state notifications
-  // (e.g. when the user switches to the SMS app to copy a code and returns).
-  static const Widget _phoneAuthPage = PhoneAuthPage(
-    key: ValueKey<String>('persistent-phone-auth-page'),
-  );
-
-  @override
   Widget build(BuildContext context) {
-    if (!widget.environment.usesCloudBase) {
-      return widget.child;
+    if (!usesCloudBase) {
+      return child;
     }
-    final AuthRepository auth = widget.authRepository;
-    if (auth.hasVerifiedPhoneIdentity == true) {
-      return widget.child;
+
+    if (authRepository.hasVerifiedPhoneIdentity == true) {
+      return child;
     }
+
     final bool showLoadingOverlay =
-        !auth.hasCompletedInitialAuthBootstrap || auth.isAuthenticating;
+        !authRepository.hasCompletedInitialAuthBootstrap ||
+        authRepository.isAuthenticating;
+
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
-        _phoneAuthPage,
+        child,
         if (showLoadingOverlay) const _AuthLoadingOverlay(),
       ],
     );

@@ -64,6 +64,16 @@ class PhoneVerificationChallenge {
   final bool isExistingUser;
 }
 
+class PhoneVerificationProof {
+  const PhoneVerificationProof({
+    required this.verificationToken,
+    required this.expiresIn,
+  });
+
+  final String verificationToken;
+  final int expiresIn;
+}
+
 class AuthCaptchaChallenge {
   const AuthCaptchaChallenge({
     required this.token,
@@ -1801,6 +1811,36 @@ class AssistantMessage {
       provider: provider ?? this.provider,
       model: model ?? this.model,
       errorMessage: errorMessage ?? this.errorMessage,
+    );
+  }
+}
+
+enum AssistantThreadTurnStatus { idle, streaming, finalizing }
+
+class AssistantThreadTurnState {
+  const AssistantThreadTurnState({
+    required this.threadId,
+    required this.turnId,
+    required this.status,
+    required this.startedAt,
+  });
+
+  final String threadId;
+  final String turnId;
+  final AssistantThreadTurnStatus status;
+  final DateTime startedAt;
+
+  AssistantThreadTurnState copyWith({
+    String? threadId,
+    String? turnId,
+    AssistantThreadTurnStatus? status,
+    DateTime? startedAt,
+  }) {
+    return AssistantThreadTurnState(
+      threadId: threadId ?? this.threadId,
+      turnId: turnId ?? this.turnId,
+      status: status ?? this.status,
+      startedAt: startedAt ?? this.startedAt,
     );
   }
 }

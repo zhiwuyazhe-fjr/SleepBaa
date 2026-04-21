@@ -250,7 +250,7 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                   icon: Icons.menu_book_rounded,
                                   label: '睡眠百科',
                                   onTap: () =>
-                                      context.push(AppRoutes.interventionTask),
+                                      context.push(AppRoutes.sleepEncyclopedia),
                                 ),
                                 QuickActionIconButton(
                                   icon: Icons.psychology_alt_rounded,

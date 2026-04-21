@@ -364,6 +364,20 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
   }
 
   @override
+  Future<PhoneVerificationProof> verifyPhoneCode({
+    required String verificationId,
+    required String code,
+  }) async {
+    if (verificationId != 'local-verification-id' || code.trim() != '123456') {
+      throw const AuthFlowException('验证码不正确，请重新输入。');
+    }
+    return const PhoneVerificationProof(
+      verificationToken: 'local-verification-token',
+      expiresIn: 600,
+    );
+  }
+
+  @override
   Future<AuthCaptchaChallenge> createCaptchaChallenge() async {
     return const AuthCaptchaChallenge(
       token: 'local-captcha-token',
@@ -392,7 +406,7 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
     final String? savedPassword = _passwordsByPhone[normalizedPhoneNumber];
     if (!_registeredPhones.contains(normalizedPhoneNumber) ||
         (savedPassword != null && savedPassword != password)) {
-      throw const AuthFlowException('手机号或密码不正确，请重试。');
+      throw const AuthFlowException('请检查手机号和密码。');
     }
     _currentUser = _currentUser.copyWith(
       phoneNumber: normalizedPhoneNumber,
@@ -408,6 +422,7 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
     required String code,
     String? captchaToken,
   }) async {
+    await verifyPhoneCode(verificationId: verificationId, code: code);
     final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
       phoneNumber,
     );
@@ -428,6 +443,7 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
     required String code,
     required String password,
   }) async {
+    await verifyPhoneCode(verificationId: verificationId, code: code);
     final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
       phoneNumber,
     );
@@ -450,6 +466,23 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
     required String code,
     required String newPassword,
   }) async {
+    await verifyPhoneCode(verificationId: verificationId, code: code);
+    await resetPasswordWithVerificationToken(
+      phoneNumber: phoneNumber,
+      verificationToken: 'local-verification-token',
+      newPassword: newPassword,
+    );
+  }
+
+  @override
+  Future<void> resetPasswordWithVerificationToken({
+    required String phoneNumber,
+    required String verificationToken,
+    required String newPassword,
+  }) async {
+    if (verificationToken != 'local-verification-token') {
+      throw const AuthFlowException('验证码已失效，请重新验证。');
+    }
     final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
       phoneNumber,
     );
@@ -2176,6 +2209,8 @@ class InMemoryAssistantRepository extends ChangeNotifier
   late List<AssistantThread> _threads;
   final Map<String, List<AssistantMessage>> _messagesByThread =
       <String, List<AssistantMessage>>{};
+  final Map<String, AssistantThreadTurnState> _turnStatesByThread =
+      <String, AssistantThreadTurnState>{};
   String? _currentThreadId;
 
   @override
@@ -2217,6 +2252,11 @@ class InMemoryAssistantRepository extends ChangeNotifier
   }
 
   @override
+  AssistantThreadTurnState? turnStateForThread(String threadId) {
+    return _turnStatesByThread[threadId];
+  }
+
+  @override
   Future<AssistantThread> createThread({String? title}) async {
     final AssistantThread thread = AssistantThread(
       id: IdGenerator.next('assistant-thread'),
@@ -2253,6 +2293,7 @@ class InMemoryAssistantRepository extends ChangeNotifier
         .where((AssistantThread item) => item.id != threadId)
         .toList(growable: false);
     _messagesByThread.remove(threadId);
+    _turnStatesByThread.remove(threadId);
     if (_currentThreadId == threadId) {
       _currentThreadId = _threads.isEmpty ? null : _threads.first.id;
     }
@@ -2283,6 +2324,55 @@ class InMemoryAssistantRepository extends ChangeNotifier
     _messagesByThread[thread.id] = <AssistantMessage>[];
     notifyListeners();
     return thread;
+  }
+
+  @override
+  Future<bool> tryStartThreadTurn({
+    required String threadId,
+    required String turnId,
+  }) async {
+    final AssistantThreadTurnState? current = _turnStatesByThread[threadId];
+    if (current != null && current.status != AssistantThreadTurnStatus.idle) {
+      return false;
+    }
+    _turnStatesByThread[threadId] = AssistantThreadTurnState(
+      threadId: threadId,
+      turnId: turnId,
+      status: AssistantThreadTurnStatus.streaming,
+      startedAt: DateTime.now(),
+    );
+    notifyListeners();
+    return true;
+  }
+
+  @override
+  Future<void> markThreadTurnFinalizing({
+    required String threadId,
+    required String turnId,
+  }) async {
+    final AssistantThreadTurnState? current = _turnStatesByThread[threadId];
+    if (current == null || current.turnId != turnId) {
+      return;
+    }
+    _turnStatesByThread[threadId] = current.copyWith(
+      status: AssistantThreadTurnStatus.finalizing,
+    );
+    notifyListeners();
+  }
+
+  @override
+  Future<void> finishThreadTurn({
+    required String threadId,
+    required String turnId,
+  }) async {
+    final AssistantThreadTurnState? current = _turnStatesByThread[threadId];
+    if (current == null || current.turnId != turnId) {
+      return;
+    }
+    _turnStatesByThread[threadId] = current.copyWith(
+      status: AssistantThreadTurnStatus.idle,
+    );
+    notifyListeners();
   }
 
   @override

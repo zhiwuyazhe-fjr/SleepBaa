@@ -2,8 +2,9 @@ import { randomUUID } from "node:crypto";
 import {
   AIProvider,
   AIProviderSourceMode,
-  buildSystemIdentityReply,
+  DeterministicAIProvider,
   buildDeterministicProfileSummary,
+  buildSystemIdentityReply,
   classifyIntent,
 } from "../providers/ai_provider";
 import { AssistantDataRepository } from "../repositories/firestore_repositories";
@@ -11,14 +12,19 @@ import { buildCardSnapshots } from "../services/materialize_card_snapshots";
 import {
   AssistantContext,
   AssistantIntent,
+  AssistantMemoryCandidate,
   AssistantMemoryItem,
   AssistantRunDoc,
   AssistantRunSourceMode,
+  AssistantSurfacePatchDoc,
   AssistantThreadSummaryDoc,
   DreamAnalysis,
+  InterferenceSnapshotDoc,
   MorningReviewResult,
   SleepCaptureKind,
+  SleepCaptureRecordDoc,
   SurfaceId,
+  TurnInsightExtraction,
   UserStateDoc,
 } from "../shared/types";
 
@@ -55,8 +61,8 @@ function summarizeConversationWindow(
 ): string {
   const parts = [
     ...context.recentMessages
-        .slice(-4)
-        .map((message) => `${message.role}: ${message.content}`),
+      .slice(-4)
+      .map((message) => `${message.role}: ${message.content}`),
     `user: ${prompt}`,
     `assistant: ${reply}`,
   ];
@@ -79,7 +85,9 @@ function extractKeywords(prompt: string, reply: string): string[] {
     "sleep",
     "routine",
   ];
-  return candidates.filter((item) => source.toLowerCase().includes(item.toLowerCase()));
+  return candidates.filter((item) =>
+    source.toLowerCase().includes(item.toLowerCase()),
+  );
 }
 
 function buildThreadSummaryDoc(
@@ -96,27 +104,7 @@ function buildThreadSummaryDoc(
   };
 }
 
-function buildMemoryItem(
-  uid: string,
-  threadId: string,
-  kind: string,
-  content: string,
-): AssistantMemoryItem {
-  const timestamp = nowIso();
-  return {
-    id: `${uid}:${kind}`,
-    kind,
-    content,
-    sourceThreadId: threadId,
-    salience: 0.82,
-    lastUsedAt: timestamp,
-    sourceRefs: ["assistant_messages", `thread:${threadId}`],
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
-}
-
-function extractLongTermMemory(
+function buildLegacyMemoryItems(
   uid: string,
   threadId: string,
   prompt: string,
@@ -125,33 +113,142 @@ function extractLongTermMemory(
   if (!normalized) {
     return [];
   }
-  const matches: AssistantMemoryItem[] = [];
-  const maybePush = (kind: string, test: boolean) => {
-    if (test) {
-      matches.push(buildMemoryItem(uid, threadId, kind, normalized));
-    }
-  };
-  maybePush(
-    "preference",
-    /喜欢|不喜欢|偏好|prefer|favorite/i.test(normalized),
+
+  const timestamp = nowIso();
+  const keywords = extractKeywords(prompt, "");
+  const candidates: Array<{ kind: string; test: boolean; confidence: number }> =
+    [
+      {
+        kind: "preference",
+        test: /喜欢|不喜欢|偏好|prefer|favorite/i.test(normalized),
+        confidence: 0.76,
+      },
+      {
+        kind: "profile",
+        test: /我是|我叫|身份|角色|i am|my name/i.test(normalized),
+        confidence: 0.7,
+      },
+      {
+        kind: "goal",
+        test: /目标|希望|想要|计划|goal|want to/i.test(normalized),
+        confidence: 0.8,
+      },
+      {
+        kind: "dorm_context",
+        test: /宿舍|室友|寝室|roommate|dorm/i.test(normalized),
+        confidence: 0.74,
+      },
+      {
+        kind: "sleep_pattern",
+        test: /睡不着|失眠|作息|早起|晚睡|经常|总是|sleep/i.test(normalized),
+        confidence: 0.78,
+      },
+    ];
+
+  return candidates
+    .filter((item) => item.test)
+    .slice(0, 3)
+    .map((item) => ({
+      id: `${uid}:${item.kind}:${normalized.toLowerCase().slice(0, 32)}`,
+      kind: item.kind,
+      content: normalized,
+      canonicalKey: `${item.kind}:${normalized.toLowerCase().slice(0, 64)}`,
+      keywords,
+      confidence: item.confidence,
+      sourceThreadId: threadId,
+      sourceMessageId: null,
+      salience: item.confidence,
+      lastUsedAt: timestamp,
+      sourceRefs: ["assistant_messages", `thread:${threadId}`],
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }));
+}
+
+type FastPathKind =
+  | "greeting"
+  | "thanks"
+  | "goodnight"
+  | "acknowledge"
+  | "emoji";
+
+function normalizeFastPathText(prompt: string): string {
+  return prompt.trim().toLowerCase().replace(/\s+/g, "");
+}
+
+function detectFastPathKind(prompt: string): FastPathKind | null {
+  const normalized = normalizeFastPathText(prompt);
+  if (!normalized || normalized.length > 24) {
+    return null;
+  }
+
+  if (
+    /^(hi+|hello+|hey+|yo+|你好+|您好+|嗨+|哈喽+|哈囉+|在吗|在嗎)$/.test(
+      normalized,
+    )
+  ) {
+    return "greeting";
+  }
+  if (
+    /^(谢谢+|謝謝+|thanks+|thankyou+|3q+|thx+)$/.test(normalized)
+  ) {
+    return "thanks";
+  }
+  if (/^(晚安+|goodnight+|gn+|睡了|先睡了)$/.test(normalized)) {
+    return "goodnight";
+  }
+  if (/^(好+|好的+|ok+|okay+|嗯+|恩+|收到+|行+)$/.test(normalized)) {
+    return "acknowledge";
+  }
+  if (
+    normalized.length <= 8 &&
+    prompt.trim().length > 0 &&
+    prompt.replace(/[\s\p{P}\p{S}]/gu, "").length === 0
+  ) {
+    return "emoji";
+  }
+  return null;
+}
+
+function buildFastPathReply(kind: FastPathKind): string {
+  switch (kind) {
+    case "greeting":
+      return "在，我在这儿。你想随便聊聊，还是直接说说今晚哪里不舒服？";
+    case "thanks":
+      return "收到。不急，你继续说，我会帮你一起理清。";
+    case "goodnight":
+      return "晚安。先别急着逼自己马上睡着，慢慢放松下来就好。";
+    case "acknowledge":
+      return "好，我接着陪你。你要是愿意，可以继续补一句现在最在意的事。";
+    case "emoji":
+      return "我看到啦。你如果想继续说，我会接着听。";
+  }
+}
+
+function shouldRunInsight(params: {
+  intent: AssistantIntent;
+  prompt: string;
+}): boolean {
+  if (params.intent === "system_identity") {
+    return false;
+  }
+  if (
+    params.intent === "sleep_difficulty" ||
+    params.intent === "noise_issue" ||
+    params.intent === "dream_reflection" ||
+    params.intent === "plan_review"
+  ) {
+    return true;
+  }
+
+  const normalized = params.prompt.trim().toLowerCase();
+  if (normalized.length < 8) {
+    return false;
+  }
+
+  return /睡不着|失眠|宿舍|舍友|吵|噪音|灯|灯光|手机|屏幕|梦到|做梦|梦见|计划|复盘|焦虑|压力|难受|崩溃|情绪|建议|影响|作息|sleep|dream|plan|noise|stress|anx/i.test(
+    normalized,
   );
-  maybePush(
-    "profile",
-    /我是|我叫|身份|角色|i am|my name/i.test(normalized),
-  );
-  maybePush(
-    "goal",
-    /目标|希望|想要|计划|goal|want to/i.test(normalized),
-  );
-  maybePush(
-    "dorm_context",
-    /宿舍|室友|寝室|roommate|dorm/i.test(normalized),
-  );
-  maybePush(
-    "sleep_pattern",
-    /睡不着|失眠|作息|早起|晚睡|经常|总是|sleep/i.test(normalized),
-  );
-  return matches.slice(0, 3);
 }
 
 async function persistRun(
@@ -190,6 +287,887 @@ function combineErrorMessages(
   return next.length > 0 ? next.join(" | ") : null;
 }
 
+function ensureUpdatedSurfaces(
+  surfaces: SurfaceId[] | undefined,
+  fallback: SurfaceId[] = ["assistant_context"],
+): SurfaceId[] {
+  const next = (surfaces ?? fallback).filter(Boolean);
+  return Array.from(new Set(next.length > 0 ? next : fallback));
+}
+
+function mergeInterferenceSignals(
+  current: UserStateDoc["tonightInterference"] | null | undefined,
+  signals: InterferenceSnapshotDoc[],
+): UserStateDoc["tonightInterference"] | null {
+  if (signals.length === 0) {
+    return current ?? null;
+  }
+
+  const byType = new Map<
+    InterferenceSnapshotDoc["type"],
+    InterferenceSnapshotDoc
+  >();
+  for (const item of [
+    current?.noise,
+    current?.light,
+    current?.phoneUsage,
+    current?.emotion,
+  ]) {
+    if (item) {
+      byType.set(item.type, item);
+    }
+  }
+  for (const item of signals) {
+    byType.set(item.type, item);
+  }
+
+  return {
+    noise:
+      byType.get("noise") ??
+      byType.values().next().value ??
+      ({
+        type: "noise",
+        title: "宿舍噪声",
+        value: "未更新",
+        gradeLabel: "low",
+        status: "idle",
+        detail: "暂无新的噪声线索。",
+        source: "assistant_turn_extract",
+        measuredAt: null,
+        numericValue: null,
+        score: null,
+      } satisfies InterferenceSnapshotDoc),
+    light:
+      byType.get("light") ??
+      ({
+        type: "light",
+        title: "灯光环境",
+        value: "未更新",
+        gradeLabel: "low",
+        status: "idle",
+        detail: "暂无新的灯光线索。",
+        source: "assistant_turn_extract",
+        measuredAt: null,
+        numericValue: null,
+        score: null,
+      } satisfies InterferenceSnapshotDoc),
+    phoneUsage:
+      byType.get("phoneUsage") ??
+      ({
+        type: "phoneUsage",
+        title: "手机使用",
+        value: "未更新",
+        gradeLabel: "low",
+        status: "idle",
+        detail: "暂无新的手机使用线索。",
+        source: "assistant_turn_extract",
+        measuredAt: null,
+        numericValue: null,
+        score: null,
+      } satisfies InterferenceSnapshotDoc),
+    emotion:
+      byType.get("emotion") ??
+      ({
+        type: "emotion",
+        title: "情绪压力",
+        value: "未更新",
+        gradeLabel: "low",
+        status: "idle",
+        detail: "暂无新的情绪线索。",
+        source: "assistant_turn_extract",
+        measuredAt: null,
+        numericValue: null,
+        score: null,
+      } satisfies InterferenceSnapshotDoc),
+    updatedAt: nowIso(),
+  };
+}
+
+function buildMemoryItemsFromCandidates(
+  uid: string,
+  candidates: AssistantMemoryCandidate[],
+): AssistantMemoryItem[] {
+  const timestamp = nowIso();
+  return candidates.map((item) => {
+    const canonicalKey = item.canonicalKey.trim();
+    const safeKey = canonicalKey
+      .replace(/[^a-z0-9\u4e00-\u9fff]+/gi, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 64);
+    return {
+      id: `${uid}:${item.kind}:${safeKey || randomUUID()}`,
+      kind: item.kind,
+      content: item.content,
+      canonicalKey,
+      keywords: item.keywords,
+      confidence: item.confidence,
+      sourceThreadId: item.sourceThreadId ?? null,
+      sourceMessageId: item.sourceMessageId ?? null,
+      salience: item.salience,
+      lastUsedAt: timestamp,
+      sourceRefs: item.sourceRefs,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+  });
+}
+
+function emptyInsightExtraction(): TurnInsightExtraction {
+  return {
+    interferenceSignals: [],
+    actionSuggestions: [],
+    memoryCandidates: [],
+    shouldRefreshPlan: false,
+    updatedSurfaces: ["assistant_context"],
+  };
+}
+
+function buildSurfacePatch(params: {
+  context: AssistantContext;
+  userState: UserStateDoc;
+  surfaces: SurfaceId[];
+  extraRecords?: SleepCaptureRecordDoc[];
+}): {
+  snapshots: ReturnType<typeof buildCardSnapshots>;
+  patch: AssistantSurfacePatchDoc;
+} {
+  const nextContext: AssistantContext = {
+    ...params.context,
+    userState: params.userState,
+  };
+  const snapshots = buildCardSnapshots(
+    nextContext,
+    params.userState,
+    params.surfaces,
+  );
+  const snapshotMap = Object.fromEntries(
+    snapshots.map((snapshot) => [snapshot.surfaceId, snapshot]),
+  ) as AssistantSurfacePatchDoc["cardSnapshots"];
+  return {
+    snapshots,
+    patch: {
+      userState: params.userState,
+      cardSnapshots: snapshotMap,
+      ...(params.extraRecords && params.extraRecords.length > 0
+        ? { sleepCaptureRecords: params.extraRecords }
+        : {}),
+    },
+  };
+}
+
+async function writeSnapshots(
+  repo: AssistantDataRepository,
+  uid: string,
+  snapshots: ReturnType<typeof buildCardSnapshots>,
+): Promise<void> {
+  for (const snapshot of snapshots) {
+    await repo.writeCardSnapshot(uid, snapshot);
+  }
+}
+
+function buildReplyContextOptions(
+  intent: AssistantIntent,
+  prompt: string,
+): {
+  profile: "reply_lite";
+  recentSessionCount: number;
+  recentDreamCount: number;
+  messageCount: number;
+  memoryLimit: number;
+  memoryQuery: string;
+} {
+  return {
+    profile: "reply_lite",
+    recentSessionCount:
+      intent === "sleep_difficulty" || intent === "plan_review" ? 2 : 1,
+    recentDreamCount: intent === "dream_reflection" ? 1 : 0,
+    messageCount: intent === "plan_review" ? 6 : 4,
+    memoryLimit: intent === "plan_review" ? 3 : 2,
+    memoryQuery: prompt,
+  };
+}
+
+function buildInsightContextOptions(prompt: string): {
+  profile: "insight_full";
+  recentSessionCount: number;
+  recentDreamCount: number;
+  messageCount: number;
+  memoryLimit: number;
+  memoryQuery: string;
+} {
+  return {
+    profile: "insight_full",
+    recentSessionCount: 5,
+    recentDreamCount: 3,
+    messageCount: 8,
+    memoryLimit: 6,
+    memoryQuery: prompt,
+  };
+}
+
+function buildAssistantUserStatePatch(params: {
+  threadId: string;
+  latestNightMood?: string | null;
+  currentPhase?: UserStateDoc["currentPhase"];
+}): Partial<UserStateDoc> {
+  return {
+    currentPhase: params.currentPhase ?? "assistant",
+    latestThreadId: params.threadId,
+    latestNightMood: params.latestNightMood ?? null,
+    updatedAt: nowIso(),
+  };
+}
+
+interface AssistantReplyPhaseResult {
+  runId: string;
+  prompt: string;
+  threadId: string;
+  intent: AssistantIntent;
+  reply: string;
+  provider: string;
+  model: string;
+  sourceMode: AIProviderSourceMode;
+  errorMessage: string | null;
+  replyContext: AssistantContext;
+  previousUserState: UserStateDoc;
+  shouldRunInsight: boolean;
+  metrics: {
+    startedAt: number;
+    replyContextMs: number;
+    firstDeltaMs: number | null;
+    replyCompletedMs: number;
+  };
+}
+
+export async function prepareAssistantReplyPhase(params: {
+  repo: AssistantDataRepository;
+  provider: AIProvider;
+  uid: string;
+  prompt: string;
+  threadId: string;
+  onDelta?: (delta: string) => Promise<void> | void;
+}): Promise<AssistantReplyPhaseResult> {
+  const startedAt = Date.now();
+  const runId = randomUUID();
+  const intent = classifyIntent(params.prompt);
+  let firstDeltaMs: number | null = null;
+  const emitDelta = async (delta: string): Promise<void> => {
+    if (firstDeltaMs == null) {
+      firstDeltaMs = Date.now() - startedAt;
+    }
+    if (params.onDelta) {
+      await params.onDelta(delta);
+    }
+  };
+
+  const replyContextStartedAt = Date.now();
+  const replyContext = await params.repo.buildAssistantContext(
+    params.uid,
+    params.threadId,
+    buildReplyContextOptions(intent, params.prompt),
+  );
+  const replyContextMs = Date.now() - replyContextStartedAt;
+  const previousUserState = replyContext.userState ?? buildEmptyUserState();
+
+  const replyResult =
+    intent === "system_identity"
+      ? {
+          value: buildSystemIdentityReply({
+            assistantName: replyContext.assistantProfile.assistantName,
+            providerName: params.provider.providerName,
+            modelName: params.provider.modelName,
+            sourceMode: "fallbackSuccess",
+          }).reply,
+          providerName: params.provider.providerName,
+          modelName: params.provider.modelName,
+          sourceMode: "fallbackSuccess" as AIProviderSourceMode,
+          errorMessage: null,
+        }
+      : await params.provider.streamReplyText(
+          replyContext,
+          intent,
+          params.prompt,
+          emitDelta,
+        );
+
+  if (intent === "system_identity") {
+    await emitDelta(replyResult.value);
+  }
+
+  return {
+    runId,
+    prompt: params.prompt,
+    threadId: params.threadId,
+    intent,
+    reply: replyResult.value,
+    provider: replyResult.providerName,
+    model: replyResult.modelName,
+    sourceMode: replyResult.sourceMode,
+    errorMessage: replyResult.errorMessage ?? null,
+    replyContext,
+    previousUserState,
+    shouldRunInsight: shouldRunInsight({ intent, prompt: params.prompt }),
+    metrics: {
+      startedAt,
+      replyContextMs,
+      firstDeltaMs,
+      replyCompletedMs: Date.now() - startedAt,
+    },
+  };
+}
+
+export async function finalizeAssistantReplyPostprocess(params: {
+  repo: AssistantDataRepository;
+  provider: AIProvider;
+  uid: string;
+  turnId: string;
+  phase: AssistantReplyPhaseResult;
+}): Promise<{
+  updatedSurfaces: SurfaceId[];
+  memorySyncedCount: number;
+  skippedProjection: boolean;
+}> {
+  const threadSummary = buildThreadSummaryDoc(
+    params.phase.replyContext,
+    params.phase.threadId,
+    params.phase.prompt,
+    params.phase.reply,
+  );
+  await params.repo.writeAssistantThreadSummary(params.uid, threadSummary);
+
+  const statePatch = buildAssistantUserStatePatch({
+    threadId: params.phase.threadId,
+    latestNightMood:
+      params.phase.replyContext.settings.selectedNightMood ??
+      params.phase.previousUserState.latestNightMood,
+  });
+
+  const persistRunForPhase = async (input: {
+    sourceMode: AIProviderSourceMode;
+    errorMessage: string | null;
+    updatedSurfaces: SurfaceId[];
+    memorySyncedCount: number;
+    insightMs: number;
+    skippedProjection: boolean;
+  }): Promise<void> => {
+    await persistRun(params.repo, params.uid, params.phase.runId, {
+      eventType: "assistant_reply",
+      threadId: params.phase.threadId,
+      provider: params.phase.provider,
+      model: params.phase.model,
+      status: runStatusFromSourceMode(input.sourceMode),
+      sourceMode: input.sourceMode,
+      inputRefs: ["assistant_threads.messages", "user_state", "sleep_sessions"],
+      outputRefs: [
+        "assistant_runs",
+        "assistant_thread_summaries",
+        ...(input.memorySyncedCount > 0 ? ["assistant_memory_items"] : []),
+        ...(!input.skippedProjection ? ["user_state", ...input.updatedSurfaces] : []),
+      ],
+      error: input.errorMessage,
+      createdAt: nowIso(),
+      fastPath: false,
+      replyContextMs: params.phase.metrics.replyContextMs,
+      firstDeltaMs: params.phase.metrics.firstDeltaMs,
+      replyCompletedMs: params.phase.metrics.replyCompletedMs,
+      insightMs: input.insightMs,
+      totalMs: Date.now() - params.phase.metrics.startedAt,
+    });
+  };
+
+  const isCurrentCommittedTurn = () =>
+    params.repo.isAssistantThreadCommittedTurn({
+      uid: params.uid,
+      threadId: params.phase.threadId,
+      turnId: params.turnId,
+    });
+
+  if (!params.phase.shouldRunInsight) {
+    const shouldProject = await isCurrentCommittedTurn();
+    if (shouldProject) {
+      await params.repo.writeUserState(params.uid, statePatch);
+    }
+    await persistRunForPhase({
+      sourceMode: params.phase.sourceMode,
+      errorMessage: params.phase.errorMessage,
+      updatedSurfaces: shouldProject ? ["assistant_context"] : [],
+      memorySyncedCount: 0,
+      insightMs: 0,
+      skippedProjection: !shouldProject,
+    });
+    return {
+      updatedSurfaces: shouldProject ? ["assistant_context"] : [],
+      memorySyncedCount: 0,
+      skippedProjection: !shouldProject,
+    };
+  }
+
+  if (!(await isCurrentCommittedTurn())) {
+    const staleMemory = buildLegacyMemoryItems(
+      params.uid,
+      params.phase.threadId,
+      params.phase.prompt,
+    );
+    if (staleMemory.length > 0) {
+      await params.repo.upsertAssistantMemoryItems(params.uid, staleMemory);
+    }
+    await persistRunForPhase({
+      sourceMode: params.phase.sourceMode,
+      errorMessage: params.phase.errorMessage,
+      updatedSurfaces: [],
+      memorySyncedCount: staleMemory.length,
+      insightMs: 0,
+      skippedProjection: true,
+    });
+    return {
+      updatedSurfaces: [],
+      memorySyncedCount: staleMemory.length,
+      skippedProjection: true,
+    };
+  }
+
+  const insightStartedAt = Date.now();
+  const insightContext = await params.repo.buildAssistantContext(
+    params.uid,
+    params.phase.threadId,
+    buildInsightContextOptions(params.phase.prompt),
+  );
+  const baseState = insightContext.userState ?? params.phase.previousUserState;
+  const insightResult = await params.provider.extractTurnInsights(insightContext, {
+    threadId: params.phase.threadId,
+    prompt: params.phase.prompt,
+    reply: params.phase.reply,
+    intent: params.phase.intent,
+  });
+
+  const mergedInterference = mergeInterferenceSignals(
+    baseState.tonightInterference ?? insightContext.userState?.tonightInterference,
+    insightResult.value.interferenceSignals,
+  );
+
+  let nextState: UserStateDoc = {
+    ...baseState,
+    currentPhase: "assistant",
+    latestThreadId: params.phase.threadId,
+    latestNightMood:
+      insightContext.settings.selectedNightMood ??
+      baseState.latestNightMood ??
+      null,
+    tonightInterference: mergedInterference,
+    updatedAt: nowIso(),
+    profileSummary: buildDeterministicProfileSummary({
+      ...insightContext,
+      userState: {
+        ...baseState,
+        currentPhase: "assistant",
+        latestThreadId: params.phase.threadId,
+        latestNightMood:
+          insightContext.settings.selectedNightMood ??
+          baseState.latestNightMood ??
+          null,
+        tonightInterference: mergedInterference,
+        updatedAt: nowIso(),
+      },
+    }),
+  };
+
+  let planResult: Awaited<
+    ReturnType<AIProvider["generateTonightPlan"]>
+  > | null = null;
+  if (insightResult.value.shouldRefreshPlan) {
+    const planner = new DeterministicAIProvider();
+    planResult = await planner.generateTonightPlan(
+      { ...insightContext, userState: nextState },
+      params.phase.runId,
+    );
+    nextState = {
+      ...nextState,
+      tonightPlan: planResult.value,
+      updatedAt: nowIso(),
+      profileSummary: buildDeterministicProfileSummary({
+        ...insightContext,
+        userState: {
+          ...nextState,
+          tonightPlan: planResult.value,
+        },
+      }),
+    };
+  }
+  const insightMs = Date.now() - insightStartedAt;
+
+  const updatedSurfaces = ensureUpdatedSurfaces(
+    insightResult.value.updatedSurfaces,
+    ["assistant_context"],
+  );
+  const memoryItems = buildMemoryItemsFromCandidates(
+    params.uid,
+    insightResult.value.memoryCandidates,
+  );
+  const fallbackMemory =
+    memoryItems.length > 0
+      ? memoryItems
+      : buildLegacyMemoryItems(params.uid, params.phase.threadId, params.phase.prompt);
+  if (fallbackMemory.length > 0) {
+    await params.repo.upsertAssistantMemoryItems(params.uid, fallbackMemory);
+  }
+
+  const shouldProject = await isCurrentCommittedTurn();
+  if (shouldProject) {
+    await params.repo.writeUserState(params.uid, nextState);
+    const { snapshots } = buildSurfacePatch({
+      context: insightContext,
+      userState: nextState,
+      surfaces: updatedSurfaces,
+    });
+    await writeSnapshots(params.repo, params.uid, snapshots);
+  }
+
+  const combinedSourceMode = combineSourceModes([
+    params.phase.sourceMode,
+    insightResult.sourceMode,
+    ...(planResult ? [planResult.sourceMode] : []),
+  ]);
+  const combinedError = combineErrorMessages(
+    params.phase.errorMessage,
+    insightResult.errorMessage,
+    planResult?.errorMessage,
+  );
+
+  await persistRunForPhase({
+    sourceMode: combinedSourceMode,
+    errorMessage: combinedError,
+    updatedSurfaces: shouldProject ? updatedSurfaces : [],
+    memorySyncedCount: fallbackMemory.length,
+    insightMs,
+    skippedProjection: !shouldProject,
+  });
+
+  return {
+    updatedSurfaces: shouldProject ? updatedSurfaces : [],
+    memorySyncedCount: fallbackMemory.length,
+    skippedProjection: !shouldProject,
+  };
+}
+
+async function buildReplyOutcome(params: {
+  repo: AssistantDataRepository;
+  provider: AIProvider;
+  uid: string;
+  prompt: string;
+  threadId: string;
+  onDelta?: (delta: string) => Promise<void> | void;
+  onReplyReady?: (payload: {
+    reply: string;
+    intent: AssistantIntent;
+    provider: string;
+    model: string;
+    sourceMode: AIProviderSourceMode;
+    errorMessage: string | null;
+  }) => Promise<void> | void;
+}): Promise<{
+  runId: string;
+  reply: string;
+  intent: AssistantIntent;
+  updatedSurfaces: SurfaceId[];
+  userState: UserStateDoc;
+  provider: string;
+  model: string;
+  sourceMode: AIProviderSourceMode;
+  errorMessage: string | null;
+  surfacePatch: AssistantSurfacePatchDoc;
+  memorySyncedCount: number;
+}> {
+  const startedAt = Date.now();
+  const runId = randomUUID();
+  const intent = classifyIntent(params.prompt);
+  let firstDeltaMs: number | null = null;
+  const emitDelta = async (delta: string): Promise<void> => {
+    if (firstDeltaMs == null) {
+      firstDeltaMs = Date.now() - startedAt;
+    }
+    if (params.onDelta) {
+      await params.onDelta(delta);
+    }
+  };
+  const emitReplyReady = async (payload: {
+    reply: string;
+    intent: AssistantIntent;
+    provider: string;
+    model: string;
+    sourceMode: AIProviderSourceMode;
+    errorMessage: string | null;
+  }): Promise<void> => {
+    if (params.onReplyReady) {
+      await params.onReplyReady(payload);
+    }
+  };
+
+  const replyContextStartedAt = Date.now();
+  const replyContext = await params.repo.buildAssistantContext(
+    params.uid,
+    params.threadId,
+    buildReplyContextOptions(intent, params.prompt),
+  );
+  const replyContextMs = Date.now() - replyContextStartedAt;
+  const previous = replyContext.userState ?? buildEmptyUserState();
+  const planner = new DeterministicAIProvider();
+
+  const replyResult =
+    intent === "system_identity"
+      ? {
+          value: buildSystemIdentityReply({
+            assistantName: replyContext.assistantProfile.assistantName,
+            providerName: params.provider.providerName,
+            modelName: params.provider.modelName,
+            sourceMode: "fallbackSuccess",
+          }).reply,
+          providerName: params.provider.providerName,
+          modelName: params.provider.modelName,
+          sourceMode: "fallbackSuccess" as AIProviderSourceMode,
+          errorMessage: null,
+        }
+      : await params.provider.streamReplyText(
+          replyContext,
+          intent,
+          params.prompt,
+          emitDelta,
+        );
+
+  if (intent === "system_identity") {
+    await emitDelta(replyResult.value);
+  }
+  const replyCompletedMs = Date.now() - startedAt;
+  await emitReplyReady({
+    reply: replyResult.value,
+    intent,
+    provider: replyResult.providerName,
+    model: replyResult.modelName,
+    sourceMode: replyResult.sourceMode,
+    errorMessage: replyResult.errorMessage ?? null,
+  });
+
+  const lightweightState = {
+    ...previous,
+    ...buildAssistantUserStatePatch({
+      threadId: params.threadId,
+      latestNightMood:
+        replyContext.settings.selectedNightMood ?? previous.latestNightMood,
+    }),
+  } satisfies UserStateDoc;
+
+  if (!shouldRunInsight({ intent, prompt: params.prompt })) {
+    const statePatch = buildAssistantUserStatePatch({
+      threadId: params.threadId,
+      latestNightMood:
+        replyContext.settings.selectedNightMood ?? previous.latestNightMood,
+    });
+    await params.repo.writeUserState(params.uid, statePatch);
+    await params.repo.writeAssistantThreadSummary(
+      params.uid,
+      buildThreadSummaryDoc(
+        replyContext,
+        params.threadId,
+        params.prompt,
+        replyResult.value,
+      ),
+    );
+    await persistRun(params.repo, params.uid, runId, {
+      eventType: "assistant_reply",
+      threadId: params.threadId,
+      provider: replyResult.providerName,
+      model: replyResult.modelName,
+      status: runStatusFromSourceMode(replyResult.sourceMode),
+      sourceMode: replyResult.sourceMode,
+      inputRefs: ["assistant_threads.messages", "user_state", "sleep_sessions"],
+      outputRefs: ["assistant_runs", "user_state"],
+      error: replyResult.errorMessage ?? null,
+      createdAt: nowIso(),
+      fastPath: false,
+      replyContextMs,
+      firstDeltaMs,
+      replyCompletedMs,
+      insightMs: 0,
+      totalMs: Date.now() - startedAt,
+    });
+    return {
+      runId,
+      reply: replyResult.value,
+      intent,
+      updatedSurfaces: ["assistant_context"],
+      userState: lightweightState,
+      provider: replyResult.providerName,
+      model: replyResult.modelName,
+      sourceMode: replyResult.sourceMode,
+      errorMessage: replyResult.errorMessage ?? null,
+      surfacePatch: {
+        userState: statePatch,
+      },
+      memorySyncedCount: 0,
+    };
+  }
+
+  const insightStartedAt = Date.now();
+  const insightContext =
+    intent === "system_identity"
+      ? replyContext
+      : await params.repo.buildAssistantContext(
+          params.uid,
+          params.threadId,
+          buildInsightContextOptions(params.prompt),
+        );
+  const baseState = insightContext.userState ?? previous;
+
+  const insightResult =
+    intent === "system_identity"
+      ? {
+          value: emptyInsightExtraction(),
+          providerName: params.provider.providerName,
+          modelName: params.provider.modelName,
+          sourceMode: "fallbackSuccess" as AIProviderSourceMode,
+          errorMessage: null,
+        }
+      : await params.provider.extractTurnInsights(insightContext, {
+          threadId: params.threadId,
+          prompt: params.prompt,
+          reply: replyResult.value,
+          intent,
+        });
+
+  const mergedInterference = mergeInterferenceSignals(
+    baseState.tonightInterference ??
+      insightContext.userState?.tonightInterference,
+    insightResult.value.interferenceSignals,
+  );
+
+  let nextState: UserStateDoc = {
+    ...baseState,
+    currentPhase: "assistant",
+    latestThreadId: params.threadId,
+    latestNightMood:
+      insightContext.settings.selectedNightMood ??
+      baseState.latestNightMood ??
+      null,
+    tonightInterference: mergedInterference,
+    updatedAt: nowIso(),
+    profileSummary: buildDeterministicProfileSummary({
+      ...insightContext,
+      userState: {
+        ...baseState,
+        currentPhase: "assistant",
+        latestThreadId: params.threadId,
+        latestNightMood:
+          insightContext.settings.selectedNightMood ??
+          baseState.latestNightMood ??
+          null,
+        tonightInterference: mergedInterference,
+        updatedAt: nowIso(),
+      },
+    }),
+  };
+
+  let planResult: Awaited<
+    ReturnType<AIProvider["generateTonightPlan"]>
+  > | null = null;
+  if (insightResult.value.shouldRefreshPlan) {
+    planResult = await planner.generateTonightPlan(
+      { ...insightContext, userState: nextState },
+      runId,
+    );
+    nextState = {
+      ...nextState,
+      tonightPlan: planResult.value,
+      updatedAt: nowIso(),
+      profileSummary: buildDeterministicProfileSummary({
+        ...insightContext,
+        userState: {
+          ...nextState,
+          tonightPlan: planResult.value,
+        },
+      }),
+    };
+  }
+  const insightMs = Date.now() - insightStartedAt;
+
+  await params.repo.writeUserState(params.uid, nextState);
+
+  const updatedSurfaces = ensureUpdatedSurfaces(
+    insightResult.value.updatedSurfaces,
+    ["assistant_context"],
+  );
+  const { snapshots, patch } = buildSurfacePatch({
+    context: insightContext,
+    userState: nextState,
+    surfaces: updatedSurfaces,
+  });
+  await writeSnapshots(params.repo, params.uid, snapshots);
+
+  const combinedSourceMode = combineSourceModes([
+    replyResult.sourceMode,
+    insightResult.sourceMode,
+    ...(planResult ? [planResult.sourceMode] : []),
+  ]);
+  const combinedError = combineErrorMessages(
+    replyResult.errorMessage,
+    insightResult.errorMessage,
+    planResult?.errorMessage,
+  );
+
+  await persistRun(params.repo, params.uid, runId, {
+    eventType: "assistant_reply",
+    threadId: params.threadId,
+    provider: replyResult.providerName,
+    model: replyResult.modelName,
+    status: runStatusFromSourceMode(combinedSourceMode),
+    sourceMode: combinedSourceMode,
+    inputRefs: ["assistant_threads.messages", "user_state", "sleep_sessions"],
+    outputRefs: ["users.assistant_runs", "user_state", ...updatedSurfaces],
+    error: combinedError,
+    createdAt: nowIso(),
+    fastPath: false,
+    replyContextMs,
+    firstDeltaMs,
+    replyCompletedMs,
+    insightMs,
+    totalMs: Date.now() - startedAt,
+  });
+
+  await params.repo.writeAssistantThreadSummary(
+    params.uid,
+    buildThreadSummaryDoc(
+      insightContext,
+      params.threadId,
+      params.prompt,
+      replyResult.value,
+    ),
+  );
+
+  const memoryItems = buildMemoryItemsFromCandidates(
+    params.uid,
+    insightResult.value.memoryCandidates,
+  );
+  const fallbackMemory =
+    memoryItems.length > 0
+      ? memoryItems
+      : buildLegacyMemoryItems(params.uid, params.threadId, params.prompt);
+  if (fallbackMemory.length > 0) {
+    await params.repo.upsertAssistantMemoryItems(params.uid, fallbackMemory);
+  }
+
+  return {
+    runId,
+    reply: replyResult.value,
+    intent,
+    updatedSurfaces,
+    userState: nextState,
+    provider: replyResult.providerName,
+    model: replyResult.modelName,
+    sourceMode: combinedSourceMode,
+    errorMessage: combinedError,
+    surfacePatch: patch,
+    memorySyncedCount: fallbackMemory.length,
+  };
+}
+
 export async function prepareTonightPlan(
   repo: AssistantDataRepository,
   provider: AIProvider,
@@ -222,10 +1200,11 @@ export async function prepareTonightPlan(
 
   await repo.writeUserState(uid, userState);
   const updatedSurfaces: SurfaceId[] = ["home_pre_sleep", "assistant_context"];
-  const snapshots = buildCardSnapshots(context, userState, updatedSurfaces);
-  for (const snapshot of snapshots) {
-    await repo.writeCardSnapshot(uid, snapshot);
-  }
+  await writeSnapshots(
+    repo,
+    uid,
+    buildCardSnapshots(context, userState, updatedSurfaces),
+  );
 
   await persistRun(repo, uid, runId, {
     eventType: "prepare_tonight_plan",
@@ -263,6 +1242,15 @@ export async function handleAssistantReply(
   uid: string,
   prompt: string,
   threadId: string,
+  onDelta?: (delta: string) => Promise<void> | void,
+  onReplyReady?: (payload: {
+    reply: string;
+    intent: AssistantIntent;
+    provider: string;
+    model: string;
+    sourceMode: AIProviderSourceMode;
+    errorMessage: string | null;
+  }) => Promise<void> | void,
 ): Promise<{
   runId: string;
   reply: string;
@@ -273,100 +1261,18 @@ export async function handleAssistantReply(
   model: string;
   sourceMode: AIProviderSourceMode;
   errorMessage: string | null;
+  surfacePatch: AssistantSurfacePatchDoc;
+  memorySyncedCount: number;
 }> {
-  const runId = randomUUID();
-  const context = await repo.buildAssistantContext(uid, threadId);
-  const intent = classifyIntent(prompt);
-  const previous = context.userState ?? buildEmptyUserState();
-  const replyResult =
-    intent === "system_identity"
-      ? {
-          value: buildSystemIdentityReply({
-            assistantName: context.assistantProfile.assistantName,
-            providerName: provider.providerName,
-            modelName: provider.modelName,
-            sourceMode: "fallbackSuccess",
-          }),
-          providerName: provider.providerName,
-          modelName: provider.modelName,
-          sourceMode: "fallbackSuccess" as AIProviderSourceMode,
-          errorMessage: null,
-        }
-      : await provider.generateStructuredReply(context, intent, prompt);
-  const reply = replyResult.value;
-  let planResult:
-    | Awaited<ReturnType<AIProvider["generateTonightPlan"]>>
-    | null = null;
-
-  let nextState: UserStateDoc = {
-    ...previous,
-    currentPhase: "assistant",
-    latestThreadId: threadId,
-    profileSummary: buildDeterministicProfileSummary(context),
-    updatedAt: nowIso(),
-  };
-
-  if (reply.updateTonightPlan) {
-    planResult = await provider.generateTonightPlan(context, runId);
-    nextState = {
-      ...nextState,
-      tonightPlan: planResult.value,
-    };
-  }
-
-  await repo.writeUserState(uid, nextState);
-  const snapshots = buildCardSnapshots(context, nextState, reply.updatedSurfaces);
-  for (const snapshot of snapshots) {
-    await repo.writeCardSnapshot(uid, snapshot);
-  }
-
-  await persistRun(repo, uid, runId, {
-    eventType: "assistant_reply",
-    threadId,
-    provider: replyResult.providerName,
-    model: replyResult.modelName,
-    status: runStatusFromSourceMode(
-      combineSourceModes([
-        replyResult.sourceMode,
-        ...(planResult ? [planResult.sourceMode] : []),
-      ]),
-    ),
-    sourceMode: combineSourceModes([
-      replyResult.sourceMode,
-      ...(planResult ? [planResult.sourceMode] : []),
-    ]),
-    inputRefs: ["assistant_threads.messages", "user_state", "sleep_sessions"],
-    outputRefs: ["users.assistant_runs", "user_state", ...reply.updatedSurfaces],
-    error: combineErrorMessages(
-      replyResult.errorMessage,
-      planResult?.errorMessage,
-    ),
-    createdAt: nowIso(),
-  });
-
-  const threadSummary = buildThreadSummaryDoc(
-    context,
-    threadId,
+  return buildReplyOutcome({
+    repo,
+    provider,
+    uid,
     prompt,
-    reply.reply,
-  );
-  await repo.writeAssistantThreadSummary(uid, threadSummary);
-  const longTermMemory = extractLongTermMemory(uid, threadId, prompt);
-  if (longTermMemory.length > 0) {
-    await repo.upsertAssistantMemoryItems(uid, longTermMemory);
-  }
-
-  return {
-    runId,
-    reply: reply.reply,
-    intent: reply.intent,
-    updatedSurfaces: reply.updatedSurfaces,
-    userState: nextState,
-    provider: replyResult.providerName,
-    model: replyResult.modelName,
-    sourceMode: replyResult.sourceMode,
-    errorMessage: replyResult.errorMessage ?? null,
-  };
+    threadId,
+    onDelta,
+    onReplyReady,
+  });
 }
 
 export async function handleAssistantCapture(
@@ -386,10 +1292,19 @@ export async function handleAssistantCapture(
   model: string;
   sourceMode: AIProviderSourceMode;
   errorMessage: string | null;
-  record: Record<string, unknown>;
+  record: SleepCaptureRecordDoc;
+  surfacePatch: AssistantSurfacePatchDoc;
+  memorySyncedCount: number;
 }> {
   const runId = randomUUID();
-  const context = await repo.buildAssistantContext(uid, threadId);
+  const context = await repo.buildAssistantContext(uid, threadId, {
+    profile: "capture_full",
+    recentSessionCount: 5,
+    recentDreamCount: 3,
+    messageCount: 8,
+    memoryLimit: 6,
+    memoryQuery: prompt,
+  });
   const previous = context.userState ?? buildEmptyUserState();
   const captureResult = await provider.generateSleepCapture(context, {
     prompt,
@@ -397,14 +1312,15 @@ export async function handleAssistantCapture(
     sessionId,
   });
   const draft = captureResult.value;
-  const record = await repo.saveSleepCaptureRecord(uid, {
+  const record = (await repo.saveSleepCaptureRecord(uid, {
     type: draft.type,
     sessionId,
     createdAt: nowIso(),
     title: draft.title,
     outline: draft.outline,
     content: draft.content,
-  });
+  })) as unknown as SleepCaptureRecordDoc;
+
   const nextState: UserStateDoc = {
     ...previous,
     latestThreadId: threadId,
@@ -412,6 +1328,15 @@ export async function handleAssistantCapture(
   };
 
   await repo.writeUserState(uid, nextState);
+  const updatedSurfaces: SurfaceId[] = ["assistant_context"];
+  const { snapshots, patch } = buildSurfacePatch({
+    context,
+    userState: nextState,
+    surfaces: updatedSurfaces,
+    extraRecords: [record],
+  });
+  await writeSnapshots(repo, uid, snapshots);
+
   await persistRun(repo, uid, runId, {
     eventType: "assistant_capture",
     threadId,
@@ -425,14 +1350,11 @@ export async function handleAssistantCapture(
     createdAt: nowIso(),
   });
 
-  const threadSummary = buildThreadSummaryDoc(
-    context,
-    threadId,
-    prompt,
-    draft.reply,
+  await repo.writeAssistantThreadSummary(
+    uid,
+    buildThreadSummaryDoc(context, threadId, prompt, draft.reply),
   );
-  await repo.writeAssistantThreadSummary(uid, threadSummary);
-  const longTermMemory = extractLongTermMemory(uid, threadId, prompt);
+  const longTermMemory = buildLegacyMemoryItems(uid, threadId, prompt);
   if (longTermMemory.length > 0) {
     await repo.upsertAssistantMemoryItems(uid, longTermMemory);
   }
@@ -440,13 +1362,15 @@ export async function handleAssistantCapture(
   return {
     runId,
     reply: draft.reply,
-    updatedSurfaces: ["assistant_context"],
+    updatedSurfaces,
     userState: nextState,
     provider: captureResult.providerName,
     model: captureResult.modelName,
     sourceMode: captureResult.sourceMode,
     errorMessage: captureResult.errorMessage ?? null,
     record,
+    surfacePatch: patch,
+    memorySyncedCount: longTermMemory.length,
   };
 }
 
@@ -470,9 +1394,7 @@ export async function refreshUserCards(
     tonightPlan: tonightPlanResult.value,
   };
   const snapshots = buildCardSnapshots(context, userState, surfaces);
-  for (const snapshot of snapshots) {
-    await repo.writeCardSnapshot(uid, snapshot);
-  }
+  await writeSnapshots(repo, uid, snapshots);
   return {
     version: snapshots[0]?.version ?? `v-${Date.now()}`,
     updatedSurfaces: surfaces,
@@ -498,9 +1420,11 @@ export async function handleSleepSessionChange(
       updatedAt: nowIso(),
     };
     await repo.writeUserState(uid, nextState);
-    for (const snapshot of buildCardSnapshots(context, nextState, ["sleep_mode"])) {
-      await repo.writeCardSnapshot(uid, snapshot);
-    }
+    await writeSnapshots(
+      repo,
+      uid,
+      buildCardSnapshots(context, nextState, ["sleep_mode"]),
+    );
     return;
   }
 
@@ -512,9 +1436,11 @@ export async function handleSleepSessionChange(
       updatedAt: nowIso(),
     };
     await repo.writeUserState(uid, nextState);
-    for (const snapshot of buildCardSnapshots(context, nextState, ["morning_feedback"])) {
-      await repo.writeCardSnapshot(uid, snapshot);
-    }
+    await writeSnapshots(
+      repo,
+      uid,
+      buildCardSnapshots(context, nextState, ["morning_feedback"]),
+    );
     await repo.upsertNotification(uid, `feedback-${sessionId}`, {
       id: `feedback-${sessionId}`,
       category: "reminder",
@@ -536,21 +1462,20 @@ export async function handleSleepSessionChange(
       updatedAt: nowIso(),
     };
     await repo.writeUserState(uid, nextState);
-    for (const snapshot of buildCardSnapshots(context, nextState, [
-      "home_pre_sleep",
-      "profile_report",
-    ])) {
-      await repo.writeCardSnapshot(uid, snapshot);
-    }
+    await writeSnapshots(
+      repo,
+      uid,
+      buildCardSnapshots(context, nextState, [
+        "home_pre_sleep",
+        "profile_report",
+      ]),
+    );
     return;
   }
 
   if (afterStatus === "completed" && beforeStatus !== "completed") {
     const review: MorningReviewResult = (
-      await provider.analyzeFeedback(
-        context,
-        sessionId,
-      )
+      await provider.analyzeFeedback(context, sessionId)
     ).value;
     const nextState: UserStateDoc = {
       ...previous,
@@ -567,13 +1492,15 @@ export async function handleSleepSessionChange(
       updatedAt: nowIso(),
     };
     await repo.writeUserState(uid, nextState);
-    for (const snapshot of buildCardSnapshots(context, nextState, [
-      "profile_report",
-      "morning_feedback",
-      "assistant_context",
-    ])) {
-      await repo.writeCardSnapshot(uid, snapshot);
-    }
+    await writeSnapshots(
+      repo,
+      uid,
+      buildCardSnapshots(context, nextState, [
+        "profile_report",
+        "morning_feedback",
+        "assistant_context",
+      ]),
+    );
   }
 }
 
@@ -599,11 +1526,13 @@ export async function handleDreamEntryChange(
     updatedAt: nowIso(),
   };
   await repo.writeUserState(uid, nextState);
-  for (const snapshot of buildCardSnapshots(context, nextState, [
-    "profile_report",
-    "assistant_context",
-  ])) {
-    await repo.writeCardSnapshot(uid, snapshot);
-  }
+  await writeSnapshots(
+    repo,
+    uid,
+    buildCardSnapshots(context, nextState, [
+      "profile_report",
+      "assistant_context",
+    ]),
+  );
   return analysis;
 }

@@ -184,7 +184,6 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
     );
     _insightsFacade = InsightsFacade(insightsRepository: _insightsRepository);
     _assistantFacade = AssistantFacade(
-      authRepository: _authRepository,
       assistantRepository: _assistantRepository,
       sleepCaptureRepository: _sleepCaptureRepository,
       dormRepository: _dormRepository,
@@ -203,6 +202,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
       dreamRepository: _dreamRepository,
       insightsRepository: _insightsRepository,
       assistantRepository: _assistantRepository,
+      assistantReplyGateway: _assistantReplyGateway,
       notificationApi: _unifiedNotificationDispatcher,
       appNotificationService: _appNotificationService,
       audioPlaybackController: _audioPlaybackController,
@@ -394,7 +394,9 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
       // gate and destroy PhoneAuthPage state.
       if (_authRepository.hasVerifiedPhoneIdentity) {
         unawaited(_sleepExperienceController.handleAppResumed());
-        unawaited(_dormPresenceSyncController.syncPresenceFromCurrentLocation());
+        unawaited(
+          _dormPresenceSyncController.syncPresenceFromCurrentLocation(),
+        );
       }
     }
   }
@@ -472,6 +474,7 @@ class AppServices {
     required this.dreamRepository,
     required this.insightsRepository,
     required this.assistantRepository,
+    required this.assistantReplyGateway,
     required this.notificationApi,
     required this.appNotificationService,
     required this.audioPlaybackController,
@@ -501,6 +504,7 @@ class AppServices {
   final DreamRepository dreamRepository;
   final InsightsRepository insightsRepository;
   final AssistantRepository assistantRepository;
+  final AssistantReplyGateway assistantReplyGateway;
   final UnifiedNotificationApi notificationApi;
   final AppNotificationService appNotificationService;
   final AudioPlaybackController audioPlaybackController;

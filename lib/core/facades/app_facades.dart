@@ -181,6 +181,16 @@ class ProfileFacade extends ChangeNotifier {
     );
   }
 
+  Future<PhoneVerificationProof> verifyPhoneCode({
+    required String verificationId,
+    required String code,
+  }) {
+    return _authRepository.verifyPhoneCode(
+      verificationId: verificationId,
+      code: code,
+    );
+  }
+
   Future<AuthCaptchaChallenge> createCaptchaChallenge() {
     return _authRepository.createCaptchaChallenge();
   }
@@ -242,6 +252,18 @@ class ProfileFacade extends ChangeNotifier {
       phoneNumber: phoneNumber,
       verificationId: verificationId,
       code: code,
+      newPassword: newPassword,
+    );
+  }
+
+  Future<void> resetPasswordWithVerificationToken({
+    required String phoneNumber,
+    required String verificationToken,
+    required String newPassword,
+  }) {
+    return _authRepository.resetPasswordWithVerificationToken(
+      phoneNumber: phoneNumber,
+      verificationToken: verificationToken,
       newPassword: newPassword,
     );
   }
@@ -563,20 +585,17 @@ class InsightsFacade extends ChangeNotifier {
 
 class AssistantFacade extends ChangeNotifier {
   AssistantFacade({
-    required AuthRepository authRepository,
     required AssistantRepository assistantRepository,
     required SleepCaptureRepository sleepCaptureRepository,
     required DormRepository dormRepository,
     required AssistantReplyGateway assistantReplyGateway,
-  }) : _authRepository = authRepository,
-       _assistantRepository = assistantRepository,
+  }) : _assistantRepository = assistantRepository,
        _sleepCaptureRepository = sleepCaptureRepository,
        _dormRepository = dormRepository,
        _assistantReplyGateway = assistantReplyGateway {
     _assistantRepository.addListener(notifyListeners);
   }
 
-  final AuthRepository _authRepository;
   final AssistantRepository _assistantRepository;
   final SleepCaptureRepository _sleepCaptureRepository;
   final DormRepository _dormRepository;
@@ -619,7 +638,6 @@ class AssistantFacade extends ChangeNotifier {
     if (normalizedPrompt.isEmpty) {
       return;
     }
-    await _authRepository.ensureAuthenticated();
     final AssistantThread thread = await _assistantRepository.ensureThread(
       title: '今晚睡前聊聊',
     );
@@ -652,25 +670,33 @@ class AssistantFacade extends ChangeNotifier {
           .messagesForThread(thread.id);
       final String assistantMessageId =
           reply.assistantMessageId ?? clientAssistantMessageId;
+      final String nextReplyContent =
+          reply.sourceMode == AssistantReplySourceMode.error
+          ? assistantErrorContentForCode(reply.errorCode)
+          : reply.reply;
+      final String? nextErrorMessage =
+          reply.sourceMode == AssistantReplySourceMode.error
+          ? assistantErrorHintForCode(reply.errorCode)
+          : reply.errorMessage;
       if (existingMessages.any(
         (AssistantMessage item) => item.id == assistantMessageId,
       )) {
         await _assistantRepository.updateAssistantMessage(
           threadId: thread.id,
           messageId: assistantMessageId,
-          content: reply.reply,
+          content: nextReplyContent,
           status: reply.sourceMode == AssistantReplySourceMode.error
               ? AssistantMessageStatus.error
               : AssistantMessageStatus.complete,
           sourceMode: reply.sourceMode,
           provider: reply.provider,
           model: reply.model,
-          errorMessage: reply.errorMessage,
+          errorMessage: nextErrorMessage,
         );
       } else {
         await _assistantRepository.addAssistantMessage(
           threadId: thread.id,
-          content: reply.reply,
+          content: nextReplyContent,
           messageId: assistantMessageId,
           status: reply.sourceMode == AssistantReplySourceMode.error
               ? AssistantMessageStatus.error
@@ -678,7 +704,7 @@ class AssistantFacade extends ChangeNotifier {
           sourceMode: reply.sourceMode,
           provider: reply.provider,
           model: reply.model,
-          errorMessage: reply.errorMessage,
+          errorMessage: nextErrorMessage,
         );
       }
     } catch (error) {
@@ -693,7 +719,7 @@ class AssistantFacade extends ChangeNotifier {
           content: '暂时没有收到回复，请稍后再试。',
           status: AssistantMessageStatus.error,
           sourceMode: AssistantReplySourceMode.error,
-          errorMessage: error.toString(),
+          errorMessage: '请直接重试上一条消息。',
         );
       } else {
         await _assistantRepository.addAssistantMessage(
@@ -701,7 +727,7 @@ class AssistantFacade extends ChangeNotifier {
           content: '暂时没有收到回复，请稍后再试。',
           status: AssistantMessageStatus.error,
           sourceMode: AssistantReplySourceMode.error,
-          errorMessage: error.toString(),
+          errorMessage: '请直接重试上一条消息。',
         );
       }
     }
@@ -716,7 +742,6 @@ class AssistantFacade extends ChangeNotifier {
     if (normalizedPrompt.isEmpty) {
       return null;
     }
-    await _authRepository.ensureAuthenticated();
     final AssistantThread thread = await _assistantRepository.ensureThread(
       title: captureType == SleepCaptureType.dream ? '梦记收纳' : '事记收纳',
     );
@@ -778,7 +803,9 @@ class AssistantFacade extends ChangeNotifier {
         provider: result.provider,
         model: result.model,
         assistantMessageId: result.assistantMessageId,
-        errorMessage: result.errorMessage,
+        errorMessage: result.sourceMode == AssistantReplySourceMode.error
+            ? '请直接重试上一条消息。'
+            : result.errorMessage,
         updatedSurfaces: result.updatedSurfaces,
       );
     } catch (error) {
@@ -804,6 +831,10 @@ class AssistantFacade extends ChangeNotifier {
     final List<AssistantMessage> existingMessages = _assistantRepository
         .messagesForThread(threadId);
     final String nextMessageId = assistantMessageId ?? defaultMessageId;
+    final String? nextErrorMessage =
+        sourceMode == AssistantReplySourceMode.error
+        ? '请直接重试上一条消息。'
+        : errorMessage;
     if (existingMessages.any(
       (AssistantMessage item) => item.id == nextMessageId,
     )) {
@@ -817,7 +848,7 @@ class AssistantFacade extends ChangeNotifier {
         sourceMode: sourceMode,
         provider: provider,
         model: model,
-        errorMessage: errorMessage,
+        errorMessage: nextErrorMessage,
       );
     } else {
       await _assistantRepository.addAssistantMessage(
@@ -830,7 +861,7 @@ class AssistantFacade extends ChangeNotifier {
         sourceMode: sourceMode,
         provider: provider,
         model: model,
-        errorMessage: errorMessage,
+        errorMessage: nextErrorMessage,
       );
     }
   }
@@ -840,24 +871,27 @@ class AssistantFacade extends ChangeNotifier {
     required String messageId,
     required Object error,
   }) async {
+    final String? errorCode = assistantErrorCodeFromException(error);
+    final String errorContent = assistantErrorContentForCode(errorCode);
+    final String errorHint = assistantErrorHintForCode(errorCode);
     if (_assistantRepository
         .messagesForThread(threadId)
         .any((AssistantMessage item) => item.id == messageId)) {
       await _assistantRepository.updateAssistantMessage(
         threadId: threadId,
         messageId: messageId,
-        content: '暂时没有收到回复，请稍后再试。',
+        content: errorContent,
         status: AssistantMessageStatus.error,
         sourceMode: AssistantReplySourceMode.error,
-        errorMessage: error.toString(),
+        errorMessage: errorHint,
       );
     } else {
       await _assistantRepository.addAssistantMessage(
         threadId: threadId,
-        content: '暂时没有收到回复，请稍后再试。',
+        content: errorContent,
         status: AssistantMessageStatus.error,
         sourceMode: AssistantReplySourceMode.error,
-        errorMessage: error.toString(),
+        errorMessage: errorHint,
       );
     }
   }

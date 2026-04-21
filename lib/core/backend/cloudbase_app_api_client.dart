@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -26,6 +27,13 @@ class CloudBaseAppApiException implements Exception {
   }
 }
 
+class CloudBaseSseFrame {
+  const CloudBaseSseFrame({required this.event, required this.data});
+
+  final String event;
+  final String data;
+}
+
 class CloudBaseAppApiClient {
   CloudBaseAppApiClient({
     required AppEnvironment environment,
@@ -41,11 +49,19 @@ class CloudBaseAppApiClient {
   final CloudBaseSessionStore _sessionStore;
   final CloudBaseAuthClient _authClient;
   final http.Client _httpClient;
+  Future<CloudBaseSession>? _sessionRefreshInFlight;
 
   bool get isConfigured => _environment.hasCloudBaseAppApi;
 
   Future<Map<String, dynamic>> bootstrap() {
     return post('/api/app/bootstrap', body: const <String, dynamic>{});
+  }
+
+  Future<CloudBaseSession> refreshSession(
+    CloudBaseSession existing, {
+    bool force = false,
+  }) {
+    return _refreshSession(existing, force: force);
   }
 
   Future<Map<String, dynamic>> post(
@@ -54,18 +70,18 @@ class CloudBaseAppApiClient {
   }) async {
     final Map<String, dynamic> normalizedBody = _normalizeJsonMap(body);
     CloudBaseSession session = await _requireSession();
-    http.Response response = await _httpClient.post(
-      _uri(path),
-      headers: _headers(session.accessToken, session.deviceId),
-      body: jsonEncode(normalizedBody),
+    http.Response response = await _sendJsonPost(
+      path,
+      session: session,
+      body: normalizedBody,
     );
 
     if (response.statusCode == 401 && session.refreshToken.isNotEmpty) {
-      session = await _refreshSession(session);
-      response = await _httpClient.post(
-        _uri(path),
-        headers: _headers(session.accessToken, session.deviceId),
-        body: jsonEncode(normalizedBody),
+      session = await _recoverUnauthorizedSession(session);
+      response = await _sendJsonPost(
+        path,
+        session: session,
+        body: normalizedBody,
       );
     }
 
@@ -82,6 +98,69 @@ class CloudBaseAppApiClient {
       );
     }
     return payload;
+  }
+
+  Future<Stream<CloudBaseSseFrame>> postSse(
+    String path, {
+    Map<String, dynamic> body = const <String, dynamic>{},
+  }) async {
+    final Map<String, dynamic> normalizedBody = _normalizeJsonMap(body);
+    CloudBaseSession session = await _requireSession();
+    http.StreamedResponse response = await _sendStreamPost(
+      path,
+      session: session,
+      body: normalizedBody,
+    );
+
+    if (response.statusCode == 401 && session.refreshToken.isNotEmpty) {
+      session = await _recoverUnauthorizedSession(session);
+      response = await _sendStreamPost(
+        path,
+        session: session,
+        body: normalizedBody,
+      );
+    }
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final String bodyText = await response.stream.bytesToString();
+      final Map<String, dynamic> payload = _decodeApiPayload(bodyText);
+      throw CloudBaseAppApiException(
+        message:
+            payload['message'] as String? ??
+            payload['error'] as String? ??
+            'CloudBase app API SSE request failed.',
+        statusCode: response.statusCode,
+        code: payload['code'] as String?,
+        body: payload,
+      );
+    }
+
+    return _parseSseFrames(response.stream);
+  }
+
+  Future<http.Response> _sendJsonPost(
+    String path, {
+    required CloudBaseSession session,
+    required Map<String, dynamic> body,
+  }) {
+    return _httpClient.post(
+      _uri(path),
+      headers: _headers(session.accessToken, session.deviceId),
+      body: jsonEncode(body),
+    );
+  }
+
+  Future<http.StreamedResponse> _sendStreamPost(
+    String path, {
+    required CloudBaseSession session,
+    required Map<String, dynamic> body,
+  }) {
+    final http.Request request = http.Request('POST', _uri(path));
+    request.headers.addAll(_headers(session.accessToken, session.deviceId));
+    request.headers['Connection'] = 'close';
+    request.persistentConnection = false;
+    request.body = jsonEncode(body);
+    return _httpClient.send(request);
   }
 
   Future<CloudBaseSession> _requireSession() async {
@@ -102,7 +181,49 @@ class CloudBaseAppApiClient {
     return _refreshSession(existing);
   }
 
-  Future<CloudBaseSession> _refreshSession(CloudBaseSession existing) async {
+  Future<CloudBaseSession> _recoverUnauthorizedSession(
+    CloudBaseSession requestSession,
+  ) async {
+    final CloudBaseSession? latest = await _sessionStore.readSession();
+    if (latest != null &&
+        latest.accessToken != requestSession.accessToken &&
+        !latest.isExpired) {
+      return latest;
+    }
+    return _refreshSession(latest ?? requestSession, force: true);
+  }
+
+  Future<CloudBaseSession> _refreshSession(
+    CloudBaseSession existing, {
+    bool force = false,
+  }) async {
+    final Future<CloudBaseSession>? inFlight = _sessionRefreshInFlight;
+    if (inFlight != null) {
+      return inFlight;
+    }
+    final Future<CloudBaseSession> refreshFuture = Future<CloudBaseSession>(
+      () async {
+        final CloudBaseSession? latest = await _sessionStore.readSession();
+        final CloudBaseSession candidate = latest ?? existing;
+        if (!force && !candidate.isExpired) {
+          return candidate;
+        }
+        return _performSessionRefresh(candidate);
+      },
+    );
+    _sessionRefreshInFlight = refreshFuture;
+    try {
+      return await refreshFuture;
+    } finally {
+      if (identical(_sessionRefreshInFlight, refreshFuture)) {
+        _sessionRefreshInFlight = null;
+      }
+    }
+  }
+
+  Future<CloudBaseSession> _performSessionRefresh(
+    CloudBaseSession existing,
+  ) async {
     final CloudBaseAuthTokenResponse refreshed = await _authClient
         .refreshAccessToken(
           refreshToken: existing.refreshToken,
@@ -128,11 +249,45 @@ class CloudBaseAppApiClient {
 
   Map<String, String> _headers(String accessToken, String deviceId) {
     return <String, String>{
-      'Accept': 'application/json',
+      'Accept': 'application/json, text/event-stream',
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $accessToken',
       'x-device-id': deviceId,
     };
+  }
+}
+
+Stream<CloudBaseSseFrame> _parseSseFrames(Stream<List<int>> source) async* {
+  String? eventName;
+  final List<String> dataLines = <String>[];
+
+  await for (final String line
+      in utf8.decoder.bind(source).transform(const LineSplitter())) {
+    if (line.isEmpty) {
+      if (eventName != null || dataLines.isNotEmpty) {
+        yield CloudBaseSseFrame(
+          event: eventName ?? 'message',
+          data: dataLines.join('\n'),
+        );
+        eventName = null;
+        dataLines.clear();
+      }
+      continue;
+    }
+    if (line.startsWith('event:')) {
+      eventName = line.substring('event:'.length).trim();
+      continue;
+    }
+    if (line.startsWith('data:')) {
+      dataLines.add(line.substring('data:'.length).trimLeft());
+    }
+  }
+
+  if (eventName != null || dataLines.isNotEmpty) {
+    yield CloudBaseSseFrame(
+      event: eventName ?? 'message',
+      data: dataLines.join('\n'),
+    );
   }
 }
 

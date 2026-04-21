@@ -73,6 +73,7 @@ class _BottomNavShellState extends State<BottomNavShell> {
 
         return Scaffold(
           extendBody: true,
+          resizeToAvoidBottomInset: false,
           body: Stack(
             children: <Widget>[
               Positioned.fill(child: widget.navigationShell),

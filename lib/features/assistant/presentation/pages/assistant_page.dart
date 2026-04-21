@@ -5,6 +5,7 @@ import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/backend/assistant_reply_gateway.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -31,7 +32,6 @@ class _AssistantPageState extends State<AssistantPage> {
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
 
-  bool _isSending = false;
   int _lastRenderedMessageCount = 0;
   late AssistantCaptureTab _selectedTab;
 
@@ -43,6 +43,26 @@ class _AssistantPageState extends State<AssistantPage> {
       ? SleepCaptureType.memo
       : SleepCaptureType.dream;
 
+  AssistantThreadTurnState? _currentTurnState(AppServices services) {
+    final AssistantThread? thread = services.assistantFacade.currentThread;
+    if (thread == null) {
+      return null;
+    }
+    return services.assistantRepository.turnStateForThread(thread.id);
+  }
+
+  String _nextTurnId() {
+    return 'assistant-turn-${DateTime.now().microsecondsSinceEpoch}';
+  }
+
+  Future<void> _showThreadBusyToast() {
+    return notifyPassiveToast(context, message: '上一条还在处理中，请稍后再发');
+  }
+
+  String? _errorCodeOf(Object error) {
+    return assistantErrorCodeFromException(error);
+  }
+
   _CaptureCopy get _copy {
     if (!_isCaptureMode) {
       return const _CaptureCopy(
@@ -51,19 +71,14 @@ class _AssistantPageState extends State<AssistantPage> {
         prompt: '如果你愿意，可以先告诉我今晚最在意的一件事，我会顺着你的节奏陪你说下去。',
         inputHint: '说一说吧',
         footnote: '',
-        suggestions: <String>[
-          '我现在有点睡不着',
-          '宿舍有点吵',
-          '帮我看看今晚该怎么放松',
-        ],
+        suggestions: <String>['我现在有点睡不着', '宿舍有点吵', '帮我看看今晚该怎么放松'],
       );
     }
     if (_selectedTab == AssistantCaptureTab.memo) {
       return const _CaptureCopy(
         title: '把事也先安放下来',
         subtitle: '怕睡前突然想到的事明早忘掉，就先在这里交给我保管。',
-        prompt:
-            '你可以写下明天要做的事、突然想到的人名任务，或者一句不想忘记的话。我会先帮你整理成简短提要，让你今晚不用一直惦记着它。',
+        prompt: '你可以写下明天要做的事、突然想到的人名任务，或者一句不想忘记的话。我会先帮你整理成简短提要，让你今晚不用一直惦记着它。',
         inputHint: '例如：明早要给导师发材料，还要记得问室友借充电器...',
         footnote: '会保存到“我的 / 事记仓库”；结束睡眠模式后，首页会短暂提醒你回看。',
         suggestions: <String>[
@@ -76,8 +91,7 @@ class _AssistantPageState extends State<AssistantPage> {
     return const _CaptureCopy(
       title: '把梦先轻轻记下来',
       subtitle: '不用一次写完整，先把还记得的画面、人物、颜色或一句话留住就好。',
-      prompt:
-          '如果刚醒来还模糊，可以先从“我看到什么”“我当时什么感觉”“有没有一句特别清楚的话”开始写，我会帮你把梦记轻轻收好。',
+      prompt: '如果刚醒来还模糊，可以先从“我看到什么”“我当时什么感觉”“有没有一句特别清楚的话”开始写，我会帮你把梦记轻轻收好。',
       inputHint: '例如：我梦见自己站在很高的桥上，风很冷，但并不害怕...',
       footnote: '会保存到“我的 / 梦境记录”。',
       suggestions: <String>[
@@ -113,43 +127,402 @@ class _AssistantPageState extends State<AssistantPage> {
 
   Future<void> _handleSubmit(AppServices services, {String? prompt}) async {
     final String normalizedPrompt = (prompt ?? _inputController.text).trim();
-    if (normalizedPrompt.isEmpty || _isSending) {
+    if (normalizedPrompt.isEmpty) {
       _focusNode.requestFocus();
       return;
     }
 
     final String? activeSessionId =
         services.sleepSessionRepository.activeSession?.id;
-    if (_isCaptureMode && (activeSessionId == null || activeSessionId.isEmpty)) {
+    if (_isCaptureMode &&
+        (activeSessionId == null || activeSessionId.isEmpty)) {
       await notifyPassiveToast(context, message: '只有在睡眠模式中，才能使用梦记和事记收纳。');
       _focusNode.requestFocus();
       return;
     }
 
-    setState(() {
-      _isSending = true;
-      if (prompt == null) {
-        _inputController.clear();
-      }
-    });
+    final AssistantThread thread = await services.assistantRepository
+        .ensureThread(
+          title: _isCaptureMode
+              ? (_activeCaptureType == SleepCaptureType.dream ? '梦记收纳' : '事记收纳')
+              : '今晚睡前聊聊',
+        );
+    await services.assistantRepository.setCurrentThread(thread.id);
+    final String turnId = _nextTurnId();
+    final bool started = await services.assistantRepository.tryStartThreadTurn(
+      threadId: thread.id,
+      turnId: turnId,
+    );
+    if (!started) {
+      await _showThreadBusyToast();
+      return;
+    }
+
+    if (prompt == null && mounted) {
+      setState(() => _inputController.clear());
+    }
     _focusNode.unfocus();
     _scrollToBottom();
 
     try {
       if (_isCaptureMode) {
-        await services.assistantFacade.sendCapturePrompt(
+        await _sendCaptureStream(
+          services,
+          selectedThread: thread,
+          turnId: turnId,
           prompt: normalizedPrompt,
           captureType: _activeCaptureType,
           sessionId: activeSessionId!,
         );
       } else {
-        await services.assistantFacade.sendPrompt(normalizedPrompt);
+        await _sendReplyStream(
+          services,
+          selectedThread: thread,
+          turnId: turnId,
+          prompt: normalizedPrompt,
+        );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isSending = false);
-        _scrollToBottom();
+      _scrollToBottom();
+    }
+  }
+
+  Future<void> _sendReplyStream(
+    AppServices services, {
+    required AssistantThread selectedThread,
+    required String turnId,
+    required String prompt,
+  }) async {
+    final AssistantThread thread = selectedThread;
+    final String clientUserMessageId =
+        'assistant-msg-user-${DateTime.now().microsecondsSinceEpoch}';
+    final String clientAssistantMessageId =
+        'assistant-msg-assistant-${DateTime.now().microsecondsSinceEpoch}';
+    await services.assistantRepository.sendUserMessage(
+      threadId: thread.id,
+      content: prompt,
+      messageId: clientUserMessageId,
+    );
+    await services.assistantRepository.addAssistantMessage(
+      threadId: thread.id,
+      content: '小眠正在整理回复...',
+      messageId: clientAssistantMessageId,
+      status: AssistantMessageStatus.pending,
+    );
+    _scrollToBottom();
+
+    bool turnFinished = false;
+    Future<void> finishTurn() async {
+      if (turnFinished) {
+        return;
       }
+      turnFinished = true;
+      await services.assistantRepository.finishThreadTurn(
+        threadId: thread.id,
+        turnId: turnId,
+      );
+    }
+
+    try {
+      String bufferedReply = '';
+      bool completed = false;
+      await for (final AssistantStreamEvent event
+          in services.assistantReplyGateway.streamReply(
+            prompt: prompt,
+            threadId: thread.id,
+            clientUserMessageId: clientUserMessageId,
+            clientAssistantMessageId: clientAssistantMessageId,
+            dorm: services.dormRepository.currentDorm,
+          )) {
+        switch (event.type) {
+          case AssistantStreamEventType.messageDelta:
+            bufferedReply += event.delta ?? '';
+            await services.assistantRepository.updateAssistantMessage(
+              threadId: thread.id,
+              messageId: clientAssistantMessageId,
+              content: bufferedReply,
+              status: AssistantMessageStatus.pending,
+            );
+            break;
+          case AssistantStreamEventType.messageCompleted:
+            completed = true;
+            await services.assistantRepository.markThreadTurnFinalizing(
+              threadId: thread.id,
+              turnId: turnId,
+            );
+            await _upsertAssistantReply(
+              services,
+              threadId: thread.id,
+              defaultMessageId: clientAssistantMessageId,
+              reply: event.reply ?? bufferedReply,
+              sourceMode:
+                  event.sourceMode ?? AssistantReplySourceMode.remoteSuccess,
+              provider: event.provider,
+              model: event.model,
+              errorMessage: event.errorMessage,
+              assistantMessageId:
+                  event.assistantMessageId ?? clientAssistantMessageId,
+            );
+            break;
+          case AssistantStreamEventType.error:
+            completed = true;
+            await _setAssistantError(
+              services,
+              threadId: thread.id,
+              messageId: clientAssistantMessageId,
+              error: event.errorMessage ?? 'stream error',
+              errorCode: event.errorCode,
+            );
+            await finishTurn();
+            break;
+          case AssistantStreamEventType.ack:
+          case AssistantStreamEventType.surfacePatch:
+          case AssistantStreamEventType.captureRecord:
+          case AssistantStreamEventType.memorySynced:
+            break;
+          case AssistantStreamEventType.done:
+            await finishTurn();
+            break;
+        }
+      }
+
+      if (!completed) {
+        await _setAssistantError(
+          services,
+          threadId: thread.id,
+          messageId: clientAssistantMessageId,
+          error: 'reply stream ended before completion',
+        );
+      }
+    } catch (error) {
+      await _setAssistantError(
+        services,
+        threadId: thread.id,
+        messageId: clientAssistantMessageId,
+        error: error,
+        errorCode: _errorCodeOf(error),
+      );
+    } finally {
+      await finishTurn();
+    }
+  }
+
+  Future<void> _sendCaptureStream(
+    AppServices services, {
+    required AssistantThread selectedThread,
+    required String turnId,
+    required String prompt,
+    required SleepCaptureType captureType,
+    required String sessionId,
+  }) async {
+    final AssistantThread thread = await services.assistantRepository
+        .ensureThread(
+          title: captureType == SleepCaptureType.dream ? '梦记收纳' : '事记收纳',
+        );
+    await services.assistantRepository.setCurrentThread(thread.id);
+    final String clientUserMessageId =
+        'assistant-msg-user-${DateTime.now().microsecondsSinceEpoch}';
+    final String clientAssistantMessageId =
+        'assistant-msg-assistant-${DateTime.now().microsecondsSinceEpoch}';
+    await services.assistantRepository.sendUserMessage(
+      threadId: thread.id,
+      content: prompt,
+      messageId: clientUserMessageId,
+    );
+    await services.assistantRepository.addAssistantMessage(
+      threadId: thread.id,
+      content: '小眠正在整理这段记录...',
+      messageId: clientAssistantMessageId,
+      status: AssistantMessageStatus.pending,
+    );
+    _scrollToBottom();
+
+    bool turnFinished = false;
+    Future<void> finishTurn() async {
+      if (turnFinished) {
+        return;
+      }
+      turnFinished = true;
+      await services.assistantRepository.finishThreadTurn(
+        threadId: thread.id,
+        turnId: turnId,
+      );
+    }
+
+    try {
+      String bufferedReply = '';
+      SleepCaptureRecord? streamedRecord;
+      bool completed = false;
+      await for (final AssistantStreamEvent event
+          in services.assistantReplyGateway.streamCapture(
+            prompt: prompt,
+            threadId: thread.id,
+            sessionId: sessionId,
+            captureType: captureType,
+            clientUserMessageId: clientUserMessageId,
+            clientAssistantMessageId: clientAssistantMessageId,
+            dorm: services.dormRepository.currentDorm,
+          )) {
+        switch (event.type) {
+          case AssistantStreamEventType.messageDelta:
+            bufferedReply += event.delta ?? '';
+            await services.assistantRepository.updateAssistantMessage(
+              threadId: thread.id,
+              messageId: clientAssistantMessageId,
+              content: bufferedReply,
+              status: AssistantMessageStatus.pending,
+            );
+            break;
+          case AssistantStreamEventType.captureRecord:
+            streamedRecord = event.record;
+            break;
+          case AssistantStreamEventType.messageCompleted:
+            completed = true;
+            await services.assistantRepository.markThreadTurnFinalizing(
+              threadId: thread.id,
+              turnId: turnId,
+            );
+            streamedRecord ??= await services.sleepCaptureRepository.addRecord(
+              type: captureType,
+              sessionId: sessionId,
+              content: prompt,
+            );
+            await _upsertAssistantReply(
+              services,
+              threadId: thread.id,
+              defaultMessageId: clientAssistantMessageId,
+              reply: event.reply ?? bufferedReply,
+              sourceMode:
+                  event.sourceMode ?? AssistantReplySourceMode.remoteSuccess,
+              provider: event.provider,
+              model: event.model,
+              errorMessage: event.errorMessage,
+              assistantMessageId:
+                  event.assistantMessageId ?? clientAssistantMessageId,
+            );
+            break;
+          case AssistantStreamEventType.error:
+            completed = true;
+            await _setAssistantError(
+              services,
+              threadId: thread.id,
+              messageId: clientAssistantMessageId,
+              error: event.errorMessage ?? 'stream error',
+              errorCode: event.errorCode,
+            );
+            await finishTurn();
+            break;
+          case AssistantStreamEventType.ack:
+          case AssistantStreamEventType.surfacePatch:
+          case AssistantStreamEventType.memorySynced:
+            break;
+          case AssistantStreamEventType.done:
+            await finishTurn();
+            break;
+        }
+      }
+
+      if (!completed) {
+        await _setAssistantError(
+          services,
+          threadId: thread.id,
+          messageId: clientAssistantMessageId,
+          error: 'capture stream ended before completion',
+        );
+      }
+    } catch (error) {
+      await _setAssistantError(
+        services,
+        threadId: thread.id,
+        messageId: clientAssistantMessageId,
+        error: error,
+        errorCode: _errorCodeOf(error),
+      );
+    } finally {
+      await finishTurn();
+    }
+  }
+
+  Future<void> _upsertAssistantReply(
+    AppServices services, {
+    required String threadId,
+    required String defaultMessageId,
+    required String reply,
+    required AssistantReplySourceMode sourceMode,
+    required String? provider,
+    required String? model,
+    required String? errorMessage,
+    String? assistantMessageId,
+  }) async {
+    final List<AssistantMessage> existingMessages = services.assistantRepository
+        .messagesForThread(threadId);
+    final String nextMessageId = assistantMessageId ?? defaultMessageId;
+    final String? nextErrorMessage =
+        sourceMode == AssistantReplySourceMode.error
+        ? '请直接重试上一条消息。'
+        : errorMessage;
+    if (existingMessages.any(
+      (AssistantMessage item) => item.id == nextMessageId,
+    )) {
+      await services.assistantRepository.updateAssistantMessage(
+        threadId: threadId,
+        messageId: nextMessageId,
+        content: reply,
+        status: sourceMode == AssistantReplySourceMode.error
+            ? AssistantMessageStatus.error
+            : AssistantMessageStatus.complete,
+        sourceMode: sourceMode,
+        provider: provider,
+        model: model,
+        errorMessage: nextErrorMessage,
+      );
+    } else {
+      await services.assistantRepository.addAssistantMessage(
+        threadId: threadId,
+        content: reply,
+        messageId: nextMessageId,
+        status: sourceMode == AssistantReplySourceMode.error
+            ? AssistantMessageStatus.error
+            : AssistantMessageStatus.complete,
+        sourceMode: sourceMode,
+        provider: provider,
+        model: model,
+        errorMessage: nextErrorMessage,
+      );
+    }
+  }
+
+  Future<void> _setAssistantError(
+    AppServices services, {
+    required String threadId,
+    required String messageId,
+    required Object error,
+    String? errorCode,
+  }) async {
+    final String? normalizedErrorCode = errorCode ?? _errorCodeOf(error);
+    final String errorContent = assistantErrorContentForCode(
+      normalizedErrorCode,
+    );
+    final String errorHint = assistantErrorHintForCode(normalizedErrorCode);
+    if (services.assistantRepository
+        .messagesForThread(threadId)
+        .any((AssistantMessage item) => item.id == messageId)) {
+      await services.assistantRepository.updateAssistantMessage(
+        threadId: threadId,
+        messageId: messageId,
+        content: errorContent,
+        status: AssistantMessageStatus.error,
+        sourceMode: AssistantReplySourceMode.error,
+        errorMessage: errorHint,
+      );
+    } else {
+      await services.assistantRepository.addAssistantMessage(
+        threadId: threadId,
+        content: errorContent,
+        status: AssistantMessageStatus.error,
+        sourceMode: AssistantReplySourceMode.error,
+        errorMessage: errorHint,
+      );
     }
   }
 
@@ -170,9 +543,7 @@ class _AssistantPageState extends State<AssistantPage> {
             controller: controller,
             autofocus: true,
             maxLength: 12,
-            decoration: const InputDecoration(
-              hintText: '例如：小眠、阿眠、今晚陪伴官',
-            ),
+            decoration: const InputDecoration(hintText: '例如：小眠、阿眠、今晚陪伴官'),
           ),
           actions: <Widget>[
             TextButton(
@@ -262,6 +633,11 @@ class _AssistantPageState extends State<AssistantPage> {
   Widget _buildComposer(AppServices services) {
     final bool isFocused = _focusNode.hasFocus;
     final _CaptureCopy copy = _copy;
+    final AssistantThreadTurnState? turnState = _currentTurnState(services);
+    final bool isThreadBusy =
+        turnState != null && turnState.status != AssistantThreadTurnStatus.idle;
+    final bool showSendingIndicator =
+        turnState?.status == AssistantThreadTurnStatus.streaming;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: const Color(0xFF0A111D).withAlpha(242),
@@ -307,7 +683,7 @@ class _AssistantPageState extends State<AssistantPage> {
                         focusNode: _focusNode,
                         minLines: 1,
                         maxLines: 4,
-                        enabled: !_isSending,
+                        enabled: true,
                         textInputAction: TextInputAction.newline,
                         onChanged: (_) => setState(() {}),
                         style: const TextStyle(
@@ -325,7 +701,7 @@ class _AssistantPageState extends State<AssistantPage> {
                         ),
                       ),
                     ),
-                    if (!_hasDraft && !_isSending) ...<Widget>[
+                    if (!_hasDraft && !isThreadBusy) ...<Widget>[
                       const SizedBox(width: AppSpacing.sm),
                       IconButton(
                         onPressed: _showVoiceHint,
@@ -342,7 +718,7 @@ class _AssistantPageState extends State<AssistantPage> {
             ),
             const SizedBox(width: AppSpacing.sm),
             FilledButton(
-              onPressed: (_isSending || !_hasDraft)
+              onPressed: (isThreadBusy || !_hasDraft)
                   ? null
                   : () => _handleSubmit(services),
               style: FilledButton.styleFrom(
@@ -355,7 +731,7 @@ class _AssistantPageState extends State<AssistantPage> {
                   borderRadius: BorderRadius.circular(20),
                 ),
               ),
-              child: _isSending
+              child: showSendingIndicator
                   ? const SizedBox(
                       width: 18,
                       height: 18,
@@ -427,7 +803,9 @@ class _AssistantPageState extends State<AssistantPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
                               Text(
-                                _isCaptureMode ? copy.title : profile.assistantName,
+                                _isCaptureMode
+                                    ? copy.title
+                                    : profile.assistantName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.titleLarge
@@ -529,7 +907,8 @@ class _AssistantPageState extends State<AssistantPage> {
                               child: _MessageBubble(
                                 message: message,
                                 assistantName: profile.assistantName,
-                                onRetry: message.status ==
+                                onRetry:
+                                    message.status ==
                                         AssistantMessageStatus.error
                                     ? () => _retryLatestPrompt(services)
                                     : null,
@@ -544,7 +923,7 @@ class _AssistantPageState extends State<AssistantPage> {
                     curve: Curves.easeOutCubic,
                     padding: EdgeInsets.fromLTRB(
                       AppSpacing.lg,
-                      
+
                       keyboardVisible ? 0 : AppSpacing.sm,
                       AppSpacing.lg,
                       keyboardVisible ? AppSpacing.sm : AppSpacing.lg,
@@ -706,10 +1085,7 @@ class _InputActionButton extends StatelessWidget {
 }
 
 class _CaptureTabSwitcher extends StatelessWidget {
-  const _CaptureTabSwitcher({
-    required this.selected,
-    required this.onChanged,
-  });
+  const _CaptureTabSwitcher({required this.selected, required this.onChanged});
 
   final AssistantCaptureTab selected;
   final ValueChanged<AssistantCaptureTab> onChanged;
@@ -887,8 +1263,8 @@ class _MessageBubble extends StatelessWidget {
         ? const Color(0xFF162234)
         : const Color(0xFF10192A);
     final Color textColor = isUser ? Colors.white : AppColors.onDark;
-    final String? statusLabel = _statusLabel(message);
-    final String? statusDescription = _statusDescription(message);
+    final String? statusLabel = _messageStatusLabel(message);
+    final String? statusDescription = _messageStatusDescription(message);
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -985,6 +1361,31 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 
+  String? _messageStatusLabel(AssistantMessage message) {
+    if (message.status == AssistantMessageStatus.pending) {
+      return '生成中';
+    }
+    return switch (message.sourceMode) {
+      AssistantReplySourceMode.remoteSuccess => '联网回复',
+      AssistantReplySourceMode.fallbackSuccess => '备用回复',
+      AssistantReplySourceMode.error => '回复失败',
+      _ => null,
+    };
+  }
+
+  String? _messageStatusDescription(AssistantMessage message) {
+    if (message.sourceMode == AssistantReplySourceMode.error &&
+        message.errorMessage?.trim().isNotEmpty == true) {
+      return message.errorMessage;
+    }
+    return switch (message.sourceMode) {
+      AssistantReplySourceMode.fallbackSuccess => '这次使用了备用回复，不影响你继续对话。',
+      AssistantReplySourceMode.error => '这次没有拿到有效回复，可以直接重试上一条消息。',
+      _ => null,
+    };
+  }
+
+  // ignore: unused_element
   String? _statusLabel(AssistantMessage message) {
     if (message.status == AssistantMessageStatus.pending) {
       return '生成中';
@@ -997,6 +1398,7 @@ class _MessageBubble extends StatelessWidget {
     };
   }
 
+  // ignore: unused_element
   String? _statusDescription(AssistantMessage message) {
     return switch (message.sourceMode) {
       AssistantReplySourceMode.fallbackSuccess =>
@@ -1013,7 +1415,9 @@ class _MessageBubble extends StatelessWidget {
 }
 
 String _formatTime(DateTime time) {
+  final String month = time.month.toString().padLeft(2, '0');
+  final String day = time.day.toString().padLeft(2, '0');
   final String hour = time.hour.toString().padLeft(2, '0');
   final String minute = time.minute.toString().padLeft(2, '0');
-  return '$hour:$minute';
+  return '$month-$day $hour:$minute';
 }

@@ -358,8 +358,9 @@ Dorm _unboundDorm() {
 }
 
 DormMember _dormMemberFromMap(Map<String, dynamic> map) {
-  final int? noise =
-      map['noiseDb'] == null ? null : (map['noiseDb'] as num?)?.round();
+  final int? noise = map['noiseDb'] == null
+      ? null
+      : (map['noiseDb'] as num?)?.round();
   return DormMember(
     uid: _stringOf(map['uid']),
     name: _stringOf(map['name']),
@@ -639,6 +640,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
 
   late UserProfile _currentUser;
   bool _isAuthenticating = false;
+  Future<UserProfile>? _authenticationInFlight;
   bool _hasCompletedInitialAuthBootstrap = false;
   String? _lastAuthError;
   DateTime? _lastSuccessfulAuthAt;
@@ -797,9 +799,26 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   Future<UserProfile> ensureAuthenticated() => _ensureAuthenticated();
 
   Future<UserProfile> _ensureAuthenticated({bool forceRefresh = false}) async {
-    if (_isAuthenticating) {
-      return _currentUser;
+    final Future<UserProfile>? inFlight = _authenticationInFlight;
+    if (inFlight != null) {
+      return inFlight;
     }
+    final Future<UserProfile> authenticationFuture = _performAuthentication(
+      forceRefresh: forceRefresh,
+    );
+    _authenticationInFlight = authenticationFuture;
+    try {
+      return await authenticationFuture;
+    } finally {
+      if (identical(_authenticationInFlight, authenticationFuture)) {
+        _authenticationInFlight = null;
+      }
+    }
+  }
+
+  Future<UserProfile> _performAuthentication({
+    required bool forceRefresh,
+  }) async {
     if (!_environment.usesCloudBase) {
       _hasCompletedInitialAuthBootstrap = true;
       return _currentUser.uid.isNotEmpty
@@ -841,23 +860,9 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       bool tokenRefreshFailed = false;
       if (restoredSession.isExpired) {
         try {
-          final CloudBaseAuthTokenResponse refreshed = await _authClient
-              .refreshAccessToken(
-                refreshToken: restoredSession.refreshToken,
-                deviceId: restoredDeviceId,
-              );
-          restoredSession = CloudBaseSession(
-            accessToken: refreshed.accessToken,
-            refreshToken: refreshed.refreshToken,
-            subject: refreshed.subject,
-            expiresAt: DateTime.now().add(
-              Duration(seconds: refreshed.expiresIn),
-            ),
-            deviceId: restoredDeviceId,
-            scope: refreshed.scope,
-            tokenType: refreshed.tokenType,
+          restoredSession = await _appApiClient.refreshSession(
+            restoredSession.copyWith(deviceId: restoredDeviceId),
           );
-          await _sessionStore.writeSession(restoredSession);
         } on CloudBaseAuthException catch (error) {
           if (_isSessionInvalidError(error)) {
             await _sessionStore.clearSession();
@@ -1284,15 +1289,53 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       if (_isCaptchaRequired(error)) {
         _throwCaptchaRequired();
       }
-      _throwAuthFlowError(
-        _phoneAuthErrorMessage(error, action: 'sendCode', target: target),
+      final String userMessage = _phoneAuthErrorMessage(
+        error,
+        action: 'sendCode',
+        target: target,
       );
+      if (_isSendCodeTargetMismatchMessage(userMessage, target)) {
+        _throwPhoneTargetMismatch(userMessage);
+      }
+      _throwAuthFlowError(userMessage);
     } catch (error) {
       _throwAuthFlowError(
         _unexpectedPhoneAuthError(
           error,
           fallbackMessage:
               '\u9a8c\u8bc1\u7801\u53d1\u9001\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<PhoneVerificationProof> verifyPhoneCode({
+    required String verificationId,
+    required String code,
+  }) async {
+    _requireCloudBaseAuthConfig();
+    final String verifiedDeviceId = await _sessionStore.ensureDeviceId();
+    try {
+      final CloudBasePhoneVerificationResult verificationResult =
+          await _authClient.verifyPhoneCode(
+            verificationId: verificationId,
+            code: code,
+            deviceId: verifiedDeviceId,
+          );
+      return PhoneVerificationProof(
+        verificationToken: verificationResult.verificationToken,
+        expiresIn: verificationResult.expiresIn,
+      );
+    } on CloudBaseAuthException catch (error) {
+      _throwAuthFlowError(
+        _phoneAuthErrorMessage(error, action: 'verifyCode'),
+      );
+    } catch (error) {
+      _throwAuthFlowError(
+        _unexpectedPhoneAuthError(
+          error,
+          fallbackMessage: '验证码校验失败，请稍后再试。',
         ),
       );
     }
@@ -1437,21 +1480,32 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     required String code,
     required String newPassword,
   }) async {
+    final PhoneVerificationProof proof = await verifyPhoneCode(
+      verificationId: verificationId,
+      code: code,
+    );
+    await resetPasswordWithVerificationToken(
+      phoneNumber: phoneNumber,
+      verificationToken: proof.verificationToken,
+      newPassword: newPassword,
+    );
+  }
+
+  @override
+  Future<void> resetPasswordWithVerificationToken({
+    required String phoneNumber,
+    required String verificationToken,
+    required String newPassword,
+  }) async {
     _requireCloudBaseAuthConfig();
     final String requestedPhoneNumber = normalizeCloudBasePhoneNumber(
       phoneNumber,
     );
     final String verifiedDeviceId = await _sessionStore.ensureDeviceId();
     try {
-      final CloudBasePhoneVerificationResult verificationResult =
-          await _authClient.verifyPhoneCode(
-            verificationId: verificationId,
-            code: code,
-            deviceId: verifiedDeviceId,
-          );
       await _authClient.resetPasswordWithVerificationToken(
         phoneNumber: requestedPhoneNumber,
-        verificationToken: verificationResult.verificationToken,
+        verificationToken: verificationToken,
         newPassword: newPassword,
         deviceId: verifiedDeviceId,
       );
@@ -1684,26 +1738,32 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   }) {
     final String message = error.message.toLowerCase();
     final String code = (error.code ?? '').toLowerCase();
-    if (message.contains('verification') ||
-        message.contains('otp') ||
-        message.contains('code') ||
-        code.contains('verification')) {
+    final int? statusCode = error.statusCode;
+    if (_isPasswordCredentialError(message, code, statusCode)) {
+      return '\u8bf7\u68c0\u67e5\u624b\u673a\u53f7\u548c\u5bc6\u7801\u3002';
+    }
+    if (_isVerificationFailure(message, code)) {
       return '\u9a8c\u8bc1\u7801\u9519\u8bef\u6216\u5df2\u8fc7\u671f\uff0c\u8bf7\u91cd\u65b0\u83b7\u53d6\u540e\u518d\u8bd5\u3002';
     }
     if (message.contains('already') ||
         message.contains('exists') ||
+        message.contains('duplicate') ||
         message.contains('registered') ||
-        code.contains('already')) {
-      return '\u8fd9\u4e2a\u624b\u673a\u53f7\u5df2\u7ecf\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002';
+        code.contains('already') ||
+        code.contains('exists') ||
+        code.contains('registered') ||
+        code.contains('duplicate')) {
+      return '\u8be5\u624b\u673a\u53f7\u5df2\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002';
     }
     if (message.contains('not found') ||
+        message.contains('not registered') ||
         code.contains('not_found') ||
         code.contains('user_not_found')) {
-      return '\u672a\u627e\u5230\u8fd9\u4e2a\u624b\u673a\u53f7\u5bf9\u5e94\u7684\u8d26\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002';
+      return '\u672a\u627e\u5230\u8be5\u624b\u673a\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002';
     }
     if (message.contains('password') || code.contains('password')) {
       if (action == 'passwordSignIn') {
-        return '\u624b\u673a\u53f7\u6216\u5bc6\u7801\u4e0d\u6b63\u786e\uff0c\u8bf7\u91cd\u8bd5\u3002';
+        return '\u8bf7\u68c0\u67e5\u624b\u673a\u53f7\u548c\u5bc6\u7801\u3002';
       }
       return '\u5bc6\u7801\u6821\u9a8c\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u540e\u91cd\u8bd5\u3002';
     }
@@ -1714,16 +1774,6 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
         message.contains('too many') ||
         code.contains('rate_limit')) {
       return '\u64cd\u4f5c\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002';
-    }
-    if (message.contains('phone') || code.contains('phone')) {
-      return switch (target ?? PhoneVerificationTarget.any) {
-        PhoneVerificationTarget.newUser =>
-          '\u8fd9\u4e2a\u624b\u673a\u53f7\u5df2\u7ecf\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002',
-        PhoneVerificationTarget.existingUser =>
-          '\u672a\u627e\u5230\u8fd9\u4e2a\u624b\u673a\u53f7\u5bf9\u5e94\u7684\u8d26\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002',
-        PhoneVerificationTarget.any =>
-          '\u624b\u673a\u53f7\u6821\u9a8c\u5931\u8d25\uff0c\u8bf7\u786e\u8ba4\u8f93\u5165\u65e0\u8bef\u3002',
-      };
     }
     return switch (action) {
       'sendCode' =>
@@ -1743,6 +1793,49 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       _ =>
         '\u624b\u673a\u53f7\u8ba4\u8bc1\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
     };
+  }
+
+  bool _isSendCodeTargetMismatchMessage(
+    String message,
+    PhoneVerificationTarget target,
+  ) {
+    return switch (target) {
+      PhoneVerificationTarget.newUser =>
+        message == '\u8be5\u624b\u673a\u53f7\u5df2\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002',
+      PhoneVerificationTarget.existingUser =>
+        message == '\u672a\u627e\u5230\u8be5\u624b\u673a\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002',
+      PhoneVerificationTarget.any => false,
+    };
+  }
+
+  bool _isPasswordCredentialError(
+    String message,
+    String code,
+    int? statusCode,
+  ) {
+    return message.contains('password') ||
+        message.contains('credential') ||
+        message.contains('invalid login') ||
+        message.contains('invalid_credentials') ||
+        code.contains('password') ||
+        code.contains('credential') ||
+        code.contains('unauthorized') ||
+        code.contains('invalid_credentials') ||
+        statusCode == 401;
+  }
+
+  bool _isVerificationFailure(String message, String code) {
+    return message.contains('verification code') ||
+        message.contains('verification_code') ||
+        message.contains('verification token') ||
+        message.contains('otp') ||
+        message.contains('one-time code') ||
+        message.contains('invalid code') ||
+        message.contains('code expired') ||
+        message.contains('expired code') ||
+        message.contains('sms code') ||
+        code.contains('verification') ||
+        code.contains('otp');
   }
 
   String _unexpectedPhoneAuthError(
@@ -2809,7 +2902,9 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
         snapshotSession.sleepModeActive) {
       return false;
     }
-    final DateTime? localEndAt = resolveMorningFeedbackSessionEndAt(localSession);
+    final DateTime? localEndAt = resolveMorningFeedbackSessionEndAt(
+      localSession,
+    );
     final DateTime? snapshotEndAt = resolveMorningFeedbackSessionEndAt(
       snapshotSession,
     );
@@ -2817,7 +2912,8 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
       return false;
     }
     return snapshotSession.openSegment != null ||
-        snapshotSession.trackedDurationMinutes < localSession.trackedDurationMinutes;
+        snapshotSession.trackedDurationMinutes <
+            localSession.trackedDurationMinutes;
   }
 
   void _applyLocalSleepPhase(SleepSession session) {
@@ -4315,6 +4411,8 @@ class CloudBaseAssistantRepository extends ChangeNotifier
   List<AssistantThread> _threads = const <AssistantThread>[];
   final Map<String, List<AssistantMessage>> _messagesByThread =
       <String, List<AssistantMessage>>{};
+  final Map<String, AssistantThreadTurnState> _turnStatesByThread =
+      <String, AssistantThreadTurnState>{};
   final Set<String> _optimisticThreadIds = <String>{};
   String? _currentThreadId;
 
@@ -4348,14 +4446,16 @@ class CloudBaseAssistantRepository extends ChangeNotifier
 
   @override
   List<AssistantMessage> messagesForThread(String threadId) {
-    final List<AssistantMessage> sorted =
-        List<AssistantMessage>.from(
-          _messagesByThread[threadId] ?? const <AssistantMessage>[],
-        )..sort(
-          (AssistantMessage a, AssistantMessage b) =>
-              a.createdAt.compareTo(b.createdAt),
-        );
-    return List<AssistantMessage>.unmodifiable(sorted);
+    return List<AssistantMessage>.unmodifiable(
+      List<AssistantMessage>.from(
+        _messagesByThread[threadId] ?? const <AssistantMessage>[],
+      ),
+    );
+  }
+
+  @override
+  AssistantThreadTurnState? turnStateForThread(String threadId) {
+    return _turnStatesByThread[threadId];
   }
 
   void _upsertLocalThread(AssistantThread thread) {
@@ -4377,6 +4477,62 @@ class CloudBaseAssistantRepository extends ChangeNotifier
       for (final MapEntry<String, List<AssistantMessage>> entry
           in _messagesByThread.entries)
         entry.key: List<AssistantMessage>.from(entry.value),
+    };
+  }
+
+  List<AssistantMessage> _mergeThreadMessages({
+    required List<AssistantMessage> snapshotMessages,
+    required List<AssistantMessage> localMessages,
+  }) {
+    if (localMessages.isEmpty) {
+      return List<AssistantMessage>.unmodifiable(snapshotMessages);
+    }
+    final Map<String, AssistantMessage> snapshotById =
+        <String, AssistantMessage>{
+          for (final AssistantMessage message in snapshotMessages)
+            message.id: message,
+        };
+    final List<AssistantMessage> merged = <AssistantMessage>[
+      for (final AssistantMessage message in localMessages)
+        snapshotById.remove(message.id) ?? message,
+    ];
+    for (final AssistantMessage remoteOnly in snapshotMessages) {
+      if (!snapshotById.containsKey(remoteOnly.id)) {
+        continue;
+      }
+      final int insertIndex = merged.indexWhere(
+        (AssistantMessage message) =>
+            message.createdAt.isAfter(remoteOnly.createdAt),
+      );
+      if (insertIndex == -1) {
+        merged.add(remoteOnly);
+      } else {
+        merged.insert(insertIndex, remoteOnly);
+      }
+      snapshotById.remove(remoteOnly.id);
+    }
+    return List<AssistantMessage>.unmodifiable(merged);
+  }
+
+  Map<String, List<AssistantMessage>> _mergeSnapshotMessagesByThread({
+    required List<AssistantThread> snapshotThreads,
+    required Map<String, List<AssistantMessage>> snapshotMessagesByThread,
+    required Map<String, List<AssistantMessage>> previousMessagesByThread,
+  }) {
+    return <String, List<AssistantMessage>>{
+      for (final AssistantThread thread in snapshotThreads)
+        if ((snapshotMessagesByThread[thread.id] ?? const <AssistantMessage>[])
+                .isNotEmpty ||
+            (previousMessagesByThread[thread.id] ?? const <AssistantMessage>[])
+                .isNotEmpty)
+          thread.id: _mergeThreadMessages(
+            snapshotMessages:
+                snapshotMessagesByThread[thread.id] ??
+                const <AssistantMessage>[],
+            localMessages:
+                previousMessagesByThread[thread.id] ??
+                const <AssistantMessage>[],
+          ),
     };
   }
 
@@ -4479,6 +4635,7 @@ class CloudBaseAssistantRepository extends ChangeNotifier
         .where((AssistantThread item) => item.id != threadId)
         .toList(growable: false);
     _messagesByThread.remove(threadId);
+    _turnStatesByThread.remove(threadId);
     if (_currentThreadId == threadId) {
       _currentThreadId = _threads.isEmpty ? null : _threads.first.id;
     }
@@ -4500,6 +4657,9 @@ class CloudBaseAssistantRepository extends ChangeNotifier
       await selectMostRecentThread();
       return currentThread!;
     }
+    if (_appApiClient.isConfigured) {
+      return createThread(title: title ?? '新的睡前陪伴对话');
+    }
     final AssistantThread thread = AssistantThread(
       id: IdGenerator.next('assistant-thread'),
       userId: _userId,
@@ -4512,6 +4672,55 @@ class CloudBaseAssistantRepository extends ChangeNotifier
     _messagesByThread[thread.id] = <AssistantMessage>[];
     notifyListeners();
     return thread;
+  }
+
+  @override
+  Future<bool> tryStartThreadTurn({
+    required String threadId,
+    required String turnId,
+  }) async {
+    final AssistantThreadTurnState? current = _turnStatesByThread[threadId];
+    if (current != null && current.status != AssistantThreadTurnStatus.idle) {
+      return false;
+    }
+    _turnStatesByThread[threadId] = AssistantThreadTurnState(
+      threadId: threadId,
+      turnId: turnId,
+      status: AssistantThreadTurnStatus.streaming,
+      startedAt: DateTime.now(),
+    );
+    notifyListeners();
+    return true;
+  }
+
+  @override
+  Future<void> markThreadTurnFinalizing({
+    required String threadId,
+    required String turnId,
+  }) async {
+    final AssistantThreadTurnState? current = _turnStatesByThread[threadId];
+    if (current == null || current.turnId != turnId) {
+      return;
+    }
+    _turnStatesByThread[threadId] = current.copyWith(
+      status: AssistantThreadTurnStatus.finalizing,
+    );
+    notifyListeners();
+  }
+
+  @override
+  Future<void> finishThreadTurn({
+    required String threadId,
+    required String turnId,
+  }) async {
+    final AssistantThreadTurnState? current = _turnStatesByThread[threadId];
+    if (current == null || current.turnId != turnId) {
+      return;
+    }
+    _turnStatesByThread[threadId] = current.copyWith(
+      status: AssistantThreadTurnStatus.idle,
+    );
+    notifyListeners();
   }
 
   @override
@@ -4639,10 +4848,21 @@ class CloudBaseAssistantRepository extends ChangeNotifier
     _threads = snapshot.threads;
     _messagesByThread
       ..clear()
-      ..addAll(snapshot.messagesByThread);
+      ..addAll(
+        _mergeSnapshotMessagesByThread(
+          snapshotThreads: snapshot.threads,
+          snapshotMessagesByThread: snapshot.messagesByThread,
+          previousMessagesByThread: previousMessagesByThread,
+        ),
+      );
     _optimisticThreadIds.removeWhere(
       (String threadId) =>
           _threads.any((AssistantThread item) => item.id == threadId),
+    );
+    _turnStatesByThread.removeWhere(
+      (String threadId, AssistantThreadTurnState _) =>
+          !_threads.any((AssistantThread item) => item.id == threadId) &&
+          !_optimisticThreadIds.contains(threadId),
     );
     final String latestThreadId = _stringOf(
       snapshot.userState['latestThreadId'],
