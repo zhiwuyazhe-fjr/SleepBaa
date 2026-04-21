@@ -10,6 +10,7 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/state/evening_welcome_local_store.dart';
 import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
 import 'package:sleep_dorm_app/core/notifications/notification_navigation_coordinator.dart';
 
@@ -23,6 +24,7 @@ class SleepDormApp extends StatefulWidget {
     this.initialSettings,
     this.showNightWelcomeOutsideNightInDebug,
     this.appNotificationService,
+    this.initialLocalEveningWelcome,
   });
 
   final String initialLocation;
@@ -32,6 +34,9 @@ class SleepDormApp extends StatefulWidget {
   final UserSettings? initialSettings;
   final bool? showNightWelcomeOutsideNightInDebug;
   final AppNotificationService? appNotificationService;
+
+  /// Local welcome + encouragement for current period after [main] pruning.
+  final LocalEveningWelcomeBootState? initialLocalEveningWelcome;
 
   @override
   State<SleepDormApp> createState() => _SleepDormAppState();
@@ -50,6 +55,7 @@ class _SleepDormAppState extends State<SleepDormApp> {
       showNightWelcomeOutsideNightInDebug:
           widget.showNightWelcomeOutsideNightInDebug,
       appNotificationService: widget.appNotificationService,
+      initialLocalEveningWelcome: widget.initialLocalEveningWelcome,
       child: Builder(
         builder: (BuildContext context) {
           final AppServices services = context.appServices;

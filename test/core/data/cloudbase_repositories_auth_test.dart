@@ -9,6 +9,7 @@ import 'package:sleep_dorm_app/core/backend/cloudbase_app_api_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_auth_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_session_store.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_snapshot_store.dart';
+import 'package:sleep_dorm_app/core/backend/verified_phone_identity_store.dart';
 import 'package:sleep_dorm_app/core/data/cloudbase_repositories.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -179,7 +180,7 @@ void main() {
   );
 
   test(
-    'ensureAuthenticated clears session when refresh token is rejected with 401',
+    'ensureAuthenticated clears session but keeps verified identity when refresh is rejected with 401',
     () async {
       final _FakeSessionStore sessionStore = _FakeSessionStore();
       sessionStore._session = CloudBaseSession(
@@ -188,6 +189,12 @@ void main() {
         subject: 'tester',
         expiresAt: DateTime.now().subtract(const Duration(minutes: 5)),
         deviceId: 'test-device-id',
+      );
+      final _MemoryVerifiedPhoneStore verifiedStore = _MemoryVerifiedPhoneStore(
+        VerifiedPhoneIdentity(
+          subject: 'tester',
+          phoneNumber: '+86 13800138000',
+        ),
       );
       const AppEnvironment environment = AppEnvironment(
         target: AppBackendTarget.production,
@@ -229,14 +236,68 @@ void main() {
         appApiClient: appApiClient,
         sessionStore: sessionStore,
         snapshotStore: snapshotStore,
+        verifiedPhoneStore: verifiedStore,
       );
 
       await repository.ensureAuthenticated();
 
-      expect(repository.hasVerifiedPhoneIdentity, isFalse);
-      expect(repository.isAuthenticated, isFalse);
+      expect(repository.hasVerifiedPhoneIdentity, isTrue);
+      expect(repository.isAuthenticated, isTrue);
       expect(sessionStore._session, isNull);
       expect(repository.lastAuthError, contains('登录状态已失效'));
+    },
+  );
+
+  test(
+    'ensureAuthenticated restores profile from persisted identity when session is missing',
+    () async {
+      final _FakeSessionStore sessionStore = _FakeSessionStore();
+      sessionStore._session = null;
+      final _MemoryVerifiedPhoneStore verifiedStore = _MemoryVerifiedPhoneStore(
+        VerifiedPhoneIdentity(
+          subject: 'returning-user',
+          phoneNumber: '+86 13900139000',
+        ),
+      );
+      const AppEnvironment environment = AppEnvironment(
+        target: AppBackendTarget.production,
+        appIdPrefix: 'com.dormsleep.app',
+        cloudbaseEnvId: 'demo-env',
+        cloudbaseAuthBaseUrl: 'https://example.com',
+        cloudbaseAppApiBaseUrl: 'https://example.com',
+        cloudbasePublishableKey: 'publishable-key',
+        cloudbaseClientId: 'demo-env',
+      );
+      final http.Client httpClient = MockClient((http.Request request) async {
+        throw StateError('Unexpected path: ${request.url.path}');
+      });
+      final CloudBaseAuthClient authClient = CloudBaseAuthClient(
+        environment: environment,
+        httpClient: httpClient,
+      );
+      final CloudBaseAppApiClient appApiClient = CloudBaseAppApiClient(
+        environment: environment,
+        sessionStore: sessionStore,
+        authClient: authClient,
+        httpClient: httpClient,
+      );
+      final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final CloudBaseAuthRepository repository = CloudBaseAuthRepository(
+        environment: environment,
+        authClient: authClient,
+        appApiClient: appApiClient,
+        sessionStore: sessionStore,
+        snapshotStore: snapshotStore,
+        verifiedPhoneStore: verifiedStore,
+      );
+
+      await repository.ensureAuthenticated();
+
+      expect(repository.hasVerifiedPhoneIdentity, isTrue);
+      expect(repository.currentUser.uid, 'returning-user');
+      expect(repository.currentUser.phoneNumber, '+86 13900139000');
     },
   );
 
@@ -531,6 +592,25 @@ class _AuthHarness {
   final CloudBaseAuthRepository repository;
   final CloudBaseSnapshotStore snapshotStore;
   final _FakeSessionStore sessionStore;
+}
+
+class _MemoryVerifiedPhoneStore extends VerifiedPhoneIdentityStore {
+  _MemoryVerifiedPhoneStore(this._value) : super();
+
+  VerifiedPhoneIdentity? _value;
+
+  @override
+  Future<VerifiedPhoneIdentity?> read() async => _value;
+
+  @override
+  Future<void> write(VerifiedPhoneIdentity identity) async {
+    _value = identity;
+  }
+
+  @override
+  Future<void> clear() async {
+    _value = null;
+  }
 }
 
 class _FakeSessionStore extends CloudBaseSessionStore {

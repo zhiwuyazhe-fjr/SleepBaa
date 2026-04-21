@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sleep_dorm_app/app/app.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
+import 'package:sleep_dorm_app/core/state/evening_welcome_local_store.dart';
 
 const List<DeviceOrientation> _sleepDormPreferredOrientations =
     <DeviceOrientation>[
@@ -32,5 +33,13 @@ Future<void> main() async {
   await configureSleepDormSystemChrome();
   GoogleFonts.config.allowRuntimeFetching = false;
   final AppEnvironment environment = AppEnvironment.fromDefines();
-  runApp(SleepDormApp(environment: environment));
+  await EveningWelcomeLocalStore.pruneStaleAgainstNow();
+  final LocalEveningWelcomeBootState? localEveningWelcome =
+      await EveningWelcomeLocalStore.readBootState();
+  runApp(
+    SleepDormApp(
+      environment: environment,
+      initialLocalEveningWelcome: localEveningWelcome,
+    ),
+  );
 }

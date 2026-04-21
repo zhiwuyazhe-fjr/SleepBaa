@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sleep_dorm_app/app/app.dart';
 import 'package:sleep_dorm_app/main.dart' as app_main;
 import 'package:sleep_dorm_app/app/routes.dart';
@@ -40,6 +41,7 @@ import 'package:sleep_dorm_app/features/profile/presentation/pages/sleep_report_
 void main() {
   setUpAll(() {
     GoogleFonts.config.allowRuntimeFetching = false;
+    SharedPreferences.setMockInitialValues(<String, Object>{});
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           _secureStorageChannel,
@@ -83,7 +85,9 @@ void main() {
   test('system chrome config locks the app to portrait orientations', () async {
     final List<MethodCall> calls = <MethodCall>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(SystemChannels.platform, (MethodCall call) async {
+        .setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall call,
+        ) async {
           calls.add(call);
           return null;
         });
@@ -103,14 +107,10 @@ void main() {
               'method',
               'SystemChrome.setPreferredOrientations',
             )
-            .having(
-              (MethodCall call) => call.arguments,
-              'arguments',
-              <String>[
-                'DeviceOrientation.portraitUp',
-                'DeviceOrientation.portraitDown',
-              ],
-            ),
+            .having((MethodCall call) => call.arguments, 'arguments', <String>[
+              'DeviceOrientation.portraitUp',
+              'DeviceOrientation.portraitDown',
+            ]),
       ),
     );
   });
@@ -1383,7 +1383,7 @@ void main() {
       clock: _dayClock,
     );
 
-    expect(find.text('每天都是成长和积极改变的新机会。'), findsOneWidget);
+    expect(find.text('完成今晚心情选择，解锁一句陪伴语'), findsOneWidget);
     expect(find.text('睡眠质量(分)'), findsOneWidget);
     expect(find.text('实验报告'), findsOneWidget);
     expect(find.text('梦记'), findsOneWidget);
