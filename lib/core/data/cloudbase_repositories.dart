@@ -145,6 +145,116 @@ T? _firstWhereOrNull<T>(Iterable<T> values, bool Function(T value) test) {
   return null;
 }
 
+String _avatarResourceKey(String? url) {
+  final String trimmed = url?.trim() ?? '';
+  if (trimmed.isEmpty) {
+    return '';
+  }
+  final Uri? parsed = Uri.tryParse(trimmed);
+  if (parsed == null || !parsed.hasScheme) {
+    return trimmed.split('?').first.split('#').first;
+  }
+  return Uri(
+    scheme: parsed.scheme,
+    host: parsed.host,
+    port: parsed.hasPort ? parsed.port : null,
+    path: parsed.path,
+  ).toString();
+}
+
+String? _stableDisplayedAvatarUrl({
+  required String? displayedUrl,
+  required String? nextUrl,
+  String? displayedStoragePath,
+  String? nextStoragePath,
+}) {
+  final String current = displayedUrl?.trim() ?? '';
+  final String incoming = nextUrl?.trim() ?? '';
+  if (incoming.isEmpty) {
+    return null;
+  }
+  if (current.isEmpty) {
+    return incoming;
+  }
+  final String currentStorage = displayedStoragePath?.trim() ?? '';
+  final String incomingStorage = nextStoragePath?.trim() ?? '';
+  if (currentStorage.isNotEmpty && currentStorage == incomingStorage) {
+    return displayedUrl;
+  }
+  if (_avatarResourceKey(current) == _avatarResourceKey(incoming)) {
+    return displayedUrl;
+  }
+  return incoming;
+}
+
+Dorm _mergeStableDormAvatarUrls(Dorm currentDorm, Dorm nextDorm) {
+  if (currentDorm.members.isEmpty || nextDorm.members.isEmpty) {
+    return nextDorm;
+  }
+  final Map<String, DormMember> currentByUid = <String, DormMember>{
+    for (final DormMember member in currentDorm.members) member.uid: member,
+  };
+  return nextDorm.copyWith(
+    members: nextDorm.members
+        .map((DormMember nextMember) {
+          final DormMember? currentMember = currentByUid[nextMember.uid];
+          if (currentMember == null) {
+            return nextMember;
+          }
+          final String? stableAvatarUrl = _stableDisplayedAvatarUrl(
+            displayedUrl: currentMember.avatarUrl,
+            nextUrl: nextMember.avatarUrl,
+          );
+          return nextMember.copyWith(
+            avatarUrl: stableAvatarUrl,
+            clearAvatarUrl: stableAvatarUrl == null,
+          );
+        })
+        .toList(growable: false),
+  );
+}
+
+class _PendingDormMemberStatusOverride {
+  const _PendingDormMemberStatusOverride({
+    this.status,
+    this.presenceStatus,
+    this.sleepModeActive,
+    this.note,
+  });
+
+  final DormMemberStatus? status;
+  final DormPresenceStatus? presenceStatus;
+  final bool? sleepModeActive;
+  final String? note;
+
+  DormMember apply(DormMember member) {
+    return member.copyWith(
+      status: status,
+      presenceStatus: presenceStatus,
+      sleepModeActive: sleepModeActive,
+      note: note,
+    );
+  }
+}
+
+Dorm _applyPendingDormStatusOverrides(
+  Dorm dorm,
+  Map<String, _PendingDormMemberStatusOverride> pending,
+) {
+  if (pending.isEmpty || dorm.members.isEmpty) {
+    return dorm;
+  }
+  return dorm.copyWith(
+    members: dorm.members
+        .map((DormMember member) {
+          final _PendingDormMemberStatusOverride? override =
+              pending[member.uid];
+          return override == null ? member : override.apply(member);
+        })
+        .toList(growable: false),
+  );
+}
+
 Map<String, Map<String, dynamic>> _cardSnapshotsFromPayload(dynamic value) {
   if (value is Map) {
     return value.map<String, Map<String, dynamic>>(
@@ -367,6 +477,10 @@ DormMember _dormMemberFromMap(Map<String, dynamic> map) {
     status: _activityStatusFromStorage(map),
     presenceStatus: _presenceStatusFromStorage(map),
     sleepModeActive: _sleepModeFromStorage(map),
+    appOnline: map['appOnline'] as bool? ?? false,
+    appLastSeenAt: map['appLastSeenAt'] == null
+        ? null
+        : _dateOf(map['appLastSeenAt']),
     lastActiveAt: _dateOf(map['lastActiveAt']),
     note: _stringOf(map['note']),
     avatarUrl: map['avatarUrl'] as String?,
@@ -626,7 +740,8 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
        _appApiClient = appApiClient,
        _sessionStore = sessionStore,
        _snapshotStore = snapshotStore,
-       _verifiedPhoneStore = verifiedPhoneStore ?? VerifiedPhoneIdentityStore() {
+       _verifiedPhoneStore =
+           verifiedPhoneStore ?? VerifiedPhoneIdentityStore() {
     _snapshotStore.addListener(_syncFromSnapshot);
     _currentUser = buildDefaultUserProfile().copyWith(uid: '', dormId: null);
   }
@@ -693,7 +808,9 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
 
   void _hydrateUserAfterInvalidSession({required String sessionSubject}) {
     final VerifiedPhoneIdentity? v = _cachedVerifiedIdentity;
-    if (v != null && v.subject == sessionSubject && v.phoneNumber.trim().isNotEmpty) {
+    if (v != null &&
+        v.subject == sessionSubject &&
+        v.phoneNumber.trim().isNotEmpty) {
       _currentUser = buildDefaultUserProfile().copyWith(
         uid: v.subject,
         phoneNumber: v.phoneNumber,
@@ -887,7 +1004,8 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       // /user/me; if it doesn't, _readCurrentCloudBaseUser returns null and
       // we fall back to the session subject only.
       final CloudBaseUserInfo? restoredInfo =
-          _currentUser.uid.isEmpty || !_phoneIdentityResolvableFromLocalProfile()
+          _currentUser.uid.isEmpty ||
+              !_phoneIdentityResolvableFromLocalProfile()
           ? await _readCurrentCloudBaseUser(restoredSession)
           : null;
       if (_currentUser.uid.isEmpty) {
@@ -1328,15 +1446,10 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
         expiresIn: verificationResult.expiresIn,
       );
     } on CloudBaseAuthException catch (error) {
-      _throwAuthFlowError(
-        _phoneAuthErrorMessage(error, action: 'verifyCode'),
-      );
+      _throwAuthFlowError(_phoneAuthErrorMessage(error, action: 'verifyCode'));
     } catch (error) {
       _throwAuthFlowError(
-        _unexpectedPhoneAuthError(
-          error,
-          fallbackMessage: '验证码校验失败，请稍后再试。',
-        ),
+        _unexpectedPhoneAuthError(error, fallbackMessage: '验证码校验失败，请稍后再试。'),
       );
     }
   }
@@ -1801,9 +1914,11 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   ) {
     return switch (target) {
       PhoneVerificationTarget.newUser =>
-        message == '\u8be5\u624b\u673a\u53f7\u5df2\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002',
+        message ==
+            '\u8be5\u624b\u673a\u53f7\u5df2\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002',
       PhoneVerificationTarget.existingUser =>
-        message == '\u672a\u627e\u5230\u8be5\u624b\u673a\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002',
+        message ==
+            '\u672a\u627e\u5230\u8be5\u624b\u673a\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002',
       PhoneVerificationTarget.any => false,
     };
   }
@@ -1909,7 +2024,12 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           ? snapshotPhone
           : _currentUser.phoneNumber,
       phoneLinkedAt: snapshotPhoneLinkedAt ?? _currentUser.phoneLinkedAt,
-      avatarUrl: snapshot.user.avatarUrl,
+      avatarUrl: _stableDisplayedAvatarUrl(
+        displayedUrl: _currentUser.avatarUrl,
+        nextUrl: snapshot.user.avatarUrl,
+        displayedStoragePath: _currentUser.avatarStoragePath,
+        nextStoragePath: snapshot.user.avatarStoragePath,
+      ),
       avatarPath: snapshot.user.avatarPath,
       avatarStoragePath: snapshot.user.avatarStoragePath,
       avatarFallbackSeed: snapshot.user.avatarFallbackSeed,
@@ -2012,7 +2132,9 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
 
   /// Remote snapshot may omit `eveningEncouragement*` until the backend persists them;
   /// keep the last local quote so the profile card does not clear after refresh.
-  UserSettings _mergeEveningEncouragementIfServerOmitted(UserSettings incoming) {
+  UserSettings _mergeEveningEncouragementIfServerOmitted(
+    UserSettings incoming,
+  ) {
     final String? prevLine = _settings.eveningEncouragementLine;
     final String? prevKey = _settings.eveningEncouragementPeriodKey;
     final NightMood? prevSnap = _settings.eveningEncouragementMoodSnapshot;
@@ -3396,6 +3518,8 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
 
   Dorm _currentDorm;
   int _latestStatusSyncId = 0;
+  final Map<String, _PendingDormMemberStatusOverride> _pendingStatusOverrides =
+      <String, _PendingDormMemberStatusOverride>{};
 
   @override
   Dorm get currentDorm => _currentDorm;
@@ -3508,6 +3632,12 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
     }
     final DateTime now = DateTime.now();
     final String nextNote = note ?? currentMember.note;
+    _pendingStatusOverrides[uid] = _PendingDormMemberStatusOverride(
+      status: status,
+      presenceStatus: presenceStatus,
+      sleepModeActive: sleepModeActive,
+      note: note,
+    );
     _currentDorm = _currentDorm.copyWith(
       members: _currentDorm.members
           .map((DormMember member) {
@@ -3559,16 +3689,57 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
 
   void _enqueueStatusSync(Map<String, dynamic> body) {
     final int syncId = ++_latestStatusSyncId;
+    final String uid = (body['uid'] as String?) ?? '';
     _statusSyncQueue.enqueue(() async {
       try {
         await _appApiClient.post('/api/dorm/member/status', body: body);
         if (syncId == _latestStatusSyncId) {
           await _snapshotStore.refresh();
+          _pendingStatusOverrides.remove(uid);
         }
       } catch (error) {
         debugPrint('CloudBase dorm status sync failed: $error');
       }
     });
+  }
+
+  @override
+  Future<void> updateCurrentUserOnlineStatus({
+    required String uid,
+    required bool online,
+  }) async {
+    if (_currentDorm.id.isEmpty) {
+      return;
+    }
+    final DateTime now = DateTime.now();
+    bool updatedLocalMember = false;
+    _currentDorm = _currentDorm.copyWith(
+      members: _currentDorm.members
+          .map((DormMember member) {
+            if (member.uid != uid) {
+              return member;
+            }
+            updatedLocalMember = true;
+            return member.copyWith(appOnline: online, appLastSeenAt: now);
+          })
+          .toList(growable: false),
+    );
+    if (updatedLocalMember) {
+      _emitCurrentState();
+      notifyListeners();
+    }
+    if (!_appApiClient.isConfigured) {
+      return;
+    }
+    try {
+      await _authRepository.ensureAuthenticated();
+      await _appApiClient.post(
+        '/api/dorm/member/heartbeat',
+        body: <String, dynamic>{'online': online},
+      );
+    } catch (error) {
+      debugPrint('CloudBase dorm heartbeat sync failed: $error');
+    }
   }
 
   @override
@@ -4053,7 +4224,10 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
       _snapshotStore.payload,
       _authRepository.currentUser.uid,
     );
-    _currentDorm = snapshot.dorm;
+    _currentDorm = _applyPendingDormStatusOverrides(
+      _mergeStableDormAvatarUrls(_currentDorm, snapshot.dorm),
+      _pendingStatusOverrides,
+    );
     _emitCurrentState();
     notifyListeners();
   }

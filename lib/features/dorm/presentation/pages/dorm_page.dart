@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -52,20 +51,13 @@ class DormPage extends StatefulWidget {
   State<DormPage> createState() => _DormPageState();
 }
 
-class _DormPageState extends State<DormPage> with WidgetsBindingObserver {
-  Timer? _dormPollTimer;
+class _DormPageState extends State<DormPage> {
   AppServices? _dormNoiseRecordingServices;
   bool _ledgerAggregateFlushScheduled = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _startDormPollTimerIfResumed();
-      }
-    });
   }
 
   @override
@@ -77,7 +69,9 @@ class _DormPageState extends State<DormPage> with WidgetsBindingObserver {
         _scheduleDormAggregateRecordingAfterBuild,
       );
       _dormNoiseRecordingServices = services;
-      services.dormRepository.addListener(_scheduleDormAggregateRecordingAfterBuild);
+      services.dormRepository.addListener(
+        _scheduleDormAggregateRecordingAfterBuild,
+      );
       _scheduleDormAggregateRecordingAfterBuild();
     }
   }
@@ -100,49 +94,11 @@ class _DormPageState extends State<DormPage> with WidgetsBindingObserver {
     });
   }
 
-  void _startDormPollTimerIfResumed() {
-    if (!mounted || _dormPollTimer != null) {
-      return;
-    }
-    final AppLifecycleState? life = WidgetsBinding.instance.lifecycleState;
-    if (life != null && life != AppLifecycleState.resumed) {
-      return;
-    }
-    _dormPollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (!mounted) {
-        return;
-      }
-      unawaited(context.appServices.dormRepository.refreshDormSnapshot());
-    });
-  }
-
-  void _stopDormPollTimer() {
-    _dormPollTimer?.cancel();
-    _dormPollTimer = null;
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    switch (state) {
-      case AppLifecycleState.resumed:
-        _startDormPollTimerIfResumed();
-        break;
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.paused:
-      case AppLifecycleState.hidden:
-      case AppLifecycleState.detached:
-        _stopDormPollTimer();
-        break;
-    }
-  }
-
   @override
   void dispose() {
     _dormNoiseRecordingServices?.dormRepository.removeListener(
       _scheduleDormAggregateRecordingAfterBuild,
     );
-    WidgetsBinding.instance.removeObserver(this);
-    _stopDormPollTimer();
     super.dispose();
   }
 
@@ -177,8 +133,7 @@ class _DormPageState extends State<DormPage> with WidgetsBindingObserver {
                   ),
                 ]
               : noiseSeries;
-          final int quietStars =
-              computeDormQuietRating(forRating).stars;
+          final int quietStars = computeDormQuietRating(forRating).stars;
           final UserProfile currentUser = services.authRepository.currentUser;
           final NightMoodPalette palette = context.nightMoodPalette;
           final String currentUserId = currentUser.uid;
@@ -812,6 +767,7 @@ class _DormMemberAvatar extends StatelessWidget {
         fit: BoxFit.cover,
         width: radius * 2,
         height: radius * 2,
+        gaplessPlayback: true,
         errorBuilder:
             (BuildContext context, Object error, StackTrace? stackTrace) {
               return _buildFallback(context);

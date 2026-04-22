@@ -11,6 +11,7 @@ import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
 import 'package:sleep_dorm_app/core/notifications/cloudbase_notification_sync_controller.dart';
+import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_member_status_presenter.dart';
 
 void main() {
   test(
@@ -595,7 +596,10 @@ void main() {
 
       expect(repository.activeSession, isNull);
       expect(repository.latestAwaitingFeedbackSession?.id, active.id);
-      expect(repository.sessions.single.status, SleepSessionStatus.awaitingFeedback);
+      expect(
+        repository.sessions.single.status,
+        SleepSessionStatus.awaitingFeedback,
+      );
       expect(repository.sessions.single.sleepModeActive, isFalse);
       expect(repository.sessions.single.displayEndAt, endedAt);
       expect(repository.sessions.single.trackedDurationMinutes, 480);
@@ -707,6 +711,259 @@ void main() {
       await pumpEventQueue();
 
       expect(snapshotStore.refreshCount, 1);
+    },
+  );
+
+  test('dorm online count uses foreground heartbeat fields only', () {
+    final DateTime now = DateTime(2026, 4, 22, 12);
+    final List<DormMember> members = <DormMember>[
+      DormMember(
+        uid: 'online',
+        name: 'Online',
+        status: DormMemberStatus.quiet,
+        presenceStatus: DormPresenceStatus.returned,
+        sleepModeActive: false,
+        appOnline: true,
+        appLastSeenAt: now.subtract(const Duration(seconds: 30)),
+        lastActiveAt: now.subtract(const Duration(days: 1)),
+        note: '',
+      ),
+      DormMember(
+        uid: 'stale-heartbeat',
+        name: 'Stale',
+        status: DormMemberStatus.quiet,
+        presenceStatus: DormPresenceStatus.returned,
+        sleepModeActive: false,
+        appOnline: true,
+        appLastSeenAt: now.subtract(const Duration(seconds: 91)),
+        lastActiveAt: now,
+        note: '',
+      ),
+      DormMember(
+        uid: 'offline',
+        name: 'Offline',
+        status: DormMemberStatus.quiet,
+        presenceStatus: DormPresenceStatus.returned,
+        sleepModeActive: false,
+        appOnline: false,
+        appLastSeenAt: now.subtract(const Duration(seconds: 10)),
+        lastActiveAt: now,
+        note: '',
+      ),
+      DormMember(
+        uid: 'legacy-active',
+        name: 'Legacy',
+        status: DormMemberStatus.quiet,
+        presenceStatus: DormPresenceStatus.returned,
+        sleepModeActive: false,
+        lastActiveAt: now.subtract(const Duration(seconds: 10)),
+        note: '',
+      ),
+    ];
+
+    expect(dormAppOnlineMemberCount(members, now: now), 1);
+  });
+
+  test(
+    'cloudbase dorm repository parses heartbeat fields and posts heartbeat endpoint',
+    () async {
+      final List<_PostCall> calls = <_PostCall>[];
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) async {
+              calls.add(_PostCall(path: path, body: body));
+              return <String, dynamic>{'ok': true};
+            },
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(
+          uid: 'cloud-user',
+          dormId: 'dorm-204',
+          phoneNumber: '+86 13800138000',
+        ),
+      );
+      final CloudBaseDormRepository repository = CloudBaseDormRepository(
+        authRepository: authRepository,
+        snapshotStore: snapshotStore,
+        appApiClient: appApiClient,
+      );
+
+      snapshotStore.pushPayload(
+        _dormPayload(<String, dynamic>{
+          'uid': 'cloud-user',
+          'name': 'Cloud User',
+          'status': DormMemberStatus.quiet.name,
+          'presenceStatus': DormPresenceStatus.returned.name,
+          'sleepModeActive': false,
+          'appOnline': true,
+          'appLastSeenAt': '2026-04-22T04:00:00.000Z',
+          'lastActiveAt': '2026-04-21T23:00:00.000Z',
+          'note': '',
+        }),
+      );
+
+      DormMember member = repository.currentDorm.members.single;
+      expect(member.appOnline, isTrue);
+      expect(member.appLastSeenAt, DateTime.parse('2026-04-22T04:00:00.000Z'));
+
+      await repository.updateCurrentUserOnlineStatus(
+        uid: 'cloud-user',
+        online: false,
+      );
+
+      member = repository.currentDorm.members.single;
+      expect(member.appOnline, isFalse);
+      expect(calls.map((call) => call.path), <String>[
+        '/api/dorm/member/heartbeat',
+      ]);
+      expect(calls.single.body['online'], isFalse);
+      expect(snapshotStore.refreshCount, 0);
+    },
+  );
+
+  test(
+    'cloudbase dorm repository keeps local sleep exit during stale snapshot refresh',
+    () async {
+      final List<_PostCall> calls = <_PostCall>[];
+      final Completer<Map<String, dynamic>> syncCompleter =
+          Completer<Map<String, dynamic>>();
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) {
+              calls.add(_PostCall(path: path, body: body));
+              return syncCompleter.future;
+            },
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(
+          uid: 'cloud-user',
+          dormId: 'dorm-204',
+        ),
+      );
+      final CloudBaseDormRepository repository = CloudBaseDormRepository(
+        authRepository: authRepository,
+        snapshotStore: snapshotStore,
+        appApiClient: appApiClient,
+      );
+      final Map<String, dynamic> stalePayload = _dormPayload(<String, dynamic>{
+        'uid': 'cloud-user',
+        'name': 'Cloud User',
+        'status': DormMemberStatus.quiet.name,
+        'presenceStatus': DormPresenceStatus.returned.name,
+        'sleepModeActive': true,
+        'lastActiveAt': '2026-04-21T23:00:00.000Z',
+        'note': 'sleeping',
+      });
+
+      snapshotStore.pushPayload(stalePayload);
+      await repository.updateCurrentUserStatus(
+        uid: 'cloud-user',
+        sleepModeActive: false,
+        note: 'waiting for feedback',
+      );
+      expect(repository.currentDorm.members.single.sleepModeActive, isFalse);
+
+      await pumpEventQueue();
+      expect(calls.single.path, '/api/dorm/member/status');
+      snapshotStore.pushPayload(stalePayload);
+
+      expect(repository.currentDorm.members.single.sleepModeActive, isFalse);
+      expect(
+        repository.currentDorm.members.single.note,
+        'waiting for feedback',
+      );
+
+      syncCompleter.complete(<String, dynamic>{'ok': true});
+      await pumpEventQueue();
+
+      expect(snapshotStore.refreshCount, 1);
+    },
+  );
+
+  test(
+    'cloudbase repositories preserve displayed avatar urls for unchanged resources',
+    () {
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) async =>
+                <String, dynamic>{'ok': true},
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final CloudBaseAuthRepository authRepository = CloudBaseAuthRepository(
+        environment: _testCloudBaseEnvironment,
+        authClient: CloudBaseAuthClient(environment: _testCloudBaseEnvironment),
+        appApiClient: appApiClient,
+        sessionStore: _FakeSessionStore(),
+        snapshotStore: snapshotStore,
+      );
+      final CloudBaseDormRepository dormRepository = CloudBaseDormRepository(
+        authRepository: authRepository,
+        snapshotStore: snapshotStore,
+        appApiClient: appApiClient,
+      );
+
+      snapshotStore.pushPayload(
+        _dormPayload(
+          <String, dynamic>{
+            'uid': 'cloud-user',
+            'name': 'Cloud User',
+            'status': DormMemberStatus.quiet.name,
+            'presenceStatus': DormPresenceStatus.returned.name,
+            'sleepModeActive': false,
+            'lastActiveAt': '2026-04-21T23:00:00.000Z',
+            'note': '',
+            'avatarUrl': 'https://cdn.example.com/avatar.png?sig=first',
+          },
+          user: <String, dynamic>{
+            'uid': 'cloud-user',
+            'displayName': 'Cloud User',
+            'dormId': 'dorm-204',
+            'avatarUrl': 'https://cdn.example.com/me.png?sig=first',
+            'avatarStoragePath': 'avatars/cloud-user.png',
+          },
+        ),
+      );
+      snapshotStore.pushPayload(
+        _dormPayload(
+          <String, dynamic>{
+            'uid': 'cloud-user',
+            'name': 'Cloud User',
+            'status': DormMemberStatus.quiet.name,
+            'presenceStatus': DormPresenceStatus.returned.name,
+            'sleepModeActive': false,
+            'lastActiveAt': '2026-04-21T23:00:00.000Z',
+            'note': '',
+            'avatarUrl': 'https://cdn.example.com/avatar.png?sig=second',
+          },
+          user: <String, dynamic>{
+            'uid': 'cloud-user',
+            'displayName': 'Cloud User',
+            'dormId': 'dorm-204',
+            'avatarUrl': 'https://cdn.example.com/me.png?sig=second',
+            'avatarStoragePath': 'avatars/cloud-user.png',
+          },
+        ),
+      );
+
+      expect(
+        authRepository.currentUser.avatarUrl,
+        'https://cdn.example.com/me.png?sig=first',
+      );
+      expect(
+        dormRepository.currentDorm.members.single.avatarUrl,
+        'https://cdn.example.com/avatar.png?sig=first',
+      );
+
+      authRepository.dispose();
+      dormRepository.dispose();
     },
   );
 
@@ -1262,6 +1519,9 @@ class _TestSnapshotStore extends CloudBaseSnapshotStore {
   Map<String, dynamic> get payload => _nextPayload;
 
   @override
+  bool get hasPayload => _nextPayload.isNotEmpty;
+
+  @override
   bool get isRefreshing => _isRefreshing;
 
   @override
@@ -1296,6 +1556,16 @@ class _TestSnapshotStore extends CloudBaseSnapshotStore {
   }
 }
 
+const AppEnvironment _testCloudBaseEnvironment = AppEnvironment(
+  target: AppBackendTarget.production,
+  appIdPrefix: 'com.dormsleep.app',
+  cloudbaseEnvId: 'demo-env',
+  cloudbaseAuthBaseUrl: 'https://example.com',
+  cloudbaseAppApiBaseUrl: 'https://example.com',
+  cloudbasePublishableKey: 'publishable-key',
+  cloudbaseClientId: 'demo-env',
+);
+
 Map<String, dynamic> _bootstrapPayloadWithNotifications(
   List<NotificationItem> notifications,
 ) {
@@ -1329,30 +1599,50 @@ Map<String, dynamic> _bootstrapPayloadWithNotifications(
   };
 }
 
+Map<String, dynamic> _dormPayload(
+  Map<String, dynamic> member, {
+  Map<String, dynamic>? user,
+}) {
+  return <String, dynamic>{
+    'data': <String, dynamic>{
+      'user':
+          user ??
+          <String, dynamic>{
+            'uid': 'cloud-user',
+            'displayName': 'Cloud User',
+            'dormId': 'dorm-204',
+          },
+      'settings': const <String, dynamic>{},
+      'dorm': <String, dynamic>{
+        'id': 'dorm-204',
+        'name': 'Dorm',
+        'overview': '',
+        'noiseDb': 32,
+        'lightLabel': '',
+        'quietLabel': '',
+        'rules': const <Map<String, dynamic>>[],
+        'events': const <Map<String, dynamic>>[],
+        'invites': const <Map<String, dynamic>>[],
+        'members': <Map<String, dynamic>>[member],
+      },
+      'sleepSessions': const <Map<String, dynamic>>[],
+      'dreamEntries': const <Map<String, dynamic>>[],
+      'sleepCaptureRecords': const <Map<String, dynamic>>[],
+      'assistantThreads': const <Map<String, dynamic>>[],
+      'assistantMessages': const <String, List<Map<String, dynamic>>>{},
+      'cardSnapshots': const <String, Map<String, dynamic>>{},
+      'userState': const <String, dynamic>{},
+      'notifications': const <Map<String, dynamic>>[],
+    },
+  };
+}
+
 class _FakeCloudBaseAppApiClient extends CloudBaseAppApiClient {
   _FakeCloudBaseAppApiClient({required this.onPost})
     : super(
-        environment: const AppEnvironment(
-          target: AppBackendTarget.production,
-          appIdPrefix: 'com.dormsleep.app',
-          cloudbaseEnvId: 'demo-env',
-          cloudbaseAuthBaseUrl: 'https://example.com',
-          cloudbaseAppApiBaseUrl: 'https://example.com',
-          cloudbasePublishableKey: 'publishable-key',
-          cloudbaseClientId: 'demo-env',
-        ),
+        environment: _testCloudBaseEnvironment,
         sessionStore: _FakeSessionStore(),
-        authClient: CloudBaseAuthClient(
-          environment: const AppEnvironment(
-            target: AppBackendTarget.production,
-            appIdPrefix: 'com.dormsleep.app',
-            cloudbaseEnvId: 'demo-env',
-            cloudbaseAuthBaseUrl: 'https://example.com',
-            cloudbaseAppApiBaseUrl: 'https://example.com',
-            cloudbasePublishableKey: 'publishable-key',
-            cloudbaseClientId: 'demo-env',
-          ),
-        ),
+        authClient: CloudBaseAuthClient(environment: _testCloudBaseEnvironment),
       );
 
   final Future<Map<String, dynamic>> Function(

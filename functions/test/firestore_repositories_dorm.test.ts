@@ -20,7 +20,8 @@ class TestDocumentStore {
   }
 
   async merge(collection: string, id: string, patch: JsonMap): Promise<void> {
-    const current = (await this.get(collection, id)) ?? ({ _id: id } as JsonMap);
+    const current =
+      (await this.get(collection, id)) ?? ({ _id: id } as JsonMap);
     await this.set(collection, id, {
       ...current,
       ...this.clone(patch),
@@ -43,8 +44,8 @@ class TestDocumentStore {
       limit?: number;
     },
   ): Promise<JsonMap[]> {
-    let docs = Array.from(this.ensureCollection(collection).values()).map((doc) =>
-      this.clone(doc),
+    let docs = Array.from(this.ensureCollection(collection).values()).map(
+      (doc) => this.clone(doc),
     );
     if (options?.filters) {
       docs = docs.filter((doc) =>
@@ -137,7 +138,10 @@ test("acceptDormInvite writes joined member displayBadgeId", async () => {
     equippedBadgeId: null,
   });
 
-  const accepted = await repo.acceptDormInvite("roommate-user", invite.inviteCode);
+  const accepted = await repo.acceptDormInvite(
+    "roommate-user",
+    invite.inviteCode,
+  );
   assert.equal(accepted.dormId, created.dormId);
 
   const member = await store.get(
@@ -197,7 +201,10 @@ test("getDorm backfills avatarUrl and displayBadgeId from latest user profile", 
 
   dorm = await repo.getDorm(dormId, "owner-user");
   roommate = dorm.members.find((member) => member.uid === "roommate-user");
-  assert.equal(roommate?.avatarUrl, "https://images.example.com/new-avatar.png");
+  assert.equal(
+    roommate?.avatarUrl,
+    "https://images.example.com/new-avatar.png",
+  );
   assert.equal(roommate?.displayBadgeId, "equipped-badge");
 
   await store.merge("users", "roommate-user", {
@@ -214,4 +221,65 @@ test("getDorm backfills avatarUrl and displayBadgeId from latest user profile", 
     roommate?.avatarUrl,
     "https://old.example.com/member-only-avatar.png",
   );
+});
+
+test("updateDormMemberStatus preserves sleepModeActive when omitted", async () => {
+  const store = new TestDocumentStore();
+  const repo = new FirestoreRepository(store as any, new TestFileStorage());
+  const uid = "sleeping-user";
+  const dormId = "dorm-sleep-preserve";
+
+  await store.set("dorms", dormId, { id: dormId, name: "Dorm" });
+  await repo.saveUserProfile(uid, { displayName: "Sleeper", dormId });
+  await store.set("dorm_members", `${dormId}:${uid}`, {
+    dormId,
+    uid,
+    name: "Sleeper",
+    status: "quiet",
+    presenceStatus: "returned",
+    sleepModeActive: true,
+    lastActiveAt: "2026-04-20T23:00:00.000Z",
+    note: "asleep",
+  });
+
+  const member = await repo.updateDormMemberStatus(uid, {
+    presenceStatus: "away",
+    note: "location changed",
+  });
+
+  assert.equal(member.sleepModeActive, true);
+  assert.equal(member.presenceStatus, "away");
+});
+
+test("updateDormMemberHeartbeat writes app online fields only", async () => {
+  const store = new TestDocumentStore();
+  const repo = new FirestoreRepository(store as any, new TestFileStorage());
+  const uid = "online-user";
+  const dormId = "dorm-heartbeat";
+  const originalLastActiveAt = "2026-04-20T23:00:00.000Z";
+
+  await store.set("dorms", dormId, { id: dormId, name: "Dorm" });
+  await repo.saveUserProfile(uid, { displayName: "Online", dormId });
+  await store.set("dorm_members", `${dormId}:${uid}`, {
+    dormId,
+    uid,
+    name: "Online",
+    status: "quiet",
+    presenceStatus: "returned",
+    sleepModeActive: true,
+    lastActiveAt: originalLastActiveAt,
+    note: "asleep",
+  });
+
+  const online = await repo.updateDormMemberHeartbeat(uid, { online: true });
+
+  assert.equal(online.appOnline, true);
+  assert.equal(typeof online.appLastSeenAt, "string");
+  assert.equal(online.sleepModeActive, true);
+  assert.equal(online.lastActiveAt, originalLastActiveAt);
+
+  const offline = await repo.updateDormMemberHeartbeat(uid, { online: false });
+  assert.equal(offline.appOnline, false);
+  assert.equal(offline.sleepModeActive, true);
+  assert.equal(offline.lastActiveAt, originalLastActiveAt);
 });

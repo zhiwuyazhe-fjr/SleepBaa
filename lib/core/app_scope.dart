@@ -21,6 +21,7 @@ import 'package:sleep_dorm_app/core/notifications/sleep_mode_notification_contro
 import 'package:sleep_dorm_app/core/notifications/unified_notification.dart';
 import 'package:sleep_dorm_app/core/state/audio_playback_controller.dart';
 import 'package:sleep_dorm_app/core/state/dorm_noise_sample_ledger.dart';
+import 'package:sleep_dorm_app/core/state/dorm_online_sync_controller.dart';
 import 'package:sleep_dorm_app/core/state/dorm_presence_sync_controller.dart';
 import 'package:sleep_dorm_app/core/state/interference_probe_controller.dart';
 import 'package:sleep_dorm_app/core/state/evening_welcome_local_store.dart';
@@ -81,6 +82,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
   _cloudBaseNotificationSyncController;
   late final AudioPlaybackController _audioPlaybackController;
   late final DormPresenceSyncController _dormPresenceSyncController;
+  late final DormOnlineSyncController _dormOnlineSyncController;
   late final DormNoiseSampleLedger _dormNoiseSampleLedger;
   late final InterferenceProbeController _interferenceProbeController;
   late final SleepExperienceController _sleepExperienceController;
@@ -121,6 +123,10 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
     );
     _audioPlaybackController = AudioPlaybackController();
     _dormPresenceSyncController = DormPresenceSyncController(
+      authRepository: _authRepository,
+      dormRepository: _dormRepository,
+    );
+    _dormOnlineSyncController = DormOnlineSyncController(
       authRepository: _authRepository,
       dormRepository: _dormRepository,
     );
@@ -224,7 +230,8 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
 
   /// Restores fixed encouragement from device prefs when cloud settings are empty/stale.
   void _hydrateEncouragementFromLocalBootState() {
-    final LocalEveningWelcomeBootState? boot = widget.initialLocalEveningWelcome;
+    final LocalEveningWelcomeBootState? boot =
+        widget.initialLocalEveningWelcome;
     if (boot == null) {
       return;
     }
@@ -259,6 +266,8 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
       // Auth and callable failures are surfaced through repository state so
       // the app can keep rendering while settings diagnostics explain the
       // backend issue.
+    } finally {
+      _dormOnlineSyncController.start();
     }
   }
 
@@ -383,6 +392,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _bedtimeReminderSyncController.handleAppLifecycleState(state);
     _cloudBaseNotificationSyncController.handleAppLifecycleState(state);
+    _dormOnlineSyncController.handleAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       // Always poke ensureAuthenticated so that a returning user gets their
       // session restored.  The call is a fast no-op when the cached auth
@@ -410,6 +420,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
     _dreamFacade.dispose();
     _notificationFacade.dispose();
     _dormFacade.dispose();
+    unawaited(_dormOnlineSyncController.dispose());
     _dormPresenceSyncController.dispose();
     _sleepModeNotificationController.dispose();
     _sleepFacade.dispose();

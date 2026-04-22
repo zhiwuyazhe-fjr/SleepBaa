@@ -431,11 +431,11 @@ class UserSettings {
       eveningEncouragementMoodSnapshot: clearEveningEncouragement
           ? null
           : identical(
-                  eveningEncouragementMoodSnapshot,
-                  _unsetEveningEncouragementMoodSnapshot,
-                )
-              ? this.eveningEncouragementMoodSnapshot
-              : eveningEncouragementMoodSnapshot as NightMood?,
+              eveningEncouragementMoodSnapshot,
+              _unsetEveningEncouragementMoodSnapshot,
+            )
+          ? this.eveningEncouragementMoodSnapshot
+          : eveningEncouragementMoodSnapshot as NightMood?,
     );
   }
 }
@@ -1130,6 +1130,8 @@ class DormMember {
     required this.status,
     required this.presenceStatus,
     required this.sleepModeActive,
+    this.appOnline = false,
+    this.appLastSeenAt,
     required this.lastActiveAt,
     required this.note,
     this.avatarUrl,
@@ -1142,6 +1144,8 @@ class DormMember {
   final DormMemberStatus status;
   final DormPresenceStatus presenceStatus;
   final bool sleepModeActive;
+  final bool appOnline;
+  final DateTime? appLastSeenAt;
   final DateTime lastActiveAt;
   final String note;
   final String? avatarUrl;
@@ -1156,11 +1160,15 @@ class DormMember {
     DormMemberStatus? status,
     DormPresenceStatus? presenceStatus,
     bool? sleepModeActive,
+    bool? appOnline,
+    DateTime? appLastSeenAt,
     DateTime? lastActiveAt,
     String? note,
     String? avatarUrl,
     String? displayBadgeId,
     int? noiseDb,
+    bool clearAvatarUrl = false,
+    bool clearAppLastSeenAt = false,
     bool clearNoiseDb = false,
   }) {
     return DormMember(
@@ -1169,9 +1177,13 @@ class DormMember {
       status: status ?? this.status,
       presenceStatus: presenceStatus ?? this.presenceStatus,
       sleepModeActive: sleepModeActive ?? this.sleepModeActive,
+      appOnline: appOnline ?? this.appOnline,
+      appLastSeenAt: clearAppLastSeenAt
+          ? null
+          : (appLastSeenAt ?? this.appLastSeenAt),
       lastActiveAt: lastActiveAt ?? this.lastActiveAt,
       note: note ?? this.note,
-      avatarUrl: avatarUrl ?? this.avatarUrl,
+      avatarUrl: clearAvatarUrl ? null : (avatarUrl ?? this.avatarUrl),
       displayBadgeId: displayBadgeId ?? this.displayBadgeId,
       noiseDb: clearNoiseDb ? null : (noiseDb ?? this.noiseDb),
     );
