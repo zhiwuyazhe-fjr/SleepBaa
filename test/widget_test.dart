@@ -682,6 +682,17 @@ void main() {
       );
       expect(find.text(AppBrand.loginTitle), findsOneWidget);
       expect(
+        find.byKey(const ValueKey<String>('auth-login-logo')),
+        findsOneWidget,
+      );
+      final Image loginLogo = tester.widget<Image>(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('auth-login-logo')),
+          matching: find.byType(Image),
+        ),
+      );
+      expect((loginLogo.image as AssetImage).assetName, AppBrand.logoAssetPath);
+      expect(
         find.byKey(const ValueKey<String>('auth-forgot-password')),
         findsOneWidget,
       );
