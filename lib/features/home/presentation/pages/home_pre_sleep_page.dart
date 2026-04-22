@@ -12,6 +12,7 @@ import 'package:sleep_dorm_app/core/widgets/home_metric_card.dart';
 import 'package:sleep_dorm_app/core/widgets/quick_action_icon_button.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_hero_pair.dart';
+import 'package:sleep_dorm_app/features/home/presentation/widgets/home_quick_actions.dart';
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.dart';
 
 class HomePreSleepPage extends StatefulWidget {
@@ -105,6 +106,7 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
           services.dormRepository,
           services.notificationRepository,
           services.recommendationRepository,
+          services.settingsRepository,
           services.audioPlaybackController,
           services.sleepCaptureRepository,
           services.interferenceProbeController,
@@ -114,8 +116,12 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
           final Dorm dorm = services.dormRepository.currentDorm;
           final List<NightRecommendation> recommendations =
               services.recommendationRepository.tonightRecommendations;
+          final UserSettings settings =
+              services.settingsRepository.currentSettings;
           final TonightInterferenceState interference =
               services.interferenceProbeController.currentState;
+          final List<HomeQuickActionDefinition> quickActions =
+              homeQuickActionDefinitionsFor(settings.homeQuickActionIds);
           final int unread = services.notificationRepository
               .unreadNotifications()
               .length;
@@ -228,37 +234,27 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                     fontWeight: FontWeight.w400,
                                   ),
                               onAction: () =>
-                                  context.push(AppRoutes.interventionTask),
+                                  context.push(AppRoutes.homeQuickActionsEdit),
                             ),
                             const SizedBox(height: AppSpacing.md),
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: <Widget>[
-                                QuickActionIconButton(
-                                  icon: Icons.auto_stories_rounded,
-                                  label: '梦记一则',
-                                  onTap: () =>
-                                      context.push(AppRoutes.dreamJournal),
-                                ),
-                                QuickActionIconButton(
-                                  icon: Icons.calendar_month_rounded,
-                                  label: '打卡日历',
-                                  onTap: () =>
-                                      context.push(AppRoutes.profileCalendar),
-                                ),
-                                QuickActionIconButton(
-                                  icon: Icons.menu_book_rounded,
-                                  label: '睡眠百科',
-                                  onTap: () =>
-                                      context.push(AppRoutes.sleepEncyclopedia),
-                                ),
-                                QuickActionIconButton(
-                                  icon: Icons.psychology_alt_rounded,
-                                  label: '思绪清理',
-                                  onTap: () => context.push(
-                                    '${AppRoutes.assistant}?flow=sleep_capture&mode=memo',
+                                for (
+                                  int index = 0;
+                                  index < quickActions.length;
+                                  index++
+                                ) ...<Widget>[
+                                  Expanded(
+                                    child: QuickActionIconButton(
+                                      icon: quickActions[index].icon,
+                                      label: quickActions[index].label,
+                                      onTap: () =>
+                                          quickActions[index].open(context),
+                                    ),
                                   ),
-                                ),
+                                  if (index != quickActions.length - 1)
+                                    const SizedBox(width: AppSpacing.xs),
+                                ],
                               ],
                             ),
                             const SizedBox(height: AppSpacing.xl),

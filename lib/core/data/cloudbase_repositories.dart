@@ -626,7 +626,8 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
        _appApiClient = appApiClient,
        _sessionStore = sessionStore,
        _snapshotStore = snapshotStore,
-       _verifiedPhoneStore = verifiedPhoneStore ?? VerifiedPhoneIdentityStore() {
+       _verifiedPhoneStore =
+           verifiedPhoneStore ?? VerifiedPhoneIdentityStore() {
     _snapshotStore.addListener(_syncFromSnapshot);
     _currentUser = buildDefaultUserProfile().copyWith(uid: '', dormId: null);
   }
@@ -693,7 +694,9 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
 
   void _hydrateUserAfterInvalidSession({required String sessionSubject}) {
     final VerifiedPhoneIdentity? v = _cachedVerifiedIdentity;
-    if (v != null && v.subject == sessionSubject && v.phoneNumber.trim().isNotEmpty) {
+    if (v != null &&
+        v.subject == sessionSubject &&
+        v.phoneNumber.trim().isNotEmpty) {
       _currentUser = buildDefaultUserProfile().copyWith(
         uid: v.subject,
         phoneNumber: v.phoneNumber,
@@ -887,7 +890,8 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       // /user/me; if it doesn't, _readCurrentCloudBaseUser returns null and
       // we fall back to the session subject only.
       final CloudBaseUserInfo? restoredInfo =
-          _currentUser.uid.isEmpty || !_phoneIdentityResolvableFromLocalProfile()
+          _currentUser.uid.isEmpty ||
+              !_phoneIdentityResolvableFromLocalProfile()
           ? await _readCurrentCloudBaseUser(restoredSession)
           : null;
       if (_currentUser.uid.isEmpty) {
@@ -1328,15 +1332,10 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
         expiresIn: verificationResult.expiresIn,
       );
     } on CloudBaseAuthException catch (error) {
-      _throwAuthFlowError(
-        _phoneAuthErrorMessage(error, action: 'verifyCode'),
-      );
+      _throwAuthFlowError(_phoneAuthErrorMessage(error, action: 'verifyCode'));
     } catch (error) {
       _throwAuthFlowError(
-        _unexpectedPhoneAuthError(
-          error,
-          fallbackMessage: '验证码校验失败，请稍后再试。',
-        ),
+        _unexpectedPhoneAuthError(error, fallbackMessage: '验证码校验失败，请稍后再试。'),
       );
     }
   }
@@ -1801,9 +1800,11 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   ) {
     return switch (target) {
       PhoneVerificationTarget.newUser =>
-        message == '\u8be5\u624b\u673a\u53f7\u5df2\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002',
+        message ==
+            '\u8be5\u624b\u673a\u53f7\u5df2\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002',
       PhoneVerificationTarget.existingUser =>
-        message == '\u672a\u627e\u5230\u8be5\u624b\u673a\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002',
+        message ==
+            '\u672a\u627e\u5230\u8be5\u624b\u673a\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002',
       PhoneVerificationTarget.any => false,
     };
   }
@@ -1943,6 +1944,7 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
 
   late UserSettings _settings;
   NightMood? _pendingMoodOverride;
+  List<String>? _pendingHomeQuickActionIds;
 
   @override
   UserSettings get currentSettings => _settings;
@@ -1956,8 +1958,14 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
   @override
   Future<void> saveSettings(UserSettings settings) async {
     final NightMood? previousMood = _settings.selectedNightMood;
+    final List<String> previousQuickActionIds = _settings.homeQuickActionIds;
     if (previousMood != settings.selectedNightMood) {
       _pendingMoodOverride = settings.selectedNightMood;
+    }
+    if (!_sameStringList(previousQuickActionIds, settings.homeQuickActionIds)) {
+      _pendingHomeQuickActionIds = normalizeHomeQuickActionIds(
+        settings.homeQuickActionIds,
+      );
     }
     replaceLocalSettings(settings);
     if (!_appApiClient.isConfigured) {
@@ -1997,6 +2005,7 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
     UserSettings incoming = _mergeEveningEncouragementIfServerOmitted(
       snapshot.settings,
     );
+    incoming = _mergePendingHomeQuickActionsIfServerOmitted(incoming);
     if (_pendingMoodOverride != null &&
         incoming.selectedNightMood != _pendingMoodOverride &&
         _settings.selectedNightMood == _pendingMoodOverride) {
@@ -2012,7 +2021,9 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
 
   /// Remote snapshot may omit `eveningEncouragement*` until the backend persists them;
   /// keep the last local quote so the profile card does not clear after refresh.
-  UserSettings _mergeEveningEncouragementIfServerOmitted(UserSettings incoming) {
+  UserSettings _mergeEveningEncouragementIfServerOmitted(
+    UserSettings incoming,
+  ) {
     final String? prevLine = _settings.eveningEncouragementLine;
     final String? prevKey = _settings.eveningEncouragementPeriodKey;
     final NightMood? prevSnap = _settings.eveningEncouragementMoodSnapshot;
@@ -2026,6 +2037,36 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
       );
     }
     return incoming;
+  }
+
+  UserSettings _mergePendingHomeQuickActionsIfServerOmitted(
+    UserSettings incoming,
+  ) {
+    final List<String>? pending = _pendingHomeQuickActionIds;
+    if (pending == null) {
+      return incoming;
+    }
+    if (_sameStringList(incoming.homeQuickActionIds, pending)) {
+      _pendingHomeQuickActionIds = null;
+      return incoming;
+    }
+    if (_sameStringList(_settings.homeQuickActionIds, pending)) {
+      return incoming.copyWith(homeQuickActionIds: pending);
+    }
+    _pendingHomeQuickActionIds = null;
+    return incoming;
+  }
+
+  bool _sameStringList(List<String> first, List<String> second) {
+    if (first.length != second.length) {
+      return false;
+    }
+    for (var index = 0; index < first.length; index += 1) {
+      if (first[index] != second[index]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   @override

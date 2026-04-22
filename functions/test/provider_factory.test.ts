@@ -34,6 +34,12 @@ function buildContext(): AssistantContext {
       preferredTrackTitle: "Deep Ocean Waves",
       smartSuggestionsEnabled: true,
       selectedNightMood: "calm",
+      homeQuickActionIds: [
+        "dreamJournal",
+        "profileCalendar",
+        "sleepEncyclopedia",
+        "thoughtClean",
+      ],
     },
     dorm: {
       id: "dorm-204",

@@ -54,10 +54,14 @@ abstract final class ModelSerializers {
       'bedtimeReminder': timeOfDayToMap(settings.bedtimeReminder),
       'preferredTrackTitle': settings.preferredTrackTitle,
       'smartSuggestionsEnabled': settings.smartSuggestionsEnabled,
+      'homeQuickActionIds': normalizeHomeQuickActionIds(
+        settings.homeQuickActionIds,
+      ),
       'selectedNightMood': settings.selectedNightMood?.name,
       'eveningEncouragementPeriodKey': settings.eveningEncouragementPeriodKey,
       'eveningEncouragementLine': settings.eveningEncouragementLine,
-      'eveningEncouragementMoodSnapshot': settings.eveningEncouragementLine == null
+      'eveningEncouragementMoodSnapshot':
+          settings.eveningEncouragementLine == null
           ? null
           : (settings.eveningEncouragementMoodSnapshot?.name ?? 'unknown'),
     };
@@ -75,15 +79,17 @@ abstract final class ModelSerializers {
       ),
       preferredTrackTitle: map['preferredTrackTitle'] as String? ?? '深海海浪',
       smartSuggestionsEnabled: map['smartSuggestionsEnabled'] as bool? ?? true,
+      homeQuickActionIds: normalizeHomeQuickActionIds(
+        _stringListFromDynamic(map['homeQuickActionIds']),
+      ),
       selectedNightMood: _nightMoodFromName(
         map['selectedNightMood'] as String?,
       ),
       eveningEncouragementPeriodKey:
           map['eveningEncouragementPeriodKey'] as String?,
       eveningEncouragementLine: map['eveningEncouragementLine'] as String?,
-      eveningEncouragementMoodSnapshot: _eveningEncouragementMoodSnapshotFromMap(
-        map,
-      ),
+      eveningEncouragementMoodSnapshot:
+          _eveningEncouragementMoodSnapshotFromMap(map),
     );
   }
 
@@ -805,6 +811,13 @@ abstract final class ModelSerializers {
       NightMood.values,
       (NightMood item) => item.name == value,
     );
+  }
+
+  static List<String> _stringListFromDynamic(Object? value) {
+    if (value is Iterable) {
+      return value.whereType<String>().toList(growable: false);
+    }
+    return const <String>[];
   }
 
   /// `null` snapshot means the impatient/unknown quote pool; persisted as `'unknown'`.
