@@ -109,6 +109,21 @@ const Collections = {
   audioTracks: "audio_tracks",
 } as const;
 
+const DEFAULT_HOME_QUICK_ACTION_IDS = [
+  "dreamJournal",
+  "profileCalendar",
+  "sleepEncyclopedia",
+  "thoughtClean",
+] as const;
+
+const ALL_HOME_QUICK_ACTION_IDS = new Set<string>([
+  ...DEFAULT_HOME_QUICK_ACTION_IDS,
+  "thoughtVault",
+  "profileBadges",
+  "profileReport",
+  "profileSettings",
+]);
+
 const AUDIO_TRACK_CATALOG = [
   {
     id: "deep-ocean",
@@ -207,6 +222,28 @@ function asStringArray(value: unknown): string[] {
   return value
     .map((item) => String(item).trim())
     .filter((item) => item.length > 0);
+}
+
+function normalizeHomeQuickActionIds(value: unknown): string[] {
+  const selected: string[] = [];
+  for (const id of asStringArray(value)) {
+    if (!ALL_HOME_QUICK_ACTION_IDS.has(id) || selected.includes(id)) {
+      continue;
+    }
+    selected.push(id);
+    if (selected.length === DEFAULT_HOME_QUICK_ACTION_IDS.length) {
+      break;
+    }
+  }
+  for (const id of DEFAULT_HOME_QUICK_ACTION_IDS) {
+    if (selected.length === DEFAULT_HOME_QUICK_ACTION_IDS.length) {
+      break;
+    }
+    if (!selected.includes(id)) {
+      selected.push(id);
+    }
+  }
+  return selected;
 }
 
 function tokenizeSearchText(value: string): string[] {
@@ -360,6 +397,7 @@ function defaultUserSettings(): JsonMap {
     preferredTrackTitle: "深海海浪",
     smartSuggestionsEnabled: true,
     selectedNightMood: null,
+    homeQuickActionIds: [...DEFAULT_HOME_QUICK_ACTION_IDS],
     updatedAt: nowIso(),
   };
 }
@@ -1675,8 +1713,14 @@ export class FirestoreRepository implements AssistantDataRepository {
 
   async saveUserSettings(uid: string, patch: JsonMap): Promise<JsonMap> {
     await this.ensureUserBootstrap(uid);
+    const normalizedPatch: JsonMap = { ...patch };
+    if ("homeQuickActionIds" in normalizedPatch) {
+      normalizedPatch.homeQuickActionIds = normalizeHomeQuickActionIds(
+        normalizedPatch.homeQuickActionIds,
+      );
+    }
     await this.store.merge(Collections.userSettings, uid, {
-      ...patch,
+      ...normalizedPatch,
       updatedAt: nowIso(),
     });
     return withoutMeta(
@@ -3095,6 +3139,11 @@ export class FirestoreRepository implements AssistantDataRepository {
         sourceSettings.selectedNightMood,
         defaultSettings.selectedNightMood,
       ),
+      homeQuickActionIds: this.preferHomeQuickActionIds(
+        canonicalSettings.homeQuickActionIds,
+        sourceSettings.homeQuickActionIds,
+        defaultSettings.homeQuickActionIds,
+      ),
       updatedAt: migratedAt,
     });
 
@@ -3464,6 +3513,20 @@ export class FirestoreRepository implements AssistantDataRepository {
     return Object.keys(fallbackValue).length > 0 ? fallbackValue : primaryValue;
   }
 
+  private preferHomeQuickActionIds(
+    primary: unknown,
+    fallback: unknown,
+    defaultValue: unknown,
+  ): string[] {
+    const primaryValue = normalizeHomeQuickActionIds(primary);
+    const defaultArray = normalizeHomeQuickActionIds(defaultValue);
+    if (JSON.stringify(primaryValue) !== JSON.stringify(defaultArray)) {
+      return primaryValue;
+    }
+    const fallbackValue = normalizeHomeQuickActionIds(fallback);
+    return fallbackValue.length > 0 ? fallbackValue : primaryValue;
+  }
+
   private async readAssistantThreadSummary(
     threadId: string | null | undefined,
   ): Promise<AssistantThreadSummaryDoc | null> {
@@ -3701,6 +3764,7 @@ export class FirestoreRepository implements AssistantDataRepository {
       preferredTrackTitle: asString(doc.preferredTrackTitle, "深海海浪"),
       smartSuggestionsEnabled: asBoolean(doc.smartSuggestionsEnabled, true),
       selectedNightMood: asString(doc.selectedNightMood),
+      homeQuickActionIds: normalizeHomeQuickActionIds(doc.homeQuickActionIds),
       bedtimeReminderEnabled: asBoolean(doc.bedtimeReminderEnabled, true),
       morningReminderEnabled: asBoolean(doc.morningReminderEnabled, true),
       dormAlertsEnabled: asBoolean(doc.dormAlertsEnabled, true),

@@ -18,6 +18,58 @@ enum NotificationCategory { reminder, session, dorm, system }
 
 enum DormMemberStatus { sleeping, quiet, away, active }
 
+abstract final class HomeQuickActionIds {
+  static const String dreamJournal = 'dreamJournal';
+  static const String profileCalendar = 'profileCalendar';
+  static const String sleepEncyclopedia = 'sleepEncyclopedia';
+  static const String thoughtClean = 'thoughtClean';
+  static const String thoughtVault = 'thoughtVault';
+  static const String profileBadges = 'profileBadges';
+  static const String profileReport = 'profileReport';
+  static const String profileSettings = 'profileSettings';
+}
+
+const int kHomeQuickActionSelectionCount = 4;
+
+const List<String> kDefaultHomeQuickActionIds = <String>[
+  HomeQuickActionIds.dreamJournal,
+  HomeQuickActionIds.profileCalendar,
+  HomeQuickActionIds.sleepEncyclopedia,
+  HomeQuickActionIds.thoughtClean,
+];
+
+const List<String> kAllHomeQuickActionIds = <String>[
+  ...kDefaultHomeQuickActionIds,
+  HomeQuickActionIds.thoughtVault,
+  HomeQuickActionIds.profileBadges,
+  HomeQuickActionIds.profileReport,
+  HomeQuickActionIds.profileSettings,
+];
+
+List<String> normalizeHomeQuickActionIds(Iterable<String>? rawIds) {
+  final List<String> normalized = <String>[];
+  void addIfAllowed(String id) {
+    if (!kAllHomeQuickActionIds.contains(id) || normalized.contains(id)) {
+      return;
+    }
+    normalized.add(id);
+  }
+
+  for (final String id in rawIds ?? const <String>[]) {
+    addIfAllowed(id);
+    if (normalized.length == kHomeQuickActionSelectionCount) {
+      return List<String>.unmodifiable(normalized);
+    }
+  }
+  for (final String id in kDefaultHomeQuickActionIds) {
+    addIfAllowed(id);
+    if (normalized.length == kHomeQuickActionSelectionCount) {
+      break;
+    }
+  }
+  return List<String>.unmodifiable(normalized);
+}
+
 enum DormPresenceStatus { returned, away }
 
 enum DormEventType { memberStatus, ruleUpdate, notification, invite, system }
@@ -368,6 +420,7 @@ class UserSettings {
     required this.bedtimeReminder,
     required this.preferredTrackTitle,
     required this.smartSuggestionsEnabled,
+    this.homeQuickActionIds = kDefaultHomeQuickActionIds,
     this.selectedNightMood,
     this.eveningEncouragementPeriodKey,
     this.eveningEncouragementLine,
@@ -381,6 +434,7 @@ class UserSettings {
   final TimeOfDay bedtimeReminder;
   final String preferredTrackTitle;
   final bool smartSuggestionsEnabled;
+  final List<String> homeQuickActionIds;
   final NightMood? selectedNightMood;
 
   /// [eveningPeriodKey] for which [eveningEncouragementLine] was chosen.
@@ -400,6 +454,7 @@ class UserSettings {
     TimeOfDay? bedtimeReminder,
     String? preferredTrackTitle,
     bool? smartSuggestionsEnabled,
+    List<String>? homeQuickActionIds,
     NightMood? selectedNightMood,
     bool clearSelectedNightMood = false,
     String? eveningEncouragementPeriodKey,
@@ -419,6 +474,9 @@ class UserSettings {
       preferredTrackTitle: preferredTrackTitle ?? this.preferredTrackTitle,
       smartSuggestionsEnabled:
           smartSuggestionsEnabled ?? this.smartSuggestionsEnabled,
+      homeQuickActionIds: normalizeHomeQuickActionIds(
+        homeQuickActionIds ?? this.homeQuickActionIds,
+      ),
       selectedNightMood: clearSelectedNightMood
           ? null
           : selectedNightMood ?? this.selectedNightMood,
@@ -431,11 +489,11 @@ class UserSettings {
       eveningEncouragementMoodSnapshot: clearEveningEncouragement
           ? null
           : identical(
-                  eveningEncouragementMoodSnapshot,
-                  _unsetEveningEncouragementMoodSnapshot,
-                )
-              ? this.eveningEncouragementMoodSnapshot
-              : eveningEncouragementMoodSnapshot as NightMood?,
+              eveningEncouragementMoodSnapshot,
+              _unsetEveningEncouragementMoodSnapshot,
+            )
+          ? this.eveningEncouragementMoodSnapshot
+          : eveningEncouragementMoodSnapshot as NightMood?,
     );
   }
 }

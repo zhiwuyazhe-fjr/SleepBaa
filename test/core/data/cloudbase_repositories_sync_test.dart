@@ -595,7 +595,10 @@ void main() {
 
       expect(repository.activeSession, isNull);
       expect(repository.latestAwaitingFeedbackSession?.id, active.id);
-      expect(repository.sessions.single.status, SleepSessionStatus.awaitingFeedback);
+      expect(
+        repository.sessions.single.status,
+        SleepSessionStatus.awaitingFeedback,
+      );
       expect(repository.sessions.single.sleepModeActive, isFalse);
       expect(repository.sessions.single.displayEndAt, endedAt);
       expect(repository.sessions.single.trackedDurationMinutes, 480);
@@ -1153,6 +1156,65 @@ void main() {
     repository.dispose();
     authRepository.dispose();
   });
+
+  test(
+    'cloudbase user settings keeps pending quick actions when refreshed snapshot omits them',
+    () async {
+      final List<_PostCall> calls = <_PostCall>[];
+      final Map<String, dynamic> stalePayload = <String, dynamic>{
+        'data': <String, dynamic>{
+          'user': <String, dynamic>{'uid': 'cloud-user'},
+          'settings': <String, dynamic>{'sleepGoalHours': 7.5},
+        },
+      };
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) async {
+              calls.add(_PostCall(path: path, body: body));
+              return <String, dynamic>{'ok': true};
+            },
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(uid: 'cloud-user'),
+      );
+      final CloudBaseUserSettingsRepository repository =
+          CloudBaseUserSettingsRepository(
+            authRepository: authRepository,
+            snapshotStore: snapshotStore,
+            appApiClient: appApiClient,
+          );
+      snapshotStore.onRefresh = () {
+        snapshotStore.pushPayload(stalePayload);
+      };
+
+      final List<String> selectedIds = <String>[
+        HomeQuickActionIds.profileSettings,
+        HomeQuickActionIds.thoughtVault,
+        HomeQuickActionIds.dreamJournal,
+        HomeQuickActionIds.profileReport,
+      ];
+      await repository.saveSettings(
+        repository.currentSettings.copyWith(homeQuickActionIds: selectedIds),
+      );
+
+      expect(repository.currentSettings.homeQuickActionIds, selectedIds);
+      expect(calls.map((call) => call.path), <String>['/api/profile/save']);
+      final Map<String, dynamic> settingsBody = Map<String, dynamic>.from(
+        calls.single.body['settings'] as Map,
+      );
+      expect(settingsBody['homeQuickActionIds'], selectedIds);
+
+      snapshotStore.pushPayload(stalePayload);
+
+      expect(repository.currentSettings.homeQuickActionIds, selectedIds);
+
+      repository.dispose();
+      authRepository.dispose();
+    },
+  );
 
   test(
     'cloudbase notification sync controller only surfaces newly fetched unread notifications',
