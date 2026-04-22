@@ -5,11 +5,11 @@ import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
-import 'package:sleep_dorm_app/core/backend/assistant_reply_gateway.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/mood_avatar.dart';
+import 'package:sleep_dorm_app/features/assistant/presentation/controllers/assistant_conversation_controller.dart';
 
 enum AssistantCaptureTab { dream, memo }
 
@@ -43,24 +43,8 @@ class _AssistantPageState extends State<AssistantPage> {
       ? SleepCaptureType.memo
       : SleepCaptureType.dream;
 
-  AssistantThreadTurnState? _currentTurnState(AppServices services) {
-    final AssistantThread? thread = services.assistantFacade.currentThread;
-    if (thread == null) {
-      return null;
-    }
-    return services.assistantRepository.turnStateForThread(thread.id);
-  }
-
-  String _nextTurnId() {
-    return 'assistant-turn-${DateTime.now().microsecondsSinceEpoch}';
-  }
-
   Future<void> _showThreadBusyToast() {
     return notifyPassiveToast(context, message: '上一条还在处理中，请稍后再发');
-  }
-
-  String? _errorCodeOf(Object error) {
-    return assistantErrorCodeFromException(error);
   }
 
   _CaptureCopy get _copy {
@@ -111,7 +95,7 @@ class _AssistantPageState extends State<AssistantPage> {
       if (!mounted) {
         return;
       }
-      await context.appServices.assistantFacade.selectMostRecentThread();
+      await context.appServices.assistantConversationController.bootstrap();
       _scrollToBottom();
     });
   }
@@ -132,397 +116,36 @@ class _AssistantPageState extends State<AssistantPage> {
       return;
     }
 
-    final String? activeSessionId =
-        services.sleepSessionRepository.activeSession?.id;
-    if (_isCaptureMode &&
-        (activeSessionId == null || activeSessionId.isEmpty)) {
-      await notifyPassiveToast(context, message: '只有在睡眠模式中，才能使用梦记和事记收纳。');
-      _focusNode.requestFocus();
-      return;
-    }
+    final AssistantConversationController controller =
+        services.assistantConversationController;
+    final AssistantConversationSubmitResult result = _isCaptureMode
+        ? await controller.submitCapturePrompt(
+            prompt: normalizedPrompt,
+            captureType: _activeCaptureType,
+          )
+        : await controller.submitPrompt(normalizedPrompt);
 
-    final AssistantThread thread = await services.assistantRepository
-        .ensureThread(
-          title: _isCaptureMode
-              ? (_activeCaptureType == SleepCaptureType.dream ? '梦记收纳' : '事记收纳')
-              : '今晚睡前聊聊',
-        );
-    await services.assistantRepository.setCurrentThread(thread.id);
-    final String turnId = _nextTurnId();
-    final bool started = await services.assistantRepository.tryStartThreadTurn(
-      threadId: thread.id,
-      turnId: turnId,
-    );
-    if (!started) {
-      await _showThreadBusyToast();
-      return;
-    }
-
-    if (prompt == null && mounted) {
-      setState(() => _inputController.clear());
-    }
-    _focusNode.unfocus();
-    _scrollToBottom();
-
-    try {
-      if (_isCaptureMode) {
-        await _sendCaptureStream(
-          services,
-          selectedThread: thread,
-          turnId: turnId,
-          prompt: normalizedPrompt,
-          captureType: _activeCaptureType,
-          sessionId: activeSessionId!,
-        );
-      } else {
-        await _sendReplyStream(
-          services,
-          selectedThread: thread,
-          turnId: turnId,
-          prompt: normalizedPrompt,
-        );
-      }
-    } finally {
-      _scrollToBottom();
-    }
-  }
-
-  Future<void> _sendReplyStream(
-    AppServices services, {
-    required AssistantThread selectedThread,
-    required String turnId,
-    required String prompt,
-  }) async {
-    final AssistantThread thread = selectedThread;
-    final String clientUserMessageId =
-        'assistant-msg-user-${DateTime.now().microsecondsSinceEpoch}';
-    final String clientAssistantMessageId =
-        'assistant-msg-assistant-${DateTime.now().microsecondsSinceEpoch}';
-    await services.assistantRepository.sendUserMessage(
-      threadId: thread.id,
-      content: prompt,
-      messageId: clientUserMessageId,
-    );
-    await services.assistantRepository.addAssistantMessage(
-      threadId: thread.id,
-      content: '小眠正在整理回复...',
-      messageId: clientAssistantMessageId,
-      status: AssistantMessageStatus.pending,
-    );
-    _scrollToBottom();
-
-    bool turnFinished = false;
-    Future<void> finishTurn() async {
-      if (turnFinished) {
-        return;
-      }
-      turnFinished = true;
-      await services.assistantRepository.finishThreadTurn(
-        threadId: thread.id,
-        turnId: turnId,
-      );
-    }
-
-    try {
-      String bufferedReply = '';
-      bool completed = false;
-      await for (final AssistantStreamEvent event
-          in services.assistantReplyGateway.streamReply(
-            prompt: prompt,
-            threadId: thread.id,
-            clientUserMessageId: clientUserMessageId,
-            clientAssistantMessageId: clientAssistantMessageId,
-            dorm: services.dormRepository.currentDorm,
-          )) {
-        switch (event.type) {
-          case AssistantStreamEventType.messageDelta:
-            bufferedReply += event.delta ?? '';
-            await services.assistantRepository.updateAssistantMessage(
-              threadId: thread.id,
-              messageId: clientAssistantMessageId,
-              content: bufferedReply,
-              status: AssistantMessageStatus.pending,
-            );
-            break;
-          case AssistantStreamEventType.messageCompleted:
-            completed = true;
-            await services.assistantRepository.markThreadTurnFinalizing(
-              threadId: thread.id,
-              turnId: turnId,
-            );
-            await _upsertAssistantReply(
-              services,
-              threadId: thread.id,
-              defaultMessageId: clientAssistantMessageId,
-              reply: event.reply ?? bufferedReply,
-              sourceMode:
-                  event.sourceMode ?? AssistantReplySourceMode.remoteSuccess,
-              provider: event.provider,
-              model: event.model,
-              errorMessage: event.errorMessage,
-              assistantMessageId:
-                  event.assistantMessageId ?? clientAssistantMessageId,
-            );
-            break;
-          case AssistantStreamEventType.error:
-            completed = true;
-            await _setAssistantError(
-              services,
-              threadId: thread.id,
-              messageId: clientAssistantMessageId,
-              error: event.errorMessage ?? 'stream error',
-              errorCode: event.errorCode,
-            );
-            await finishTurn();
-            break;
-          case AssistantStreamEventType.ack:
-          case AssistantStreamEventType.surfacePatch:
-          case AssistantStreamEventType.captureRecord:
-          case AssistantStreamEventType.memorySynced:
-            break;
-          case AssistantStreamEventType.done:
-            await finishTurn();
-            break;
+    switch (result) {
+      case AssistantConversationSubmitResult.sent:
+        if (prompt == null && mounted) {
+          setState(() => _inputController.clear());
         }
-      }
-
-      if (!completed) {
-        await _setAssistantError(
-          services,
-          threadId: thread.id,
-          messageId: clientAssistantMessageId,
-          error: 'reply stream ended before completion',
-        );
-      }
-    } catch (error) {
-      await _setAssistantError(
-        services,
-        threadId: thread.id,
-        messageId: clientAssistantMessageId,
-        error: error,
-        errorCode: _errorCodeOf(error),
-      );
-    } finally {
-      await finishTurn();
-    }
-  }
-
-  Future<void> _sendCaptureStream(
-    AppServices services, {
-    required AssistantThread selectedThread,
-    required String turnId,
-    required String prompt,
-    required SleepCaptureType captureType,
-    required String sessionId,
-  }) async {
-    final AssistantThread thread = await services.assistantRepository
-        .ensureThread(
-          title: captureType == SleepCaptureType.dream ? '梦记收纳' : '事记收纳',
-        );
-    await services.assistantRepository.setCurrentThread(thread.id);
-    final String clientUserMessageId =
-        'assistant-msg-user-${DateTime.now().microsecondsSinceEpoch}';
-    final String clientAssistantMessageId =
-        'assistant-msg-assistant-${DateTime.now().microsecondsSinceEpoch}';
-    await services.assistantRepository.sendUserMessage(
-      threadId: thread.id,
-      content: prompt,
-      messageId: clientUserMessageId,
-    );
-    await services.assistantRepository.addAssistantMessage(
-      threadId: thread.id,
-      content: '小眠正在整理这段记录...',
-      messageId: clientAssistantMessageId,
-      status: AssistantMessageStatus.pending,
-    );
-    _scrollToBottom();
-
-    bool turnFinished = false;
-    Future<void> finishTurn() async {
-      if (turnFinished) {
-        return;
-      }
-      turnFinished = true;
-      await services.assistantRepository.finishThreadTurn(
-        threadId: thread.id,
-        turnId: turnId,
-      );
-    }
-
-    try {
-      String bufferedReply = '';
-      SleepCaptureRecord? streamedRecord;
-      bool completed = false;
-      await for (final AssistantStreamEvent event
-          in services.assistantReplyGateway.streamCapture(
-            prompt: prompt,
-            threadId: thread.id,
-            sessionId: sessionId,
-            captureType: captureType,
-            clientUserMessageId: clientUserMessageId,
-            clientAssistantMessageId: clientAssistantMessageId,
-            dorm: services.dormRepository.currentDorm,
-          )) {
-        switch (event.type) {
-          case AssistantStreamEventType.messageDelta:
-            bufferedReply += event.delta ?? '';
-            await services.assistantRepository.updateAssistantMessage(
-              threadId: thread.id,
-              messageId: clientAssistantMessageId,
-              content: bufferedReply,
-              status: AssistantMessageStatus.pending,
-            );
-            break;
-          case AssistantStreamEventType.captureRecord:
-            streamedRecord = event.record;
-            break;
-          case AssistantStreamEventType.messageCompleted:
-            completed = true;
-            await services.assistantRepository.markThreadTurnFinalizing(
-              threadId: thread.id,
-              turnId: turnId,
-            );
-            streamedRecord ??= await services.sleepCaptureRepository.addRecord(
-              type: captureType,
-              sessionId: sessionId,
-              content: prompt,
-            );
-            await _upsertAssistantReply(
-              services,
-              threadId: thread.id,
-              defaultMessageId: clientAssistantMessageId,
-              reply: event.reply ?? bufferedReply,
-              sourceMode:
-                  event.sourceMode ?? AssistantReplySourceMode.remoteSuccess,
-              provider: event.provider,
-              model: event.model,
-              errorMessage: event.errorMessage,
-              assistantMessageId:
-                  event.assistantMessageId ?? clientAssistantMessageId,
-            );
-            break;
-          case AssistantStreamEventType.error:
-            completed = true;
-            await _setAssistantError(
-              services,
-              threadId: thread.id,
-              messageId: clientAssistantMessageId,
-              error: event.errorMessage ?? 'stream error',
-              errorCode: event.errorCode,
-            );
-            await finishTurn();
-            break;
-          case AssistantStreamEventType.ack:
-          case AssistantStreamEventType.surfacePatch:
-          case AssistantStreamEventType.memorySynced:
-            break;
-          case AssistantStreamEventType.done:
-            await finishTurn();
-            break;
+        _focusNode.unfocus();
+        _scrollToBottom();
+        break;
+      case AssistantConversationSubmitResult.busy:
+        await _showThreadBusyToast();
+        break;
+      case AssistantConversationSubmitResult.missingActiveSession:
+        if (!mounted) {
+          return;
         }
-      }
-
-      if (!completed) {
-        await _setAssistantError(
-          services,
-          threadId: thread.id,
-          messageId: clientAssistantMessageId,
-          error: 'capture stream ended before completion',
-        );
-      }
-    } catch (error) {
-      await _setAssistantError(
-        services,
-        threadId: thread.id,
-        messageId: clientAssistantMessageId,
-        error: error,
-        errorCode: _errorCodeOf(error),
-      );
-    } finally {
-      await finishTurn();
-    }
-  }
-
-  Future<void> _upsertAssistantReply(
-    AppServices services, {
-    required String threadId,
-    required String defaultMessageId,
-    required String reply,
-    required AssistantReplySourceMode sourceMode,
-    required String? provider,
-    required String? model,
-    required String? errorMessage,
-    String? assistantMessageId,
-  }) async {
-    final List<AssistantMessage> existingMessages = services.assistantRepository
-        .messagesForThread(threadId);
-    final String nextMessageId = assistantMessageId ?? defaultMessageId;
-    final String? nextErrorMessage =
-        sourceMode == AssistantReplySourceMode.error
-        ? '请直接重试上一条消息。'
-        : errorMessage;
-    if (existingMessages.any(
-      (AssistantMessage item) => item.id == nextMessageId,
-    )) {
-      await services.assistantRepository.updateAssistantMessage(
-        threadId: threadId,
-        messageId: nextMessageId,
-        content: reply,
-        status: sourceMode == AssistantReplySourceMode.error
-            ? AssistantMessageStatus.error
-            : AssistantMessageStatus.complete,
-        sourceMode: sourceMode,
-        provider: provider,
-        model: model,
-        errorMessage: nextErrorMessage,
-      );
-    } else {
-      await services.assistantRepository.addAssistantMessage(
-        threadId: threadId,
-        content: reply,
-        messageId: nextMessageId,
-        status: sourceMode == AssistantReplySourceMode.error
-            ? AssistantMessageStatus.error
-            : AssistantMessageStatus.complete,
-        sourceMode: sourceMode,
-        provider: provider,
-        model: model,
-        errorMessage: nextErrorMessage,
-      );
-    }
-  }
-
-  Future<void> _setAssistantError(
-    AppServices services, {
-    required String threadId,
-    required String messageId,
-    required Object error,
-    String? errorCode,
-  }) async {
-    final String? normalizedErrorCode = errorCode ?? _errorCodeOf(error);
-    final String errorContent = assistantErrorContentForCode(
-      normalizedErrorCode,
-    );
-    final String errorHint = assistantErrorHintForCode(normalizedErrorCode);
-    if (services.assistantRepository
-        .messagesForThread(threadId)
-        .any((AssistantMessage item) => item.id == messageId)) {
-      await services.assistantRepository.updateAssistantMessage(
-        threadId: threadId,
-        messageId: messageId,
-        content: errorContent,
-        status: AssistantMessageStatus.error,
-        sourceMode: AssistantReplySourceMode.error,
-        errorMessage: errorHint,
-      );
-    } else {
-      await services.assistantRepository.addAssistantMessage(
-        threadId: threadId,
-        content: errorContent,
-        status: AssistantMessageStatus.error,
-        sourceMode: AssistantReplySourceMode.error,
-        errorMessage: errorHint,
-      );
+        await notifyPassiveToast(context, message: '只有在睡眠模式中，才能使用梦记和事记收纳。');
+        _focusNode.requestFocus();
+        break;
+      case AssistantConversationSubmitResult.empty:
+        _focusNode.requestFocus();
+        break;
     }
   }
 
@@ -575,27 +198,23 @@ class _AssistantPageState extends State<AssistantPage> {
   }
 
   Future<void> _retryLatestPrompt(AppServices services) async {
-    final AssistantThread? thread = services.assistantFacade.currentThread;
-    if (thread == null) {
+    final AssistantConversationSubmitResult result = await services
+        .assistantConversationController
+        .retryLatestPrompt(
+          captureModeEnabled: _isCaptureMode,
+          captureType: _activeCaptureType,
+        );
+    if (result == AssistantConversationSubmitResult.busy) {
+      await _showThreadBusyToast();
       return;
     }
-    final List<AssistantMessage> messages =
-        services.assistantFacade.currentMessages;
-    final AssistantMessage latestUserMessage = messages.lastWhere(
-      (AssistantMessage item) => item.role == AssistantMessageRole.user,
-      orElse: () => AssistantMessage(
-        id: '',
-        threadId: '',
-        role: AssistantMessageRole.system,
-        content: '',
-        createdAt: DateTime.fromMillisecondsSinceEpoch(0),
-      ),
-    );
-    if (latestUserMessage.id.isEmpty ||
-        latestUserMessage.content.trim().isEmpty) {
+    if (result == AssistantConversationSubmitResult.missingActiveSession) {
+      if (!mounted) {
+        return;
+      }
+      await notifyPassiveToast(context, message: '只有在睡眠模式中，才能使用梦记和事记收纳。');
       return;
     }
-    await _handleSubmit(services, prompt: latestUserMessage.content);
   }
 
   Future<void> _startNewConversation(AppServices services) async {
@@ -633,7 +252,8 @@ class _AssistantPageState extends State<AssistantPage> {
   Widget _buildComposer(AppServices services) {
     final bool isFocused = _focusNode.hasFocus;
     final _CaptureCopy copy = _copy;
-    final AssistantThreadTurnState? turnState = _currentTurnState(services);
+    final AssistantThreadTurnState? turnState =
+        services.assistantConversationController.turnState;
     final bool isThreadBusy =
         turnState != null && turnState.status != AssistantThreadTurnStatus.idle;
     final bool showSendingIndicator =
@@ -771,12 +391,15 @@ class _AssistantPageState extends State<AssistantPage> {
         ),
         child: SafeArea(
           child: ListenableBuilder(
-            listenable: services.assistantFacade,
+            listenable: Listenable.merge(<Listenable>[
+              services.assistantFacade,
+              services.assistantConversationController,
+            ]),
             builder: (BuildContext context, Widget? child) {
               final AssistantProfile profile =
                   services.assistantFacade.assistantProfile;
               final List<AssistantMessage> messages =
-                  services.assistantFacade.currentMessages;
+                  services.assistantConversationController.currentMessages;
               if (_lastRenderedMessageCount != messages.length) {
                 _lastRenderedMessageCount = messages.length;
                 _scrollToBottom();

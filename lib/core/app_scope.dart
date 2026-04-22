@@ -25,6 +25,7 @@ import 'package:sleep_dorm_app/core/state/dorm_presence_sync_controller.dart';
 import 'package:sleep_dorm_app/core/state/interference_probe_controller.dart';
 import 'package:sleep_dorm_app/core/state/night_welcome_controller.dart';
 import 'package:sleep_dorm_app/core/state/sleep_experience_controller.dart';
+import 'package:sleep_dorm_app/features/assistant/presentation/controllers/assistant_conversation_controller.dart';
 
 class AppScope extends StatefulWidget {
   const AppScope({
@@ -87,6 +88,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
   late final DreamFacade _dreamFacade;
   late final InsightsFacade _insightsFacade;
   late final AssistantFacade _assistantFacade;
+  late final AssistantConversationController _assistantConversationController;
   late final AssistantReplyGateway _assistantReplyGateway;
   late final AppServices _services;
   CloudBaseSnapshotStore? _cloudBaseSnapshotStore;
@@ -180,6 +182,13 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
       dormRepository: _dormRepository,
       assistantReplyGateway: _assistantReplyGateway,
     );
+    _assistantConversationController = AssistantConversationController(
+      assistantRepository: _assistantRepository,
+      sleepCaptureRepository: _sleepCaptureRepository,
+      sleepSessionRepository: _sleepSessionRepository,
+      dormRepository: _dormRepository,
+      assistantReplyGateway: _assistantReplyGateway,
+    );
     _services = AppServices(
       environment: widget.environment,
       authRepository: _authRepository,
@@ -209,6 +218,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
       dreamFacade: _dreamFacade,
       insightsFacade: _insightsFacade,
       assistantFacade: _assistantFacade,
+      assistantConversationController: _assistantConversationController,
     );
     _bootstrapExperience();
   }
@@ -381,6 +391,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
     _sleepModeNotificationController.dispose();
     _sleepFacade.dispose();
     _profileFacade.dispose();
+    _assistantConversationController.dispose();
     _interferenceProbeController.dispose();
     _sleepExperienceController.dispose();
     _nightWelcomeController.dispose();
@@ -457,6 +468,7 @@ class AppServices {
     required this.dreamFacade,
     required this.insightsFacade,
     required this.assistantFacade,
+    required this.assistantConversationController,
   });
 
   final AppEnvironment environment;
@@ -487,6 +499,7 @@ class AppServices {
   final DreamFacade dreamFacade;
   final InsightsFacade insightsFacade;
   final AssistantFacade assistantFacade;
+  final AssistantConversationController assistantConversationController;
 }
 
 extension AppScopeContext on BuildContext {

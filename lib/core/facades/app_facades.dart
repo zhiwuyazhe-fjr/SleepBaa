@@ -586,6 +586,10 @@ class AssistantFacade extends ChangeNotifier {
     return _assistantRepository.selectMostRecentThread();
   }
 
+  Future<void> setCurrentThread(String threadId) {
+    return _assistantRepository.setCurrentThread(threadId);
+  }
+
   Future<void> updateAssistantProfileName(String assistantName) {
     return _assistantRepository.updateAssistantProfileName(assistantName);
   }

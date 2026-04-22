@@ -18,7 +18,8 @@ class AssistantHistoryPage extends StatelessWidget {
         child: ListenableBuilder(
           listenable: services.assistantFacade,
           builder: (BuildContext context, Widget? child) {
-            final List<AssistantThread> threads = services.assistantFacade.threads;
+            final List<AssistantThread> threads =
+                services.assistantFacade.threads;
             return ListView(
               padding: const EdgeInsets.all(AppSpacing.xl),
               children: <Widget>[
@@ -46,7 +47,7 @@ class AssistantHistoryPage extends StatelessWidget {
                       padding: const EdgeInsets.only(bottom: AppSpacing.md),
                       child: AppCard(
                         onTap: () async {
-                          await services.assistantRepository.setCurrentThread(
+                          await services.assistantFacade.setCurrentThread(
                             thread.id,
                           );
                           if (context.mounted) {
@@ -61,7 +62,9 @@ class AssistantHistoryPage extends StatelessWidget {
                                 children: <Widget>[
                                   Text(
                                     thread.title,
-                                    style: Theme.of(context).textTheme.titleMedium,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
                                   ),
                                   const SizedBox(height: AppSpacing.xs),
                                   Text(
