@@ -1044,14 +1044,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     return _PencilSplitPage(
       unit: unit,
       bodyChildren: <Widget>[
-        _PencilTopSquare(
-          icon: Icons.bedtime_rounded,
-          iconSize: 26 * unit,
-          size: 52 * unit,
-          radius: 16 * unit,
-          backgroundColor: _accentBlue,
-          iconColor: _accentBlueDeep,
-        ),
+        _PencilLogoTopSquare(size: 52 * unit),
         SizedBox(height: 20 * unit),
         Text(
           AppBrand.loginTitle,
@@ -1823,6 +1816,30 @@ class _PencilTopSquare extends StatelessWidget {
           width: size,
           height: size,
           child: Center(child: iconWidget),
+        ),
+      ),
+    );
+  }
+}
+
+class _PencilLogoTopSquare extends StatelessWidget {
+  const _PencilLogoTopSquare({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      key: const ValueKey<String>('auth-login-logo'),
+      width: size,
+      height: size,
+      child: Center(
+        child: Image.asset(
+          AppBrand.logoAssetPath,
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          semanticLabel: AppBrand.displayName,
         ),
       ),
     );
