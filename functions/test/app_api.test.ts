@@ -123,6 +123,60 @@ function parseSseEvents(raw: string): Array<{
 }
 
 test(
+  "profile save persists home quick action ids in bootstrap payload",
+  { concurrency: false },
+  async () => {
+    await withLocalAppApiServer(async ({ baseUrl, uid }) => {
+      const selectedIds = [
+        "profileSettings",
+        "thoughtVault",
+        "dreamJournal",
+        "profileReport",
+      ];
+      const saveResponse = await fetch(`${baseUrl}/api/profile/save`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-debug-uid": uid,
+        },
+        body: JSON.stringify({
+          settings: {
+            homeQuickActionIds: [
+              "profileSettings",
+              "unknown",
+              "thoughtVault",
+              "profileSettings",
+              "dreamJournal",
+              "profileReport",
+            ],
+          },
+        }),
+      });
+
+      assert.equal(saveResponse.status, 200);
+      const savePayload = await saveResponse.json();
+      assert.deepEqual(savePayload.settings.homeQuickActionIds, selectedIds);
+
+      const bootstrapResponse = await fetch(`${baseUrl}/api/app/bootstrap`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-debug-uid": uid,
+        },
+        body: JSON.stringify({}),
+      });
+
+      assert.equal(bootstrapResponse.status, 200);
+      const bootstrapPayload = await bootstrapResponse.json();
+      assert.deepEqual(
+        bootstrapPayload.data.settings.homeQuickActionIds,
+        selectedIds,
+      );
+    });
+  },
+);
+
+test(
   "assistant reply reuses client ids and persists provider metadata in bootstrap payload",
   { concurrency: false },
   async () => {

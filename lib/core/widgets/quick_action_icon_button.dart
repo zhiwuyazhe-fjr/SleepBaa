@@ -36,6 +36,9 @@ class QuickActionIconButton extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w600,

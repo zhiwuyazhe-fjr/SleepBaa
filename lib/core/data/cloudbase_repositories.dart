@@ -434,14 +434,20 @@ DormMemberStatus _activityStatusFromStorage(Map<String, dynamic> map) {
 
 DormPresenceStatus _presenceStatusFromStorage(Map<String, dynamic> map) {
   final String rawPresence = _stringOf(map['presenceStatus']);
+  if (rawPresence == DormPresenceStatus.returned.name) {
+    return DormPresenceStatus.returned;
+  }
   if (rawPresence == DormPresenceStatus.away.name) {
     return DormPresenceStatus.away;
+  }
+  if (rawPresence == DormPresenceStatus.unknown.name) {
+    return DormPresenceStatus.unknown;
   }
   final String rawStatus = _stringOf(map['status']);
   if (rawStatus == DormMemberStatus.away.name) {
     return DormPresenceStatus.away;
   }
-  return DormPresenceStatus.returned;
+  return DormPresenceStatus.unknown;
 }
 
 bool _sleepModeFromStorage(Map<String, dynamic> map) {
@@ -2097,6 +2103,7 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
 
   late UserSettings _settings;
   NightMood? _pendingMoodOverride;
+  List<String>? _pendingHomeQuickActionIds;
 
   @override
   UserSettings get currentSettings => _settings;
@@ -2110,8 +2117,14 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
   @override
   Future<void> saveSettings(UserSettings settings) async {
     final NightMood? previousMood = _settings.selectedNightMood;
+    final List<String> previousQuickActionIds = _settings.homeQuickActionIds;
     if (previousMood != settings.selectedNightMood) {
       _pendingMoodOverride = settings.selectedNightMood;
+    }
+    if (!_sameStringList(previousQuickActionIds, settings.homeQuickActionIds)) {
+      _pendingHomeQuickActionIds = normalizeHomeQuickActionIds(
+        settings.homeQuickActionIds,
+      );
     }
     replaceLocalSettings(settings);
     if (!_appApiClient.isConfigured) {
@@ -2151,6 +2164,7 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
     UserSettings incoming = _mergeEveningEncouragementIfServerOmitted(
       snapshot.settings,
     );
+    incoming = _mergePendingHomeQuickActionsIfServerOmitted(incoming);
     if (_pendingMoodOverride != null &&
         incoming.selectedNightMood != _pendingMoodOverride &&
         _settings.selectedNightMood == _pendingMoodOverride) {
@@ -2182,6 +2196,36 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
       );
     }
     return incoming;
+  }
+
+  UserSettings _mergePendingHomeQuickActionsIfServerOmitted(
+    UserSettings incoming,
+  ) {
+    final List<String>? pending = _pendingHomeQuickActionIds;
+    if (pending == null) {
+      return incoming;
+    }
+    if (_sameStringList(incoming.homeQuickActionIds, pending)) {
+      _pendingHomeQuickActionIds = null;
+      return incoming;
+    }
+    if (_sameStringList(_settings.homeQuickActionIds, pending)) {
+      return incoming.copyWith(homeQuickActionIds: pending);
+    }
+    _pendingHomeQuickActionIds = null;
+    return incoming;
+  }
+
+  bool _sameStringList(List<String> first, List<String> second) {
+    if (first.length != second.length) {
+      return false;
+    }
+    for (var index = 0; index < first.length; index += 1) {
+      if (first[index] != second[index]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   @override
@@ -3619,7 +3663,9 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
           uid: _authRepository.currentUser.uid,
           name: _authRepository.currentUser.displayName,
           status: DormMemberStatus.quiet,
-          presenceStatus: DormPresenceStatus.returned,
+          presenceStatus: locationAnchor == null
+              ? DormPresenceStatus.unknown
+              : DormPresenceStatus.returned,
           sleepModeActive: false,
           lastActiveAt: now,
           note:
@@ -4111,7 +4157,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
                 uid: _authRepository.currentUser.uid,
                 name: _authRepository.currentUser.displayName,
                 status: DormMemberStatus.quiet,
-                presenceStatus: DormPresenceStatus.returned,
+                presenceStatus: DormPresenceStatus.unknown,
                 sleepModeActive: false,
                 lastActiveAt: DateTime.now(),
                 note:

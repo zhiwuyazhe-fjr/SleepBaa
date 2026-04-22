@@ -61,6 +61,7 @@ export interface ContextUserSettings {
   preferredTrackTitle: string;
   smartSuggestionsEnabled: boolean;
   selectedNightMood?: string | null;
+  homeQuickActionIds: string[];
 }
 
 export interface ContextAssistantProfile {

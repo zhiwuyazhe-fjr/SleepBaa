@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/data/model_serializers.dart';
@@ -91,4 +92,50 @@ void main() {
       expect(serialized.containsKey('sleepGoalMet'), isFalse);
     },
   );
+
+  test('user settings round-trip home quick action ids', () {
+    const List<String> quickActionIds = <String>[
+      HomeQuickActionIds.profileSettings,
+      HomeQuickActionIds.profileReport,
+      HomeQuickActionIds.profileBadges,
+      HomeQuickActionIds.thoughtVault,
+    ];
+    const UserSettings settings = UserSettings(
+      sleepGoalHours: 7.5,
+      bedtimeReminderEnabled: true,
+      morningReminderEnabled: true,
+      dormAlertsEnabled: true,
+      bedtimeReminder: TimeOfDay(hour: 23, minute: 10),
+      preferredTrackTitle: '深海海浪',
+      smartSuggestionsEnabled: true,
+      homeQuickActionIds: quickActionIds,
+    );
+
+    final Map<String, dynamic> map = ModelSerializers.userSettingsToMap(
+      settings,
+    );
+    final UserSettings restored = ModelSerializers.userSettingsFromMap(map);
+
+    expect(map['homeQuickActionIds'], quickActionIds);
+    expect(restored.homeQuickActionIds, quickActionIds);
+  });
+
+  test('user settings normalizes invalid home quick action ids', () {
+    final UserSettings restored = ModelSerializers.userSettingsFromMap(
+      <String, dynamic>{
+        'homeQuickActionIds': <String>[
+          HomeQuickActionIds.profileSettings,
+          'missing-action',
+          HomeQuickActionIds.profileSettings,
+        ],
+      },
+    );
+
+    expect(restored.homeQuickActionIds, <String>[
+      HomeQuickActionIds.profileSettings,
+      HomeQuickActionIds.dreamJournal,
+      HomeQuickActionIds.profileCalendar,
+      HomeQuickActionIds.sleepEncyclopedia,
+    ]);
+  });
 }

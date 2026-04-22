@@ -1184,6 +1184,72 @@ void main() {
   );
 
   test(
+    'cloudbase dorm repository parses missing presence status as unknown',
+    () async {
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) async =>
+                <String, dynamic>{'ok': true, 'path': path, 'body': body},
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(
+          uid: 'cloud-user',
+          dormId: 'dorm-204',
+        ),
+      );
+      final CloudBaseDormRepository repository = CloudBaseDormRepository(
+        authRepository: authRepository,
+        snapshotStore: snapshotStore,
+        appApiClient: appApiClient,
+      );
+
+      snapshotStore.pushPayload(<String, dynamic>{
+        'data': <String, dynamic>{
+          'user': <String, dynamic>{
+            'uid': 'cloud-user',
+            'displayName': 'Cloud User',
+            'dormId': 'dorm-204',
+          },
+          'dorm': <String, dynamic>{
+            'id': 'dorm-204',
+            'name': '梅苑 2 栋 204',
+            'members': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'uid': 'cloud-user',
+                'name': 'Cloud User',
+                'status': DormMemberStatus.quiet.name,
+                'sleepModeActive': false,
+              },
+              <String, dynamic>{
+                'uid': 'roommate-away',
+                'name': 'Roommate',
+                'status': DormMemberStatus.away.name,
+                'sleepModeActive': false,
+              },
+            ],
+          },
+        },
+      });
+
+      expect(
+        repository.currentDorm.members
+            .firstWhere((DormMember member) => member.uid == 'cloud-user')
+            .presenceStatus,
+        DormPresenceStatus.unknown,
+      );
+      expect(
+        repository.currentDorm.members
+            .firstWhere((DormMember member) => member.uid == 'roommate-away')
+            .presenceStatus,
+        DormPresenceStatus.away,
+      );
+    },
+  );
+
+  test(
     'cloudbase insights repository parses profile duration and quality trends from snapshots',
     () async {
       final _FakeCloudBaseAppApiClient appApiClient =
@@ -1626,6 +1692,65 @@ void main() {
     repository.dispose();
     authRepository.dispose();
   });
+
+  test(
+    'cloudbase user settings keeps pending quick actions when refreshed snapshot omits them',
+    () async {
+      final List<_PostCall> calls = <_PostCall>[];
+      final Map<String, dynamic> stalePayload = <String, dynamic>{
+        'data': <String, dynamic>{
+          'user': <String, dynamic>{'uid': 'cloud-user'},
+          'settings': <String, dynamic>{'sleepGoalHours': 7.5},
+        },
+      };
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) async {
+              calls.add(_PostCall(path: path, body: body));
+              return <String, dynamic>{'ok': true};
+            },
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(uid: 'cloud-user'),
+      );
+      final CloudBaseUserSettingsRepository repository =
+          CloudBaseUserSettingsRepository(
+            authRepository: authRepository,
+            snapshotStore: snapshotStore,
+            appApiClient: appApiClient,
+          );
+      snapshotStore.onRefresh = () {
+        snapshotStore.pushPayload(stalePayload);
+      };
+
+      final List<String> selectedIds = <String>[
+        HomeQuickActionIds.profileSettings,
+        HomeQuickActionIds.thoughtVault,
+        HomeQuickActionIds.dreamJournal,
+        HomeQuickActionIds.profileReport,
+      ];
+      await repository.saveSettings(
+        repository.currentSettings.copyWith(homeQuickActionIds: selectedIds),
+      );
+
+      expect(repository.currentSettings.homeQuickActionIds, selectedIds);
+      expect(calls.map((call) => call.path), <String>['/api/profile/save']);
+      final Map<String, dynamic> settingsBody = Map<String, dynamic>.from(
+        calls.single.body['settings'] as Map,
+      );
+      expect(settingsBody['homeQuickActionIds'], selectedIds);
+
+      snapshotStore.pushPayload(stalePayload);
+
+      expect(repository.currentSettings.homeQuickActionIds, selectedIds);
+
+      repository.dispose();
+      authRepository.dispose();
+    },
+  );
 
   test(
     'cloudbase notification sync controller only surfaces newly fetched unread notifications',

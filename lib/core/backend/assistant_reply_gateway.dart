@@ -418,8 +418,8 @@ class CloudBaseAssistantReplyGateway implements AssistantReplyGateway {
         if (completedEvent != null) {
           final AssistantStreamEvent syntheticDone = AssistantStreamEvent(
             type: AssistantStreamEventType.done,
-            runId: completedEvent!.runId,
-            assistantMessageId: completedEvent!.assistantMessageId,
+            runId: completedEvent.runId,
+            assistantMessageId: completedEvent.assistantMessageId,
             backgroundSyncPending: true,
             reconcileAfterMs: 1500,
           );
@@ -444,8 +444,8 @@ class CloudBaseAssistantReplyGateway implements AssistantReplyGateway {
         if (completedEvent != null) {
           final AssistantStreamEvent syntheticDone = AssistantStreamEvent(
             type: AssistantStreamEventType.done,
-            runId: completedEvent!.runId,
-            assistantMessageId: completedEvent!.assistantMessageId,
+            runId: completedEvent.runId,
+            assistantMessageId: completedEvent.assistantMessageId,
             backgroundSyncPending: true,
             reconcileAfterMs: 1500,
           );

@@ -26,13 +26,13 @@ class DormStatusPage extends StatelessWidget {
       builder: (BuildContext context) {
         final AppServices services = context.appServices;
         return Scaffold(
-          appBar: AppBar(title: const Text('寝室状态记录')),
+          appBar: AppBar(title: const Text('宿舍状态记录')),
           body: SafeArea(
             child: ListenableBuilder(
               listenable: Listenable.merge(<Listenable>[
                 services.dormRepository,
-                services.dormLiveStatusController,
                 services.notificationRepository,
+                services.dormLiveStatusController,
               ]),
               builder: (BuildContext context, Widget? child) {
                 final NightMoodPalette palette = context.nightMoodPalette;
@@ -150,6 +150,10 @@ class DormStatusPage extends StatelessWidget {
                                     shape: BoxShape.circle,
                                     color: dormPresenceSleepColor(
                                       member,
+                                      showPresence: shouldShowDormPresence(
+                                        dorm,
+                                        member,
+                                      ),
                                     ).withAlpha(24),
                                   ),
                                   alignment: Alignment.center,
@@ -159,7 +163,14 @@ class DormStatusPage extends StatelessWidget {
                                         .textTheme
                                         .titleMedium
                                         ?.copyWith(
-                                          color: dormPresenceSleepColor(member),
+                                          color: dormPresenceSleepColor(
+                                            member,
+                                            showPresence:
+                                                shouldShowDormPresence(
+                                                  dorm,
+                                                  member,
+                                                ),
+                                          ),
                                           fontWeight: FontWeight.w800,
                                         ),
                                   ),
@@ -205,19 +216,34 @@ class DormStatusPage extends StatelessWidget {
                                       decoration: BoxDecoration(
                                         color: dormPresenceSleepColor(
                                           member,
+                                          showPresence: shouldShowDormPresence(
+                                            dorm,
+                                            member,
+                                          ),
                                         ).withAlpha(18),
                                         borderRadius: BorderRadius.circular(
                                           999,
                                         ),
                                       ),
                                       child: Text(
-                                        dormPresenceSleepLabel(member),
+                                        dormPresenceSleepLabel(
+                                          member,
+                                          showPresence: shouldShowDormPresence(
+                                            dorm,
+                                            member,
+                                          ),
+                                        ),
                                         style: Theme.of(context)
                                             .textTheme
                                             .labelSmall
                                             ?.copyWith(
                                               color: dormPresenceSleepColor(
                                                 member,
+                                                showPresence:
+                                                    shouldShowDormPresence(
+                                                      dorm,
+                                                      member,
+                                                    ),
                                               ),
                                               fontWeight: FontWeight.w800,
                                             ),

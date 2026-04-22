@@ -167,9 +167,11 @@ class _DormPageState extends State<DormPage> {
           if (dorm.id.isEmpty) {
             return const DormInvitePage();
           }
+          final bool showDormPresence = dorm.locationAnchor != null;
           final double spatialAvgDb = averageNoiseDbForReturnedMembers(
             members: dorm.members,
             dormAggregateNoiseDb: dorm.noiseDb,
+            showPresence: showDormPresence,
           );
           final List<DormNoiseSample> noiseSeries =
               services.dormNoiseSampleLedger.samples;
@@ -392,6 +394,11 @@ class _DormPageState extends State<DormPage> {
                                                       dorm.members[index];
                                                   return _DormMemberCard(
                                                     member: member,
+                                                    showPresence:
+                                                        shouldShowDormPresence(
+                                                          dorm,
+                                                          member,
+                                                        ),
                                                     isCurrentUser:
                                                         member.uid ==
                                                         currentUserId,
@@ -661,17 +668,22 @@ class _HeroRatingPill extends StatelessWidget {
 class _DormMemberCard extends StatelessWidget {
   const _DormMemberCard({
     required this.member,
+    required this.showPresence,
     required this.isCurrentUser,
     this.currentUserProfile,
   });
 
   final DormMember member;
+  final bool showPresence;
   final bool isCurrentUser;
   final UserProfile? currentUserProfile;
 
   @override
   Widget build(BuildContext context) {
-    final Color presenceColor = dormPresenceSleepColor(member);
+    final Color presenceColor = dormPresenceSleepColor(
+      member,
+      showPresence: showPresence,
+    );
     final Color accentColor = _memberColor(member.status);
     final String? resolvedBadgeId =
         currentUserProfile?.displayBadgeId ?? member.displayBadgeId;
@@ -761,7 +773,7 @@ class _DormMemberCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
-                dormPresenceSleepLabel(member),
+                dormPresenceSleepLabel(member, showPresence: showPresence),
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: presenceColor,
                   fontWeight: FontWeight.w800,

@@ -109,6 +109,21 @@ const Collections = {
   audioTracks: "audio_tracks",
 } as const;
 
+const DEFAULT_HOME_QUICK_ACTION_IDS = [
+  "dreamJournal",
+  "profileCalendar",
+  "sleepEncyclopedia",
+  "thoughtClean",
+] as const;
+
+const ALL_HOME_QUICK_ACTION_IDS = new Set<string>([
+  ...DEFAULT_HOME_QUICK_ACTION_IDS,
+  "thoughtVault",
+  "profileBadges",
+  "profileReport",
+  "profileSettings",
+]);
+
 const AUDIO_TRACK_CATALOG = [
   {
     id: "deep-ocean",
@@ -200,6 +215,21 @@ function asBoolean(value: unknown, fallback = false): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
+function hasOwn(value: JsonMap, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function normalizeDormPresenceStatus(
+  value: unknown,
+  fallback = "unknown",
+): string {
+  const raw = asString(value);
+  if (raw === "returned" || raw === "away" || raw === "unknown") {
+    return raw;
+  }
+  return fallback;
+}
+
 function asStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -207,6 +237,28 @@ function asStringArray(value: unknown): string[] {
   return value
     .map((item) => String(item).trim())
     .filter((item) => item.length > 0);
+}
+
+function normalizeHomeQuickActionIds(value: unknown): string[] {
+  const selected: string[] = [];
+  for (const id of asStringArray(value)) {
+    if (!ALL_HOME_QUICK_ACTION_IDS.has(id) || selected.includes(id)) {
+      continue;
+    }
+    selected.push(id);
+    if (selected.length === DEFAULT_HOME_QUICK_ACTION_IDS.length) {
+      break;
+    }
+  }
+  for (const id of DEFAULT_HOME_QUICK_ACTION_IDS) {
+    if (selected.length === DEFAULT_HOME_QUICK_ACTION_IDS.length) {
+      break;
+    }
+    if (!selected.includes(id)) {
+      selected.push(id);
+    }
+  }
+  return selected;
 }
 
 function tokenizeSearchText(value: string): string[] {
@@ -360,6 +412,7 @@ function defaultUserSettings(): JsonMap {
     preferredTrackTitle: "深海海浪",
     smartSuggestionsEnabled: true,
     selectedNightMood: null,
+    homeQuickActionIds: [...DEFAULT_HOME_QUICK_ACTION_IDS],
     updatedAt: nowIso(),
   };
 }
@@ -440,15 +493,14 @@ function defaultDormMember(
   name: string,
   avatarUrl?: string | null,
   displayBadgeId?: string | null,
+  presenceStatus = "unknown",
 ): JsonMap {
   return {
     uid,
     name,
     status: "quiet",
-    presenceStatus: "returned",
+    presenceStatus: normalizeDormPresenceStatus(presenceStatus),
     sleepModeActive: false,
-    appOnline: false,
-    appLastSeenAt: null,
     lastActiveAt: nowIso(),
     note: "今晚已准备进入睡前流程。",
     avatarUrl: avatarUrl ?? null,
@@ -1174,26 +1226,40 @@ export class FirestoreRepository implements AssistantDataRepository {
         const userDoc = withoutMeta(
           (await this.store.get(Collections.users, asString(value.uid))) ?? {},
         );
-        const avatarUrl = await this.resolveDormMemberAvatarUrl(userDoc, value);
+        const avatarStoragePath = asString(userDoc.avatarStoragePath);
+        let fallbackAvatarUrl = asString(userDoc.avatarUrl) || null;
+        if (!fallbackAvatarUrl && avatarStoragePath && this.fileStorage) {
+          try {
+            fallbackAvatarUrl =
+              await this.fileStorage.getTemporaryUrl(avatarStoragePath);
+          } catch {
+            fallbackAvatarUrl = null;
+          }
+        }
+        const fallbackDisplayBadgeId =
+          asString(userDoc.equippedBadgeId) ||
+          asStringArray(userDoc.earnedBadgeIds).slice(-1)[0] ||
+          null;
         return {
           uid: asString(value.uid),
           name:
             this.preferString(value.name, userDoc.displayName, "舍友") ||
             "舍友",
           status: asString(value.status, "quiet"),
-          presenceStatus: asString(value.presenceStatus, "returned"),
+          presenceStatus: normalizeDormPresenceStatus(
+            value.presenceStatus,
+            asString(value.status) === "away" ? "away" : "unknown",
+          ),
           sleepModeActive: asBoolean(value.sleepModeActive, false),
-          appOnline: asBoolean(value.appOnline, false),
-          appLastSeenAt: asString(value.appLastSeenAt) || null,
           lastActiveAt: asString(value.lastActiveAt, nowIso()),
           note: asString(value.note),
-          avatarUrl: avatarUrl || undefined,
+          avatarUrl:
+            this.preferString(fallbackAvatarUrl, value.avatarUrl, null) ||
+            undefined,
           displayBadgeId:
             this.preferString(
+              fallbackDisplayBadgeId,
               value.displayBadgeId,
-              asString(userDoc.equippedBadgeId) ||
-                asStringArray(userDoc.earnedBadgeIds).slice(-1)[0] ||
-                null,
               null,
             ) || undefined,
         } satisfies ContextDormMember;
@@ -1271,10 +1337,11 @@ export class FirestoreRepository implements AssistantDataRepository {
         uid: asString(value.uid),
         name: asString(value.name, "Dorm member"),
         status: asString(value.status, "quiet"),
-        presenceStatus: asString(value.presenceStatus, "returned"),
+        presenceStatus: normalizeDormPresenceStatus(
+          value.presenceStatus,
+          asString(value.status) === "away" ? "away" : "unknown",
+        ),
         sleepModeActive: asBoolean(value.sleepModeActive, false),
-        appOnline: asBoolean(value.appOnline, false),
-        appLastSeenAt: asString(value.appLastSeenAt) || null,
         lastActiveAt: asString(value.lastActiveAt, nowIso()),
         note: asString(value.note) || undefined,
       } satisfies ContextDormMember;
@@ -1671,8 +1738,14 @@ export class FirestoreRepository implements AssistantDataRepository {
 
   async saveUserSettings(uid: string, patch: JsonMap): Promise<JsonMap> {
     await this.ensureUserBootstrap(uid);
+    const normalizedPatch: JsonMap = { ...patch };
+    if ("homeQuickActionIds" in normalizedPatch) {
+      normalizedPatch.homeQuickActionIds = normalizeHomeQuickActionIds(
+        normalizedPatch.homeQuickActionIds,
+      );
+    }
     await this.store.merge(Collections.userSettings, uid, {
-      ...patch,
+      ...normalizedPatch,
       updatedAt: nowIso(),
     });
     return withoutMeta(
@@ -1709,33 +1782,40 @@ export class FirestoreRepository implements AssistantDataRepository {
       Collections.dormMembers,
       memberId,
     );
-    const nextStatus = asString(
-      payload.status,
-      asString(existingMember?.status, "quiet"),
-    );
-    const nextPresenceStatus = asString(
-      payload.presenceStatus,
-      asString(existingMember?.presenceStatus, "returned"),
-    );
-    const nextSleepModeActive =
-      typeof payload.sleepModeActive === "boolean"
-        ? payload.sleepModeActive
-        : asBoolean(existingMember?.sleepModeActive, false);
-    const normalizedStatus =
-      !nextSleepModeActive && nextStatus === "sleeping" ? "quiet" : nextStatus;
-    const nextNote = asString(payload.note, "已更新宿舍状态。");
-    const updatedAt = nowIso();
     const displayBadgeId =
       user.equippedBadgeId ?? user.earnedBadgeIds?.slice(-1)[0] ?? null;
+    const baseMember =
+      existingMember ??
+      defaultDormMember(
+        uid,
+        user.displayName,
+        user.avatarUrl,
+        displayBadgeId,
+      );
+    const basePresenceStatus = normalizeDormPresenceStatus(
+      baseMember.presenceStatus,
+      asString(baseMember.status) === "away" ? "away" : "unknown",
+    );
+    const nextStatus = hasOwn(payload, "status")
+      ? asString(payload.status, asString(baseMember.status, "quiet"))
+      : asString(baseMember.status, "quiet");
+    const nextPresenceStatus = hasOwn(payload, "presenceStatus")
+      ? normalizeDormPresenceStatus(payload.presenceStatus, basePresenceStatus)
+      : basePresenceStatus;
+    const nextSleepModeActive = hasOwn(payload, "sleepModeActive")
+      ? asBoolean(payload.sleepModeActive, asBoolean(baseMember.sleepModeActive))
+      : asBoolean(baseMember.sleepModeActive);
+    const normalizedStatus =
+      !nextSleepModeActive && nextStatus === "sleeping"
+        ? "quiet"
+        : nextStatus;
+    const nextNote = hasOwn(payload, "note")
+      ? asString(payload.note, asString(baseMember.note))
+      : asString(baseMember.note);
+    const updatedAt = nowIso();
     await this.store.merge(Collections.dormMembers, memberId, {
       dormId,
-      ...(existingMember ??
-        defaultDormMember(
-          uid,
-          user.displayName,
-          user.avatarUrl,
-          displayBadgeId,
-        )),
+      ...baseMember,
       uid,
       name: user.displayName,
       avatarUrl: user.avatarUrl ?? null,
@@ -1767,33 +1847,36 @@ export class FirestoreRepository implements AssistantDataRepository {
     const user = await this.getUserProfile(uid);
     const dormId = user.dormId ? user.dormId.trim() : "";
     if (!dormId) {
-      throw new Error(
-        "Create or join a dorm before updating member heartbeat.",
-      );
+      throw new Error("Create or join a dorm before updating member heartbeat.");
     }
     const memberId = `${dormId}:${uid}`;
     const existingMember = await this.store.get(
       Collections.dormMembers,
       memberId,
     );
-    const appLastSeenAt = nowIso();
     const displayBadgeId =
       user.equippedBadgeId ?? user.earnedBadgeIds?.slice(-1)[0] ?? null;
+    const baseMember =
+      existingMember ??
+      defaultDormMember(
+        uid,
+        user.displayName,
+        user.avatarUrl,
+        displayBadgeId,
+      );
+    const updatedAt = nowIso();
+    const nextOnline = hasOwn(payload, "online")
+      ? asBoolean(payload.online, asBoolean(baseMember.appOnline))
+      : true;
     await this.store.merge(Collections.dormMembers, memberId, {
       dormId,
-      ...(existingMember ??
-        defaultDormMember(
-          uid,
-          user.displayName,
-          user.avatarUrl,
-          displayBadgeId,
-        )),
+      ...baseMember,
       uid,
       name: user.displayName,
       avatarUrl: user.avatarUrl ?? null,
       displayBadgeId,
-      appOnline: asBoolean(payload.online, true),
-      appLastSeenAt,
+      appOnline: nextOnline,
+      appLastSeenAt: updatedAt,
     });
     return withoutMeta(
       (await this.store.get(Collections.dormMembers, memberId)) ?? {},
@@ -2346,6 +2429,7 @@ export class FirestoreRepository implements AssistantDataRepository {
         user.displayName,
         user.avatarUrl,
         displayBadgeId,
+        payload.locationAnchor ? "returned" : "unknown",
       ),
       note: "已创建宿舍，等待邀请舍友加入。",
       lastActiveAt: createdAt,
@@ -2624,6 +2708,7 @@ export class FirestoreRepository implements AssistantDataRepository {
         user.displayName,
         user.avatarUrl,
         displayBadgeId,
+        "unknown",
       ),
       note: "已通过邀请码加入宿舍。",
       lastActiveAt: acceptedAt,
@@ -3139,6 +3224,11 @@ export class FirestoreRepository implements AssistantDataRepository {
         sourceSettings.selectedNightMood,
         defaultSettings.selectedNightMood,
       ),
+      homeQuickActionIds: this.preferHomeQuickActionIds(
+        canonicalSettings.homeQuickActionIds,
+        sourceSettings.homeQuickActionIds,
+        defaultSettings.homeQuickActionIds,
+      ),
       updatedAt: migratedAt,
     });
 
@@ -3470,27 +3560,6 @@ export class FirestoreRepository implements AssistantDataRepository {
     return primaryValue || defaultString || null;
   }
 
-  private async resolveDormMemberAvatarUrl(
-    userDoc: JsonMap,
-    memberDoc: JsonMap,
-  ): Promise<string | null> {
-    const avatarStoragePath = asString(userDoc.avatarStoragePath).trim();
-    if (avatarStoragePath && this.fileStorage) {
-      try {
-        const temporaryUrl =
-          await this.fileStorage.getTemporaryUrl(avatarStoragePath);
-        if (temporaryUrl.trim()) {
-          return temporaryUrl;
-        }
-      } catch {
-        // Fall through to stored URLs when temp URL signing is unavailable.
-      }
-    }
-    return (
-      this.preferString(userDoc.avatarUrl, memberDoc.avatarUrl, null) || null
-    );
-  }
-
   private preferNumber(
     primary: unknown,
     fallback: unknown,
@@ -3527,6 +3596,20 @@ export class FirestoreRepository implements AssistantDataRepository {
     }
     const fallbackValue = asMap(fallback);
     return Object.keys(fallbackValue).length > 0 ? fallbackValue : primaryValue;
+  }
+
+  private preferHomeQuickActionIds(
+    primary: unknown,
+    fallback: unknown,
+    defaultValue: unknown,
+  ): string[] {
+    const primaryValue = normalizeHomeQuickActionIds(primary);
+    const defaultArray = normalizeHomeQuickActionIds(defaultValue);
+    if (JSON.stringify(primaryValue) !== JSON.stringify(defaultArray)) {
+      return primaryValue;
+    }
+    const fallbackValue = normalizeHomeQuickActionIds(fallback);
+    return fallbackValue.length > 0 ? fallbackValue : primaryValue;
   }
 
   private async readAssistantThreadSummary(
@@ -3766,6 +3849,7 @@ export class FirestoreRepository implements AssistantDataRepository {
       preferredTrackTitle: asString(doc.preferredTrackTitle, "深海海浪"),
       smartSuggestionsEnabled: asBoolean(doc.smartSuggestionsEnabled, true),
       selectedNightMood: asString(doc.selectedNightMood),
+      homeQuickActionIds: normalizeHomeQuickActionIds(doc.homeQuickActionIds),
       bedtimeReminderEnabled: asBoolean(doc.bedtimeReminderEnabled, true),
       morningReminderEnabled: asBoolean(doc.morningReminderEnabled, true),
       dormAlertsEnabled: asBoolean(doc.dormAlertsEnabled, true),
