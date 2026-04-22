@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sleep_dorm_app/app/app_brand.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_text_styles.dart';
@@ -76,7 +77,7 @@ class _SleepDormAppState extends State<SleepDormApp> {
                 homeMode: widget.homeMode,
                 initialLocation: widget.initialLocation,
                 theme: _buildTheme(effectiveMood),
-                title: 'DormSleep',
+                title: AppBrand.displayName,
               );
             },
           );

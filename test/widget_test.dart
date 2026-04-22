@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sleep_dorm_app/app/app.dart';
+import 'package:sleep_dorm_app/app/app_brand.dart';
 import 'package:sleep_dorm_app/main.dart' as app_main;
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
@@ -120,6 +121,10 @@ void main() {
     (WidgetTester tester) async {
       await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _dayClock);
 
+      final MaterialApp app = tester.widget<MaterialApp>(
+        find.byType(MaterialApp),
+      );
+      expect(app.title, AppBrand.displayName);
       expect(find.byType(HomePreSleepPage), findsOneWidget);
       expect(find.byKey(BottomNavShell.navBarKey), findsOneWidget);
     },
@@ -573,6 +578,7 @@ void main() {
         find.byKey(const ValueKey<String>('auth-login-phone-0')),
         findsOneWidget,
       );
+      expect(find.text(AppBrand.loginTitle), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('auth-forgot-password')),
         findsOneWidget,
