@@ -33,6 +33,8 @@ class AssistantConversationController extends ChangeNotifier {
   final SleepSessionRepository _sleepSessionRepository;
   final DormRepository _dormRepository;
   final AssistantReplyGateway _assistantReplyGateway;
+  final Map<String, List<String>> _updatedSurfacesByMessageId =
+      <String, List<String>>{};
 
   AssistantThread? get currentThread => _assistantRepository.currentThread;
 
@@ -54,6 +56,15 @@ class AssistantConversationController extends ChangeNotifier {
 
   bool get isBusy =>
       turnState != null && turnState!.status != AssistantThreadTurnStatus.idle;
+
+  List<String> updatedSurfacesForMessage(String? messageId) {
+    if (messageId == null || messageId.trim().isEmpty) {
+      return const <String>[];
+    }
+    return List<String>.unmodifiable(
+      _updatedSurfacesByMessageId[messageId] ?? const <String>[],
+    );
+  }
 
   String? get latestUserPrompt {
     for (final AssistantMessage message in currentMessages.reversed) {
@@ -196,6 +207,7 @@ class AssistantConversationController extends ChangeNotifier {
     try {
       String bufferedReply = '';
       bool completed = false;
+      String resolvedAssistantMessageId = clientAssistantMessageId;
       await for (final AssistantStreamEvent event
           in _assistantReplyGateway.streamReply(
             prompt: prompt,
@@ -220,7 +232,7 @@ class AssistantConversationController extends ChangeNotifier {
               threadId: selectedThread.id,
               turnId: turnId,
             );
-            await _upsertAssistantReply(
+            resolvedAssistantMessageId = await _upsertAssistantReply(
               threadId: selectedThread.id,
               defaultMessageId: clientAssistantMessageId,
               reply: event.reply ?? bufferedReply,
@@ -231,6 +243,14 @@ class AssistantConversationController extends ChangeNotifier {
               errorMessage: event.errorMessage,
               assistantMessageId:
                   event.assistantMessageId ?? clientAssistantMessageId,
+            );
+            _recordUpdatedSurfaces(
+              messageIds: <String?>[
+                resolvedAssistantMessageId,
+                clientAssistantMessageId,
+                event.assistantMessageId,
+              ],
+              surfaceIds: event.updatedSurfaces,
             );
             break;
           case AssistantStreamEventType.error:
@@ -244,9 +264,17 @@ class AssistantConversationController extends ChangeNotifier {
             await finishTurn();
             break;
           case AssistantStreamEventType.ack:
-          case AssistantStreamEventType.surfacePatch:
           case AssistantStreamEventType.captureRecord:
           case AssistantStreamEventType.memorySynced:
+            break;
+          case AssistantStreamEventType.surfacePatch:
+            _recordUpdatedSurfaces(
+              messageIds: <String?>[
+                resolvedAssistantMessageId,
+                clientAssistantMessageId,
+              ],
+              surfaceIds: event.updatedSurfaces,
+            );
             break;
           case AssistantStreamEventType.done:
             await finishTurn();
@@ -313,6 +341,7 @@ class AssistantConversationController extends ChangeNotifier {
       String bufferedReply = '';
       SleepCaptureRecord? streamedRecord;
       bool completed = false;
+      String resolvedAssistantMessageId = clientAssistantMessageId;
       await for (final AssistantStreamEvent event
           in _assistantReplyGateway.streamCapture(
             prompt: prompt,
@@ -347,7 +376,7 @@ class AssistantConversationController extends ChangeNotifier {
               sessionId: sessionId,
               content: prompt,
             );
-            await _upsertAssistantReply(
+            resolvedAssistantMessageId = await _upsertAssistantReply(
               threadId: selectedThread.id,
               defaultMessageId: clientAssistantMessageId,
               reply: event.reply ?? bufferedReply,
@@ -358,6 +387,14 @@ class AssistantConversationController extends ChangeNotifier {
               errorMessage: event.errorMessage,
               assistantMessageId:
                   event.assistantMessageId ?? clientAssistantMessageId,
+            );
+            _recordUpdatedSurfaces(
+              messageIds: <String?>[
+                resolvedAssistantMessageId,
+                clientAssistantMessageId,
+                event.assistantMessageId,
+              ],
+              surfaceIds: event.updatedSurfaces,
             );
             break;
           case AssistantStreamEventType.error:
@@ -371,8 +408,16 @@ class AssistantConversationController extends ChangeNotifier {
             await finishTurn();
             break;
           case AssistantStreamEventType.ack:
-          case AssistantStreamEventType.surfacePatch:
           case AssistantStreamEventType.memorySynced:
+            break;
+          case AssistantStreamEventType.surfacePatch:
+            _recordUpdatedSurfaces(
+              messageIds: <String?>[
+                resolvedAssistantMessageId,
+                clientAssistantMessageId,
+              ],
+              surfaceIds: event.updatedSurfaces,
+            );
             break;
           case AssistantStreamEventType.done:
             await finishTurn();
@@ -399,7 +444,7 @@ class AssistantConversationController extends ChangeNotifier {
     }
   }
 
-  Future<void> _upsertAssistantReply({
+  Future<String> _upsertAssistantReply({
     required String threadId,
     required String defaultMessageId,
     required String reply,
@@ -411,7 +456,23 @@ class AssistantConversationController extends ChangeNotifier {
   }) async {
     final List<AssistantMessage> existingMessages = _assistantRepository
         .messagesForThread(threadId);
-    final String nextMessageId = assistantMessageId ?? defaultMessageId;
+    final String? remoteMessageId = assistantMessageId;
+    final bool hasRemoteMessage =
+        remoteMessageId != null &&
+        existingMessages.any(
+          (AssistantMessage item) => item.id == remoteMessageId,
+        );
+    final bool hasDefaultMessage = existingMessages.any(
+      (AssistantMessage item) => item.id == defaultMessageId,
+    );
+    final String nextMessageId;
+    if (remoteMessageId != null && hasRemoteMessage) {
+      nextMessageId = remoteMessageId;
+    } else if (hasDefaultMessage) {
+      nextMessageId = defaultMessageId;
+    } else {
+      nextMessageId = remoteMessageId ?? defaultMessageId;
+    }
     final String? nextErrorMessage =
         sourceMode == AssistantReplySourceMode.error
         ? '请直接重试上一条消息。'
@@ -431,7 +492,7 @@ class AssistantConversationController extends ChangeNotifier {
         model: model,
         errorMessage: nextErrorMessage,
       );
-      return;
+      return nextMessageId;
     }
     await _assistantRepository.addAssistantMessage(
       threadId: threadId,
@@ -445,6 +506,7 @@ class AssistantConversationController extends ChangeNotifier {
       model: model,
       errorMessage: nextErrorMessage,
     );
+    return nextMessageId;
   }
 
   Future<void> _setAssistantError({
@@ -479,6 +541,51 @@ class AssistantConversationController extends ChangeNotifier {
       sourceMode: AssistantReplySourceMode.error,
       errorMessage: errorHint,
     );
+  }
+
+  void _recordUpdatedSurfaces({
+    required Iterable<String?> messageIds,
+    required Iterable<String> surfaceIds,
+  }) {
+    final List<String> normalizedSurfaces = <String>[];
+    final Set<String> seenSurfaces = <String>{};
+    for (final String surfaceId in surfaceIds) {
+      final String normalized = surfaceId.trim();
+      if (normalized.isEmpty || !seenSurfaces.add(normalized)) {
+        continue;
+      }
+      normalizedSurfaces.add(normalized);
+    }
+    if (normalizedSurfaces.isEmpty) {
+      return;
+    }
+
+    bool changed = false;
+    final Set<String> handledMessageIds = <String>{};
+    for (final String? messageId in messageIds) {
+      final String normalizedMessageId = messageId?.trim() ?? '';
+      if (normalizedMessageId.isEmpty ||
+          !handledMessageIds.add(normalizedMessageId)) {
+        continue;
+      }
+      final List<String> current =
+          _updatedSurfacesByMessageId[normalizedMessageId] ?? const <String>[];
+      final List<String> merged = List<String>.from(current);
+      for (final String surfaceId in normalizedSurfaces) {
+        if (!merged.contains(surfaceId)) {
+          merged.add(surfaceId);
+        }
+      }
+      if (merged.length == current.length) {
+        continue;
+      }
+      _updatedSurfacesByMessageId[normalizedMessageId] = merged;
+      changed = true;
+    }
+
+    if (changed) {
+      notifyListeners();
+    }
   }
 
   void _relayState() {

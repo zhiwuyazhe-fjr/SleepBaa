@@ -2,103 +2,97 @@
 
 **Date:** 2026-04-22
 
-## Goal
+## Source of Truth
 
-Implement the assistant mobile client as a quiet, dark, companion-first surface where the current page emphasizes one live reply instead of a full chat transcript.
+The assistant mobile UI must follow `D:/sleep_dorm_app/glacier/pen_file/pencil-ai-2.pen` exactly.
 
-## Scope
+The active target frames are:
 
-- Target `D:/sleep_dorm_app/lib/features/assistant/presentation/pages/assistant_page.dart`
-- Keep the controller / facade / repository separation from the conversation refactor
-- Keep the history route lightweight, but align it visually with the new dark assistant surface
-- Do not redesign repository storage or backend contracts for tool receipts in this pass
+- `wXHXp` = `V5 Tool Status`
+- `64cTM` = `V6 Empty Dark`
+- `jwRyJ` = `V7 User Waiting`
+- `vr8iN` = `V9 Pull Hint`
+- `Irs6q` = `V10 History Expanded`
 
-## Approved UI Direction
+No extra avatar block, back button, edit button, title subtitle stack, or custom chrome may be introduced unless it exists in the Pencil file.
 
-### 1. Current conversation page is a stage, not a transcript
+## Screen Contract
 
-The main page should show:
+### Main page
 
-- a small top hint for history access
-- a compact header with identity and controls
-- one centered conversation stage
-- a bottom composer anchored for phone usage
+The assistant main page is a stage, not a transcript.
 
-The current page should no longer render the whole message list as stacked bubbles.
+It contains only:
 
-### 2. The stage keeps only the latest conversation focus
+- top header: left `add`, centered `小眠`, right `history`
+- center stage: one visual state at a time
+- bottom composer: translucent rounded container
 
-The stage prioritizes:
+The main page states are:
 
-- the latest user message as a single full-width card
-- the latest assistant reply as the main content block
-- lightweight inline status lines below the reply
+1. `V6 Empty Dark`
+2. `V7 User Waiting`
+3. `V9 Pull Hint`
 
-The assistant reply should not look like the old bordered bubble. The content should feel more open and fill the stage width.
+### History page
 
-### 3. History stays separate from the main mood
+The history page follows `V10 History Expanded`.
 
-The main page should preserve the emotional atmosphere by hiding the long transcript.
+It uses the same shell and composer as the main page, but the center body becomes a vertical archive flow.
 
-History access is still available, but the current page should not visually collapse back into a list.
+## Message Rules
 
-## Responsive Rules
+### Main page
 
-- Layout must be phone-first
-- Major width decisions should be container-driven and proportional, not fixed-width chat bubbles
-- Avoid hardcoded positional layout values for the conversation stage
-- Internal spacing should come from the app spacing tokens
-- Keep controls within adaptive containers instead of absolute offsets
+- Default page: show only the empty copy from `V6`
+- Waiting page: show only the latest user line from `V7`
+- Reply page: show only the latest assistant reply from `V9`
+- The reply block has no border and no bubble card
+- Tool calls are plain inline icon rows under the current assistant reply
 
-## Theme Rules
+### History page
 
-- Colors must be derived from the theme system and `NightMoodPalette`
-- The dark assistant surface should be built from palette-derived dark blends, not raw one-off hex colors
-- Reply accents, borders, glow, and send CTA should stay theme-reactive
-- Tool/status text should stay subtle and gray-toned
+- Older assistant messages are plain text
+- Older user messages are full-width rounded cards
+- Current assistant reply is the large 20pt text block at the bottom
+- Tool calls in history are bullet text, not boxed rows
 
-## Message and Status Treatment
+## Visual Rules
 
-### User message
+- Phone-first responsive layout only
+- Use container-based layout, not absolute positioning
+- Use theme-derived colors from the existing Dart theme/color system
+- Keep the dark black background and bottom green glow from Pencil
+- Visible message/composer surfaces use `20` corner radius
+- Assistant message text on the stage uses the Pencil sizing:
+  - empty title: 34
+  - waiting user text: 14
+  - current assistant reply: 20
+  - history assistant text: 13
+  - user card text: 14
+  - tool status text: 11
 
-- Show as a full-width card in the stage
-- Keep a background surface for the user message
-- Match the assistant stage width
+## Behavior Rules
 
-### Assistant reply
+- Default route still opens the empty dark page
+- The seeded assistant welcome message must not break the empty default stage
+- After the first user message is sent, the main page shows only the latest live stage
+- History is a separate route reached from the top-right history icon
+- Starting a new conversation from `add` resets the visible stage
+- Busy state keeps the duplicate-send guard
 
-- Do not render as the old outlined bubble
-- Use a wider content block with minimal chrome
-- Increase perceived readability with larger body text and calmer spacing
+## Existing Function Handling
 
-### Tool/status rows
+If existing assistant capabilities are not shown in Pencil, keep the underlying logic if needed but do not surface extra UI.
 
-- Show as inline icon + text rows
-- No full-width status boxes
-- Use different icons for different status meanings
-- In this pass, derive status from existing message / capture state instead of introducing a new persistence model
+Current examples:
 
-## Composer Behavior
+- thread creation still exists, but thread management UI is not rendered
+- capture-mode plumbing still exists, but the surface remains the same Pencil shell
+- tool receipts are rendered from existing event data instead of adding new backend schema
 
-- Keep the composer fixed at the bottom
-- Show a busy placeholder when the thread is generating
-- Preserve the existing send guard: no duplicate send while the thread is busy
-- Starting a new conversation should reset the local composer state
+## Test Policy
 
-## History Page
-
-- Keep the current route structure
-- Update the visuals to the same dark theme language
-- Keep thread management actions intact
-
-## Testing
-
-- Existing broad regressions remain in `test/widget_test.dart`
-- New page-specific UI regressions should be added to `test/glacier_test.dart`
-- `glacier_test.dart` is the preferred file for future Glacier-managed focused UI checks to avoid growing the monolithic widget suite unnecessarily
-
-## Non-Goals
-
-- No gesture-driven waterfall history implementation in this pass
-- No backend schema for persistent tool receipts yet
-- No redesign of unrelated home / dorm / profile surfaces
+- Focused assistant UI checks live in `D:/sleep_dorm_app/test/glacier_test.dart`
+- Broad app regression coverage remains in `D:/sleep_dorm_app/test/widget_test.dart`
+- Any future assistant visual change must be checked against the Pencil frames above before widening scope

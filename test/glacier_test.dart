@@ -24,39 +24,104 @@ void main() {
         .setMockMethodCallHandler(_secureStorageChannel, null);
   });
 
-  testWidgets('assistant page renders the new current stage shell', (
+  testWidgets('assistant glacier empty stage matches the pencil shell', (
     WidgetTester tester,
   ) async {
     await _pumpGlacierApp(tester);
 
     expect(
-      find.byKey(const ValueKey<String>('assistant-page-default-avatar')),
+      find.byKey(const ValueKey<String>('assistant-header-add')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey<String>('assistant-page-current-stage')),
+      find.byKey(const ValueKey<String>('assistant-header-history')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey<String>('assistant-empty-stage')),
+      findsOneWidget,
+    );
+    expect(find.text('你好，我是小眠'), findsOneWidget);
+    expect(find.text('今晚想聊点什么'), findsOneWidget);
+    expect(find.text('可以和小眠聊聊睡不着的原因，也可以把脑海里还没放下的念头交给我。'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('assistant-current-assistant-message')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('assistant glacier reply stage shows pencil tool status rows', (
+    WidgetTester tester,
+  ) async {
+    await _pumpGlacierApp(tester);
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('assistant-composer-field')),
+      '我有点累，但脑子还是停不下来。',
+    );
+    await tester.pump();
+
+    final Finder submitButtonFinder = find.descendant(
+      of: find.byKey(const ValueKey<String>('assistant-composer-submit')),
+      matching: find.byType(IconButton),
+    );
+    final IconButton submitButton = tester.widget<IconButton>(
+      submitButtonFinder,
+    );
+    expect(submitButton.onPressed, isNotNull);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('assistant-composer-submit')),
+    );
+    await tester.pump();
+    await tester.pumpAndSettle();
+
     expect(
       find.byKey(const ValueKey<String>('assistant-history-hint')),
       findsOneWidget,
     );
-    expect(find.byType(TextField), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('assistant-current-assistant-message')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('先别急着逼自己立刻睡着'), findsOneWidget);
+    expect(find.text('闹钟已设定 23:00'), findsOneWidget);
+    expect(find.text('寝室静音模式已同步'), findsOneWidget);
+    expect(find.text('晚安提醒已开启'), findsOneWidget);
   });
 
-  testWidgets('assistant page keeps the seeded reply inside the stage', (
+  testWidgets('assistant glacier history page keeps the stored archive flow', (
     WidgetTester tester,
   ) async {
     await _pumpGlacierApp(tester);
 
+    await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+    await _sendPrompt(tester, '寝室有点吵，我还是睡不着。');
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('assistant-header-history')),
+    );
+    await tester.pumpAndSettle();
+
     expect(
-      find.byKey(const ValueKey<String>('assistant-current-assistant-message')),
+      find.byKey(const ValueKey<String>('assistant-history-flow')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('assistant-history-earlier')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('assistant-history-current')),
       findsOneWidget,
     );
     expect(
       find.text('一个轻柔的 15 分钟呼吸练习，也许能帮你慢慢切换到入睡状态。要不要我现在带你开始？'),
       findsOneWidget,
     );
+    expect(find.text('我有点累，但脑子还是停不下来。'), findsOneWidget);
+    expect(find.text('寝室有点吵，我还是睡不着。'), findsOneWidget);
+    expect(find.textContaining('现在宿舍环境大约'), findsOneWidget);
   });
 }
 
@@ -64,6 +129,19 @@ Future<void> _pumpGlacierApp(WidgetTester tester) async {
   await tester.pumpWidget(
     SleepDormApp(initialLocation: AppRoutes.assistant, clock: _dayClock),
   );
+  await tester.pumpAndSettle();
+}
+
+Future<void> _sendPrompt(WidgetTester tester, String text) async {
+  await tester.enterText(
+    find.byKey(const ValueKey<String>('assistant-composer-field')),
+    text,
+  );
+  await tester.pump();
+  await tester.tap(
+    find.byKey(const ValueKey<String>('assistant-composer-submit')),
+  );
+  await tester.pump();
   await tester.pumpAndSettle();
 }
 

@@ -333,41 +333,43 @@ void main() {
     );
   });
 
-  testWidgets('assistant surfaces mood avatars after a mood is selected', (
-    WidgetTester tester,
-  ) async {
-    await _pumpApp(
-      tester,
-      initialLocation: AppRoutes.homePreSleep,
-      clock: _dayClock,
-      initialSettings: _settingsWithMood(NightMood.calm),
-    );
+  testWidgets(
+    'assistant opens the pencil stage even after a mood is selected',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.homePreSleep,
+        clock: _dayClock,
+        initialSettings: _settingsWithMood(NightMood.calm),
+      );
 
-    expect(
-      find.byKey(const ValueKey<String>('assistant-fab-mood-avatar')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey<String>('assistant-fab-mood-shell')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey<String>('assistant-fab-default-shell')),
-      findsNothing,
-    );
+      expect(
+        find.byKey(const ValueKey<String>('assistant-fab-mood-avatar')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('assistant-fab-mood-shell')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('assistant-fab-default-shell')),
+        findsNothing,
+      );
 
-    await tester.tap(find.byType(AssistantFab));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byType(AssistantFab));
+      await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey<String>('assistant-page-mood-avatar')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey<String>('assistant-page-default-avatar')),
-      findsNothing,
-    );
-  });
+      expect(
+        find.byKey(const ValueKey<String>('assistant-empty-stage')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('assistant-page-default-avatar')),
+        findsNothing,
+      );
+      expect(find.text('今晚想聊点什么'), findsOneWidget);
+    },
+  );
 
   testWidgets('assistant fab snaps to left edge after crossing midline', (
     WidgetTester tester,
@@ -442,7 +444,7 @@ void main() {
     expect(find.byType(AssistantPage), findsOneWidget);
   });
 
-  testWidgets('assistant composer enables send only after input', (
+  testWidgets('assistant composer enables the submit icon only after input', (
     WidgetTester tester,
   ) async {
     await _pumpApp(
@@ -451,10 +453,13 @@ void main() {
       clock: _dayClock,
     );
 
-    FilledButton sendButton = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, '发送'),
+    IconButton submitButton = tester.widget<IconButton>(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('assistant-composer-submit')),
+        matching: find.byType(IconButton),
+      ),
     );
-    expect(sendButton.onPressed, isNull);
+    expect(submitButton.onPressed, isNull);
 
     await tester.enterText(
       find.byKey(const ValueKey<String>('assistant-composer-field')),
@@ -462,10 +467,13 @@ void main() {
     );
     await tester.pump();
 
-    sendButton = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, '发送'),
+    submitButton = tester.widget<IconButton>(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('assistant-composer-submit')),
+        matching: find.byType(IconButton),
+      ),
     );
-    expect(sendButton.onPressed, isNotNull);
+    expect(submitButton.onPressed, isNotNull);
   });
 
   testWidgets(
