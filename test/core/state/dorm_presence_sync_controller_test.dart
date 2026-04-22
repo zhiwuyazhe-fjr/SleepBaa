@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/state/dorm_location_anchor_cache.dart';
 import 'package:sleep_dorm_app/core/state/dorm_presence_sync_controller.dart';
 
 void main() {
@@ -43,10 +44,54 @@ void main() {
       controller.dispose();
     },
   );
+
+  test(
+    'restoreCachedLocationAnchor ignores latest anchor from a different dorm',
+    () async {
+      final Dorm currentDorm = buildDefaultDorm(
+        'cloud-user',
+      ).copyWith(id: 'dorm-current', clearLocationAnchor: true);
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(
+          uid: 'cloud-user',
+          dormId: 'dorm-current',
+          phoneNumber: '+8613800000000',
+          phoneLinkedAt: DateTime(2026, 4, 22, 20),
+        ),
+      );
+      final _RecordingDormRepository dormRepository = _RecordingDormRepository(
+        initialDorm: currentDorm,
+        currentUserId: 'cloud-user',
+      );
+      final _FakeDormLocationAnchorCache cache = _FakeDormLocationAnchorCache(
+        latestAnchor: DormLocationAnchor(
+          latitude: 39.9042,
+          longitude: 116.4074,
+          radiusMeters: 100,
+          recordedAt: DateTime(2026, 4, 21, 20),
+          recordedByUid: 'cloud-user',
+        ),
+      );
+      final DormPresenceSyncController controller = DormPresenceSyncController(
+        authRepository: authRepository,
+        dormRepository: dormRepository,
+        cache: cache,
+      );
+
+      await controller.restoreCachedLocationAnchor();
+
+      expect(cache.readCalls, <String>['cloud-user:dorm-current']);
+      expect(cache.readLatestCalls, 0);
+      expect(dormRepository.hydrateCalls, 0);
+      expect(dormRepository.currentDorm.locationAnchor, isNull);
+
+      controller.dispose();
+    },
+  );
 }
 
 class _RecordingDormRepository extends InMemoryDormRepository {
-  _RecordingDormRepository() : super(currentUserId: 'unused');
+  _RecordingDormRepository({super.initialDorm, super.currentUserId = 'unused'});
 
   int hydrateCalls = 0;
   final List<Map<String, Object?>> statusUpdates = <Map<String, Object?>>[];
@@ -80,4 +125,36 @@ class _RecordingDormRepository extends InMemoryDormRepository {
     hydrateCalls += 1;
     super.hydrateCurrentDormLocationAnchor(anchor);
   }
+}
+
+class _FakeDormLocationAnchorCache extends DormLocationAnchorCache {
+  _FakeDormLocationAnchorCache({this.latestAnchor})
+    : anchorByDorm = const <String, DormLocationAnchor>{};
+
+  final Map<String, DormLocationAnchor> anchorByDorm;
+  final DormLocationAnchor? latestAnchor;
+  final List<String> readCalls = <String>[];
+  int readLatestCalls = 0;
+
+  @override
+  Future<DormLocationAnchor?> read({
+    required String uid,
+    required String dormId,
+  }) async {
+    readCalls.add('$uid:$dormId');
+    return anchorByDorm[dormId];
+  }
+
+  @override
+  Future<DormLocationAnchor?> readLatest({required String uid}) async {
+    readLatestCalls += 1;
+    return latestAnchor;
+  }
+
+  @override
+  Future<void> save({
+    required String uid,
+    required String dormId,
+    required DormLocationAnchor anchor,
+  }) async {}
 }

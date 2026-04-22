@@ -70,7 +70,7 @@ List<String> normalizeHomeQuickActionIds(Iterable<String>? rawIds) {
   return List<String>.unmodifiable(normalized);
 }
 
-enum DormPresenceStatus { returned, away }
+enum DormPresenceStatus { returned, away, unknown }
 
 enum DormEventType { memberStatus, ruleUpdate, notification, invite, system }
 

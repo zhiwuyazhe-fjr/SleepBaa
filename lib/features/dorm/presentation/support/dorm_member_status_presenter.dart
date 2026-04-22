@@ -22,10 +22,7 @@ int dormAppOnlineMemberCount(
 }) {
   final DateTime clock = now ?? DateTime.now();
   return members
-      .where(
-        (DormMember m) =>
-            clock.difference(m.lastActiveAt) <= maxIdle,
-      )
+      .where((DormMember m) => clock.difference(m.lastActiveAt) <= maxIdle)
       .length;
 }
 
@@ -42,11 +39,13 @@ int sleepingDormMemberCount(List<DormMember> members) {
 double averageNoiseDbForReturnedMembers({
   required List<DormMember> members,
   required int dormAggregateNoiseDb,
+  bool showPresence = true,
 }) {
+  if (!showPresence) {
+    return dormAggregateNoiseDb.toDouble();
+  }
   final List<DormMember> inRange = members
-      .where(
-        (DormMember m) => m.presenceStatus == DormPresenceStatus.returned,
-      )
+      .where((DormMember m) => m.presenceStatus == DormPresenceStatus.returned)
       .toList(growable: false);
   final List<int> levels = inRange
       .map((DormMember m) => m.noiseDb)
@@ -60,10 +59,18 @@ double averageNoiseDbForReturnedMembers({
   return sum / levels.length;
 }
 
-String dormPresenceSleepLabel(DormMember member) {
+bool shouldShowDormPresence(Dorm dorm, DormMember member) {
+  return dorm.locationAnchor != null &&
+      member.presenceStatus != DormPresenceStatus.unknown;
+}
+
+String dormPresenceSleepLabel(DormMember member, {bool showPresence = true}) {
+  final String sleepLabel = member.sleepModeActive ? '已睡' : '未睡';
+  if (!showPresence || member.presenceStatus == DormPresenceStatus.unknown) {
+    return sleepLabel;
+  }
   final String presenceLabel =
       member.presenceStatus == DormPresenceStatus.returned ? '已返' : '未返';
-  final String sleepLabel = member.sleepModeActive ? '已睡' : '未睡';
   return '$presenceLabel$sleepLabel';
 }
 
@@ -77,7 +84,12 @@ Color dormActivityColor(DormMember member) {
       : const Color(0xFF2D9272);
 }
 
-Color dormPresenceSleepColor(DormMember member) {
+Color dormPresenceSleepColor(DormMember member, {bool showPresence = true}) {
+  if (!showPresence || member.presenceStatus == DormPresenceStatus.unknown) {
+    return member.sleepModeActive
+        ? const Color(0xFF4458D8)
+        : const Color(0xFF8A8F9F);
+  }
   if (member.presenceStatus == DormPresenceStatus.away) {
     return const Color(0xFF8A8F9F);
   }

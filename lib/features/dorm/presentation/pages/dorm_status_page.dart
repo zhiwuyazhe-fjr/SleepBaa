@@ -140,6 +140,10 @@ class DormStatusPage extends StatelessWidget {
                                 shape: BoxShape.circle,
                                 color: dormPresenceSleepColor(
                                   member,
+                                  showPresence: shouldShowDormPresence(
+                                    dorm,
+                                    member,
+                                  ),
                                 ).withAlpha(24),
                               ),
                               alignment: Alignment.center,
@@ -147,7 +151,13 @@ class DormStatusPage extends StatelessWidget {
                                 member.name.characters.first,
                                 style: Theme.of(context).textTheme.titleMedium
                                     ?.copyWith(
-                                      color: dormPresenceSleepColor(member),
+                                      color: dormPresenceSleepColor(
+                                        member,
+                                        showPresence: shouldShowDormPresence(
+                                          dorm,
+                                          member,
+                                        ),
+                                      ),
                                       fontWeight: FontWeight.w800,
                                     ),
                               ),
@@ -188,16 +198,33 @@ class DormStatusPage extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     color: dormPresenceSleepColor(
                                       member,
+                                      showPresence: shouldShowDormPresence(
+                                        dorm,
+                                        member,
+                                      ),
                                     ).withAlpha(18),
                                     borderRadius: BorderRadius.circular(999),
                                   ),
                                   child: Text(
-                                    dormPresenceSleepLabel(member),
+                                    dormPresenceSleepLabel(
+                                      member,
+                                      showPresence: shouldShowDormPresence(
+                                        dorm,
+                                        member,
+                                      ),
+                                    ),
                                     style: Theme.of(context)
                                         .textTheme
                                         .labelSmall
                                         ?.copyWith(
-                                          color: dormPresenceSleepColor(member),
+                                          color: dormPresenceSleepColor(
+                                            member,
+                                            showPresence:
+                                                shouldShowDormPresence(
+                                                  dorm,
+                                                  member,
+                                                ),
+                                          ),
                                           fontWeight: FontWeight.w800,
                                         ),
                                   ),

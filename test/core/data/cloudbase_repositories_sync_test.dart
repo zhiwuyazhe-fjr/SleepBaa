@@ -714,6 +714,72 @@ void main() {
   );
 
   test(
+    'cloudbase dorm repository parses missing presence status as unknown',
+    () async {
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) async =>
+                <String, dynamic>{'ok': true, 'path': path, 'body': body},
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(
+          uid: 'cloud-user',
+          dormId: 'dorm-204',
+        ),
+      );
+      final CloudBaseDormRepository repository = CloudBaseDormRepository(
+        authRepository: authRepository,
+        snapshotStore: snapshotStore,
+        appApiClient: appApiClient,
+      );
+
+      snapshotStore.pushPayload(<String, dynamic>{
+        'data': <String, dynamic>{
+          'user': <String, dynamic>{
+            'uid': 'cloud-user',
+            'displayName': 'Cloud User',
+            'dormId': 'dorm-204',
+          },
+          'dorm': <String, dynamic>{
+            'id': 'dorm-204',
+            'name': '梅苑 2 栋 204',
+            'members': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'uid': 'cloud-user',
+                'name': 'Cloud User',
+                'status': DormMemberStatus.quiet.name,
+                'sleepModeActive': false,
+              },
+              <String, dynamic>{
+                'uid': 'roommate-away',
+                'name': 'Roommate',
+                'status': DormMemberStatus.away.name,
+                'sleepModeActive': false,
+              },
+            ],
+          },
+        },
+      });
+
+      expect(
+        repository.currentDorm.members
+            .firstWhere((DormMember member) => member.uid == 'cloud-user')
+            .presenceStatus,
+        DormPresenceStatus.unknown,
+      );
+      expect(
+        repository.currentDorm.members
+            .firstWhere((DormMember member) => member.uid == 'roommate-away')
+            .presenceStatus,
+        DormPresenceStatus.away,
+      );
+    },
+  );
+
+  test(
     'cloudbase insights repository parses profile duration and quality trends from snapshots',
     () async {
       final _FakeCloudBaseAppApiClient appApiClient =
