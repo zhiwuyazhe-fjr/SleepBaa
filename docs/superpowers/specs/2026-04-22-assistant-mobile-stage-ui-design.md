@@ -49,13 +49,19 @@ It uses the same shell and composer as the main page, but the center body become
 - Reply page: show only the latest assistant reply from `V9`
 - The reply block has no border and no bubble card
 - Tool calls are plain inline icon rows under the current assistant reply
+- The pull hint stays hidden by default and appears only after the user starts dragging upward
+- The composer stays single-line and compact on phone screens
+- The right edge of the composer contains two actions: `mic` then `send`
 
 ### History page
 
+- Upward drag from the reply stage expands the current thread archive inline
+- Downward drag from the archive top area returns to the centered stage
 - Older assistant messages are plain text
 - Older user messages are full-width rounded cards
 - Current assistant reply is the large 20pt text block at the bottom
 - Tool calls in history are bullet text, not boxed rows
+- The top-right header history action is reserved for saved conversation threads, not for the inline archive
 
 ## Visual Rules
 
@@ -64,6 +70,7 @@ It uses the same shell and composer as the main page, but the center body become
 - Use theme-derived colors from the existing Dart theme/color system
 - Keep the dark black background and bottom green glow from Pencil
 - Visible message/composer surfaces use `20` corner radius
+- Keep the shell visually compact on tall phones; do not scale spacing upward past the Pencil baseline
 - Assistant message text on the stage uses the Pencil sizing:
   - empty title: 34
   - waiting user text: 14
@@ -77,9 +84,11 @@ It uses the same shell and composer as the main page, but the center body become
 - Default route still opens the empty dark page
 - The seeded assistant welcome message must not break the empty default stage
 - After the first user message is sent, the main page shows only the latest live stage
-- History is a separate route reached from the top-right history icon
+- The inline archive is revealed only by upward pull on the reply stage
+- The top-right history icon opens saved conversation threads
 - Starting a new conversation from `add` resets the visible stage
 - Busy state keeps the duplicate-send guard
+- All visible action buttons need immediate touch feedback
 
 ## Motion and Haptics
 

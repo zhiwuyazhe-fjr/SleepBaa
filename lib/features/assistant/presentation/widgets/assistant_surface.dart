@@ -1,6 +1,8 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -9,13 +11,17 @@ class AssistantSurfaceMetrics {
   const AssistantSurfaceMetrics._({required this.scale});
 
   factory AssistantSurfaceMetrics.fromWidth(double width) {
-    final double nextScale = (width / 390).clamp(0.92, 1.08);
+    final double nextScale = (width / 390).clamp(0.92, 1.0);
     return AssistantSurfaceMetrics._(scale: nextScale);
   }
 
   final double scale;
 
   double unit(double designUnit) => designUnit * scale;
+
+  double contentWidth(double maxWidth, {double designWidth = 344}) {
+    return math.min(maxWidth, unit(designWidth));
+  }
 }
 
 class AssistantToolStatus {
@@ -96,6 +102,7 @@ class AssistantSurfacePalette {
     required this.userText,
     required this.bottomGlowStart,
     required this.bottomGlowMid,
+    required this.bottomGlowCore,
   });
 
   factory AssistantSurfacePalette.fromMood(NightMoodPalette mood) {
@@ -126,6 +133,7 @@ class AssistantSurfacePalette {
       userText: _alpha(Color.lerp(AppColors.onDark, surface, 0.18)!, 0.93),
       bottomGlowStart: _alpha(accent, 0.15),
       bottomGlowMid: _alpha(midGlow, 0.82),
+      bottomGlowCore: _alpha(accent, 0.24),
     );
   }
 
@@ -146,6 +154,7 @@ class AssistantSurfacePalette {
   final Color userText;
   final Color bottomGlowStart;
   final Color bottomGlowMid;
+  final Color bottomGlowCore;
 }
 
 class AssistantShellScaffold extends StatelessWidget {
@@ -195,18 +204,41 @@ class AssistantShellScaffold extends StatelessWidget {
                 child: Align(
                   alignment: Alignment.bottomCenter,
                   child: FractionallySizedBox(
-                    heightFactor: 0.42,
+                    heightFactor: 0.46,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.bottomCenter,
                           end: Alignment.topCenter,
-                          stops: const <double>[0, 0.36, 1],
+                          stops: const <double>[0, 0.34, 1],
                           colors: <Color>[
                             palette.bottomGlowStart,
                             palette.bottomGlowMid,
                             Colors.transparent,
                           ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              IgnorePointer(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: FractionallySizedBox(
+                    widthFactor: 0.94,
+                    heightFactor: 0.20,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(
+                          center: const Alignment(0, 0.95),
+                          radius: 1.1,
+                          colors: <Color>[
+                            palette.bottomGlowCore,
+                            palette.bottomGlowStart,
+                            Colors.transparent,
+                          ],
+                          stops: const <double>[0, 0.46, 1],
                         ),
                       ),
                     ),
@@ -219,9 +251,9 @@ class AssistantShellScaffold extends StatelessWidget {
                   curve: Curves.easeOutCubic,
                   padding: EdgeInsets.fromLTRB(
                     metrics.unit(20),
-                    metrics.unit(24),
+                    metrics.unit(18),
                     metrics.unit(20),
-                    metrics.unit(20) + keyboardInset,
+                    metrics.unit(12) + keyboardInset,
                   ),
                   child: Column(
                     children: <Widget>[
@@ -231,9 +263,9 @@ class AssistantShellScaffold extends StatelessWidget {
                         onTapAdd: onTapAdd,
                         onTapHistory: onTapHistory,
                       ),
-                      SizedBox(height: metrics.unit(28)),
+                      SizedBox(height: metrics.unit(20)),
                       Expanded(child: bodyBuilder(context, metrics, palette)),
-                      SizedBox(height: metrics.unit(28)),
+                      SizedBox(height: metrics.unit(16)),
                       composerBuilder(context, metrics, palette),
                     ],
                   ),
@@ -265,7 +297,7 @@ class AssistantHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: <Widget>[
-        _AssistantHeaderIcon(
+        _AssistantActionIconButton(
           key: const ValueKey<String>('assistant-header-add'),
           icon: Icons.add,
           size: metrics.unit(22),
@@ -284,7 +316,7 @@ class AssistantHeader extends StatelessWidget {
             ),
           ),
         ),
-        _AssistantHeaderIcon(
+        _AssistantActionIconButton(
           key: const ValueKey<String>('assistant-header-history'),
           icon: Icons.history,
           size: metrics.unit(22),
@@ -301,7 +333,7 @@ class AssistantFloatingMotion extends StatefulWidget {
     super.key,
     required this.child,
     required this.travelDistance,
-    this.duration = const Duration(milliseconds: 2800),
+    this.duration = const Duration(milliseconds: 2600),
     this.transformKey,
   });
 
@@ -353,6 +385,40 @@ class _AssistantFloatingMotionState extends State<AssistantFloatingMotion>
   }
 }
 
+class AssistantLoopingRotation extends StatefulWidget {
+  const AssistantLoopingRotation({
+    super.key,
+    required this.child,
+    this.duration = const Duration(milliseconds: 1200),
+  });
+
+  final Widget child;
+  final Duration duration;
+
+  @override
+  State<AssistantLoopingRotation> createState() =>
+      _AssistantLoopingRotationState();
+}
+
+class _AssistantLoopingRotationState extends State<AssistantLoopingRotation>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: widget.duration,
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RotationTransition(turns: _controller, child: widget.child);
+  }
+}
+
 class AssistantComposer extends StatelessWidget {
   const AssistantComposer({
     super.key,
@@ -364,6 +430,7 @@ class AssistantComposer extends StatelessWidget {
     required this.isBusy,
     required this.onSubmit,
     this.onTapAdd,
+    this.onTapMic,
   });
 
   final TextEditingController controller;
@@ -374,6 +441,7 @@ class AssistantComposer extends StatelessWidget {
   final bool isBusy;
   final VoidCallback onSubmit;
   final VoidCallback? onTapAdd;
+  final VoidCallback? onTapMic;
 
   @override
   Widget build(BuildContext context) {
@@ -401,29 +469,33 @@ class AssistantComposer extends StatelessWidget {
             ],
           ),
           child: Padding(
-            padding: EdgeInsets.all(metrics.unit(24)),
+            padding: EdgeInsets.symmetric(
+              horizontal: metrics.unit(18),
+              vertical: metrics.unit(18),
+            ),
             child: ListenableBuilder(
               listenable: controller,
               builder: (BuildContext context, Widget? child) {
                 final bool canSubmit =
                     !isBusy && controller.text.trim().isNotEmpty;
                 return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: <Widget>[
-                    _AssistantHeaderIcon(
+                    _AssistantActionIconButton(
+                      key: const ValueKey<String>('assistant-composer-add'),
                       icon: Icons.add,
                       size: metrics.unit(22),
                       color: palette.headerIcon,
                       onTap: onTapAdd,
                     ),
-                    SizedBox(width: metrics.unit(16)),
+                    SizedBox(width: metrics.unit(14)),
                     Expanded(
                       child: TextField(
                         key: const ValueKey<String>('assistant-composer-field'),
                         controller: controller,
                         focusNode: focusNode,
                         textInputAction: TextInputAction.send,
-                        minLines: 1,
-                        maxLines: 4,
+                        maxLines: 1,
                         cursorColor: palette.composerText,
                         keyboardAppearance: Brightness.dark,
                         onSubmitted: (_) => onSubmit(),
@@ -431,29 +503,63 @@ class AssistantComposer extends StatelessWidget {
                           color: palette.composerText,
                           fontSize: metrics.unit(16),
                           fontWeight: FontWeight.w500,
-                          height: 1.45,
+                          height: 1.34,
                         ),
                         decoration: InputDecoration(
                           isCollapsed: true,
                           border: InputBorder.none,
                           hintText: hintText,
+                          hintMaxLines: 1,
                           hintStyle: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
                                 color: palette.composerHint,
                                 fontSize: metrics.unit(isBusy ? 15 : 16),
                                 fontWeight: FontWeight.w500,
-                                height: 1.45,
+                                height: 1.34,
                               ),
                         ),
                       ),
                     ),
-                    SizedBox(width: metrics.unit(16)),
-                    _AssistantHeaderIcon(
+                    SizedBox(width: metrics.unit(8)),
+                    _AssistantActionIconButton(
+                      key: const ValueKey<String>('assistant-composer-mic'),
+                      icon: Icons.mic_none_rounded,
+                      size: metrics.unit(22),
+                      color: palette.headerIcon,
+                      onTap: isBusy ? null : onTapMic,
+                    ),
+                    SizedBox(width: metrics.unit(2)),
+                    _AssistantActionIconButton(
                       key: const ValueKey<String>('assistant-composer-submit'),
-                      icon: isBusy ? Icons.autorenew_rounded : Icons.mic,
-                      size: metrics.unit(24),
+                      size: metrics.unit(22),
                       color: palette.headerIcon,
                       onTap: canSubmit ? onSubmit : null,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        child: isBusy
+                            ? AssistantLoopingRotation(
+                                key: const ValueKey<String>(
+                                  'assistant-composer-busy-icon',
+                                ),
+                                child: Icon(
+                                  Icons.autorenew_rounded,
+                                  size: metrics.unit(22),
+                                  color: palette.headerIcon,
+                                ),
+                              )
+                            : Icon(
+                                Icons.arrow_upward_rounded,
+                                key: const ValueKey<String>(
+                                  'assistant-composer-send-icon',
+                                ),
+                                size: metrics.unit(22),
+                                color: canSubmit
+                                    ? palette.headerIcon
+                                    : _alpha(palette.headerIcon, 0.34),
+                              ),
+                      ),
                     ),
                   ],
                 );
@@ -680,28 +786,46 @@ AssistantToolStatus? _toolStatusForSurfaceId(String surfaceId) {
   }
 }
 
-class _AssistantHeaderIcon extends StatelessWidget {
-  const _AssistantHeaderIcon({
+class _AssistantActionIconButton extends StatelessWidget {
+  const _AssistantActionIconButton({
     super.key,
-    required this.icon,
     required this.size,
     required this.color,
     required this.onTap,
+    this.icon,
+    this.child,
   });
 
-  final IconData icon;
+  final IconData? icon;
+  final Widget? child;
   final double size;
   final Color color;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      padding: EdgeInsets.zero,
-      constraints: BoxConstraints.tight(Size.square(size)),
-      splashRadius: size,
-      onPressed: onTap,
-      icon: Icon(icon, size: size, color: color),
+    final double hitSize = math.max(size * 1.82, 40);
+    return SizedBox(
+      width: hitSize,
+      height: hitSize,
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        constraints: BoxConstraints.tight(Size.square(hitSize)),
+        splashRadius: hitSize / 2,
+        style: IconButton.styleFrom(
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          foregroundColor: color,
+          disabledForegroundColor: _alpha(color, 0.34),
+          overlayColor: _alpha(color, 0.14),
+        ),
+        onPressed: onTap == null
+            ? null
+            : () {
+                HapticFeedback.selectionClick();
+                onTap!();
+              },
+        icon: child ?? Icon(icon, size: size, color: color),
+      ),
     );
   }
 }

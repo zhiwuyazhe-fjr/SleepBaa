@@ -570,6 +570,10 @@ class AssistantFacade extends ChangeNotifier {
     return _assistantRepository.messagesForThread(thread.id);
   }
 
+  List<AssistantMessage> messagesForThread(String threadId) {
+    return _assistantRepository.messagesForThread(threadId);
+  }
+
   Future<AssistantThread> createThread({String? title}) {
     return _assistantRepository.createThread(title: title);
   }
