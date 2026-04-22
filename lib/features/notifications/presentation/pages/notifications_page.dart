@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -47,12 +49,7 @@ class NotificationsPage extends StatelessWidget {
               .toList();
 
           return ListView(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.sm,
-              AppSpacing.sm,
-              AppSpacing.sm,
-              88,
-            ),
+            padding: AppPageInsets.floatingPage(bottom: 88),
             children: <Widget>[
               _NotificationOverviewCard(unreadCount: unread.length),
               const SizedBox(height: AppSpacing.sm),
@@ -130,7 +127,7 @@ class _NotificationSection extends StatelessWidget {
                   horizontal: 10,
                   vertical: AppSpacing.sm,
                 ),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: AppRadius.compactCard,
                 color: item.isRead
                     ? AppColors.surface
                     : AppColors.legacyCardSurface,
@@ -238,7 +235,7 @@ class _NotificationOverviewCard extends StatelessWidget {
     final NightMoodPalette palette = context.nightMoodPalette;
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.sm),
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: AppRadius.compactCard,
       color: AppColors.surface,
       child: Row(
         children: <Widget>[

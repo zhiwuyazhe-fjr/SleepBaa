@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
@@ -6,20 +7,26 @@ import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 
 class AppMenuGroupCardItem {
   const AppMenuGroupCardItem({
-    required this.icon,
     required this.title,
     required this.onTap,
+    this.icon,
+    this.subtitle,
     this.trailing,
     this.titleStyle,
+    this.subtitleStyle,
     this.iconColor,
+    this.iconSize = 20,
   });
 
-  final IconData icon;
+  final IconData? icon;
   final String title;
   final VoidCallback onTap;
+  final String? subtitle;
   final Widget? trailing;
   final TextStyle? titleStyle;
+  final TextStyle? subtitleStyle;
   final Color? iconColor;
+  final double iconSize;
 }
 
 class AppMenuGroupCard extends StatelessWidget {
@@ -29,12 +36,17 @@ class AppMenuGroupCard extends StatelessWidget {
     this.cardKey,
     this.borderRadius,
     this.padding = const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+    this.itemPadding = const EdgeInsets.symmetric(
+      horizontal: AppSpacing.md,
+      vertical: AppSpacing.sm,
+    ),
   });
 
   final List<AppMenuGroupCardItem> items;
   final Key? cardKey;
   final BorderRadius? borderRadius;
   final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry itemPadding;
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +57,7 @@ class AppMenuGroupCard extends StatelessWidget {
       child: Column(
         children: <Widget>[
           for (final AppMenuGroupCardItem item in items)
-            _AppMenuGroupRow(item: item),
+            _AppMenuGroupRow(item: item, padding: itemPadding),
         ],
       ),
     );
@@ -53,26 +65,62 @@ class AppMenuGroupCard extends StatelessWidget {
 }
 
 class _AppMenuGroupRow extends StatelessWidget {
-  const _AppMenuGroupRow({required this.item});
+  const _AppMenuGroupRow({required this.item, required this.padding});
 
   final AppMenuGroupCardItem item;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
+    void handleTap() {
+      HapticFeedback.lightImpact();
+      item.onTap();
+    }
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: item.onTap,
+        onTap: handleTap,
+        borderRadius: AppRadius.control,
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg,
-            vertical: AppSpacing.md,
-          ),
+          padding: padding,
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
-              Icon(item.icon, color: item.iconColor ?? AppColors.textPrimary),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(child: Text(item.title, style: item.titleStyle)),
+              if (item.icon != null) ...<Widget>[
+                SizedBox(
+                  width: item.iconSize + AppSpacing.xs,
+                  child: Center(
+                    child: Icon(
+                      item.icon,
+                      size: item.iconSize,
+                      color: item.iconColor ?? AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(item.title, style: item.titleStyle),
+                    if (item.subtitle != null) ...<Widget>[
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(
+                        item.subtitle!,
+                        style:
+                            item.subtitleStyle ??
+                            Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppColors.textSecondary,
+                              height: 1.35,
+                            ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
               item.trailing ??
                   const Icon(
                     Icons.chevron_right_rounded,

@@ -3,6 +3,9 @@ import 'dart:collection';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 
 class PassiveToastController {
   final Queue<_PassiveToastRequest> _pending = Queue<_PassiveToastRequest>();
@@ -163,10 +166,11 @@ class _PassiveToastSession {
   void show() {
     _entry = OverlayEntry(
       builder: (BuildContext context) {
+        final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
         return Positioned(
-          left: 16,
-          right: 16,
-          bottom: 12,
+          left: AppPageInsets.horizontal,
+          right: AppPageInsets.horizontal,
+          bottom: keyboardInset > 0 ? keyboardInset + 12 : 12,
           child: SafeArea(
             top: false,
             child: ValueListenableBuilder<bool>(
@@ -201,12 +205,12 @@ class _PassiveToastSession {
                   child: Material(
                     key: _toastLayoutKey,
                     color: const Color(0xFF181B22),
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: AppRadius.toast,
                     elevation: 8,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.sm,
                       ),
                       child: Text(
                         message,
