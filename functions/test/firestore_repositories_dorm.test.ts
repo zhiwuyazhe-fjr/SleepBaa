@@ -174,7 +174,7 @@ test("getDorm backfills avatarUrl and displayBadgeId from latest user profile", 
     sleepModeActive: false,
     lastActiveAt: "2026-04-13T15:00:00.000Z",
     note: "准备休息",
-    avatarUrl: null,
+    avatarUrl: "https://old.example.com/expired-member-avatar.png",
     displayBadgeId: null,
   });
 
@@ -187,12 +187,31 @@ test("getDorm backfills avatarUrl and displayBadgeId from latest user profile", 
 
   await repo.saveUserProfile("roommate-user", {
     avatarUrl: "https://images.example.com/new-avatar.png",
+    avatarStoragePath: null,
     equippedBadgeId: "equipped-badge",
     earnedBadgeIds: ["first-week", "latest-earned", "equipped-badge"],
+  });
+  await store.merge("dorm_members", `${dormId}:roommate-user`, {
+    avatarUrl: "https://old.example.com/stale-member-avatar.png",
   });
 
   dorm = await repo.getDorm(dormId, "owner-user");
   roommate = dorm.members.find((member) => member.uid === "roommate-user");
   assert.equal(roommate?.avatarUrl, "https://images.example.com/new-avatar.png");
   assert.equal(roommate?.displayBadgeId, "equipped-badge");
+
+  await store.merge("users", "roommate-user", {
+    avatarUrl: null,
+    avatarStoragePath: null,
+  });
+  await store.merge("dorm_members", `${dormId}:roommate-user`, {
+    avatarUrl: "https://old.example.com/member-only-avatar.png",
+  });
+
+  dorm = await repo.getDorm(dormId, "owner-user");
+  roommate = dorm.members.find((member) => member.uid === "roommate-user");
+  assert.equal(
+    roommate?.avatarUrl,
+    "https://old.example.com/member-only-avatar.png",
+  );
 });

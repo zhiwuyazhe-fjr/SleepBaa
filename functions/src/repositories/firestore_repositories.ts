@@ -1171,16 +1171,10 @@ export class FirestoreRepository implements AssistantDataRepository {
         const userDoc = withoutMeta(
           (await this.store.get(Collections.users, asString(value.uid))) ?? {},
         );
-        const avatarStoragePath = asString(userDoc.avatarStoragePath);
-        let fallbackAvatarUrl = asString(userDoc.avatarUrl) || null;
-        if (!fallbackAvatarUrl && avatarStoragePath && this.fileStorage) {
-          try {
-            fallbackAvatarUrl =
-              await this.fileStorage.getTemporaryUrl(avatarStoragePath);
-          } catch {
-            fallbackAvatarUrl = null;
-          }
-        }
+        const avatarUrl = await this.resolveDormMemberAvatarUrl(
+          userDoc,
+          value,
+        );
         return {
           uid: asString(value.uid),
           name:
@@ -1191,9 +1185,7 @@ export class FirestoreRepository implements AssistantDataRepository {
           sleepModeActive: asBoolean(value.sleepModeActive, false),
           lastActiveAt: asString(value.lastActiveAt, nowIso()),
           note: asString(value.note),
-          avatarUrl:
-            this.preferString(value.avatarUrl, fallbackAvatarUrl, null) ||
-            undefined,
+          avatarUrl: avatarUrl || undefined,
           displayBadgeId:
             this.preferString(
               value.displayBadgeId,
@@ -3424,6 +3416,27 @@ export class FirestoreRepository implements AssistantDataRepository {
       return fallbackValue;
     }
     return primaryValue || defaultString || null;
+  }
+
+  private async resolveDormMemberAvatarUrl(
+    userDoc: JsonMap,
+    memberDoc: JsonMap,
+  ): Promise<string | null> {
+    const avatarStoragePath = asString(userDoc.avatarStoragePath).trim();
+    if (avatarStoragePath && this.fileStorage) {
+      try {
+        const temporaryUrl =
+          await this.fileStorage.getTemporaryUrl(avatarStoragePath);
+        if (temporaryUrl.trim()) {
+          return temporaryUrl;
+        }
+      } catch {
+        // Fall through to stored URLs when temp URL signing is unavailable.
+      }
+    }
+    return (
+      this.preferString(userDoc.avatarUrl, memberDoc.avatarUrl, null) || null
+    );
   }
 
   private preferNumber(
