@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
-import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/mood_avatar.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/controllers/assistant_conversation_controller.dart';
 
@@ -29,11 +29,11 @@ class AssistantPage extends StatefulWidget {
 
 class _AssistantPageState extends State<AssistantPage> {
   final TextEditingController _inputController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
 
-  int _lastRenderedMessageCount = 0;
   late AssistantCaptureTab _selectedTab;
+  String? _stagedUserPrompt;
+  String? _stagedThreadId;
 
   bool get _hasDraft => _inputController.text.trim().isNotEmpty;
   bool get _isCaptureMode => widget.captureModeEnabled;
@@ -50,21 +50,21 @@ class _AssistantPageState extends State<AssistantPage> {
   _CaptureCopy get _copy {
     if (!_isCaptureMode) {
       return const _CaptureCopy(
-        title: '现在想聊些什么？',
-        subtitle: '我会陪你慢慢放松，也可以帮你把脑海里的念头整理清楚。',
-        prompt: '如果你愿意，可以先告诉我今晚最在意的一件事，我会顺着你的节奏陪你说下去。',
-        inputHint: '说一说吧',
+        title: '安静疗愈空间',
+        subtitle: '这里会只保留你此刻最需要看的那条回复。',
+        prompt: '你可以先说今晚最在意的一件事。发出消息后，你的话会停在中央，小眠会把回应轻轻托上来。',
+        inputHint: '把今晚最在意的一句话交给我',
         footnote: '',
-        suggestions: <String>['我现在有点睡不着', '宿舍有点吵', '帮我看看今晚该怎么放松'],
+        suggestions: <String>['我现在有点睡不着', '宿舍有点吵', '帮我把脑子里的事放下来'],
       );
     }
     if (_selectedTab == AssistantCaptureTab.memo) {
       return const _CaptureCopy(
-        title: '把事也先安放下来',
-        subtitle: '怕睡前突然想到的事明早忘掉，就先在这里交给我保管。',
-        prompt: '你可以写下明天要做的事、突然想到的人名任务，或者一句不想忘记的话。我会先帮你整理成简短提要，让你今晚不用一直惦记着它。',
-        inputHint: '例如：明早要给导师发材料，还要记得问室友借充电器...',
-        footnote: '会保存到“我的 / 事记仓库”；结束睡眠模式后，首页会短暂提醒你回看。',
+        title: '事记收纳',
+        subtitle: '先放下待办，今晚只留出一点安静。',
+        prompt: '怕睡前想到的事明早忘掉，就先交给我保管。我会把它整理成一条轻量状态，等你需要时再回看。',
+        inputHint: '写下你暂时不想一直惦记的事',
+        footnote: '会保存到“我的 / 事记仓库”，结束睡眠模式后可以继续整理。',
         suggestions: <String>[
           '明早要给导师发材料，还要记得问室友借充电器',
           '记得把实验数据发给组会同学',
@@ -73,10 +73,10 @@ class _AssistantPageState extends State<AssistantPage> {
       );
     }
     return const _CaptureCopy(
-      title: '把梦先轻轻记下来',
-      subtitle: '不用一次写完整，先把还记得的画面、人物、颜色或一句话留住就好。',
-      prompt: '如果刚醒来还模糊，可以先从“我看到什么”“我当时什么感觉”“有没有一句特别清楚的话”开始写，我会帮你把梦记轻轻收好。',
-      inputHint: '例如：我梦见自己站在很高的桥上，风很冷，但并不害怕...',
+      title: '梦记收纳',
+      subtitle: '趁画面还没有散掉，先留住最亮的一层。',
+      prompt: '不必一次写完整，只要把还记得的人物、颜色、情绪或一句话留下来。我会先帮你温柔收好。',
+      inputHint: '把还记得的梦境先轻轻写下来',
       footnote: '会保存到“我的 / 梦境记录”。',
       suggestions: <String>[
         '我梦见自己站在很高的桥上，风很冷，但并不害怕',
@@ -96,7 +96,6 @@ class _AssistantPageState extends State<AssistantPage> {
         return;
       }
       await context.appServices.assistantConversationController.bootstrap();
-      _scrollToBottom();
     });
   }
 
@@ -104,7 +103,6 @@ class _AssistantPageState extends State<AssistantPage> {
   void dispose() {
     _focusNode.removeListener(_handleComposerStateChanged);
     _inputController.dispose();
-    _scrollController.dispose();
     _focusNode.dispose();
     super.dispose();
   }
@@ -127,11 +125,14 @@ class _AssistantPageState extends State<AssistantPage> {
 
     switch (result) {
       case AssistantConversationSubmitResult.sent:
-        if (prompt == null && mounted) {
-          setState(() => _inputController.clear());
+        if (mounted) {
+          setState(() {
+            _inputController.clear();
+            _stagedUserPrompt = normalizedPrompt;
+            _stagedThreadId = controller.currentThread?.id;
+          });
         }
         _focusNode.unfocus();
-        _scrollToBottom();
         break;
       case AssistantConversationSubmitResult.busy:
         await _showThreadBusyToast();
@@ -193,10 +194,6 @@ class _AssistantPageState extends State<AssistantPage> {
     await notifyPassiveToast(context, message: '助手名字已更新');
   }
 
-  void _showVoiceHint() {
-    notifyPassiveToast(context, message: '语音输入即将上线');
-  }
-
   Future<void> _retryLatestPrompt(AppServices services) async {
     final AssistantConversationSubmitResult result = await services
         .assistantConversationController
@@ -213,7 +210,6 @@ class _AssistantPageState extends State<AssistantPage> {
         return;
       }
       await notifyPassiveToast(context, message: '只有在睡眠模式中，才能使用梦记和事记收纳。');
-      return;
     }
   }
 
@@ -226,20 +222,12 @@ class _AssistantPageState extends State<AssistantPage> {
     if (!mounted) {
       return;
     }
-    _scrollToBottom();
-  }
-
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) {
-        return;
-      }
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-      );
+    setState(() {
+      _inputController.clear();
+      _stagedUserPrompt = null;
+      _stagedThreadId = null;
     });
+    _focusNode.unfocus();
   }
 
   void _handleComposerStateChanged() {
@@ -249,33 +237,50 @@ class _AssistantPageState extends State<AssistantPage> {
     setState(() {});
   }
 
-  Widget _buildComposer(AppServices services) {
+  String _busyComposerHint() {
+    if (_isCaptureMode) {
+      return _activeCaptureType == SleepCaptureType.dream
+          ? '小眠正在轻轻整理这段梦境...'
+          : '小眠正在替你安放这段事记...';
+    }
+    return '小眠正在整理回复...';
+  }
+
+  Widget _buildComposer({
+    required AppServices services,
+    required _AssistantSurfacePalette palette,
+  }) {
     final bool isFocused = _focusNode.hasFocus;
-    final _CaptureCopy copy = _copy;
     final AssistantThreadTurnState? turnState =
         services.assistantConversationController.turnState;
     final bool isThreadBusy =
         turnState != null && turnState.status != AssistantThreadTurnStatus.idle;
-    final bool showSendingIndicator =
-        turnState?.status == AssistantThreadTurnStatus.streaming;
+    final bool showSendingIndicator = isThreadBusy;
+    final String hintText = isThreadBusy && !_hasDraft
+        ? _busyComposerHint()
+        : _copy.inputHint;
+
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFF0A111D).withAlpha(242),
-        borderRadius: BorderRadius.circular(28),
+        color: palette.chromeSurface,
+        borderRadius: AppRadius.card,
         border: Border.all(
-          color: isFocused ? const Color(0xFF3E5E86) : const Color(0xFF1A2740),
+          color: isFocused ? palette.focusBorder : palette.chromeBorder,
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sm),
+        padding: const EdgeInsets.all(AppSpacing.xs),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: <Widget>[
-            _InputActionButton(
+            _ComposerActionButton(
               icon: Icons.add_rounded,
-              onPressed: () => _startNewConversation(services),
+              palette: palette,
+              onPressed: isThreadBusy
+                  ? null
+                  : () => _startNewConversation(services),
             ),
-            const SizedBox(width: AppSpacing.sm),
+            const SizedBox(width: AppSpacing.xs),
             Expanded(
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
@@ -285,82 +290,76 @@ class _AssistantPageState extends State<AssistantPage> {
                   vertical: AppSpacing.sm,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF111A2B),
-                  borderRadius: BorderRadius.circular(24),
+                  color: palette.composerFieldSurface,
+                  borderRadius: AppRadius.surfaceSecondary,
                   border: Border.all(
                     color: isFocused
-                        ? const Color(0xFF5D7BA2)
-                        : const Color(0xFF22314C),
+                        ? palette.focusBorder
+                        : palette.fieldBorder,
                   ),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: <Widget>[
-                    Expanded(
-                      child: TextField(
-                        key: const ValueKey<String>('assistant-composer-field'),
-                        controller: _inputController,
-                        focusNode: _focusNode,
-                        minLines: 1,
-                        maxLines: 4,
-                        enabled: true,
-                        textInputAction: TextInputAction.newline,
-                        onChanged: (_) => setState(() {}),
-                        style: const TextStyle(
-                          color: AppColors.onDark,
-                          height: 1.4,
-                        ),
-                        decoration: InputDecoration(
-                          isCollapsed: true,
-                          border: InputBorder.none,
-                          hintText: copy.inputHint,
-                          hintStyle: TextStyle(
-                            color: AppColors.onDark.withAlpha(125),
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
+                child: TextField(
+                  key: const ValueKey<String>('assistant-composer-field'),
+                  controller: _inputController,
+                  focusNode: _focusNode,
+                  minLines: 1,
+                  maxLines: 4,
+                  textInputAction: TextInputAction.newline,
+                  onChanged: (_) => setState(() {}),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.onDark,
+                    height: 1.5,
+                  ),
+                  decoration: InputDecoration(
+                    isCollapsed: true,
+                    border: InputBorder.none,
+                    hintText: hintText,
+                    hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: palette.placeholderText,
+                      height: 1.5,
                     ),
-                    if (!_hasDraft && !isThreadBusy) ...<Widget>[
-                      const SizedBox(width: AppSpacing.sm),
-                      IconButton(
-                        onPressed: _showVoiceHint,
-                        icon: const Icon(
-                          Icons.mic_none_rounded,
-                          color: Color(0xFF8FA6C7),
-                        ),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
               ),
             ),
-            const SizedBox(width: AppSpacing.sm),
+            const SizedBox(width: AppSpacing.xs),
             FilledButton(
               onPressed: (isThreadBusy || !_hasDraft)
                   ? null
                   : () => _handleSubmit(services),
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF4E8DF7),
-                disabledBackgroundColor: const Color(0xFF26364F),
-                foregroundColor: Colors.white,
-                minimumSize: const Size(74, 46),
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                backgroundColor: palette.sendSurface,
+                disabledBackgroundColor: palette.disabledSurface,
+                foregroundColor: palette.sendForeground,
+                disabledForegroundColor: palette.placeholderText,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: AppRadius.surfaceSecondary,
                 ),
               ),
-              child: showSendingIndicator
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 160),
+                child: showSendingIndicator
+                    ? SizedBox(
+                        key: const ValueKey<String>('assistant-composer-busy'),
+                        width: AppSpacing.md,
+                        height: AppSpacing.md,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: palette.sendForeground,
+                        ),
+                      )
+                    : Text(
+                        '发送',
+                        key: const ValueKey<String>('assistant-composer-send'),
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: palette.sendForeground,
+                        ),
                       ),
-                    )
-                  : const Text('发送'),
+              ),
             ),
           ],
         ),
@@ -371,21 +370,25 @@ class _AssistantPageState extends State<AssistantPage> {
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    final _CaptureCopy copy = _copy;
     final double keyboardInset = MediaQuery.of(context).viewInsets.bottom;
     final bool keyboardVisible = keyboardInset > 0;
-    final _CaptureCopy copy = _copy;
+    final double horizontalPadding = MediaQuery.of(context).size.width * 0.06;
+    final _AssistantSurfacePalette palette = _AssistantSurfacePalette.from(
+      context,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.darkBackground,
       body: DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: <Color>[
-              Color(0xFF0B1220),
-              Color(0xFF111B30),
-              Color(0xFF090F18),
+              palette.backgroundStart,
+              palette.backgroundMid,
+              palette.backgroundEnd,
             ],
           ),
         ),
@@ -400,158 +403,130 @@ class _AssistantPageState extends State<AssistantPage> {
                   services.assistantFacade.assistantProfile;
               final List<AssistantMessage> messages =
                   services.assistantConversationController.currentMessages;
-              if (_lastRenderedMessageCount != messages.length) {
-                _lastRenderedMessageCount = messages.length;
-                _scrollToBottom();
-              }
+              final AssistantThreadTurnState? turnState =
+                  services.assistantConversationController.turnState;
+              final _ConversationSnapshot snapshot =
+                  _ConversationSnapshot.fromMessages(messages);
+              final String? stagedUserPrompt =
+                  services.assistantConversationController.currentThread?.id ==
+                      _stagedThreadId
+                  ? _stagedUserPrompt
+                  : null;
+              final bool hasConversation =
+                  snapshot.hasConversation || stagedUserPrompt != null;
 
               return Column(
                 children: <Widget>[
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.lg,
-                      AppSpacing.md,
-                      AppSpacing.lg,
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding,
+                      AppSpacing.xs,
+                      horizontalPadding,
+                      AppSpacing.sm,
+                    ),
+                    child: _HistoryHint(
+                      palette: palette,
+                      onTap: () => context.push(AppRoutes.assistantHistory),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding,
+                      0,
+                      horizontalPadding,
                       AppSpacing.md,
                     ),
-                    child: Row(
-                      children: <Widget>[
-                        _CircleActionButton(
-                          icon: Icons.arrow_back_ios_new_rounded,
-                          onPressed: () => Navigator.of(context).maybePop(),
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                _isCaptureMode
-                                    ? copy.title
-                                    : profile.assistantName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleLarge
-                                    ?.copyWith(
-                                      color: AppColors.onDark,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                              ),
-                              Text(
-                                _isCaptureMode ? copy.subtitle : '线程记忆已开启',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: AppColors.onDark.withAlpha(170),
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        _CircleActionButton(
-                          icon: Icons.edit_outlined,
-                          onPressed: () =>
-                              _showRenameDialog(context, services, profile),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        _CircleActionButton(
-                          icon: Icons.add_rounded,
-                          onPressed: () => _startNewConversation(services),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        _CircleActionButton(
-                          icon: Icons.history_rounded,
-                          onPressed: () =>
-                              context.push(AppRoutes.assistantHistory),
-                        ),
-                      ],
+                    child: _AssistantHeader(
+                      assistantName: profile.assistantName,
+                      subtitle: _isCaptureMode
+                          ? copy.subtitle
+                          : '当前页只展示最新一条回复，历史记录已收起。',
+                      captureCopy: copy,
+                      captureModeEnabled: _isCaptureMode,
+                      palette: palette,
+                      onBack: () => Navigator.of(context).maybePop(),
+                      onRename: () =>
+                          _showRenameDialog(context, services, profile),
+                      onNewConversation: () => _startNewConversation(services),
                     ),
                   ),
                   if (_isCaptureMode)
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.lg,
+                      padding: EdgeInsets.fromLTRB(
+                        horizontalPadding,
                         0,
-                        AppSpacing.lg,
-                        AppSpacing.md,
+                        horizontalPadding,
+                        AppSpacing.sm,
                       ),
                       child: _CaptureTabSwitcher(
                         selected: _selectedTab,
+                        palette: palette,
                         onChanged: (AssistantCaptureTab value) {
                           setState(() => _selectedTab = value);
                         },
                       ),
                     ),
-                  if (!keyboardVisible) ...<Widget>[
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg,
-                      ),
-                      child: _AssistantHero(
-                        profile: profile,
-                        copy: copy,
-                        captureModeEnabled: _isCaptureMode,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                  ],
                   Expanded(
-                    child: ListView(
-                      controller: _scrollController,
+                    child: Padding(
                       padding: EdgeInsets.fromLTRB(
-                        AppSpacing.lg,
-                        0,
-                        AppSpacing.lg,
+                        horizontalPadding,
+                        AppSpacing.sm,
+                        horizontalPadding,
                         keyboardVisible ? AppSpacing.sm : AppSpacing.lg,
                       ),
-                      children: <Widget>[
-                        if (messages.isEmpty)
-                          _AssistantEmptyState(
-                            assistantName: profile.assistantName,
-                            copy: copy,
-                            onSuggestionTap: (String suggestion) {
-                              setState(() {
-                                _inputController.text = suggestion;
-                                _inputController.selection =
-                                    TextSelection.collapsed(
-                                      offset: suggestion.length,
-                                    );
-                              });
-                              _focusNode.requestFocus();
-                            },
-                          )
-                        else
-                          ...messages.map(
-                            (AssistantMessage message) => Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: AppSpacing.md,
-                              ),
-                              child: _MessageBubble(
-                                message: message,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        child: hasConversation
+                            ? _AssistantCurrentStage(
+                                key: const ValueKey<String>(
+                                  'assistant-page-current-stage',
+                                ),
                                 assistantName: profile.assistantName,
+                                snapshot: snapshot,
+                                stagedUserPrompt: stagedUserPrompt,
+                                turnState: turnState,
+                                captureModeEnabled: _isCaptureMode,
+                                captureType: _activeCaptureType,
+                                palette: palette,
                                 onRetry:
-                                    message.status ==
+                                    snapshot.latestAssistantMessage?.status ==
                                         AssistantMessageStatus.error
                                     ? () => _retryLatestPrompt(services)
                                     : null,
+                              )
+                            : _AssistantEmptyState(
+                                key: const ValueKey<String>(
+                                  'assistant-empty-stage',
+                                ),
+                                assistantName: profile.assistantName,
+                                copy: copy,
+                                palette: palette,
+                                onSuggestionTap: (String suggestion) {
+                                  setState(() {
+                                    _inputController.text = suggestion;
+                                    _inputController.selection =
+                                        TextSelection.collapsed(
+                                          offset: suggestion.length,
+                                        );
+                                  });
+                                  _focusNode.requestFocus();
+                                },
                               ),
-                            ),
-                          ),
-                      ],
+                      ),
                     ),
                   ),
                   AnimatedPadding(
                     duration: const Duration(milliseconds: 180),
                     curve: Curves.easeOutCubic,
                     padding: EdgeInsets.fromLTRB(
-                      AppSpacing.lg,
-
+                      horizontalPadding,
                       keyboardVisible ? 0 : AppSpacing.sm,
-                      AppSpacing.lg,
+                      horizontalPadding,
                       keyboardVisible ? AppSpacing.sm : AppSpacing.lg,
                     ),
-                    child: _buildComposer(services),
+                    child: _buildComposer(services: services, palette: palette),
                   ),
                 ],
               );
@@ -581,97 +556,519 @@ class _CaptureCopy {
   final List<String> suggestions;
 }
 
-class _AssistantHero extends StatelessWidget {
-  const _AssistantHero({
-    required this.profile,
-    required this.copy,
+class _AssistantHeader extends StatelessWidget {
+  const _AssistantHeader({
+    required this.assistantName,
+    required this.subtitle,
+    required this.captureCopy,
     required this.captureModeEnabled,
+    required this.palette,
+    required this.onBack,
+    required this.onRename,
+    required this.onNewConversation,
   });
 
-  final AssistantProfile profile;
-  final _CaptureCopy copy;
+  final String assistantName;
+  final String subtitle;
+  final _CaptureCopy captureCopy;
   final bool captureModeEnabled;
+  final _AssistantSurfacePalette palette;
+  final VoidCallback onBack;
+  final VoidCallback onRename;
+  final VoidCallback onNewConversation;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        _ChromeIconButton(
+          icon: Icons.arrow_back_ios_new_rounded,
+          palette: palette,
+          onPressed: onBack,
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Row(
+            children: <Widget>[
+              _AssistantIdentityAvatar(
+                captureModeEnabled: captureModeEnabled,
+                palette: palette,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      captureModeEnabled ? captureCopy.title : assistantName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            color: AppColors.onDark,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: palette.secondaryText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        _ChromeIconButton(
+          icon: Icons.edit_outlined,
+          palette: palette,
+          onPressed: onRename,
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        _ChromeIconButton(
+          icon: Icons.add_comment_rounded,
+          palette: palette,
+          onPressed: onNewConversation,
+        ),
+      ],
+    );
+  }
+}
+
+class _AssistantIdentityAvatar extends StatelessWidget {
+  const _AssistantIdentityAvatar({
+    required this.captureModeEnabled,
+    required this.palette,
+  });
+
+  final bool captureModeEnabled;
+  final _AssistantSurfacePalette palette;
 
   @override
   Widget build(BuildContext context) {
     final NightMood? mood = context.nightMoodPalette.mood;
-    return AppCard(
-      color: const Color(0xFF10192A),
-      border: Border.all(color: const Color(0xFF24334E)),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: <Color>[
-                  const Color(0xFF7BC4FF),
-                  context.nightMoodPalette.primarySoft,
-                ],
-              ),
-            ),
-            alignment: Alignment.center,
-            child: mood == null
-                ? const Icon(
-                    key: ValueKey<String>('assistant-page-default-avatar'),
-                    Icons.auto_awesome_rounded,
-                    color: Color(0xFF16334E),
-                    size: 30,
-                  )
-                : MoodAvatar(
-                    key: const ValueKey<String>('assistant-page-mood-avatar'),
-                    mood: mood,
-                    size: 48,
-                    fillColor: context.nightMoodPalette.welcomeFaceColor,
-                  ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  captureModeEnabled
-                      ? copy.title
-                      : '${profile.assistantName}会记住你的节奏',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.onDark,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  captureModeEnabled
-                      ? copy.subtitle
-                      : '温和、低压、不评判。你可以直接说困意、心情、宿舍状态，或者只是想被陪一会儿。',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.onDark.withAlpha(180),
-                    height: 1.45,
-                  ),
-                ),
-              ],
-            ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            palette.avatarGradientStart,
+            palette.avatarGradientEnd,
+          ],
+        ),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: palette.avatarGlow,
+            blurRadius: AppSpacing.xxl,
+            offset: const Offset(0, AppSpacing.xs),
           ),
         ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xs),
+        child: CircleAvatar(
+          radius: AppSpacing.lg,
+          backgroundColor: palette.avatarSurface,
+          child: captureModeEnabled
+              ? Icon(
+                  Icons.auto_awesome_rounded,
+                  color: palette.avatarForeground,
+                )
+              : mood == null
+              ? Icon(
+                  key: const ValueKey<String>('assistant-page-default-avatar'),
+                  Icons.auto_awesome_rounded,
+                  color: palette.avatarForeground,
+                )
+              : MoodAvatar(
+                  key: const ValueKey<String>('assistant-page-mood-avatar'),
+                  mood: mood,
+                  size: AppSpacing.xxxl,
+                  fillColor: context.nightMoodPalette.welcomeFaceColor,
+                ),
+        ),
       ),
     );
   }
 }
 
-class _CircleActionButton extends StatelessWidget {
-  const _CircleActionButton({required this.icon, required this.onPressed});
+class _HistoryHint extends StatelessWidget {
+  const _HistoryHint({required this.palette, required this.onTap});
+
+  final _AssistantSurfacePalette palette;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: InkWell(
+        key: const ValueKey<String>('assistant-history-hint'),
+        borderRadius: AppRadius.pill,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.xs,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(
+                Icons.keyboard_double_arrow_up_rounded,
+                size: AppSpacing.md,
+                color: palette.mutedText,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                '再次上拉查看对话记录',
+                style: Theme.of(
+                  context,
+                ).textTheme.labelMedium?.copyWith(color: palette.mutedText),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AssistantEmptyState extends StatelessWidget {
+  const _AssistantEmptyState({
+    super.key,
+    required this.assistantName,
+    required this.copy,
+    required this.palette,
+    required this.onSuggestionTap,
+  });
+
+  final String assistantName;
+  final _CaptureCopy copy;
+  final _AssistantSurfacePalette palette;
+  final ValueChanged<String> onSuggestionTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: FractionallySizedBox(
+        widthFactor: 0.94,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                decoration: BoxDecoration(
+                  color: palette.stageSurface,
+                  borderRadius: AppRadius.cardLarge,
+                  border: Border.all(color: palette.chromeBorder),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      copy.title.isEmpty
+                          ? '先跟 $assistantName 说一句吧'
+                          : copy.title,
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            color: AppColors.onDark,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      copy.prompt,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: palette.secondaryText,
+                        height: 1.6,
+                      ),
+                    ),
+                    if (copy.footnote.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        copy.footnote,
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(color: palette.mutedText),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: copy.suggestions
+                    .map(
+                      (String label) => _SuggestionChip(
+                        label: label,
+                        palette: palette,
+                        onTap: () => onSuggestionTap(label),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AssistantCurrentStage extends StatelessWidget {
+  const _AssistantCurrentStage({
+    super.key,
+    required this.assistantName,
+    required this.snapshot,
+    required this.stagedUserPrompt,
+    required this.turnState,
+    required this.captureModeEnabled,
+    required this.captureType,
+    required this.palette,
+    this.onRetry,
+  });
+
+  final String assistantName;
+  final _ConversationSnapshot snapshot;
+  final String? stagedUserPrompt;
+  final AssistantThreadTurnState? turnState;
+  final bool captureModeEnabled;
+  final SleepCaptureType captureType;
+  final _AssistantSurfacePalette palette;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final AssistantMessage? latestUser = snapshot.latestUserMessage;
+    final AssistantMessage? latestAssistant = snapshot.latestAssistantMessage;
+    final String? currentUserText = latestUser?.content ?? stagedUserPrompt;
+    final List<_AssistantStatusItem> statusItems = _buildStatusItems(
+      assistantMessage: latestAssistant,
+      turnState: turnState,
+      captureModeEnabled: captureModeEnabled,
+      captureType: captureType,
+    );
+
+    return Center(
+      child: FractionallySizedBox(
+        widthFactor: 0.94,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              if (currentUserText != null)
+                Container(
+                  key: const ValueKey<String>('assistant-current-user-message'),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  decoration: BoxDecoration(
+                    color: palette.userBubbleSurface,
+                    borderRadius: AppRadius.surfacePrimary,
+                    border: Border.all(color: palette.userBubbleBorder),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        '你刚刚说',
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(color: palette.mutedText),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        currentUserText,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: AppColors.onDark,
+                          height: 1.6,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (currentUserText != null)
+                const SizedBox(height: AppSpacing.xl),
+              Container(
+                key: const ValueKey<String>(
+                  'assistant-current-assistant-message',
+                ),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.md,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: AppRadius.card,
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: <Color>[palette.assistantGlow, Colors.transparent],
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      assistantName,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: palette.mutedText,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      latestAssistant?.content.trim().isNotEmpty == true
+                          ? latestAssistant!.content
+                          : '小眠正在整理这一条回应...',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: AppColors.onDark,
+                        height: 1.7,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (statusItems.isNotEmpty) ...<Widget>[
+                const SizedBox(height: AppSpacing.lg),
+                Wrap(
+                  key: const ValueKey<String>('assistant-current-status-list'),
+                  spacing: AppSpacing.md,
+                  runSpacing: AppSpacing.sm,
+                  children: statusItems
+                      .map(
+                        (_AssistantStatusItem item) =>
+                            _AssistantStatusLine(item: item, palette: palette),
+                      )
+                      .toList(growable: false),
+                ),
+              ],
+              if (latestAssistant?.status == AssistantMessageStatus.error &&
+                  latestAssistant?.errorMessage?.trim().isNotEmpty ==
+                      true) ...<Widget>[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  latestAssistant!.errorMessage!,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: palette.mutedText,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+              if (latestAssistant?.status == AssistantMessageStatus.error &&
+                  onRetry != null) ...<Widget>[
+                const SizedBox(height: AppSpacing.md),
+                TextButton.icon(
+                  onPressed: onRetry,
+                  style: TextButton.styleFrom(
+                    foregroundColor: palette.retryColor,
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  icon: const Icon(Icons.refresh_rounded, size: AppSpacing.md),
+                  label: const Text('重试这条回复'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AssistantStatusLine extends StatelessWidget {
+  const _AssistantStatusLine({required this.item, required this.palette});
+
+  final _AssistantStatusItem item;
+  final _AssistantSurfacePalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Icon(item.icon, size: AppSpacing.md, color: palette.statusText),
+        const SizedBox(width: AppSpacing.xs),
+        Text(
+          item.label,
+          style: Theme.of(
+            context,
+          ).textTheme.labelMedium?.copyWith(color: palette.statusText),
+        ),
+      ],
+    );
+  }
+}
+
+class _SuggestionChip extends StatelessWidget {
+  const _SuggestionChip({
+    required this.label,
+    required this.palette,
+    required this.onTap,
+  });
+
+  final String label;
+  final _AssistantSurfacePalette palette;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: AppRadius.pill,
+      onTap: onTap,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: palette.suggestionSurface,
+          borderRadius: AppRadius.pill,
+          border: Border.all(color: palette.suggestionBorder),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+          child: Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.onDark),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChromeIconButton extends StatelessWidget {
+  const _ChromeIconButton({
+    required this.icon,
+    required this.palette,
+    required this.onPressed,
+  });
 
   final IconData icon;
+  final _AssistantSurfacePalette palette;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFF121B2A),
+      color: palette.actionSurface,
       shape: const CircleBorder(),
       child: IconButton(
         onPressed: onPressed,
@@ -681,46 +1078,56 @@ class _CircleActionButton extends StatelessWidget {
   }
 }
 
-class _InputActionButton extends StatelessWidget {
-  const _InputActionButton({required this.icon, required this.onPressed});
+class _ComposerActionButton extends StatelessWidget {
+  const _ComposerActionButton({
+    required this.icon,
+    required this.palette,
+    this.onPressed,
+  });
 
   final IconData icon;
-  final VoidCallback onPressed;
+  final _AssistantSurfacePalette palette;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: AppRadius.surfaceSecondary,
       onTap: onPressed,
-      child: Container(
-        width: 44,
-        height: 44,
+      child: DecoratedBox(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          color: const Color(0xFF141F31),
-          border: Border.all(color: const Color(0xFF25344F)),
+          color: palette.actionSurface,
+          borderRadius: AppRadius.surfaceSecondary,
+          border: Border.all(color: palette.fieldBorder),
         ),
-        alignment: Alignment.center,
-        child: Icon(icon, color: const Color(0xFFB5C8E6), size: 20),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          child: Icon(icon, color: AppColors.onDark),
+        ),
       ),
     );
   }
 }
 
 class _CaptureTabSwitcher extends StatelessWidget {
-  const _CaptureTabSwitcher({required this.selected, required this.onChanged});
+  const _CaptureTabSwitcher({
+    required this.selected,
+    required this.palette,
+    required this.onChanged,
+  });
 
   final AssistantCaptureTab selected;
+  final _AssistantSurfacePalette palette;
   final ValueChanged<AssistantCaptureTab> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.all(AppSpacing.xxs),
       decoration: BoxDecoration(
-        color: const Color(0xFF10192A),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFF24334E)),
+        color: palette.stageSurface,
+        borderRadius: AppRadius.pill,
+        border: Border.all(color: palette.chromeBorder),
       ),
       child: Row(
         children: <Widget>[
@@ -728,6 +1135,7 @@ class _CaptureTabSwitcher extends StatelessWidget {
             child: _CaptureTabChip(
               label: '梦记',
               selected: selected == AssistantCaptureTab.dream,
+              palette: palette,
               onTap: () => onChanged(AssistantCaptureTab.dream),
             ),
           ),
@@ -736,6 +1144,7 @@ class _CaptureTabSwitcher extends StatelessWidget {
             child: _CaptureTabChip(
               label: '事记',
               selected: selected == AssistantCaptureTab.memo,
+              palette: palette,
               onTap: () => onChanged(AssistantCaptureTab.memo),
             ),
           ),
@@ -749,17 +1158,19 @@ class _CaptureTabChip extends StatelessWidget {
   const _CaptureTabChip({
     required this.label,
     required this.selected,
+    required this.palette,
     required this.onTap,
   });
 
   final String label;
   final bool selected;
+  final _AssistantSurfacePalette palette;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: AppRadius.pill,
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
@@ -769,15 +1180,14 @@ class _CaptureTabChip extends StatelessWidget {
           vertical: AppSpacing.sm,
         ),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF4E8DF7) : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
+          color: selected ? palette.sendSurface : Colors.transparent,
+          borderRadius: AppRadius.pill,
         ),
         alignment: Alignment.center,
         child: Text(
           label,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: selected ? Colors.white : AppColors.onDark.withAlpha(190),
-            fontWeight: FontWeight.w700,
+            color: selected ? palette.sendForeground : palette.secondaryText,
           ),
         ),
       ),
@@ -785,262 +1195,250 @@ class _CaptureTabChip extends StatelessWidget {
   }
 }
 
-class _AssistantEmptyState extends StatelessWidget {
-  const _AssistantEmptyState({
-    required this.assistantName,
-    required this.copy,
-    required this.onSuggestionTap,
+class _ConversationSnapshot {
+  const _ConversationSnapshot({
+    required this.latestUserMessage,
+    required this.latestAssistantMessage,
+    required this.messageCount,
   });
 
-  final String assistantName;
-  final _CaptureCopy copy;
-  final ValueChanged<String> onSuggestionTap;
+  final AssistantMessage? latestUserMessage;
+  final AssistantMessage? latestAssistantMessage;
+  final int messageCount;
 
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      color: const Color(0xFF10192A),
-      border: Border.all(color: const Color(0xFF24334E)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            copy.title.isEmpty ? '先跟 $assistantName 说一句吧' : copy.title,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: AppColors.onDark,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            copy.prompt,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.onDark.withAlpha(180),
-              height: 1.5,
-            ),
-          ),
-          if (copy.footnote.isNotEmpty) ...<Widget>[
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              copy.footnote,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: AppColors.onDark.withAlpha(160),
-              ),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.lg),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: copy.suggestions
-                .map(
-                  (String label) => InkWell(
-                    borderRadius: BorderRadius.circular(999),
-                    onTap: () => onSuggestionTap(label),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md,
-                        vertical: AppSpacing.sm,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF172235),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: const Color(0xFF26354F)),
-                      ),
-                      child: Text(
-                        label,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.onDark.withAlpha(220),
-                        ),
-                      ),
-                    ),
-                  ),
-                )
-                .toList(growable: false),
-          ),
-        ],
-      ),
+  bool get hasConversation =>
+      latestUserMessage != null || latestAssistantMessage != null;
+
+  static _ConversationSnapshot fromMessages(List<AssistantMessage> messages) {
+    AssistantMessage? latestUser;
+    AssistantMessage? latestAssistant;
+    for (final AssistantMessage message in messages.reversed) {
+      if (latestUser == null && message.role == AssistantMessageRole.user) {
+        latestUser = message;
+      }
+      if (latestAssistant == null &&
+          message.role == AssistantMessageRole.assistant) {
+        latestAssistant = message;
+      }
+      if (latestUser != null && latestAssistant != null) {
+        break;
+      }
+    }
+    return _ConversationSnapshot(
+      latestUserMessage: latestUser,
+      latestAssistantMessage: latestAssistant,
+      messageCount: messages.length,
     );
   }
 }
 
-class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({
-    required this.message,
-    required this.assistantName,
-    this.onRetry,
-  });
+class _AssistantStatusItem {
+  const _AssistantStatusItem({required this.icon, required this.label});
 
-  final AssistantMessage message;
-  final String assistantName;
-  final VoidCallback? onRetry;
+  final IconData icon;
+  final String label;
+}
 
-  @override
-  Widget build(BuildContext context) {
-    final bool isUser = message.role == AssistantMessageRole.user;
-    final Color bubbleColor = isUser
-        ? const Color(0xFF6AA8FF)
-        : message.status == AssistantMessageStatus.error
-        ? const Color(0xFF41212C)
-        : message.status == AssistantMessageStatus.pending
-        ? const Color(0xFF162234)
-        : const Color(0xFF10192A);
-    final Color textColor = isUser ? Colors.white : AppColors.onDark;
-    final String? statusLabel = _messageStatusLabel(message);
-    final String? statusDescription = _messageStatusDescription(message);
+List<_AssistantStatusItem> _buildStatusItems({
+  required AssistantMessage? assistantMessage,
+  required AssistantThreadTurnState? turnState,
+  required bool captureModeEnabled,
+  required SleepCaptureType captureType,
+}) {
+  final List<_AssistantStatusItem> items = <_AssistantStatusItem>[];
+  final bool isBusy =
+      turnState != null && turnState.status != AssistantThreadTurnStatus.idle;
 
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 328),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: bubbleColor,
-            borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(22),
-              topRight: const Radius.circular(22),
-              bottomLeft: Radius.circular(isUser ? 22 : 8),
-              bottomRight: Radius.circular(isUser ? 8 : 22),
-            ),
-            border: isUser ? null : Border.all(color: const Color(0xFF24334E)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg,
-              vertical: AppSpacing.md,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                if (!isUser)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                    child: Text(
-                      assistantName,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: textColor.withAlpha(170),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                Text(
-                  message.content,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: textColor,
-                    height: 1.55,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: <Widget>[
-                    Text(
-                      _formatTime(message.createdAt),
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: textColor.withAlpha(150),
-                      ),
-                    ),
-                    if (statusLabel != null) ...<Widget>[
-                      const SizedBox(width: AppSpacing.sm),
-                      Text(
-                        statusLabel,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: textColor.withAlpha(180),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                if (statusDescription != null) ...<Widget>[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    statusDescription,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: textColor.withAlpha(150),
-                      height: 1.45,
-                    ),
-                  ),
-                ],
-                if (message.status == AssistantMessageStatus.error &&
-                    onRetry != null) ...<Widget>[
-                  const SizedBox(height: AppSpacing.sm),
-                  TextButton.icon(
-                    onPressed: onRetry,
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFFFFC7D1),
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(0, 0),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    icon: const Icon(Icons.refresh_rounded, size: 16),
-                    label: const Text('重试'),
-                  ),
-                ],
-              ],
-            ),
-          ),
+  if (captureModeEnabled &&
+      assistantMessage != null &&
+      assistantMessage.status != AssistantMessageStatus.error &&
+      !isBusy) {
+    items.add(
+      _AssistantStatusItem(
+        icon: captureType == SleepCaptureType.dream
+            ? Icons.bedtime_rounded
+            : Icons.bookmark_added_rounded,
+        label: captureType == SleepCaptureType.dream ? '梦记已收纳' : '事记已收纳',
+      ),
+    );
+  }
+
+  if (isBusy || assistantMessage?.status == AssistantMessageStatus.pending) {
+    items.add(
+      _AssistantStatusItem(
+        icon: Icons.hourglass_top_rounded,
+        label: captureModeEnabled
+            ? (captureType == SleepCaptureType.dream ? '正在整理梦记' : '正在整理事记')
+            : '正在整理回复',
+      ),
+    );
+    return items;
+  }
+
+  switch (assistantMessage?.sourceMode) {
+    case AssistantReplySourceMode.remoteSuccess:
+      items.add(
+        const _AssistantStatusItem(
+          icon: Icons.wifi_tethering_rounded,
+          label: '联网回复已完成',
         ),
-      ),
-    );
+      );
+    case AssistantReplySourceMode.fallbackSuccess:
+      items.add(
+        const _AssistantStatusItem(
+          icon: Icons.auto_awesome_rounded,
+          label: '备用回复已完成',
+        ),
+      );
+    case AssistantReplySourceMode.error:
+      items.add(
+        const _AssistantStatusItem(
+          icon: Icons.error_outline_rounded,
+          label: '这次回复失败',
+        ),
+      );
+    case null:
+      if (assistantMessage != null) {
+        items.add(
+          const _AssistantStatusItem(
+            icon: Icons.check_circle_outline_rounded,
+            label: '陪伴回复已就绪',
+          ),
+        );
+      }
   }
 
-  String? _messageStatusLabel(AssistantMessage message) {
-    if (message.status == AssistantMessageStatus.pending) {
-      return '生成中';
-    }
-    return switch (message.sourceMode) {
-      AssistantReplySourceMode.remoteSuccess => '联网回复',
-      AssistantReplySourceMode.fallbackSuccess => '备用回复',
-      AssistantReplySourceMode.error => '回复失败',
-      _ => null,
-    };
-  }
-
-  String? _messageStatusDescription(AssistantMessage message) {
-    if (message.sourceMode == AssistantReplySourceMode.error &&
-        message.errorMessage?.trim().isNotEmpty == true) {
-      return message.errorMessage;
-    }
-    return switch (message.sourceMode) {
-      AssistantReplySourceMode.fallbackSuccess => '这次使用了备用回复，不影响你继续对话。',
-      AssistantReplySourceMode.error => '这次没有拿到有效回复，可以直接重试上一条消息。',
-      _ => null,
-    };
-  }
-
-  // ignore: unused_element
-  String? _statusLabel(AssistantMessage message) {
-    if (message.status == AssistantMessageStatus.pending) {
-      return '生成中';
-    }
-    return switch (message.sourceMode) {
-      AssistantReplySourceMode.remoteSuccess => '联网回复',
-      AssistantReplySourceMode.fallbackSuccess => '回退回复',
-      AssistantReplySourceMode.error => '回复失败',
-      _ => null,
-    };
-  }
-
-  // ignore: unused_element
-  String? _statusDescription(AssistantMessage message) {
-    return switch (message.sourceMode) {
-      AssistantReplySourceMode.fallbackSuccess =>
-        message.errorMessage?.trim().isNotEmpty == true
-            ? '远端模型未成功返回：${message.errorMessage}'
-            : '远端模型未成功返回，本次使用了稳定回退回复。',
-      AssistantReplySourceMode.error =>
-        message.errorMessage?.trim().isNotEmpty == true
-            ? '这次没有拿到有效回复：${message.errorMessage}'
-            : '这次没有拿到有效回复，可以直接重试上一条消息。',
-      _ => null,
-    };
-  }
+  return items;
 }
 
-String _formatTime(DateTime time) {
-  final String month = time.month.toString().padLeft(2, '0');
-  final String day = time.day.toString().padLeft(2, '0');
-  final String hour = time.hour.toString().padLeft(2, '0');
-  final String minute = time.minute.toString().padLeft(2, '0');
-  return '$month-$day $hour:$minute';
+class _AssistantSurfacePalette {
+  const _AssistantSurfacePalette({
+    required this.backgroundStart,
+    required this.backgroundMid,
+    required this.backgroundEnd,
+    required this.chromeSurface,
+    required this.chromeBorder,
+    required this.fieldBorder,
+    required this.focusBorder,
+    required this.stageSurface,
+    required this.userBubbleSurface,
+    required this.userBubbleBorder,
+    required this.assistantGlow,
+    required this.actionSurface,
+    required this.composerFieldSurface,
+    required this.suggestionSurface,
+    required this.suggestionBorder,
+    required this.sendSurface,
+    required this.sendForeground,
+    required this.disabledSurface,
+    required this.avatarGradientStart,
+    required this.avatarGradientEnd,
+    required this.avatarSurface,
+    required this.avatarForeground,
+    required this.avatarGlow,
+    required this.secondaryText,
+    required this.mutedText,
+    required this.placeholderText,
+    required this.statusText,
+    required this.retryColor,
+  });
+
+  final Color backgroundStart;
+  final Color backgroundMid;
+  final Color backgroundEnd;
+  final Color chromeSurface;
+  final Color chromeBorder;
+  final Color fieldBorder;
+  final Color focusBorder;
+  final Color stageSurface;
+  final Color userBubbleSurface;
+  final Color userBubbleBorder;
+  final Color assistantGlow;
+  final Color actionSurface;
+  final Color composerFieldSurface;
+  final Color suggestionSurface;
+  final Color suggestionBorder;
+  final Color sendSurface;
+  final Color sendForeground;
+  final Color disabledSurface;
+  final Color avatarGradientStart;
+  final Color avatarGradientEnd;
+  final Color avatarSurface;
+  final Color avatarForeground;
+  final Color avatarGlow;
+  final Color secondaryText;
+  final Color mutedText;
+  final Color placeholderText;
+  final Color statusText;
+  final Color retryColor;
+
+  static _AssistantSurfacePalette from(BuildContext context) {
+    final NightMoodPalette mood = context.nightMoodPalette;
+    return _AssistantSurfacePalette(
+      backgroundStart: Color.lerp(
+        AppColors.darkBackground,
+        mood.heroGradientStart,
+        0.55,
+      )!,
+      backgroundMid: Color.lerp(
+        AppColors.darkBackground,
+        mood.heroGradientMid,
+        0.38,
+      )!,
+      backgroundEnd: Color.lerp(
+        AppColors.darkBackground,
+        mood.heroGradientEnd,
+        0.2,
+      )!,
+      chromeSurface: Color.lerp(
+        AppColors.darkSurface,
+        mood.welcomeSurfaceColor,
+        0.5,
+      )!,
+      chromeBorder: mood.primarySoft.withAlpha(44),
+      fieldBorder: mood.primarySoft.withAlpha(34),
+      focusBorder: mood.primarySoft.withAlpha(88),
+      stageSurface: Color.lerp(
+        AppColors.darkSurface,
+        mood.welcomeSurfaceColor,
+        0.62,
+      )!,
+      userBubbleSurface: Color.lerp(
+        mood.welcomeSurfaceColor,
+        mood.heroGradientMid,
+        0.32,
+      )!,
+      userBubbleBorder: mood.primarySoft.withAlpha(52),
+      assistantGlow: mood.primarySoft.withAlpha(28),
+      actionSurface: Color.lerp(
+        AppColors.darkSurface,
+        mood.welcomeSurfaceColor,
+        0.46,
+      )!,
+      composerFieldSurface: Color.lerp(
+        AppColors.darkSurface,
+        mood.welcomeSurfaceColor,
+        0.28,
+      )!,
+      suggestionSurface: Color.lerp(
+        AppColors.darkSurface,
+        mood.welcomeSurfaceColor,
+        0.36,
+      )!,
+      suggestionBorder: mood.primarySoft.withAlpha(34),
+      sendSurface: mood.welcomeAccentColor,
+      sendForeground: mood.welcomeTextOnAccent,
+      disabledSurface: mood.primaryDeep.withAlpha(120),
+      avatarGradientStart: mood.moonGradientStart,
+      avatarGradientEnd: mood.moonGradientEnd,
+      avatarSurface: mood.welcomeCardColor.withAlpha(242),
+      avatarForeground: mood.primaryDeep,
+      avatarGlow: mood.primarySoft.withAlpha(24),
+      secondaryText: AppColors.onDark.withAlpha(196),
+      mutedText: AppColors.onDark.withAlpha(136),
+      placeholderText: AppColors.onDark.withAlpha(112),
+      statusText: AppColors.onDark.withAlpha(144),
+      retryColor: mood.primarySoft,
+    );
+  }
 }

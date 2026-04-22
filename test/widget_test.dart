@@ -83,7 +83,9 @@ void main() {
   test('system chrome config locks the app to portrait orientations', () async {
     final List<MethodCall> calls = <MethodCall>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(SystemChannels.platform, (MethodCall call) async {
+        .setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall call,
+        ) async {
           calls.add(call);
           return null;
         });
@@ -103,14 +105,10 @@ void main() {
               'method',
               'SystemChrome.setPreferredOrientations',
             )
-            .having(
-              (MethodCall call) => call.arguments,
-              'arguments',
-              <String>[
-                'DeviceOrientation.portraitUp',
-                'DeviceOrientation.portraitDown',
-              ],
-            ),
+            .having((MethodCall call) => call.arguments, 'arguments', <String>[
+              'DeviceOrientation.portraitUp',
+              'DeviceOrientation.portraitDown',
+            ]),
       ),
     );
   });
@@ -443,28 +441,6 @@ void main() {
 
     expect(find.byType(AssistantPage), findsOneWidget);
   });
-
-  testWidgets(
-    'assistant page provides holographic avatar and local text input',
-    (WidgetTester tester) async {
-      await _pumpApp(
-        tester,
-        initialLocation: AppRoutes.assistant,
-        clock: _dayClock,
-      );
-
-      expect(
-        find.byKey(const ValueKey<String>('assistant-page-default-avatar')),
-        findsOneWidget,
-      );
-      expect(find.byType(TextField), findsOneWidget);
-      expect(find.text('和助手说点什么'), findsNothing);
-
-      await tester.enterText(find.byType(TextField), '今晚宿舍有点吵');
-      expect(find.text('今晚宿舍有点吵'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, '发送'), findsOneWidget);
-    },
-  );
 
   testWidgets('assistant composer enables send only after input', (
     WidgetTester tester,
