@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sleep_dorm_app/app/app_brand.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
@@ -1053,7 +1054,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
         ),
         SizedBox(height: 20 * unit),
         Text(
-          '登录舍眠',
+          AppBrand.loginTitle,
           style: _textStyle(
             context,
             size: 32 * unit,
