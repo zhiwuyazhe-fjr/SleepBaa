@@ -772,7 +772,7 @@ test(
       });
       assert.equal(createResponse.status, 200);
 
-      const memberSleepMode = async (): Promise<boolean> => {
+      const currentDormMember = async (): Promise<Record<string, unknown>> => {
         const bootstrapResponse = await fetch(`${baseUrl}/api/app/bootstrap`, {
           method: "POST",
           headers,
@@ -784,6 +784,11 @@ test(
           (item: Record<string, unknown>) => item.uid === uid,
         );
         assert.ok(member);
+        return member;
+      };
+
+      const memberSleepMode = async (): Promise<boolean> => {
+        const member = await currentDormMember();
         return Boolean(member.sleepModeActive);
       };
 
@@ -809,6 +814,7 @@ test(
       });
       assert.equal(enterPauseResponse.status, 200);
       assert.equal(await memberSleepMode(), true);
+      assert.equal((await currentDormMember()).status, "quiet");
 
       const pauseResponse = await fetch(`${baseUrl}/api/sleep/pause`, {
         method: "POST",
@@ -817,6 +823,7 @@ test(
       });
       assert.equal(pauseResponse.status, 200);
       assert.equal(await memberSleepMode(), false);
+      assert.equal((await currentDormMember()).status, "quiet");
 
       const secondSessionId = `${uid}-sleep-sync-exit`;
       const enterExitResponse = await fetch(`${baseUrl}/api/sleep/enter`, {
@@ -840,6 +847,7 @@ test(
       });
       assert.equal(enterExitResponse.status, 200);
       assert.equal(await memberSleepMode(), true);
+      assert.equal((await currentDormMember()).status, "quiet");
 
       const exitResponse = await fetch(`${baseUrl}/api/sleep/exit`, {
         method: "POST",
@@ -848,6 +856,7 @@ test(
       });
       assert.equal(exitResponse.status, 200);
       assert.equal(await memberSleepMode(), false);
+      assert.equal((await currentDormMember()).status, "quiet");
     });
   },
 );

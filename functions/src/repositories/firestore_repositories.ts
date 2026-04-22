@@ -1721,6 +1721,8 @@ export class FirestoreRepository implements AssistantDataRepository {
       typeof payload.sleepModeActive === "boolean"
         ? payload.sleepModeActive
         : asBoolean(existingMember?.sleepModeActive, false);
+    const normalizedStatus =
+      !nextSleepModeActive && nextStatus === "sleeping" ? "quiet" : nextStatus;
     const nextNote = asString(payload.note, "已更新宿舍状态。");
     const updatedAt = nowIso();
     const displayBadgeId =
@@ -1738,7 +1740,7 @@ export class FirestoreRepository implements AssistantDataRepository {
       name: user.displayName,
       avatarUrl: user.avatarUrl ?? null,
       displayBadgeId,
-      status: nextStatus,
+      status: normalizedStatus,
       presenceStatus: nextPresenceStatus,
       sleepModeActive: nextSleepModeActive,
       note: nextNote,

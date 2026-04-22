@@ -251,6 +251,38 @@ test("updateDormMemberStatus preserves sleepModeActive when omitted", async () =
   assert.equal(member.presenceStatus, "away");
 });
 
+test(
+  "updateDormMemberStatus normalizes legacy sleeping status when sleep mode is off",
+  async () => {
+    const store = new TestDocumentStore();
+    const repo = new FirestoreRepository(store as any, new TestFileStorage());
+    const uid = "sleeping-user";
+    const dormId = "dorm-sleep-normalize";
+
+    await store.set("dorms", dormId, { id: dormId, name: "Dorm" });
+    await repo.saveUserProfile(uid, { displayName: "Sleeper", dormId });
+    await store.set("dorm_members", `${dormId}:${uid}`, {
+      dormId,
+      uid,
+      name: "Sleeper",
+      status: "sleeping",
+      presenceStatus: "returned",
+      sleepModeActive: true,
+      lastActiveAt: "2026-04-20T23:00:00.000Z",
+      note: "asleep",
+    });
+
+    const member = await repo.updateDormMemberStatus(uid, {
+      sleepModeActive: false,
+      note: "awake now",
+    });
+
+    assert.equal(member.sleepModeActive, false);
+    assert.equal(member.status, "quiet");
+    assert.equal(member.note, "awake now");
+  },
+);
+
 test("updateDormMemberHeartbeat writes app online fields only", async () => {
   const store = new TestDocumentStore();
   const repo = new FirestoreRepository(store as any, new TestFileStorage());

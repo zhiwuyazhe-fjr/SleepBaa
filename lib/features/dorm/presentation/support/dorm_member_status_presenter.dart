@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 
-/// Members currently within the dorm geofence ("已返").
 int returnedDormMemberCount(List<DormMember> members) {
   return members
       .where(
@@ -14,7 +13,6 @@ int returnedDormMemberCount(List<DormMember> members) {
 /// Max idle duration to still count as "APP 在线" (recent heartbeat).
 const Duration kDormAppOnlineMaxIdle = Duration(seconds: 90);
 
-/// Roommates considered online: same dorm list entry, app recently active.
 int dormAppOnlineMemberCount(
   List<DormMember> members, {
   DateTime? now,
@@ -23,16 +21,16 @@ int dormAppOnlineMemberCount(
   final DateTime clock = now ?? DateTime.now();
   return members
       .where(
-        (DormMember m) =>
-            m.appOnline &&
-            m.appLastSeenAt != null &&
-            clock.difference(m.appLastSeenAt!) <= maxIdle,
+        (DormMember member) =>
+            member.appOnline &&
+            member.appLastSeenAt != null &&
+            clock.difference(member.appLastSeenAt!) <= maxIdle,
       )
       .length;
 }
 
-String dormOnlineCountLabel(List<DormMember> members) {
-  return '在线 ${dormAppOnlineMemberCount(members)} 人';
+String dormOnlineCountLabel(List<DormMember> members, {DateTime? now}) {
+  return '在线 ${dormAppOnlineMemberCount(members, now: now)} 人';
 }
 
 int sleepingDormMemberCount(List<DormMember> members) {
@@ -46,17 +44,19 @@ double averageNoiseDbForReturnedMembers({
   required int dormAggregateNoiseDb,
 }) {
   final List<DormMember> inRange = members
-      .where((DormMember m) => m.presenceStatus == DormPresenceStatus.returned)
+      .where((DormMember member) {
+        return member.presenceStatus == DormPresenceStatus.returned;
+      })
       .toList(growable: false);
   final List<int> levels = inRange
-      .map((DormMember m) => m.noiseDb)
+      .map((DormMember member) => member.noiseDb)
       .whereType<int>()
       .where((int db) => db >= 0)
       .toList(growable: false);
   if (levels.isEmpty) {
     return dormAggregateNoiseDb.toDouble();
   }
-  final int sum = levels.fold<int>(0, (int a, int b) => a + b);
+  final int sum = levels.fold<int>(0, (int total, int db) => total + db);
   return sum / levels.length;
 }
 

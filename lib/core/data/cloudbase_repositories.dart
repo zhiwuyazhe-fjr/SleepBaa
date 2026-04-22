@@ -214,6 +214,38 @@ Dorm _mergeStableDormAvatarUrls(Dorm currentDorm, Dorm nextDorm) {
   );
 }
 
+Dorm _mergeNewerDormHeartbeatFields(Dorm currentDorm, Dorm nextDorm) {
+  if (currentDorm.members.isEmpty || nextDorm.members.isEmpty) {
+    return nextDorm;
+  }
+  final Map<String, DormMember> currentByUid = <String, DormMember>{
+    for (final DormMember member in currentDorm.members) member.uid: member,
+  };
+  return nextDorm.copyWith(
+    members: nextDorm.members
+        .map((DormMember nextMember) {
+          final DormMember? currentMember = currentByUid[nextMember.uid];
+          if (currentMember == null) {
+            return nextMember;
+          }
+          final DateTime? currentHeartbeatAt = currentMember.appLastSeenAt;
+          final DateTime? nextHeartbeatAt = nextMember.appLastSeenAt;
+          final bool keepCurrentHeartbeat =
+              currentHeartbeatAt != null &&
+              (nextHeartbeatAt == null ||
+                  currentHeartbeatAt.isAfter(nextHeartbeatAt));
+          if (!keepCurrentHeartbeat) {
+            return nextMember;
+          }
+          return nextMember.copyWith(
+            appOnline: currentMember.appOnline,
+            appLastSeenAt: currentHeartbeatAt,
+          );
+        })
+        .toList(growable: false),
+  );
+}
+
 class _PendingDormMemberStatusOverride {
   const _PendingDormMemberStatusOverride({
     this.status,
@@ -413,8 +445,10 @@ DormPresenceStatus _presenceStatusFromStorage(Map<String, dynamic> map) {
 }
 
 bool _sleepModeFromStorage(Map<String, dynamic> map) {
-  final bool explicit = map['sleepModeActive'] as bool? ?? false;
-  return explicit || _stringOf(map['status']) == DormMemberStatus.sleeping.name;
+  if (map.containsKey('sleepModeActive')) {
+    return map['sleepModeActive'] as bool? ?? false;
+  }
+  return _stringOf(map['status']) == DormMemberStatus.sleeping.name;
 }
 
 NightRecommendation _recommendationFromAction(Map<String, dynamic> action) {
@@ -4225,7 +4259,10 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
       _authRepository.currentUser.uid,
     );
     _currentDorm = _applyPendingDormStatusOverrides(
-      _mergeStableDormAvatarUrls(_currentDorm, snapshot.dorm),
+      _mergeNewerDormHeartbeatFields(
+        _currentDorm,
+        _mergeStableDormAvatarUrls(_currentDorm, snapshot.dorm),
+      ),
       _pendingStatusOverrides,
     );
     _emitCurrentState();

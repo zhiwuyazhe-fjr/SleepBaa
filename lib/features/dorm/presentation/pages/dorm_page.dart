@@ -52,8 +52,13 @@ class DormPage extends StatefulWidget {
 }
 
 class _DormPageState extends State<DormPage> {
+  static const String _liveStatusPageId = 'dorm-page';
+
   AppServices? _dormNoiseRecordingServices;
+  AppServices? _dormLiveStatusServices;
   bool _ledgerAggregateFlushScheduled = false;
+  bool _liveStatusSyncScheduled = false;
+  bool? _lastLiveStatusActive;
 
   @override
   void initState() {
@@ -74,6 +79,14 @@ class _DormPageState extends State<DormPage> {
       );
       _scheduleDormAggregateRecordingAfterBuild();
     }
+    if (!identical(_dormLiveStatusServices, services)) {
+      _dormLiveStatusServices?.dormLiveStatusController.setPageActive(
+        pageId: _liveStatusPageId,
+        active: false,
+      );
+      _dormLiveStatusServices = services;
+    }
+    _scheduleDormLiveStatusSync();
   }
 
   /// [maybeRecordDormAggregate] notifies the ledger; must not run inside [build].
@@ -94,10 +107,43 @@ class _DormPageState extends State<DormPage> {
     });
   }
 
+  void _scheduleDormLiveStatusSync() {
+    if (!mounted || _liveStatusSyncScheduled) {
+      return;
+    }
+    _liveStatusSyncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _liveStatusSyncScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      final AppServices services = context.appServices;
+      final bool shouldPoll = _isDormPageVisible(context);
+      if (_lastLiveStatusActive == shouldPoll) {
+        return;
+      }
+      _lastLiveStatusActive = shouldPoll;
+      services.dormLiveStatusController.setPageActive(
+        pageId: _liveStatusPageId,
+        active: shouldPoll,
+      );
+    });
+  }
+
+  bool _isDormPageVisible(BuildContext context) {
+    final ModalRoute<dynamic>? route = ModalRoute.of(context);
+    return TickerMode.valuesOf(context).enabled &&
+        (route == null || route.isCurrent);
+  }
+
   @override
   void dispose() {
     _dormNoiseRecordingServices?.dormRepository.removeListener(
       _scheduleDormAggregateRecordingAfterBuild,
+    );
+    _dormLiveStatusServices?.dormLiveStatusController.setPageActive(
+      pageId: _liveStatusPageId,
+      active: false,
     );
     super.dispose();
   }
@@ -105,12 +151,14 @@ class _DormPageState extends State<DormPage> {
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    _scheduleDormLiveStatusSync();
     return Scaffold(
       body: ListenableBuilder(
         listenable: Listenable.merge(<Listenable>[
           services.authRepository,
           services.dormRepository,
           services.notificationRepository,
+          services.dormLiveStatusController,
           services.dormNoiseSampleLedger,
           services.interferenceProbeController,
         ]),
@@ -136,6 +184,8 @@ class _DormPageState extends State<DormPage> {
           final int quietStars = computeDormQuietRating(forRating).stars;
           final UserProfile currentUser = services.authRepository.currentUser;
           final NightMoodPalette palette = context.nightMoodPalette;
+          final DateTime liveNow =
+              services.dormLiveStatusController.currentTime;
           final String currentUserId = currentUser.uid;
           final List<DormEventRecord> events = buildDormEventRecords(
             dorm: dorm,
@@ -257,7 +307,10 @@ class _DormPageState extends State<DormPage> {
                               _DormHeroCard(
                                 key: DormPage.heroCardKey,
                                 palette: palette,
-                                onlineLabel: dormOnlineCountLabel(dorm.members),
+                                onlineLabel: dormOnlineCountLabel(
+                                  dorm.members,
+                                  now: liveNow,
+                                ),
                                 sleepingCount: sleepingCount,
                                 quietScore: quietStars,
                               ),

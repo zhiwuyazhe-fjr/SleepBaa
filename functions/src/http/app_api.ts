@@ -65,6 +65,7 @@ async function syncDormSleepMode(
 ): Promise<void> {
   try {
     await repo.updateDormMemberStatus(uid, {
+      status: "quiet",
       sleepModeActive,
       note: sleepModeActive ? "Sleep mode is active." : "Sleep mode is off.",
     });
