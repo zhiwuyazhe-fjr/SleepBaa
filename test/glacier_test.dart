@@ -13,15 +13,20 @@ void main() {
           _secureStorageChannel,
           _handleSecureStorageCall,
         );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_platformChannel, _handlePlatformCall);
   });
 
   setUp(() {
     _mockSecureStorage.clear();
+    _platformMethodCalls.clear();
   });
 
   tearDownAll(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_secureStorageChannel, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_platformChannel, null);
   });
 
   testWidgets('assistant glacier empty stage matches the pencil shell', (
@@ -74,7 +79,7 @@ void main() {
       find.byKey(const ValueKey<String>('assistant-composer-submit')),
     );
     await tester.pump();
-    await tester.pumpAndSettle();
+    await _pumpAssistantFrames(tester);
 
     expect(
       find.byKey(const ValueKey<String>('assistant-history-hint')),
@@ -101,7 +106,7 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey<String>('assistant-header-history')),
     );
-    await tester.pumpAndSettle();
+    await _pumpAssistantFrames(tester);
 
     expect(
       find.byKey(const ValueKey<String>('assistant-history-flow')),
@@ -123,13 +128,85 @@ void main() {
     expect(find.text('寝室有点吵，我还是睡不着。'), findsOneWidget);
     expect(find.textContaining('现在宿舍环境大约'), findsOneWidget);
   });
+
+  testWidgets('assistant history action opens the history route', (
+    WidgetTester tester,
+  ) async {
+    await _pumpGlacierApp(tester);
+    await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('assistant-header-history')),
+    );
+    await _pumpAssistantFrames(tester);
+
+    expect(
+      find.byKey(const ValueKey<String>('assistant-history-flow')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('assistant add action starts a new empty conversation stage', (
+    WidgetTester tester,
+  ) async {
+    await _pumpGlacierApp(tester);
+    await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('assistant-header-add')),
+    );
+    await _pumpAssistantFrames(tester);
+
+    expect(
+      find.byKey(const ValueKey<String>('assistant-empty-stage')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('assistant-current-assistant-message')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('assistant reply text has subtle floating motion', (
+    WidgetTester tester,
+  ) async {
+    await _pumpGlacierApp(tester);
+    await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+    final Finder floatingFinder = find.byKey(
+      const ValueKey<String>('assistant-current-floating-motion'),
+    );
+    expect(floatingFinder, findsOneWidget);
+
+    final Transform initialTransform = tester.widget<Transform>(floatingFinder);
+    final double initialDy = initialTransform.transform.getTranslation().y;
+
+    await tester.pump(const Duration(milliseconds: 900));
+
+    final Transform movedTransform = tester.widget<Transform>(floatingFinder);
+    final double movedDy = movedTransform.transform.getTranslation().y;
+
+    expect(movedDy, isNot(initialDy));
+  });
+
+  testWidgets('assistant reply reveal triggers gentle haptics', (
+    WidgetTester tester,
+  ) async {
+    await _pumpGlacierApp(tester);
+    await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+    final Iterable<MethodCall> hapticCalls = _platformMethodCalls.where(
+      (MethodCall call) => call.method == 'HapticFeedback.vibrate',
+    );
+    expect(hapticCalls, isNotEmpty);
+  });
 }
 
 Future<void> _pumpGlacierApp(WidgetTester tester) async {
   await tester.pumpWidget(
     SleepDormApp(initialLocation: AppRoutes.assistant, clock: _dayClock),
   );
-  await tester.pumpAndSettle();
+  await _pumpAssistantFrames(tester);
 }
 
 Future<void> _sendPrompt(WidgetTester tester, String text) async {
@@ -142,7 +219,13 @@ Future<void> _sendPrompt(WidgetTester tester, String text) async {
     find.byKey(const ValueKey<String>('assistant-composer-submit')),
   );
   await tester.pump();
-  await tester.pumpAndSettle();
+  await _pumpAssistantFrames(tester);
+}
+
+Future<void> _pumpAssistantFrames(WidgetTester tester) async {
+  await tester.pump(const Duration(milliseconds: 120));
+  await tester.pump(const Duration(milliseconds: 220));
+  await tester.pump(const Duration(milliseconds: 320));
 }
 
 Future<dynamic> _handleSecureStorageCall(MethodCall call) async {
@@ -170,9 +253,16 @@ Future<dynamic> _handleSecureStorageCall(MethodCall call) async {
   }
 }
 
+Future<dynamic> _handlePlatformCall(MethodCall call) async {
+  _platformMethodCalls.add(call);
+  return null;
+}
+
 DateTime _dayClock() => DateTime(2026, 4, 5, 14);
 
 const MethodChannel _secureStorageChannel = MethodChannel(
   'plugins.it_nomads.com/flutter_secure_storage',
 );
+const MethodChannel _platformChannel = SystemChannels.platform;
 final Map<String, String> _mockSecureStorage = <String, String>{};
+final List<MethodCall> _platformMethodCalls = <MethodCall>[];

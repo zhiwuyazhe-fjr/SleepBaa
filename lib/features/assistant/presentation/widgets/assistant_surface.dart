@@ -296,6 +296,63 @@ class AssistantHeader extends StatelessWidget {
   }
 }
 
+class AssistantFloatingMotion extends StatefulWidget {
+  const AssistantFloatingMotion({
+    super.key,
+    required this.child,
+    required this.travelDistance,
+    this.duration = const Duration(milliseconds: 2800),
+    this.transformKey,
+  });
+
+  final Widget child;
+  final double travelDistance;
+  final Duration duration;
+  final Key? transformKey;
+
+  @override
+  State<AssistantFloatingMotion> createState() =>
+      _AssistantFloatingMotionState();
+}
+
+class _AssistantFloatingMotionState extends State<AssistantFloatingMotion>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: widget.duration,
+  )..repeat(reverse: true);
+  late final Animation<double> _animation = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeInOutSine,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      child: widget.child,
+      builder: (BuildContext context, Widget? child) {
+        final double offsetY = lerpDouble(
+          0,
+          -widget.travelDistance,
+          _animation.value,
+        )!;
+        return Transform.translate(
+          key: widget.transformKey,
+          offset: Offset(0, offsetY),
+          child: child,
+        );
+      },
+    );
+  }
+}
+
 class AssistantComposer extends StatelessWidget {
   const AssistantComposer({
     super.key,

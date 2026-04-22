@@ -305,7 +305,7 @@ void main() {
     );
 
     await tester.tap(find.byIcon(Icons.auto_awesome_rounded));
-    await tester.pumpAndSettle();
+    await _pumpAssistantSurface(tester);
 
     expect(find.byType(AssistantPage), findsOneWidget);
   });
@@ -357,7 +357,7 @@ void main() {
       );
 
       await tester.tap(find.byType(AssistantFab));
-      await tester.pumpAndSettle();
+      await _pumpAssistantSurface(tester);
 
       expect(
         find.byKey(const ValueKey<String>('assistant-empty-stage')),
@@ -439,7 +439,7 @@ void main() {
     expect(find.byType(AssistantFabDock), findsOneWidget);
 
     await tester.tap(assistantFinder);
-    await tester.pumpAndSettle();
+    await _pumpAssistantSurface(tester);
 
     expect(find.byType(AssistantPage), findsOneWidget);
   });
@@ -451,7 +451,9 @@ void main() {
       tester,
       initialLocation: AppRoutes.assistant,
       clock: _dayClock,
+      settle: false,
     );
+    await _pumpAssistantSurface(tester);
 
     IconButton submitButton = tester.widget<IconButton>(
       find.descendant(
@@ -2698,6 +2700,12 @@ void main() {
 
     expect(find.byType(HomePostSleepPage), findsOneWidget);
   });
+}
+
+Future<void> _pumpAssistantSurface(WidgetTester tester) async {
+  await tester.pump(const Duration(milliseconds: 120));
+  await tester.pump(const Duration(milliseconds: 220));
+  await tester.pump(const Duration(milliseconds: 320));
 }
 
 Future<void> _pumpApp(

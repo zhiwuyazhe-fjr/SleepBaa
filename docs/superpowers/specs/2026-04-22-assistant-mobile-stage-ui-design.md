@@ -81,6 +81,16 @@ It uses the same shell and composer as the main page, but the center body become
 - Starting a new conversation from `add` resets the visible stage
 - Busy state keeps the duplicate-send guard
 
+## Motion and Haptics
+
+- Motion must stay subtle and must not change the Pencil layout
+- The empty headline and the current assistant reply may use a gentle vertical floating motion
+- The floating motion is low-amplitude and slow-cycle only; no bounce, zoom, shimmer, or parallax layers
+- Haptics are single-shot feedback, not continuous vibration
+- When a new assistant reply first appears, trigger one light haptic
+- If that reply also renders tool status rows, a second lighter confirmation tap may follow shortly after
+- Do not vibrate continuously during the floating motion
+
 ## Existing Function Handling
 
 If existing assistant capabilities are not shown in Pencil, keep the underlying logic if needed but do not surface extra UI.

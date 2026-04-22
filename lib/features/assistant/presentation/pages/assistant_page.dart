@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -28,6 +31,7 @@ class _AssistantPageState extends State<AssistantPage> {
   final FocusNode _focusNode = FocusNode();
 
   late AssistantCaptureTab _selectedTab;
+  String? _lastHapticAssistantMessageId;
 
   SleepCaptureType get _activeCaptureType =>
       _selectedTab == AssistantCaptureTab.memo
@@ -104,7 +108,20 @@ class _AssistantPageState extends State<AssistantPage> {
       return;
     }
     setState(_inputController.clear);
+    _lastHapticAssistantMessageId = null;
     _focusNode.unfocus();
+  }
+
+  Future<void> _emitReplyHaptics({required bool hasStatuses}) async {
+    await HapticFeedback.lightImpact();
+    if (!hasStatuses) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!mounted) {
+      return;
+    }
+    await HapticFeedback.selectionClick();
   }
 
   @override
@@ -130,6 +147,21 @@ class _AssistantPageState extends State<AssistantPage> {
             assistantToolStatusesFromSurfaceIds(
               controller.updatedSurfacesForMessage(latestAssistant?.id),
             );
+        final String? latestAssistantMessageId = latestAssistant?.id;
+        if (stageState == _AssistantStageState.reply &&
+            latestAssistantMessageId != null &&
+            latestAssistantMessageId != _lastHapticAssistantMessageId) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted ||
+                latestAssistantMessageId == _lastHapticAssistantMessageId) {
+              return;
+            }
+            _lastHapticAssistantMessageId = latestAssistantMessageId;
+            unawaited(
+              _emitReplyHaptics(hasStatuses: latestStatuses.isNotEmpty),
+            );
+          });
+        }
 
         return AssistantShellScaffold(
           onTapAdd: () => _startNewConversation(services),
@@ -223,16 +255,7 @@ class _AssistantEmptyStage extends StatelessWidget {
               ),
             ),
             SizedBox(height: metrics.unit(10)),
-            Text(
-              '今晚想聊点什么',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                color: palette.headlineText,
-                fontSize: metrics.unit(34),
-                fontWeight: FontWeight.w700,
-                height: 1.02,
-              ),
-            ),
+            _AssistantEmptyHeadline(metrics: metrics, palette: palette),
             SizedBox(height: metrics.unit(10)),
             Text(
               '可以和小眠聊聊睡不着的原因，也可以把脑海里还没放下的念头交给我。',
@@ -245,6 +268,32 @@ class _AssistantEmptyStage extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AssistantEmptyHeadline extends StatelessWidget {
+  const _AssistantEmptyHeadline({required this.metrics, required this.palette});
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return AssistantFloatingMotion(
+      transformKey: const ValueKey<String>('assistant-empty-floating-motion'),
+      travelDistance: metrics.unit(4),
+      child: Text(
+        '今晚想聊点什么',
+        key: const ValueKey<String>('assistant-empty-headline-text'),
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.displaySmall?.copyWith(
+          color: palette.headlineText,
+          fontSize: metrics.unit(34),
+          fontWeight: FontWeight.w700,
+          height: 1.02,
         ),
       ),
     );
@@ -313,16 +362,22 @@ class _AssistantReplyStage extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
-                  replyText,
-                  key: const ValueKey<String>(
-                    'assistant-current-assistant-message',
+                AssistantFloatingMotion(
+                  transformKey: const ValueKey<String>(
+                    'assistant-current-floating-motion',
                   ),
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: palette.headlineText,
-                    fontSize: metrics.unit(20),
-                    fontWeight: FontWeight.w500,
-                    height: 1.62,
+                  travelDistance: metrics.unit(4),
+                  child: Text(
+                    replyText,
+                    key: const ValueKey<String>(
+                      'assistant-current-assistant-message',
+                    ),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: palette.headlineText,
+                      fontSize: metrics.unit(20),
+                      fontWeight: FontWeight.w500,
+                      height: 1.62,
+                    ),
                   ),
                 ),
                 if (statuses.isNotEmpty) ...<Widget>[
