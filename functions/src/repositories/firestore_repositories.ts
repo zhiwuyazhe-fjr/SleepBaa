@@ -215,6 +215,21 @@ function asBoolean(value: unknown, fallback = false): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
+function hasOwn(value: JsonMap, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function normalizeDormPresenceStatus(
+  value: unknown,
+  fallback = "unknown",
+): string {
+  const raw = asString(value);
+  if (raw === "returned" || raw === "away" || raw === "unknown") {
+    return raw;
+  }
+  return fallback;
+}
+
 function asStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -478,12 +493,13 @@ function defaultDormMember(
   name: string,
   avatarUrl?: string | null,
   displayBadgeId?: string | null,
+  presenceStatus = "unknown",
 ): JsonMap {
   return {
     uid,
     name,
     status: "quiet",
-    presenceStatus: "returned",
+    presenceStatus: normalizeDormPresenceStatus(presenceStatus),
     sleepModeActive: false,
     lastActiveAt: nowIso(),
     note: "今晚已准备进入睡前流程。",
@@ -1225,7 +1241,10 @@ export class FirestoreRepository implements AssistantDataRepository {
             this.preferString(value.name, userDoc.displayName, "舍友") ||
             "舍友",
           status: asString(value.status, "quiet"),
-          presenceStatus: asString(value.presenceStatus, "returned"),
+          presenceStatus: normalizeDormPresenceStatus(
+            value.presenceStatus,
+            asString(value.status) === "away" ? "away" : "unknown",
+          ),
           sleepModeActive: asBoolean(value.sleepModeActive, false),
           lastActiveAt: asString(value.lastActiveAt, nowIso()),
           note: asString(value.note),
@@ -1315,7 +1334,10 @@ export class FirestoreRepository implements AssistantDataRepository {
         uid: asString(value.uid),
         name: asString(value.name, "Dorm member"),
         status: asString(value.status, "quiet"),
-        presenceStatus: asString(value.presenceStatus, "returned"),
+        presenceStatus: normalizeDormPresenceStatus(
+          value.presenceStatus,
+          asString(value.status) === "away" ? "away" : "unknown",
+        ),
         sleepModeActive: asBoolean(value.sleepModeActive, false),
         lastActiveAt: asString(value.lastActiveAt, nowIso()),
         note: asString(value.note) || undefined,
@@ -1757,25 +1779,36 @@ export class FirestoreRepository implements AssistantDataRepository {
       Collections.dormMembers,
       memberId,
     );
-    const nextStatus = asString(payload.status, "quiet");
-    const nextPresenceStatus = asString(
-      payload.presenceStatus,
-      asString(existingMember?.presenceStatus, "returned"),
-    );
-    const nextSleepModeActive = asBoolean(payload.sleepModeActive, false);
-    const nextNote = asString(payload.note, "已更新宿舍状态。");
-    const updatedAt = nowIso();
     const displayBadgeId =
       user.equippedBadgeId ?? user.earnedBadgeIds?.slice(-1)[0] ?? null;
+    const baseMember =
+      existingMember ??
+      defaultDormMember(
+        uid,
+        user.displayName,
+        user.avatarUrl,
+        displayBadgeId,
+      );
+    const basePresenceStatus = normalizeDormPresenceStatus(
+      baseMember.presenceStatus,
+      asString(baseMember.status) === "away" ? "away" : "unknown",
+    );
+    const nextStatus = hasOwn(payload, "status")
+      ? asString(payload.status, asString(baseMember.status, "quiet"))
+      : asString(baseMember.status, "quiet");
+    const nextPresenceStatus = hasOwn(payload, "presenceStatus")
+      ? normalizeDormPresenceStatus(payload.presenceStatus, basePresenceStatus)
+      : basePresenceStatus;
+    const nextSleepModeActive = hasOwn(payload, "sleepModeActive")
+      ? asBoolean(payload.sleepModeActive, asBoolean(baseMember.sleepModeActive))
+      : asBoolean(baseMember.sleepModeActive);
+    const nextNote = hasOwn(payload, "note")
+      ? asString(payload.note, asString(baseMember.note))
+      : asString(baseMember.note);
+    const updatedAt = nowIso();
     await this.store.merge(Collections.dormMembers, memberId, {
       dormId,
-      ...(existingMember ??
-        defaultDormMember(
-          uid,
-          user.displayName,
-          user.avatarUrl,
-          displayBadgeId,
-        )),
+      ...baseMember,
       uid,
       name: user.displayName,
       avatarUrl: user.avatarUrl ?? null,
@@ -2346,6 +2379,7 @@ export class FirestoreRepository implements AssistantDataRepository {
         user.displayName,
         user.avatarUrl,
         displayBadgeId,
+        payload.locationAnchor ? "returned" : "unknown",
       ),
       note: "已创建宿舍，等待邀请舍友加入。",
       lastActiveAt: createdAt,
@@ -2624,6 +2658,7 @@ export class FirestoreRepository implements AssistantDataRepository {
         user.displayName,
         user.avatarUrl,
         displayBadgeId,
+        "unknown",
       ),
       note: "已通过邀请码加入宿舍。",
       lastActiveAt: acceptedAt,

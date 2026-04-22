@@ -292,14 +292,20 @@ DormMemberStatus _activityStatusFromStorage(Map<String, dynamic> map) {
 
 DormPresenceStatus _presenceStatusFromStorage(Map<String, dynamic> map) {
   final String rawPresence = _stringOf(map['presenceStatus']);
+  if (rawPresence == DormPresenceStatus.returned.name) {
+    return DormPresenceStatus.returned;
+  }
   if (rawPresence == DormPresenceStatus.away.name) {
     return DormPresenceStatus.away;
+  }
+  if (rawPresence == DormPresenceStatus.unknown.name) {
+    return DormPresenceStatus.unknown;
   }
   final String rawStatus = _stringOf(map['status']);
   if (rawStatus == DormMemberStatus.away.name) {
     return DormPresenceStatus.away;
   }
-  return DormPresenceStatus.returned;
+  return DormPresenceStatus.unknown;
 }
 
 bool _sleepModeFromStorage(Map<String, dynamic> map) {
@@ -3502,7 +3508,9 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
           uid: _authRepository.currentUser.uid,
           name: _authRepository.currentUser.displayName,
           status: DormMemberStatus.quiet,
-          presenceStatus: DormPresenceStatus.returned,
+          presenceStatus: locationAnchor == null
+              ? DormPresenceStatus.unknown
+              : DormPresenceStatus.returned,
           sleepModeActive: false,
           lastActiveAt: now,
           note:
@@ -3947,7 +3955,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
                 uid: _authRepository.currentUser.uid,
                 name: _authRepository.currentUser.displayName,
                 status: DormMemberStatus.quiet,
-                presenceStatus: DormPresenceStatus.returned,
+                presenceStatus: DormPresenceStatus.unknown,
                 sleepModeActive: false,
                 lastActiveAt: DateTime.now(),
                 note:
