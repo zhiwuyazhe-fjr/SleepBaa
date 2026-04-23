@@ -166,30 +166,40 @@ void main() {
     },
   );
 
-  testWidgets('sleep preference switch rows match account entry height', (
+  testWidgets('sleep preference rows match account and dorm entry heights', (
     WidgetTester tester,
   ) async {
-    await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
-
+    await _pumpApp(tester, initialLocation: AppRoutes.profileAccountCenter);
     final double accountEntryHeight = tester
         .getSize(
-          find.ancestor(of: find.text('账号管理'), matching: find.byType(InkWell)),
+          find.ancestor(of: find.text('个人资料'), matching: find.byType(InkWell)),
         )
         .height;
-    final List<String> switchItemTitles = <String>[
+
+    await _pumpApp(tester, initialLocation: AppRoutes.profileAccountDorm);
+    final double dormEntryHeight = tester
+        .getSize(
+          find.ancestor(of: find.text('邀请舍友'), matching: find.byType(InkWell)),
+        )
+        .height;
+
+    await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
+    final List<String> sleepItemTitles = <String>[
+      '睡前提醒时间',
       '睡前提醒',
       '晨间反馈提醒',
       '宿舍动态提醒',
       '智能建议',
     ];
 
-    for (final String title in switchItemTitles) {
-      final double switchRowHeight = tester
+    expect(dormEntryHeight, accountEntryHeight);
+    for (final String title in sleepItemTitles) {
+      final double sleepRowHeight = tester
           .getSize(
             find.ancestor(of: find.text(title), matching: find.byType(InkWell)),
           )
           .height;
-      expect(switchRowHeight, accountEntryHeight, reason: title);
+      expect(sleepRowHeight, accountEntryHeight, reason: title);
     }
   });
 
