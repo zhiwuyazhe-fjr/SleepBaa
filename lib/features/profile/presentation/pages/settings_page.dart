@@ -281,15 +281,10 @@ class _SettingsPageState extends State<SettingsPage> {
                           icon: Icons.schedule_rounded,
                           title: '睡前提醒时间',
                           iconColor: context.nightMoodPalette.primaryDeep,
-                          minHeight: 52,
-                          leadingWidth: _SettingsSliderRow._leadingWidth,
                           trailing: _SettingsValueTrailing(
                             value: Formatters.formatClock(_bedtimeReminder),
                           ),
                           onTap: _pickReminderTime,
-                          titleStyle: textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w400,
-                          ),
                         ),
                         _SettingsSwitchRow(
                           icon: Icons.bedtime_rounded,
@@ -356,8 +351,6 @@ class _SettingsPageState extends State<SettingsPage> {
 }
 
 class _SettingsSliderRow extends StatelessWidget {
-  static const double _leadingWidth = 32;
-
   const _SettingsSliderRow({
     required this.title,
     required this.valueLabel,
@@ -377,59 +370,60 @@ class _SettingsSliderRow extends StatelessWidget {
         AppSpacing.md,
         AppSpacing.xs,
         AppSpacing.md,
-        AppSpacing.xxs,
+        AppSpacing.sm,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              SizedBox(
-                width: _leadingWidth,
-                child: Center(
-                  child: Icon(
-                    Icons.hotel_rounded,
-                    size: 20,
-                    color: context.nightMoodPalette.primaryDeep,
+          SizedBox(
+            width: 28,
+            child: Center(
+              child: Icon(
+                Icons.hotel_rounded,
+                size: 20,
+                color: context.nightMoodPalette.primaryDeep,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    Text(
+                      valueLabel,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 4,
+                    overlayShape: SliderComponentShape.noOverlay,
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 8,
+                    ),
+                  ),
+                  child: Slider(
+                    value: value,
+                    min: 6,
+                    max: 9,
+                    divisions: 12,
+                    onChanged: onChanged,
                   ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  title,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
-                ),
-              ),
-              Text(
-                valueLabel,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.only(
-              left: _leadingWidth + AppSpacing.sm,
-              right: AppSpacing.xs,
-            ),
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: 4,
-                overlayShape: SliderComponentShape.noOverlay,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-              ),
-              child: Slider(
-                value: value,
-                min: 6,
-                max: 9,
-                divisions: 12,
-                onChanged: onChanged,
-              ),
+              ],
             ),
           ),
         ],
@@ -456,12 +450,9 @@ class _SettingsSwitchRow extends StatelessWidget {
     return AppSettingsItem(
       icon: icon,
       iconColor: context.nightMoodPalette.primaryDeep,
-      iconSize: 20,
-      leadingWidth: _SettingsSliderRow._leadingWidth,
-      minHeight: 52,
       title: title,
       trailing: Transform.scale(
-        scale: 0.68,
+        scale: 0.74,
         alignment: Alignment.centerRight,
         child: Switch(
           value: value,
@@ -475,13 +466,6 @@ class _SettingsSwitchRow extends StatelessWidget {
         ),
       ),
       onTap: () => onChanged(!value),
-      titleStyle: Theme.of(
-        context,
-      ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w400),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
     );
   }
 }

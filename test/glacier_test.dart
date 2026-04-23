@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:sleep_dorm_app/app/app.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
@@ -129,6 +130,41 @@ void main() {
     expect(find.text('查看宿舍规则'), findsOneWidget);
     expect(find.text('编辑宿舍名称'), findsOneWidget);
   });
+
+  testWidgets(
+    'sleep preference action rows keep shared settings item baseline',
+    (WidgetTester tester) async {
+      await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
+
+      final Iterable<AppSettingsItem> settingsItems = tester.widgetList(
+        find.byType(AppSettingsItem),
+      );
+      final List<String> sleepItemTitles = <String>[
+        '睡前提醒时间',
+        '睡前提醒',
+        '晨间反馈提醒',
+        '宿舍动态提醒',
+        '智能建议',
+      ];
+
+      for (final String title in sleepItemTitles) {
+        final AppSettingsItem item = settingsItems.singleWhere(
+          (AppSettingsItem candidate) => candidate.title == title,
+        );
+        expect(item.leadingWidth, 28, reason: title);
+        expect(item.minHeight, isNull, reason: title);
+        expect(item.titleStyle, isNull, reason: title);
+        expect(
+          item.padding,
+          const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+          reason: title,
+        );
+      }
+    },
+  );
 
   testWidgets('filled primary button uses welcome accent colors', (
     WidgetTester tester,

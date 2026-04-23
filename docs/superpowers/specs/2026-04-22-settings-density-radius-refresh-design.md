@@ -209,8 +209,8 @@ flutter build apk --dart-define-from-file=D:\sleep_dorm_app\.cloudbase.local.jso
 - Shrink the selected mood ring and reduce the top / bottom empty space around each mood circle
 - Keep the settings landing page compact and preserve the shared bottom `退出登录` action
 - In `睡眠偏好`, keep the bed icon visually centered by reserving a stable leading slot and letting the slider begin slightly to the right
-- Normalize the sleep-preference row heights so toggle rows sit closer to the `睡前提醒时间` reference height
-- Keep sleep-preference child labels lighter than the section heading
+- Do not override typography, padding, leading width, or row height for the non-slider sleep-preference rows
+- `睡前提醒时间 / 睡前提醒 / 晨间反馈提醒 / 宿舍动态提醒 / 智能建议` must stay on the shared `AppSettingsItem` baseline used by account-management child entries
 
 ### Account management child pages
 
