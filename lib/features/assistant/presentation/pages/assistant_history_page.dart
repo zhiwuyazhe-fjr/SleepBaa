@@ -68,56 +68,7 @@ class _AssistantHistoryPageState extends State<AssistantHistoryPage> {
                 return Stack(
                   fit: StackFit.expand,
                   children: <Widget>[
-                    const DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: AppColors.darkBackground,
-                      ),
-                    ),
-                    IgnorePointer(
-                      child: Align(
-                        alignment: Alignment.bottomCenter,
-                        child: FractionallySizedBox(
-                          heightFactor: 0.56,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.bottomCenter,
-                                end: Alignment.topCenter,
-                                colors: <Color>[
-                                  palette.bottomGlowStart,
-                                  palette.bottomGlowMid,
-                                  Colors.transparent,
-                                ],
-                                stops: const <double>[0, 0.38, 1],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    IgnorePointer(
-                      child: Align(
-                        alignment: Alignment.bottomCenter,
-                        child: FractionallySizedBox(
-                          widthFactor: 1,
-                          heightFactor: 0.28,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: RadialGradient(
-                                center: const Alignment(0, 0.95),
-                                radius: 1.34,
-                                colors: <Color>[
-                                  palette.bottomGlowCore,
-                                  palette.bottomGlowStart,
-                                  Colors.transparent,
-                                ],
-                                stops: const <double>[0, 0.52, 1],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                    AssistantBackgroundGlow(palette: palette),
                     SafeArea(
                       child: Padding(
                         padding: EdgeInsets.fromLTRB(

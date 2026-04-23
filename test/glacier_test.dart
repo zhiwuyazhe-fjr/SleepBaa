@@ -4,8 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sleep_dorm_app/app/app.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
+import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/settings_page.dart';
 
 void main() {
   setUpAll(() {
@@ -199,6 +201,49 @@ void main() {
     },
   );
 
+  testWidgets(
+    'assistant archive opens at the latest message when history is expanded',
+    (WidgetTester tester) async {
+      await _pumpGlacierApp(tester);
+      for (int index = 0; index < 5; index++) {
+        await _sendPrompt(tester, '第${index + 1}条：今天脑子一直停不下来，想把这些念头先收好再睡。');
+      }
+
+      final Finder viewport = find.byKey(
+        const ValueKey<String>('assistant-stage-viewport'),
+      );
+
+      final TestGesture firstPull = await tester.startGesture(
+        tester.getCenter(viewport),
+      );
+      await firstPull.moveBy(const Offset(0, 54));
+      await tester.pump();
+      await firstPull.up();
+      await _pumpAssistantFrames(tester);
+
+      final TestGesture secondPull = await tester.startGesture(
+        tester.getCenter(viewport),
+      );
+      await secondPull.moveBy(const Offset(0, 200));
+      await tester.pump();
+      await secondPull.up();
+      await _pumpAssistantFrames(tester);
+
+      final ScrollableState scrollable = tester.state<ScrollableState>(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('assistant-history-scroll')),
+          matching: find.byType(Scrollable),
+        ),
+      );
+
+      expect(scrollable.position.maxScrollExtent, greaterThan(0));
+      expect(
+        scrollable.position.pixels,
+        closeTo(scrollable.position.maxScrollExtent, 1),
+      );
+    },
+  );
+
   testWidgets('assistant history action opens the thread history page', (
     WidgetTester tester,
   ) async {
@@ -323,15 +368,67 @@ void main() {
 
     expect(highDy.abs(), greaterThan(lowDy.abs()));
   });
+
+  testWidgets(
+    'assistant motion setting saves from the dedicated settings row',
+    (WidgetTester tester) async {
+      await _pumpRouteApp(
+        tester,
+        AppRoutes.profileSettings,
+        initialSettings: buildDefaultUserSettings().copyWith(
+          assistantReplyMotionLevel: AssistantReplyMotionLevel.low,
+        ),
+      );
+
+      expect(find.byType(SettingsPage), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('陪伴动效'),
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+
+      expect(find.text('陪伴动效'), findsOneWidget);
+      expect(find.text('回复文字浮动'), findsOneWidget);
+      expect(find.text('低'), findsOneWidget);
+
+      await tester.tap(find.text('回复文字浮动'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 240));
+
+      await tester.tap(find.text('高').last);
+      await _pumpAssistantFrames(tester);
+
+      final AppServices services = AppScope.of(
+        tester.element(find.byType(SettingsPage)),
+      );
+      expect(
+        services.profileFacade.currentSettings.assistantReplyMotionLevel,
+        AssistantReplyMotionLevel.high,
+      );
+    },
+  );
 }
 
 Future<void> _pumpGlacierApp(
   WidgetTester tester, {
   UserSettings? initialSettings,
 }) async {
+  await _pumpRouteApp(
+    tester,
+    AppRoutes.assistant,
+    initialSettings: initialSettings,
+  );
+}
+
+Future<void> _pumpRouteApp(
+  WidgetTester tester,
+  String route, {
+  UserSettings? initialSettings,
+}) async {
   await tester.pumpWidget(
     SleepDormApp(
-      initialLocation: AppRoutes.assistant,
+      initialLocation: route,
       clock: _dayClock,
       initialSettings: initialSettings,
     ),
@@ -354,8 +451,8 @@ Future<void> _sendPrompt(WidgetTester tester, String text) async {
 
 Future<void> _pumpAssistantFrames(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 120));
-  await tester.pump(const Duration(milliseconds: 320));
-  await tester.pump(const Duration(milliseconds: 560));
+  await tester.pump(const Duration(milliseconds: 520));
+  await tester.pump(const Duration(milliseconds: 760));
 }
 
 Future<double> _replyFloatingDistanceForLevel(

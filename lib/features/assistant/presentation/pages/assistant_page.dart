@@ -28,7 +28,7 @@ class AssistantPage extends StatefulWidget {
 
 class _AssistantPageState extends State<AssistantPage>
     with SingleTickerProviderStateMixin {
-  static const Duration _archiveAnimationDuration = Duration(milliseconds: 320);
+  static const Duration _archiveAnimationDuration = Duration(milliseconds: 520);
   static const Duration _archiveHintMemoryDuration = Duration(seconds: 5);
 
   final TextEditingController _inputController = TextEditingController();
@@ -200,7 +200,7 @@ class _AssistantPageState extends State<AssistantPage>
     await _archiveController.animateTo(
       target,
       duration: _archiveAnimationDuration,
-      curve: Curves.easeOutCubic,
+      curve: Curves.easeInOutCubic,
     );
     if (!mounted) {
       return;
@@ -525,7 +525,7 @@ class _AssistantStageViewport extends StatelessWidget {
                 child: Opacity(
                   opacity: 1 - archiveProgress,
                   child: Transform.translate(
-                    offset: Offset(0, metrics.unit(24) * archiveProgress),
+                    offset: Offset(0, metrics.unit(30) * archiveProgress),
                     child: _AssistantPrimaryStage(
                       metrics: metrics,
                       palette: palette,
@@ -547,7 +547,7 @@ class _AssistantStageViewport extends StatelessWidget {
                     child: Transform.translate(
                       offset: Offset(
                         0,
-                        -metrics.unit(40) * (1 - archiveProgress),
+                        -metrics.unit(56) * (1 - archiveProgress),
                       ),
                       child: NotificationListener<ScrollNotification>(
                         onNotification: onArchiveScrollNotification,
@@ -655,9 +655,9 @@ class _AssistantPrimaryStage extends StatelessWidget {
     };
 
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 760),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
+      duration: const Duration(milliseconds: 1000),
+      switchInCurve: Curves.linear,
+      switchOutCurve: Curves.linear,
       layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) =>
           Stack(
             fit: StackFit.expand,
@@ -674,22 +674,22 @@ class _AssistantPrimaryStage extends StatelessWidget {
         if (isIncoming) {
           final Animation<double> progress = CurvedAnimation(
             parent: animation,
-            curve: const Interval(0.38, 1, curve: Curves.easeOutCubic),
+            curve: const Interval(0.60, 1, curve: Curves.easeOutCubic),
           );
           stageOpacity = progress;
           stageOffset = Tween<Offset>(
-            begin: const Offset(0, 0.12),
+            begin: const Offset(0, 0.16),
             end: Offset.zero,
           ).animate(progress);
         } else {
           final Animation<double> progress = CurvedAnimation(
             parent: ReverseAnimation(animation),
-            curve: const Interval(0, 0.58, curve: Curves.easeInOutCubic),
+            curve: const Interval(0, 0.46, curve: Curves.easeInOutCubic),
           );
           stageOpacity = Tween<double>(begin: 1, end: 0).animate(progress);
           stageOffset = Tween<Offset>(
             begin: Offset.zero,
-            end: const Offset(0, -0.12),
+            end: const Offset(0, -0.18),
           ).animate(progress);
         }
 
@@ -927,7 +927,7 @@ double _replyFloatingDistance(
   };
 }
 
-class _AssistantArchiveStage extends StatelessWidget {
+class _AssistantArchiveStage extends StatefulWidget {
   const _AssistantArchiveStage({
     required this.metrics,
     required this.palette,
@@ -941,13 +941,68 @@ class _AssistantArchiveStage extends StatelessWidget {
   final AssistantConversationController controller;
 
   @override
+  State<_AssistantArchiveStage> createState() => _AssistantArchiveStageState();
+}
+
+class _AssistantArchiveStageState extends State<_AssistantArchiveStage> {
+  final ScrollController _scrollController = ScrollController();
+  bool _hasAnchoredToLatest = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleAnchorToLatest();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AssistantArchiveStage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.messages.length == widget.messages.length) {
+      return;
+    }
+    final bool shouldStayPinned =
+        !_scrollController.hasClients ||
+        (_scrollController.position.maxScrollExtent -
+                _scrollController.position.pixels) <=
+            widget.metrics.unit(28);
+    if (shouldStayPinned) {
+      _scheduleAnchorToLatest(animated: _hasAnchoredToLatest);
+    }
+  }
+
+  void _scheduleAnchorToLatest({bool animated = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+      final double target = _scrollController.position.maxScrollExtent;
+      if (animated) {
+        _scrollController.animateTo(
+          target,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+        );
+      } else {
+        _scrollController.jumpTo(target);
+      }
+      _hasAnchoredToLatest = true;
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (messages.isEmpty) {
+    if (widget.messages.isEmpty) {
       return const SizedBox.expand();
     }
 
     AssistantMessage? latestAssistant;
-    for (final AssistantMessage message in messages.reversed) {
+    for (final AssistantMessage message in widget.messages.reversed) {
       if (message.role == AssistantMessageRole.assistant) {
         latestAssistant = message;
         break;
@@ -955,12 +1010,12 @@ class _AssistantArchiveStage extends StatelessWidget {
     }
     final int latestAssistantIndex = latestAssistant == null
         ? -1
-        : messages.lastIndexOf(latestAssistant);
+        : widget.messages.lastIndexOf(latestAssistant);
     final List<AssistantMessage> earlierMessages = latestAssistantIndex <= 0
-        ? messages
-              .take(latestAssistantIndex == -1 ? messages.length : 0)
+        ? widget.messages
+              .take(latestAssistantIndex == -1 ? widget.messages.length : 0)
               .toList(growable: false)
-        : messages.sublist(0, latestAssistantIndex);
+        : widget.messages.sublist(0, latestAssistantIndex);
     final bool showEarlierLabel = earlierMessages.any(
       (AssistantMessage message) =>
           message.role == AssistantMessageRole.assistant,
@@ -970,8 +1025,11 @@ class _AssistantArchiveStage extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final double contentWidth = metrics.contentWidth(constraints.maxWidth);
+        final double contentWidth = widget.metrics.contentWidth(
+          constraints.maxWidth,
+        );
         return SingleChildScrollView(
+          controller: _scrollController,
           key: const ValueKey<String>('assistant-history-scroll'),
           physics: const BouncingScrollPhysics(
             parent: AlwaysScrollableScrollPhysics(),
@@ -981,7 +1039,7 @@ class _AssistantArchiveStage extends StatelessWidget {
             child: Align(
               alignment: Alignment.bottomCenter,
               child: Padding(
-                padding: EdgeInsets.only(top: metrics.unit(8)),
+                padding: EdgeInsets.only(top: widget.metrics.unit(8)),
                 child: SizedBox(
                   width: contentWidth,
                   child: Column(
@@ -997,12 +1055,12 @@ class _AssistantArchiveStage extends StatelessWidget {
                           ),
                           style: Theme.of(context).textTheme.labelSmall
                               ?.copyWith(
-                                color: palette.mutedText,
-                                fontSize: metrics.unit(11),
+                                color: widget.palette.mutedText,
+                                fontSize: widget.metrics.unit(11),
                                 fontWeight: FontWeight.w500,
                               ),
                         ),
-                        SizedBox(height: metrics.unit(16)),
+                        SizedBox(height: widget.metrics.unit(16)),
                       ],
                       ...earlierMessages.expand<Widget>((
                         AssistantMessage message,
@@ -1011,37 +1069,39 @@ class _AssistantArchiveStage extends StatelessWidget {
                           return <Widget>[
                             AssistantUserCard(
                               text: message.content.trim(),
-                              metrics: metrics,
-                              palette: palette,
+                              metrics: widget.metrics,
+                              palette: widget.palette,
                             ),
-                            SizedBox(height: metrics.unit(16)),
+                            SizedBox(height: widget.metrics.unit(16)),
                           ];
                         }
 
                         final List<AssistantToolStatus> messageStatuses =
                             assistantToolStatusesFromSurfaceIds(
-                              controller.updatedSurfacesForMessage(message.id),
+                              widget.controller.updatedSurfacesForMessage(
+                                message.id,
+                              ),
                             );
                         return <Widget>[
                           Text(
                             message.content.trim(),
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
-                                  color: palette.bodyText,
-                                  fontSize: metrics.unit(13),
+                                  color: widget.palette.bodyText,
+                                  fontSize: widget.metrics.unit(13),
                                   fontWeight: FontWeight.w500,
                                   height: 1.58,
                                 ),
                           ),
                           if (messageStatuses.isNotEmpty) ...<Widget>[
-                            SizedBox(height: metrics.unit(8)),
+                            SizedBox(height: widget.metrics.unit(8)),
                             AssistantBulletStatusList(
                               statuses: messageStatuses,
-                              metrics: metrics,
-                              palette: palette,
+                              metrics: widget.metrics,
+                              palette: widget.palette,
                             ),
                           ],
-                          SizedBox(height: metrics.unit(16)),
+                          SizedBox(height: widget.metrics.unit(16)),
                         ];
                       }),
                       if (showCurrentLabel) ...<Widget>[
@@ -1052,36 +1112,36 @@ class _AssistantArchiveStage extends StatelessWidget {
                           ),
                           style: Theme.of(context).textTheme.labelSmall
                               ?.copyWith(
-                                color: palette.mutedText,
-                                fontSize: metrics.unit(11),
+                                color: widget.palette.mutedText,
+                                fontSize: widget.metrics.unit(11),
                                 fontWeight: FontWeight.w500,
                               ),
                         ),
-                        SizedBox(height: metrics.unit(16)),
+                        SizedBox(height: widget.metrics.unit(16)),
                       ],
                       if (latestAssistant != null) ...<Widget>[
                         Text(
                           latestAssistant.content.trim(),
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(
-                                color: palette.headlineText,
-                                fontSize: metrics.unit(20),
+                                color: widget.palette.headlineText,
+                                fontSize: widget.metrics.unit(20),
                                 fontWeight: FontWeight.w500,
                                 height: 1.62,
                               ),
                         ),
-                        SizedBox(height: metrics.unit(12)),
+                        SizedBox(height: widget.metrics.unit(12)),
                         AssistantBulletStatusList(
                           statuses: assistantToolStatusesFromSurfaceIds(
-                            controller.updatedSurfacesForMessage(
+                            widget.controller.updatedSurfacesForMessage(
                               latestAssistant.id,
                             ),
                           ),
-                          metrics: metrics,
-                          palette: palette,
+                          metrics: widget.metrics,
+                          palette: widget.palette,
                         ),
                       ] else
-                        ...messages
+                        ...widget.messages
                             .where(
                               (AssistantMessage message) =>
                                   message.role == AssistantMessageRole.user,
@@ -1089,12 +1149,12 @@ class _AssistantArchiveStage extends StatelessWidget {
                             .map(
                               (AssistantMessage message) => Padding(
                                 padding: EdgeInsets.only(
-                                  bottom: metrics.unit(16),
+                                  bottom: widget.metrics.unit(16),
                                 ),
                                 child: AssistantUserCard(
                                   text: message.content.trim(),
-                                  metrics: metrics,
-                                  palette: palette,
+                                  metrics: widget.metrics,
+                                  palette: widget.palette,
                                 ),
                               ),
                             ),

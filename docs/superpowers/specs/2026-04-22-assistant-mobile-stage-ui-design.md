@@ -60,6 +60,7 @@ It uses the same shell and composer as the main page, but the center body become
 - First pull only reveals the hint and arms archive expansion for `5s`
 - Second downward pull inside that `5s` window expands the archive
 - If the user waits longer than `5s`, the hint disappears and the two-step sequence resets
+- After expansion, the archive must land at the bottom by default so the latest visible exchange is already in view
 - After the archive is open, when the list is at the bottom, an upward pull collapses back to the centered stage
 - Older assistant messages are plain text
 - Older user messages are full-width rounded cards
@@ -74,6 +75,8 @@ It uses the same shell and composer as the main page, but the center body become
 - Use container-based layout, not absolute positioning
 - Use theme-derived colors from the existing Dart theme/color system
 - Keep the dark black background and bottom green glow from Pencil
+- The bottom glow must read as one continuous wash with the shell, not as a separate hard band or cutoff block
+- Glow tuning should stay slightly calmer and more business-like than the current oversaturated web build
 - Visible message/composer surfaces use `20` corner radius
 - Keep the shell visually compact on tall phones; do not scale spacing upward past the Pencil baseline
 - Reduce extra top padding above the `小眠` header row
@@ -107,11 +110,17 @@ It uses the same shell and composer as the main page, but the center body become
 - The reply floating motion must support three user-selectable levels in Settings: `low`, `medium`, `high`
 - The default floating level is `medium`
 - The Settings page is the only control surface for this motion level selector
+- The motion selector lives in its own dedicated settings section, not inside the sleep preferences card
+- The selector UI should be a dedicated settings entry with immediate save behavior, not an inline segmented control
 - The floating motion is low-amplitude and slow-cycle only; no bounce, zoom, shimmer, or parallax layers
 - Stage switching must feel sequential:
   - the outgoing text floats upward and fades out first
+  - the outgoing exit phase should last about `400-500ms`
+  - then hold a short `100-200ms` pause
   - then the incoming text floats upward into place
-  - the full transition should be slower and calmer than the current implementation
+  - the full transition should be around `1s`, slower and calmer than the current implementation
+  - the outgoing upward travel distance should be noticeably larger than the idle floating amplitude
+- Expanding or collapsing the inline archive must also use a calmer transition instead of snapping between states
 - Haptics are single-shot feedback, not continuous vibration
 - When a new assistant reply first appears, trigger one light haptic
 - If that reply also renders tool status rows, a second lighter confirmation tap may follow shortly after

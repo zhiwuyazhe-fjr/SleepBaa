@@ -108,10 +108,11 @@ class AssistantSurfacePalette {
   factory AssistantSurfacePalette.fromMood(NightMoodPalette mood) {
     final Color accent = mood.welcomeAccentColor;
     final Color surface = mood.welcomeSurfaceColor;
+    final Color softAccent = Color.lerp(accent, surface, 0.36)!;
     final Color midGlow = Color.lerp(
       mood.heroGradientMid,
       AppColors.darkBackground,
-      0.08,
+      0.24,
     )!;
     final Color textBlend = Color.lerp(AppColors.onDark, surface, 0.42)!;
 
@@ -131,9 +132,9 @@ class AssistantSurfacePalette {
       userCardFill: _alpha(surface, 0.91),
       userCardBorder: _alpha(accent, 0.22),
       userText: _alpha(Color.lerp(AppColors.onDark, surface, 0.18)!, 0.93),
-      bottomGlowStart: _alpha(accent, 0.24),
-      bottomGlowMid: _alpha(midGlow, 0.92),
-      bottomGlowCore: _alpha(accent, 0.38),
+      bottomGlowStart: _alpha(softAccent, 0.10),
+      bottomGlowMid: _alpha(midGlow, 0.40),
+      bottomGlowCore: _alpha(Color.lerp(accent, softAccent, 0.32)!, 0.22),
     );
   }
 
@@ -155,6 +156,71 @@ class AssistantSurfacePalette {
   final Color bottomGlowStart;
   final Color bottomGlowMid;
   final Color bottomGlowCore;
+}
+
+class AssistantBackgroundGlow extends StatelessWidget {
+  const AssistantBackgroundGlow({super.key, required this.palette});
+
+  final AssistantSurfacePalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        const DecoratedBox(
+          decoration: BoxDecoration(color: AppColors.darkBackground),
+        ),
+        IgnorePointer(
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: FractionallySizedBox(
+              heightFactor: 0.74,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    stops: const <double>[0, 0.14, 0.54, 1],
+                    colors: <Color>[
+                      palette.bottomGlowCore,
+                      palette.bottomGlowMid,
+                      palette.bottomGlowStart,
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        IgnorePointer(
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: FractionallySizedBox(
+              widthFactor: 1.12,
+              heightFactor: 0.40,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(0, 1.08),
+                    radius: 1.72,
+                    colors: <Color>[
+                      palette.bottomGlowCore,
+                      palette.bottomGlowMid,
+                      palette.bottomGlowStart,
+                      Colors.transparent,
+                    ],
+                    stops: const <double>[0, 0.20, 0.56, 1],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class AssistantShellScaffold extends StatelessWidget {
@@ -197,54 +263,7 @@ class AssistantShellScaffold extends StatelessWidget {
           return Stack(
             fit: StackFit.expand,
             children: <Widget>[
-              const DecoratedBox(
-                decoration: BoxDecoration(color: AppColors.darkBackground),
-              ),
-              IgnorePointer(
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: FractionallySizedBox(
-                    heightFactor: 0.56,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                          stops: const <double>[0, 0.38, 1],
-                          colors: <Color>[
-                            palette.bottomGlowStart,
-                            palette.bottomGlowMid,
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              IgnorePointer(
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: FractionallySizedBox(
-                    widthFactor: 1,
-                    heightFactor: 0.28,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: RadialGradient(
-                          center: const Alignment(0, 0.95),
-                          radius: 1.34,
-                          colors: <Color>[
-                            palette.bottomGlowCore,
-                            palette.bottomGlowStart,
-                            Colors.transparent,
-                          ],
-                          stops: const <double>[0, 0.52, 1],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+              AssistantBackgroundGlow(palette: palette),
               SafeArea(
                 child: AnimatedPadding(
                   duration: const Duration(milliseconds: 180),
