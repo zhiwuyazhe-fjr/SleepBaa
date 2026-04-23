@@ -50,6 +50,12 @@ class NightWelcomeController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void releaseNightMoodThemeOverride() {
+    _themeOverrideNightKey = null;
+    _activeNightMood = null;
+    notifyListeners();
+  }
+
   void syncHomeVisibility(bool isVisible) {
     if (_isHomeVisible == isVisible) {
       return;

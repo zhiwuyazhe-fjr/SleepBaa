@@ -364,6 +364,20 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
   }
 
   @override
+  Future<PhoneVerificationProof> verifyPhoneCode({
+    required String verificationId,
+    required String code,
+  }) async {
+    if (verificationId.trim().isEmpty || code.trim() != '123456') {
+      throw const AuthFlowException('验证码不正确，请重新输入。');
+    }
+    return const PhoneVerificationProof(
+      verificationToken: 'local-verification-token',
+      expiresIn: 600,
+    );
+  }
+
+  @override
   Future<AuthCaptchaChallenge> createCaptchaChallenge() async {
     return const AuthCaptchaChallenge(
       token: 'local-captcha-token',
@@ -450,6 +464,23 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
     required String code,
     required String newPassword,
   }) async {
+    await verifyPhoneCode(verificationId: verificationId, code: code);
+    await resetPasswordWithVerificationToken(
+      phoneNumber: phoneNumber,
+      verificationToken: 'local-verification-token',
+      newPassword: newPassword,
+    );
+  }
+
+  @override
+  Future<void> resetPasswordWithVerificationToken({
+    required String phoneNumber,
+    required String verificationToken,
+    required String newPassword,
+  }) async {
+    if (verificationToken != 'local-verification-token') {
+      throw const AuthFlowException('验证码已失效，请重新验证。');
+    }
     final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
       phoneNumber,
     );
@@ -490,14 +521,19 @@ class InMemoryUserSettingsRepository extends ChangeNotifier
   UserSettings _settings;
 
   @override
-  UserSettings get currentSettings => _settings;
+    UserSettings get currentSettings => _settings;
 
-  @override
-  Future<void> saveSettings(UserSettings settings) async {
-    _settings = settings;
-    notifyListeners();
+    @override
+    void replaceLocalSettings(UserSettings settings) {
+      _settings = settings;
+      notifyListeners();
+    }
+
+    @override
+    Future<void> saveSettings(UserSettings settings) async {
+      replaceLocalSettings(settings);
+    }
   }
-}
 
 class InMemoryRecommendationRepository extends ChangeNotifier
     implements RecommendationRepository {
