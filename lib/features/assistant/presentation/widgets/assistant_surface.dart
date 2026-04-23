@@ -108,12 +108,23 @@ class AssistantSurfacePalette {
   factory AssistantSurfacePalette.fromMood(NightMoodPalette mood) {
     final Color accent = mood.welcomeAccentColor;
     final Color surface = mood.welcomeSurfaceColor;
-    final Color softAccent = Color.lerp(accent, surface, 0.36)!;
-    final Color midGlow = Color.lerp(
-      mood.heroGradientMid,
-      AppColors.darkBackground,
-      0.24,
-    )!;
+    final Color softAccent = Color.lerp(accent, surface, 0.24)!;
+    final HSLColor accentHsl = HSLColor.fromColor(accent.withAlpha(0xFF));
+    final HSLColor heroEndHsl = HSLColor.fromColor(
+      mood.heroGradientEnd.withAlpha(0xFF),
+    );
+    final HSLColor stripCore = HSLColor.fromAHSL(
+      1,
+      accentHsl.hue,
+      (accentHsl.saturation * 0.92).clamp(0.0, 1.0),
+      (heroEndHsl.lightness + 0.06).clamp(0.18, 0.32),
+    );
+    final HSLColor stripMid = stripCore.withLightness(
+      (stripCore.lightness + 0.12).clamp(0.0, 1.0),
+    );
+    final HSLColor stripTail = HSLColor.fromColor(
+      Color.lerp(stripMid.toColor(), softAccent, 0.54)!,
+    ).withLightness((stripMid.lightness + 0.24).clamp(0.0, 0.84));
     final Color textBlend = Color.lerp(AppColors.onDark, surface, 0.42)!;
 
     return AssistantSurfacePalette(
@@ -132,9 +143,9 @@ class AssistantSurfacePalette {
       userCardFill: _alpha(surface, 0.91),
       userCardBorder: _alpha(accent, 0.22),
       userText: _alpha(Color.lerp(AppColors.onDark, surface, 0.18)!, 0.93),
-      bottomGlowStart: _alpha(softAccent, 0.10),
-      bottomGlowMid: _alpha(midGlow, 0.40),
-      bottomGlowCore: _alpha(Color.lerp(accent, softAccent, 0.32)!, 0.22),
+      bottomGlowStart: stripTail.toColor(),
+      bottomGlowMid: stripMid.toColor(),
+      bottomGlowCore: stripCore.toColor(),
     );
   }
 
@@ -165,6 +176,7 @@ class AssistantBackgroundGlow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Color transparentTail = _alpha(palette.bottomGlowStart, 0);
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
@@ -175,18 +187,21 @@ class AssistantBackgroundGlow extends StatelessWidget {
           child: Align(
             alignment: Alignment.bottomCenter,
             child: FractionallySizedBox(
-              heightFactor: 0.74,
+              heightFactor: 0.68,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.bottomCenter,
                     end: Alignment.topCenter,
-                    stops: const <double>[0, 0.14, 0.54, 1],
+                    stops: const <double>[0, 0.08, 0.20, 0.38, 0.58, 0.78, 1],
                     colors: <Color>[
-                      palette.bottomGlowCore,
-                      palette.bottomGlowMid,
-                      palette.bottomGlowStart,
-                      Colors.transparent,
+                      _alpha(palette.bottomGlowCore, 0.84),
+                      _alpha(palette.bottomGlowCore, 0.66),
+                      _alpha(palette.bottomGlowMid, 0.48),
+                      _alpha(palette.bottomGlowMid, 0.30),
+                      _alpha(palette.bottomGlowStart, 0.18),
+                      _alpha(palette.bottomGlowStart, 0.06),
+                      transparentTail,
                     ],
                   ),
                 ),
@@ -198,20 +213,21 @@ class AssistantBackgroundGlow extends StatelessWidget {
           child: Align(
             alignment: Alignment.bottomCenter,
             child: FractionallySizedBox(
-              widthFactor: 1.12,
-              heightFactor: 0.40,
+              widthFactor: 1.06,
+              heightFactor: 0.28,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: const Alignment(0, 1.08),
-                    radius: 1.72,
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    stops: const <double>[0, 0.18, 0.42, 0.72, 1],
                     colors: <Color>[
-                      palette.bottomGlowCore,
-                      palette.bottomGlowMid,
-                      palette.bottomGlowStart,
-                      Colors.transparent,
+                      _alpha(palette.bottomGlowCore, 0.96),
+                      _alpha(palette.bottomGlowMid, 0.58),
+                      _alpha(palette.bottomGlowMid, 0.24),
+                      _alpha(palette.bottomGlowStart, 0.08),
+                      transparentTail,
                     ],
-                    stops: const <double>[0, 0.20, 0.56, 1],
                   ),
                 ),
               ),
@@ -605,14 +621,82 @@ class AssistantPullHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      key: const ValueKey<String>('assistant-history-hint'),
-      textAlign: TextAlign.center,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-        color: palette.mutedText,
-        fontSize: metrics.unit(12),
-        fontWeight: FontWeight.w500,
+    return _AssistantPullHintChip(
+      metrics: metrics,
+      palette: palette,
+      text: text,
+    );
+  }
+}
+
+class _AssistantPullHintChip extends StatelessWidget {
+  const _AssistantPullHintChip({
+    required this.metrics,
+    required this.palette,
+    required this.text,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isExpandHint = text.contains('下拉');
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(metrics.unit(999)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: metrics.unit(14),
+          sigmaY: metrics.unit(14),
+        ),
+        child: DecoratedBox(
+          key: const ValueKey<String>('assistant-history-hint'),
+          decoration: BoxDecoration(
+            color: _alpha(AppColors.darkBackground, 0.48),
+            borderRadius: BorderRadius.circular(metrics.unit(999)),
+            border: Border.all(
+              color: _alpha(palette.composerBorder, 0.72),
+              width: metrics.unit(1),
+            ),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: _alpha(palette.bottomGlowMid, 0.24),
+                blurRadius: metrics.unit(14),
+                offset: Offset(0, metrics.unit(6)),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: metrics.unit(12),
+              vertical: metrics.unit(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(
+                  isExpandHint
+                      ? Icons.keyboard_arrow_down_rounded
+                      : Icons.keyboard_arrow_up_rounded,
+                  size: metrics.unit(16),
+                  color: palette.headerIcon,
+                ),
+                SizedBox(width: metrics.unit(6)),
+                Text(
+                  text,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: palette.headerIcon,
+                    fontSize: metrics.unit(12),
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

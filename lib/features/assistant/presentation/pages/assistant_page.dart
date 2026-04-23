@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,7 +11,13 @@ import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dar
 import 'package:sleep_dorm_app/features/assistant/presentation/controllers/assistant_conversation_controller.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/widgets/assistant_surface.dart';
 
+const Duration _assistantStageTransitionDuration = Duration(milliseconds: 2000);
+
 enum AssistantCaptureTab { dream, memo }
+
+enum _AssistantFlowHintMode { none, expand, collapse }
+
+enum _AssistantArchivePhase { collapsed, expanding, expanded, collapsing }
 
 class AssistantPage extends StatefulWidget {
   const AssistantPage({
@@ -28,7 +35,6 @@ class AssistantPage extends StatefulWidget {
 
 class _AssistantPageState extends State<AssistantPage>
     with SingleTickerProviderStateMixin {
-  static const Duration _archiveAnimationDuration = Duration(milliseconds: 520);
   static const Duration _archiveHintMemoryDuration = Duration(seconds: 5);
 
   final TextEditingController _inputController = TextEditingController();
@@ -36,20 +42,56 @@ class _AssistantPageState extends State<AssistantPage>
 
   late final AnimationController _archiveController = AnimationController(
     vsync: this,
-    duration: _archiveAnimationDuration,
+    duration: _assistantStageTransitionDuration,
   );
   late AssistantCaptureTab _selectedTab;
   Timer? _archiveHintTimer;
+  Timer? _archiveCollapseHintTimer;
   String? _lastHapticAssistantMessageId;
+  _AssistantArchivePhase _archivePhase = _AssistantArchivePhase.collapsed;
   bool _archiveExpansionArmed = false;
+  bool _archiveCollapseArmed = false;
+  bool _archiveCollapseHintPrimedFromEntry = false;
   bool _archiveAtBottom = true;
   double _replyPullExtent = 0;
   double _archiveOverscrollExtent = 0;
+  _AssistantFlowHintMode _flowHintMode = _AssistantFlowHintMode.none;
 
   SleepCaptureType get _activeCaptureType =>
       _selectedTab == AssistantCaptureTab.memo
       ? SleepCaptureType.memo
       : SleepCaptureType.dream;
+
+  bool get _archiveTransitioning =>
+      _archivePhase == _AssistantArchivePhase.expanding ||
+      _archivePhase == _AssistantArchivePhase.collapsing;
+
+  bool get _archiveExpanded => _archivePhase == _AssistantArchivePhase.expanded;
+
+  String? _flowHintText() {
+    return switch (_flowHintMode) {
+      _AssistantFlowHintMode.expand => '再次下拉查看对话记录',
+      _AssistantFlowHintMode.collapse =>
+        _archiveCollapseHintPrimedFromEntry ? '上拉返回当前回复' : '再次上拉返回当前回复',
+      _AssistantFlowHintMode.none => null,
+    };
+  }
+
+  bool _shouldShowFlowHint() {
+    return switch (_flowHintMode) {
+      _AssistantFlowHintMode.none => false,
+      _AssistantFlowHintMode.expand =>
+        _archiveExpansionArmed &&
+            _replyPullExtent <= 0.001 &&
+            !_archiveTransitioning &&
+            _archivePhase == _AssistantArchivePhase.collapsed,
+      _AssistantFlowHintMode.collapse =>
+        _archiveCollapseArmed &&
+            _archiveOverscrollExtent <= 0.001 &&
+            !_archiveTransitioning &&
+            _archivePhase == _AssistantArchivePhase.expanded,
+    };
+  }
 
   @override
   void initState() {
@@ -66,6 +108,7 @@ class _AssistantPageState extends State<AssistantPage>
   @override
   void dispose() {
     _archiveHintTimer?.cancel();
+    _archiveCollapseHintTimer?.cancel();
     _archiveController.dispose();
     _inputController.dispose();
     _focusNode.dispose();
@@ -162,20 +205,28 @@ class _AssistantPageState extends State<AssistantPage>
 
   void _resetArchiveState() {
     _archiveHintTimer?.cancel();
+    _archiveCollapseHintTimer?.cancel();
     _archiveHintTimer = null;
+    _archiveCollapseHintTimer = null;
+    _archiveController.stop();
+    _archiveController.value = 0;
+    _archivePhase = _AssistantArchivePhase.collapsed;
     _archiveExpansionArmed = false;
+    _archiveCollapseArmed = false;
+    _archiveCollapseHintPrimedFromEntry = false;
     _archiveAtBottom = true;
     _replyPullExtent = 0;
     _archiveOverscrollExtent = 0;
-    if (_archiveController.value != 0) {
-      _archiveController.value = 0;
-    }
+    _flowHintMode = _AssistantFlowHintMode.none;
   }
 
   void _armArchiveExpansion() {
     _archiveHintTimer?.cancel();
+    _archiveCollapseHintTimer?.cancel();
     setState(() {
       _archiveExpansionArmed = true;
+      _archiveCollapseArmed = false;
+      _flowHintMode = _AssistantFlowHintMode.expand;
       _replyPullExtent = 0;
       _archiveController.value = 0;
     });
@@ -186,6 +237,9 @@ class _AssistantPageState extends State<AssistantPage>
       setState(() {
         _archiveExpansionArmed = false;
         _replyPullExtent = 0;
+        if (!_archiveCollapseArmed) {
+          _flowHintMode = _AssistantFlowHintMode.none;
+        }
       });
     });
   }
@@ -194,40 +248,77 @@ class _AssistantPageState extends State<AssistantPage>
     _archiveHintTimer?.cancel();
     _archiveHintTimer = null;
     _archiveExpansionArmed = false;
+    if (!_archiveCollapseArmed) {
+      _flowHintMode = _AssistantFlowHintMode.none;
+    }
   }
 
-  Future<void> _animateArchiveTo(double target) async {
-    await _archiveController.animateTo(
-      target,
-      duration: _archiveAnimationDuration,
-      curve: Curves.easeInOutCubic,
-    );
+  void _armArchiveCollapse({bool primedFromEntry = false}) {
+    _archiveCollapseHintTimer?.cancel();
+    setState(() {
+      _archiveCollapseArmed = true;
+      _archiveCollapseHintPrimedFromEntry = primedFromEntry;
+      _flowHintMode = _AssistantFlowHintMode.collapse;
+      _archiveOverscrollExtent = 0;
+      _archiveController.value = 1;
+    });
+    _archiveCollapseHintTimer = Timer(_archiveHintMemoryDuration, () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _archiveCollapseArmed = false;
+        _archiveCollapseHintPrimedFromEntry = false;
+        _archiveOverscrollExtent = 0;
+        if (!_archiveExpansionArmed) {
+          _flowHintMode = _AssistantFlowHintMode.none;
+        }
+      });
+    });
+  }
+
+  void _disarmArchiveCollapse() {
+    _archiveCollapseHintTimer?.cancel();
+    _archiveCollapseHintTimer = null;
+    _archiveCollapseArmed = false;
+    _archiveCollapseHintPrimedFromEntry = false;
+    if (!_archiveExpansionArmed) {
+      _flowHintMode = _AssistantFlowHintMode.none;
+    }
+  }
+
+  Future<void> _playArchiveTransition(_AssistantArchivePhase nextPhase) async {
+    if (_archiveTransitioning) {
+      return;
+    }
+    setState(() {
+      _archivePhase = nextPhase;
+      _archiveExpansionArmed = false;
+      _archiveCollapseArmed = false;
+      _replyPullExtent = 0;
+      _archiveOverscrollExtent = 0;
+      _flowHintMode = _AssistantFlowHintMode.none;
+    });
+    await _archiveController.forward(from: 0);
     if (!mounted) {
       return;
     }
     setState(() {
-      if (target == 0) {
-        _replyPullExtent = 0;
+      _archivePhase = nextPhase == _AssistantArchivePhase.expanding
+          ? _AssistantArchivePhase.expanded
+          : _AssistantArchivePhase.collapsed;
+      if (_archivePhase == _AssistantArchivePhase.collapsed) {
+        _archiveAtBottom = true;
       }
+      _replyPullExtent = 0;
       _archiveOverscrollExtent = 0;
     });
-  }
-
-  double _pullHintOpacity(AssistantSurfaceMetrics metrics) {
-    if (_archiveController.value >= 1) {
-      return 0;
+    if (_archivePhase == _AssistantArchivePhase.expanded) {
+      _armArchiveCollapse(primedFromEntry: true);
     }
-    if (_archiveExpansionArmed) {
-      return (1 - _archiveController.value).clamp(0, 1);
+    if (_archivePhase == _AssistantArchivePhase.collapsed) {
+      _archiveController.value = 0;
     }
-    final double reveal = (_replyPullExtent / metrics.unit(28)).clamp(0, 1);
-    return (reveal * (1 - _archiveController.value)).clamp(0, 1);
-  }
-
-  void _syncArchiveProgressFromPull(AssistantSurfaceMetrics metrics) {
-    final double progress =
-        ((_replyPullExtent - metrics.unit(18)) / metrics.unit(96)).clamp(0, 1);
-    _archiveController.value = progress;
   }
 
   void _handleReplyPullUpdate(
@@ -236,7 +327,8 @@ class _AssistantPageState extends State<AssistantPage>
     _AssistantStageState stageState,
   ) {
     if (stageState != _AssistantStageState.reply ||
-        _archiveController.isAnimating) {
+        _archiveTransitioning ||
+        _archivePhase != _AssistantArchivePhase.collapsed) {
       return;
     }
     final double delta = details.primaryDelta ?? 0;
@@ -246,9 +338,6 @@ class _AssistantPageState extends State<AssistantPage>
 
     setState(() {
       _replyPullExtent = (_replyPullExtent + delta).clamp(0, metrics.unit(180));
-      if (_archiveExpansionArmed) {
-        _syncArchiveProgressFromPull(metrics);
-      }
     });
   }
 
@@ -275,19 +364,16 @@ class _AssistantPageState extends State<AssistantPage>
     }
 
     final bool shouldExpand =
-        _archiveController.value > 0.34 ||
-        _replyPullExtent > metrics.unit(64) ||
-        velocity > 460;
+        _replyPullExtent > metrics.unit(64) || velocity > 460;
 
     setState(() {
       _replyPullExtent = 0;
     });
     if (shouldExpand) {
       _disarmArchiveExpansion();
-      unawaited(_animateArchiveTo(1));
+      unawaited(_playArchiveTransition(_AssistantArchivePhase.expanding));
       return;
     }
-    _archiveController.value = 0;
   }
 
   bool _handleArchiveScrollNotification(
@@ -313,7 +399,7 @@ class _AssistantPageState extends State<AssistantPage>
     DragUpdateDetails details,
     AssistantSurfaceMetrics metrics,
   ) {
-    if (_archiveController.isAnimating) {
+    if (_archiveTransitioning || !_archiveExpanded) {
       return;
     }
     final double delta = details.primaryDelta ?? 0;
@@ -325,23 +411,37 @@ class _AssistantPageState extends State<AssistantPage>
         0,
         metrics.unit(180),
       );
-      final double progress = (_archiveOverscrollExtent / metrics.unit(110))
-          .clamp(0, 1);
-      _archiveController.value = 1 - progress;
     });
   }
 
-  void _handleArchiveCollapsePullEnd(DragEndDetails details) {
+  void _handleArchiveCollapsePullEnd(
+    DragEndDetails details,
+    AssistantSurfaceMetrics metrics,
+  ) {
     final double velocity = details.primaryVelocity ?? 0;
-    final bool shouldCollapse =
-        _archiveController.value < 0.76 || velocity < -420;
-    _archiveOverscrollExtent = 0;
-    if (shouldCollapse) {
-      _disarmArchiveExpansion();
-      unawaited(_animateArchiveTo(0));
+    if (!_archiveCollapseArmed) {
+      final bool shouldArm =
+          _archiveOverscrollExtent > metrics.unit(28) || velocity < -420;
+      setState(() {
+        _archiveOverscrollExtent = 0;
+      });
+      if (shouldArm) {
+        _armArchiveCollapse();
+      }
       return;
     }
-    unawaited(_animateArchiveTo(1));
+
+    final bool shouldCollapse =
+        _archiveOverscrollExtent > metrics.unit(70) || velocity < -520;
+    setState(() {
+      _archiveOverscrollExtent = 0;
+    });
+    if (shouldCollapse) {
+      _disarmArchiveCollapse();
+      _disarmArchiveExpansion();
+      unawaited(_playArchiveTransition(_AssistantArchivePhase.collapsing));
+      return;
+    }
   }
 
   @override
@@ -404,7 +504,8 @@ class _AssistantPageState extends State<AssistantPage>
                   controller: controller,
                   replyMotionLevel: replyMotionLevel,
                   archiveController: _archiveController,
-                  pullHintOpacity: _pullHintOpacity(metrics),
+                  archivePhase: _archivePhase,
+                  flowHintText: _shouldShowFlowHint() ? _flowHintText() : null,
                   archiveAtBottom: _archiveAtBottom,
                   onReplyPullUpdate: (DragUpdateDetails details) =>
                       _handleReplyPullUpdate(details, metrics, stageState),
@@ -412,7 +513,8 @@ class _AssistantPageState extends State<AssistantPage>
                       _handleReplyPullEnd(details, metrics, stageState),
                   onArchiveCollapsePullUpdate: (DragUpdateDetails details) =>
                       _handleArchiveCollapsePullUpdate(details, metrics),
-                  onArchiveCollapsePullEnd: _handleArchiveCollapsePullEnd,
+                  onArchiveCollapsePullEnd: (DragEndDetails details) =>
+                      _handleArchiveCollapsePullEnd(details, metrics),
                   onArchiveScrollNotification:
                       (ScrollNotification notification) =>
                           _handleArchiveScrollNotification(
@@ -472,7 +574,8 @@ class _AssistantStageViewport extends StatelessWidget {
     required this.controller,
     required this.replyMotionLevel,
     required this.archiveController,
-    required this.pullHintOpacity,
+    required this.archivePhase,
+    required this.flowHintText,
     required this.archiveAtBottom,
     required this.onReplyPullUpdate,
     required this.onReplyPullEnd,
@@ -489,7 +592,8 @@ class _AssistantStageViewport extends StatelessWidget {
   final AssistantConversationController controller;
   final AssistantReplyMotionLevel replyMotionLevel;
   final AnimationController archiveController;
-  final double pullHintOpacity;
+  final _AssistantArchivePhase archivePhase;
+  final String? flowHintText;
   final bool archiveAtBottom;
   final ValueChanged<DragUpdateDetails> onReplyPullUpdate;
   final ValueChanged<DragEndDetails> onReplyPullEnd;
@@ -503,14 +607,71 @@ class _AssistantStageViewport extends StatelessWidget {
     return AnimatedBuilder(
       animation: archiveController,
       builder: (BuildContext context, Widget? child) {
-        final double archiveProgress = Curves.easeOutCubic.transform(
-          archiveController.value,
-        );
-        final bool showArchive =
-            archiveController.value > 0.001 || archiveController.isAnimating;
+        final double archiveProgress = archiveController.value.clamp(0, 1);
         final bool canDragReply =
             stageState == _AssistantStageState.reply &&
-            archiveController.value < 0.999;
+            archivePhase == _AssistantArchivePhase.collapsed;
+
+        final Widget primaryStage = _AssistantPrimaryStage(
+          metrics: metrics,
+          palette: palette,
+          stageState: stageState,
+          latestUserText: slice.latestUser?.content.trim() ?? '',
+          latestAssistantText: slice.latestAssistant?.content.trim() ?? '',
+          statuses: statuses,
+          replyMotionLevel: replyMotionLevel,
+        );
+        final Widget archiveStage = NotificationListener<ScrollNotification>(
+          onNotification: onArchiveScrollNotification,
+          child: IgnorePointer(
+            ignoring: archivePhase != _AssistantArchivePhase.expanded,
+            child: _AssistantArchiveStage(
+              metrics: metrics,
+              palette: palette,
+              messages: slice.visibleMessages,
+              controller: controller,
+            ),
+          ),
+        );
+
+        final Widget viewportBody = switch (archivePhase) {
+          _AssistantArchivePhase.collapsed => primaryStage,
+          _AssistantArchivePhase.expanded => archiveStage,
+          _AssistantArchivePhase.expanding => Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              _AssistantFlowMotionLayer(
+                metrics: metrics,
+                progress: archiveProgress,
+                mode: _AssistantFlowMotionMode.outgoing,
+                child: primaryStage,
+              ),
+              _AssistantFlowMotionLayer(
+                metrics: metrics,
+                progress: archiveProgress,
+                mode: _AssistantFlowMotionMode.incoming,
+                child: archiveStage,
+              ),
+            ],
+          ),
+          _AssistantArchivePhase.collapsing => Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              _AssistantFlowMotionLayer(
+                metrics: metrics,
+                progress: archiveProgress,
+                mode: _AssistantFlowMotionMode.outgoing,
+                child: archiveStage,
+              ),
+              _AssistantFlowMotionLayer(
+                metrics: metrics,
+                progress: archiveProgress,
+                mode: _AssistantFlowMotionMode.incoming,
+                child: primaryStage,
+              ),
+            ],
+          ),
+        };
 
         return GestureDetector(
           key: const ValueKey<String>('assistant-stage-viewport'),
@@ -520,49 +681,8 @@ class _AssistantStageViewport extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: <Widget>[
-              IgnorePointer(
-                ignoring: archiveProgress > 0.98,
-                child: Opacity(
-                  opacity: 1 - archiveProgress,
-                  child: Transform.translate(
-                    offset: Offset(0, metrics.unit(30) * archiveProgress),
-                    child: _AssistantPrimaryStage(
-                      metrics: metrics,
-                      palette: palette,
-                      stageState: stageState,
-                      latestUserText: slice.latestUser?.content.trim() ?? '',
-                      latestAssistantText:
-                          slice.latestAssistant?.content.trim() ?? '',
-                      statuses: statuses,
-                      replyMotionLevel: replyMotionLevel,
-                    ),
-                  ),
-                ),
-              ),
-              if (showArchive)
-                IgnorePointer(
-                  ignoring: archiveController.value < 0.98,
-                  child: Opacity(
-                    opacity: archiveProgress,
-                    child: Transform.translate(
-                      offset: Offset(
-                        0,
-                        -metrics.unit(56) * (1 - archiveProgress),
-                      ),
-                      child: NotificationListener<ScrollNotification>(
-                        onNotification: onArchiveScrollNotification,
-                        child: _AssistantArchiveStage(
-                          metrics: metrics,
-                          palette: palette,
-                          messages: slice.visibleMessages,
-                          controller: controller,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              if (showArchive &&
-                  archiveController.value > 0.98 &&
+              Positioned.fill(child: viewportBody),
+              if (archivePhase == _AssistantArchivePhase.expanded &&
                   archiveAtBottom)
                 Align(
                   alignment: Alignment.bottomCenter,
@@ -575,31 +695,97 @@ class _AssistantStageViewport extends StatelessWidget {
                     onVerticalDragEnd: onArchiveCollapsePullEnd,
                     child: SizedBox(
                       width: double.infinity,
-                      height: metrics.unit(112),
+                      height: metrics.unit(144),
                     ),
                   ),
                 ),
-              if (pullHintOpacity > 0.001 &&
-                  stageState == _AssistantStageState.reply &&
-                  archiveController.value < 0.98)
-                Align(
-                  alignment: Alignment.topCenter,
+              IgnorePointer(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
                   child: Padding(
-                    padding: EdgeInsets.only(top: metrics.unit(8)),
-                    child: Opacity(
-                      opacity: pullHintOpacity,
-                      child: AssistantPullHint(
-                        metrics: metrics,
-                        palette: palette,
-                        text: '再次下拉查看对话记录',
-                      ),
+                    padding: EdgeInsets.only(bottom: metrics.unit(16)),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      reverseDuration: const Duration(milliseconds: 180),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder:
+                          (Widget child, Animation<double> animation) =>
+                              FadeTransition(opacity: animation, child: child),
+                      child: flowHintText == null
+                          ? const SizedBox(
+                              key: ValueKey<String>(
+                                'assistant-history-hint-hidden',
+                              ),
+                            )
+                          : AssistantPullHint(
+                              key: ValueKey<String>(
+                                'assistant-history-hint-$flowHintText',
+                              ),
+                              metrics: metrics,
+                              palette: palette,
+                              text: flowHintText!,
+                            ),
                     ),
                   ),
                 ),
+              ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+enum _AssistantFlowMotionMode { incoming, outgoing }
+
+class _AssistantFlowMotionLayer extends StatelessWidget {
+  const _AssistantFlowMotionLayer({
+    required this.metrics,
+    required this.progress,
+    required this.mode,
+    required this.child,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final double progress;
+  final _AssistantFlowMotionMode mode;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final double easedProgress = switch (mode) {
+      _AssistantFlowMotionMode.incoming => Curves.easeOutCubic.transform(
+        const Interval(0.34, 1).transform(progress),
+      ),
+      _AssistantFlowMotionMode.outgoing => Curves.easeInOutCubic.transform(
+        const Interval(0, 0.64).transform(progress),
+      ),
+    };
+    final double opacity = switch (mode) {
+      _AssistantFlowMotionMode.incoming => easedProgress,
+      _AssistantFlowMotionMode.outgoing => 1 - easedProgress,
+    };
+    final double translateY = switch (mode) {
+      _AssistantFlowMotionMode.incoming => lerpDouble(
+        metrics.unit(136),
+        0,
+        easedProgress,
+      )!,
+      _AssistantFlowMotionMode.outgoing => lerpDouble(
+        0,
+        -metrics.unit(228),
+        easedProgress,
+      )!,
+    };
+
+    return IgnorePointer(
+      ignoring: true,
+      child: Opacity(
+        opacity: opacity.clamp(0, 1),
+        child: Transform.translate(offset: Offset(0, translateY), child: child),
+      ),
     );
   }
 }
@@ -655,7 +841,7 @@ class _AssistantPrimaryStage extends StatelessWidget {
     };
 
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 1000),
+      duration: _assistantStageTransitionDuration,
       switchInCurve: Curves.linear,
       switchOutCurve: Curves.linear,
       layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) =>
@@ -670,32 +856,44 @@ class _AssistantPrimaryStage extends StatelessWidget {
       transitionBuilder: (Widget child, Animation<double> animation) {
         final bool isIncoming = child.key == stageKey;
         final Animation<double> stageOpacity;
-        final Animation<Offset> stageOffset;
+        final Animation<double> stageProgress;
+        final double beginDy;
+        final double endDy;
         if (isIncoming) {
-          final Animation<double> progress = CurvedAnimation(
+          stageProgress = CurvedAnimation(
             parent: animation,
             curve: const Interval(0.60, 1, curve: Curves.easeOutCubic),
           );
-          stageOpacity = progress;
-          stageOffset = Tween<Offset>(
-            begin: const Offset(0, 0.16),
-            end: Offset.zero,
-          ).animate(progress);
+          stageOpacity = stageProgress;
+          beginDy = metrics.unit(136);
+          endDy = 0;
         } else {
-          final Animation<double> progress = CurvedAnimation(
+          stageProgress = CurvedAnimation(
             parent: ReverseAnimation(animation),
-            curve: const Interval(0, 0.46, curve: Curves.easeInOutCubic),
+            curve: const Interval(0, 0.40, curve: Curves.easeInOutCubic),
           );
-          stageOpacity = Tween<double>(begin: 1, end: 0).animate(progress);
-          stageOffset = Tween<Offset>(
-            begin: Offset.zero,
-            end: const Offset(0, -0.18),
-          ).animate(progress);
+          stageOpacity = Tween<double>(begin: 1, end: 0).animate(stageProgress);
+          beginDy = 0;
+          endDy = -metrics.unit(228);
         }
 
-        return FadeTransition(
-          opacity: stageOpacity,
-          child: SlideTransition(position: stageOffset, child: child),
+        return AnimatedBuilder(
+          animation: stageProgress,
+          child: child,
+          builder: (BuildContext context, Widget? child) {
+            final double translateY = lerpDouble(
+              beginDy,
+              endDy,
+              stageProgress.value,
+            )!;
+            return Opacity(
+              opacity: stageOpacity.value.clamp(0, 1),
+              child: Transform.translate(
+                offset: Offset(0, translateY),
+                child: child,
+              ),
+            );
+          },
         );
       },
       child: activeStage,
