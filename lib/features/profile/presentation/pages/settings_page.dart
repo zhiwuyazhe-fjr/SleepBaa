@@ -451,18 +451,22 @@ class _SettingsSwitchRow extends StatelessWidget {
       icon: icon,
       iconColor: context.nightMoodPalette.primaryDeep,
       title: title,
-      trailing: Transform.scale(
-        scale: 0.74,
-        alignment: Alignment.centerRight,
-        child: Switch(
-          value: value,
-          onChanged: (bool next) {
-            HapticFeedback.selectionClick();
-            onChanged(next);
-          },
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          activeThumbColor: context.nightMoodPalette.primary,
-          activeTrackColor: context.nightMoodPalette.primarySoft,
+      trailing: SizedBox(
+        width: 44,
+        height: 24,
+        child: FittedBox(
+          fit: BoxFit.contain,
+          alignment: Alignment.centerRight,
+          child: Switch(
+            value: value,
+            onChanged: (bool next) {
+              HapticFeedback.selectionClick();
+              onChanged(next);
+            },
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            activeThumbColor: context.nightMoodPalette.primary,
+            activeTrackColor: context.nightMoodPalette.primarySoft,
+          ),
         ),
       ),
       onTap: () => onChanged(!value),

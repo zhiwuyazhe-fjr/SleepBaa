@@ -166,6 +166,33 @@ void main() {
     },
   );
 
+  testWidgets('sleep preference switch rows match account entry height', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
+
+    final double accountEntryHeight = tester
+        .getSize(
+          find.ancestor(of: find.text('账号管理'), matching: find.byType(InkWell)),
+        )
+        .height;
+    final List<String> switchItemTitles = <String>[
+      '睡前提醒',
+      '晨间反馈提醒',
+      '宿舍动态提醒',
+      '智能建议',
+    ];
+
+    for (final String title in switchItemTitles) {
+      final double switchRowHeight = tester
+          .getSize(
+            find.ancestor(of: find.text(title), matching: find.byType(InkWell)),
+          )
+          .height;
+      expect(switchRowHeight, accountEntryHeight, reason: title);
+    }
+  });
+
   testWidgets('filled primary button uses welcome accent colors', (
     WidgetTester tester,
   ) async {

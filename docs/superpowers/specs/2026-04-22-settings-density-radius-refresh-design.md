@@ -211,6 +211,7 @@ flutter build apk --dart-define-from-file=D:\sleep_dorm_app\.cloudbase.local.jso
 - In `睡眠偏好`, keep the bed icon visually centered by reserving a stable leading slot and letting the slider begin slightly to the right
 - Do not override typography, padding, leading width, or row height for the non-slider sleep-preference rows
 - `睡前提醒时间 / 睡前提醒 / 晨间反馈提醒 / 宿舍动态提醒 / 智能建议` must stay on the shared `AppSettingsItem` baseline used by account-management child entries
+- Switch controls must be visually scaled inside a fixed compact trailing box so they do not increase the row height beyond the `账号管理` entry height
 
 ### Account management child pages
 
