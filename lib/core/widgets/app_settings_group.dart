@@ -65,6 +65,8 @@ class AppSettingsItem extends StatelessWidget {
       horizontal: AppSpacing.md,
       vertical: AppSpacing.sm,
     ),
+    this.leadingWidth = 28,
+    this.minHeight,
     this.borderRadius,
   });
 
@@ -76,50 +78,55 @@ class AppSettingsItem extends StatelessWidget {
   final Widget? trailing;
   final VoidCallback? onTap;
   final EdgeInsetsGeometry padding;
+  final double leadingWidth;
+  final double? minHeight;
   final BorderRadius? borderRadius;
 
   @override
   Widget build(BuildContext context) {
-    final Widget row = Padding(
+    Widget row = Padding(
       padding: padding,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: <Widget>[
-          if (icon != null) ...<Widget>[
-            SizedBox(
-              width: iconSize + AppSpacing.xs,
-              child: Center(
-                child: Icon(
-                  icon,
-                  size: iconSize,
-                  color: iconColor ?? AppColors.textPrimary,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: minHeight ?? 0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: <Widget>[
+            if (icon != null) ...<Widget>[
+              SizedBox(
+                width: leadingWidth,
+                child: Center(
+                  child: Icon(
+                    icon,
+                    size: iconSize,
+                    color: iconColor ?? AppColors.textPrimary,
+                  ),
                 ),
               ),
+              const SizedBox(width: AppSpacing.sm),
+            ],
+            Expanded(
+              child: Text(
+                title,
+                style:
+                    titleStyle ??
+                    Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
             ),
-            const SizedBox(width: AppSpacing.sm),
+            if (trailing != null) ...<Widget>[
+              const SizedBox(width: AppSpacing.sm),
+              trailing!,
+            ] else if (onTap != null) ...<Widget>[
+              const SizedBox(width: AppSpacing.sm),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: AppColors.textHint,
+              ),
+            ],
           ],
-          Expanded(
-            child: Text(
-              title,
-              style:
-                  titleStyle ??
-                  Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
-            ),
-          ),
-          if (trailing != null) ...<Widget>[
-            const SizedBox(width: AppSpacing.sm),
-            trailing!,
-          ] else if (onTap != null) ...<Widget>[
-            const SizedBox(width: AppSpacing.sm),
-            const Icon(
-              Icons.chevron_right_rounded,
-              size: 18,
-              color: AppColors.textHint,
-            ),
-          ],
-        ],
+        ),
       ),
     );
 
@@ -136,6 +143,49 @@ class AppSettingsItem extends StatelessWidget {
           onTap!();
         },
         child: row,
+      ),
+    );
+  }
+}
+
+class AppSettingsDetailItem extends StatelessWidget {
+  const AppSettingsDetailItem({
+    super.key,
+    required this.label,
+    required this.value,
+    this.padding = const EdgeInsets.symmetric(
+      horizontal: AppSpacing.md,
+      vertical: AppSpacing.sm,
+    ),
+  });
+
+  final String label;
+  final String value;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: padding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppColors.textPrimary,
+              height: 1.35,
+            ),
+          ),
+        ],
       ),
     );
   }

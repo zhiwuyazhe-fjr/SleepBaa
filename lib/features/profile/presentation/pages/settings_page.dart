@@ -14,10 +14,11 @@ import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
-import 'package:sleep_dorm_app/core\widgets/app_menu_group_card.dart';
-import 'package:sleep_dorm_app/core\widgets/app_settings_group.dart';
-import 'package:sleep_dorm_app/core\widgets/assistant_fab.dart';
-import 'package:sleep_dorm_app/core\widgets/primary_button.dart';
+import 'package:sleep_dorm_app/core/widgets/app_menu_group_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
+import 'package:sleep_dorm_app/core/widgets/mood_avatar.dart';
+import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/widgets/account_action_widgets.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -191,14 +192,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 AppSettingsGroup(
-                  title: '切换心情',
+                  title: '切换心情主题',
                   children: <Widget>[
                     Padding(
                       padding: const EdgeInsets.fromLTRB(
                         AppSpacing.md,
-                        AppSpacing.xs,
+                        AppSpacing.xxs,
                         AppSpacing.md,
-                        AppSpacing.sm,
+                        AppSpacing.xs,
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -209,7 +210,6 @@ class _SettingsPageState extends State<SettingsPage> {
                               palette: NightMoodPalette.fromMood(
                                 NightMood.happy,
                               ),
-                              keySuffix: '-settings-happy',
                               selected:
                                   settings.selectedNightMood == NightMood.happy,
                               enabled: !_isApplyingNightMood,
@@ -223,7 +223,6 @@ class _SettingsPageState extends State<SettingsPage> {
                             child: _MoodAssistantFabSlot(
                               label: '低落',
                               palette: NightMoodPalette.fromMood(NightMood.sad),
-                              keySuffix: '-settings-sad',
                               selected:
                                   settings.selectedNightMood == NightMood.sad,
                               enabled: !_isApplyingNightMood,
@@ -239,7 +238,6 @@ class _SettingsPageState extends State<SettingsPage> {
                               palette: NightMoodPalette.fromMood(
                                 NightMood.calm,
                               ),
-                              keySuffix: '-settings-calm',
                               selected:
                                   settings.selectedNightMood == NightMood.calm,
                               enabled: !_isApplyingNightMood,
@@ -253,7 +251,6 @@ class _SettingsPageState extends State<SettingsPage> {
                             child: _MoodAssistantFabSlot(
                               label: '未知',
                               palette: NightMoodPalette.fromMood(null),
-                              keySuffix: '-settings-unknown',
                               selected: settings.selectedNightMood == null,
                               enabled: !_isApplyingNightMood,
                               onTap: () =>
@@ -284,10 +281,15 @@ class _SettingsPageState extends State<SettingsPage> {
                           icon: Icons.schedule_rounded,
                           title: '睡前提醒时间',
                           iconColor: context.nightMoodPalette.primaryDeep,
+                          minHeight: 52,
+                          leadingWidth: _SettingsSliderRow._leadingWidth,
                           trailing: _SettingsValueTrailing(
                             value: Formatters.formatClock(_bedtimeReminder),
                           ),
                           onTap: _pickReminderTime,
+                          titleStyle: textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w400,
+                          ),
                         ),
                         _SettingsSwitchRow(
                           icon: Icons.bedtime_rounded,
@@ -342,6 +344,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ],
                 ),
+                const SizedBox(height: AppSpacing.sm),
+                AccountSignOutButton(services: services, label: '退出登录'),
               ],
             );
           },
@@ -352,6 +356,8 @@ class _SettingsPageState extends State<SettingsPage> {
 }
 
 class _SettingsSliderRow extends StatelessWidget {
+  static const double _leadingWidth = 32;
+
   const _SettingsSliderRow({
     required this.title,
     required this.valueLabel,
@@ -378,18 +384,23 @@ class _SettingsSliderRow extends StatelessWidget {
         children: <Widget>[
           Row(
             children: <Widget>[
-              Icon(
-                Icons.hotel_rounded,
-                size: 20,
-                color: context.nightMoodPalette.primaryDeep,
+              SizedBox(
+                width: _leadingWidth,
+                child: Center(
+                  child: Icon(
+                    Icons.hotel_rounded,
+                    size: 20,
+                    color: context.nightMoodPalette.primaryDeep,
+                  ),
+                ),
               ),
-              const SizedBox(width: AppSpacing.xs),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
                   title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
                 ),
               ),
               Text(
@@ -401,18 +412,24 @@ class _SettingsSliderRow extends StatelessWidget {
               ),
             ],
           ),
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 4,
-              overlayShape: SliderComponentShape.noOverlay,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+          Padding(
+            padding: const EdgeInsets.only(
+              left: _leadingWidth + AppSpacing.sm,
+              right: AppSpacing.xs,
             ),
-            child: Slider(
-              value: value,
-              min: 6,
-              max: 9,
-              divisions: 12,
-              onChanged: onChanged,
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 4,
+                overlayShape: SliderComponentShape.noOverlay,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+              ),
+              child: Slider(
+                value: value,
+                min: 6,
+                max: 9,
+                divisions: 12,
+                onChanged: onChanged,
+              ),
             ),
           ),
         ],
@@ -439,9 +456,12 @@ class _SettingsSwitchRow extends StatelessWidget {
     return AppSettingsItem(
       icon: icon,
       iconColor: context.nightMoodPalette.primaryDeep,
+      iconSize: 20,
+      leadingWidth: _SettingsSliderRow._leadingWidth,
+      minHeight: 52,
       title: title,
       trailing: Transform.scale(
-        scale: 0.82,
+        scale: 0.68,
         alignment: Alignment.centerRight,
         child: Switch(
           value: value,
@@ -457,7 +477,7 @@ class _SettingsSwitchRow extends StatelessWidget {
       onTap: () => onChanged(!value),
       titleStyle: Theme.of(
         context,
-      ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w500),
+      ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w400),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
         vertical: AppSpacing.sm,
@@ -498,7 +518,6 @@ class _MoodAssistantFabSlot extends StatelessWidget {
   const _MoodAssistantFabSlot({
     required this.label,
     required this.palette,
-    required this.keySuffix,
     required this.selected,
     required this.enabled,
     required this.onTap,
@@ -506,7 +525,6 @@ class _MoodAssistantFabSlot extends StatelessWidget {
 
   final String label;
   final NightMoodPalette palette;
-  final String keySuffix;
   final bool selected;
   final bool enabled;
   final VoidCallback onTap;
@@ -531,38 +549,32 @@ class _MoodAssistantFabSlot extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Container(
-                padding: EdgeInsets.all(selected ? 1 : 0),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    width: selected ? 1.5 : 0,
-                    color: selected ? palette.primary : Colors.transparent,
-                  ),
-                  boxShadow: selected
-                      ? <BoxShadow>[
-                          BoxShadow(
-                            color: palette.primary.withAlpha(45),
-                            blurRadius: 6,
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Transform.scale(
-                  scale: 0.72,
-                  child: AssistantFabVisual(
-                    palette: palette,
-                    keySuffix: keySuffix,
+              SizedBox(
+                height: 64,
+                child: Center(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: selected ? 66 : 60,
+                    height: selected ? 66 : 60,
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        width: selected ? 2 : 0,
+                        color: selected ? palette.primary : Colors.transparent,
+                      ),
+                    ),
+                    child: _MoodSelectionVisual(palette: palette),
                   ),
                 ),
               ),
-              const SizedBox(height: AppSpacing.xxs),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 label,
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: textTheme.bodySmall?.copyWith(
+                style: textTheme.bodyLarge?.copyWith(
                   color: palette.primaryDeep,
                   fontWeight: FontWeight.w500,
                   height: 1.1,
@@ -571,6 +583,48 @@ class _MoodAssistantFabSlot extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MoodSelectionVisual extends StatelessWidget {
+  const _MoodSelectionVisual({required this.palette});
+
+  final NightMoodPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    if (palette.mood != null) {
+      return MoodAvatar(
+        mood: palette.mood!,
+        size: 50,
+        fillColor: palette.welcomeFaceColor,
+      );
+    }
+
+    return Container(
+      width: 50,
+      height: 50,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            AppColors.assistantFabShellStart,
+            AppColors.assistantFabShellEnd,
+          ],
+        ),
+        border: Border.all(
+          color: palette.primarySoft.withValues(alpha: 0.32),
+          width: 1.2,
+        ),
+      ),
+      child: Icon(
+        Icons.auto_awesome_rounded,
+        color: palette.primaryHighlight,
+        size: 24,
       ),
     );
   }

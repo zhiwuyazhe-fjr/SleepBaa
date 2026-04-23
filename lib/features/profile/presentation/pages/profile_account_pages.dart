@@ -16,6 +16,7 @@ import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/core/widgets/app_strip_card.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/core/widgets/user_avatar.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/widgets/account_action_widgets.dart';
 
 final EdgeInsets _accountPagePadding = AppPageInsets.page(
   bottom: AppSpacing.lg,
@@ -144,25 +145,27 @@ class AccountProfilePage extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: AppSpacing.sm),
-                      _DenseMetaTile(
-                        label: '个性签名',
-                        value: profile.tagline.isEmpty
-                            ? '还没有填写个性签名'
-                            : profile.tagline,
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      _DenseMetaTile(
-                        label: '角色',
-                        value: profile.role.isEmpty ? '暂未设置' : profile.role,
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      _DenseMetaTile(
-                        label: '寝室',
-                        value: dorm.id.isEmpty ? '未加入宿舍' : dorm.name,
-                      ),
                     ],
                   ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                AppSettingsGroup(
+                  children: <Widget>[
+                    AppSettingsDetailItem(
+                      label: '个性签名',
+                      value: profile.tagline.isEmpty
+                          ? '还没有填写个性签名'
+                          : profile.tagline,
+                    ),
+                    AppSettingsDetailItem(
+                      label: '角色',
+                      value: profile.role.isEmpty ? '暂未设置' : profile.role,
+                    ),
+                    AppSettingsDetailItem(
+                      label: '寝室',
+                      value: dorm.id.isEmpty ? '未加入宿舍' : dorm.name,
+                    ),
+                  ],
                 ),
               ],
             );
@@ -175,37 +178,6 @@ class AccountProfilePage extends StatelessWidget {
 
 class LoginManagementPage extends StatelessWidget {
   const LoginManagementPage({super.key});
-
-  Future<void> _signOut(BuildContext context, AppServices services) async {
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('退出登录'),
-          content: const Text('退出后将清除当前登录状态，需要重新完成登录。'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('确认退出'),
-            ),
-          ],
-        );
-      },
-    );
-    if (confirmed != true) {
-      return;
-    }
-    await services.profileFacade.signOut();
-    if (!context.mounted) {
-      return;
-    }
-    context.go(AppRoutes.authPhone);
-    await notifyPassiveToast(context, message: '已退出登录。');
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -269,25 +241,25 @@ class LoginManagementPage extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: AppSpacing.sm),
-                      _DenseMetaTile(
-                        label: '登录方式',
-                        value: displayedPhone.isEmpty
-                            ? '游客 / 本地账号'
-                            : '手机号 + 密码',
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      _DenseMetaTile(
-                        label: '手机验证',
-                        value: hasVerifiedPhoneIdentity ? '已完成' : '未完成',
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      _DenseMetaTile(
-                        label: '最近绑定',
-                        value: _formatDateTime(profile.phoneLinkedAt),
-                      ),
                     ],
                   ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                AppSettingsGroup(
+                  children: <Widget>[
+                    AppSettingsDetailItem(
+                      label: '登录方式',
+                      value: displayedPhone.isEmpty ? '游客 / 本地账号' : '手机号 + 密码',
+                    ),
+                    AppSettingsDetailItem(
+                      label: '手机验证',
+                      value: hasVerifiedPhoneIdentity ? '已完成' : '未完成',
+                    ),
+                    AppSettingsDetailItem(
+                      label: '最近绑定',
+                      value: _formatDateTime(profile.phoneLinkedAt),
+                    ),
+                  ],
                 ),
                 if (services.authRepository.lastAuthError != null) ...<Widget>[
                   const SizedBox(height: AppSpacing.sm),
@@ -305,13 +277,7 @@ class LoginManagementPage extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: AppSpacing.sm),
-                PrimaryButton(
-                  label: '退出当前账号',
-                  icon: Icons.logout_rounded,
-                  variant: PrimaryButtonVariant.ghost,
-                  size: PrimaryButtonSize.compact,
-                  onPressed: () => _signOut(context, services),
-                ),
+                AccountSignOutButton(services: services),
               ],
             );
           },
@@ -482,12 +448,6 @@ class _DormManagementPageState extends State<DormManagementPage> {
                 AppSettingsGroup(
                   children: <Widget>[
                     AppSettingsItem(
-                      icon: Icons.space_dashboard_rounded,
-                      iconColor: palette.primaryDeep,
-                      title: '查看宿舍空间',
-                      onTap: () => context.go(AppRoutes.dorm),
-                    ),
-                    AppSettingsItem(
                       icon: Icons.group_add_rounded,
                       iconColor: palette.primaryDeep,
                       title: '邀请舍友',
@@ -498,6 +458,12 @@ class _DormManagementPageState extends State<DormManagementPage> {
                       iconColor: palette.primaryDeep,
                       title: '查看宿舍规则',
                       onTap: () => context.push(AppRoutes.dormRules),
+                    ),
+                    AppSettingsItem(
+                      icon: Icons.edit_rounded,
+                      iconColor: palette.primaryDeep,
+                      title: '编辑宿舍名称',
+                      onTap: () => _renameDorm(services, dorm),
                     ),
                   ],
                 ),
@@ -513,30 +479,14 @@ class _DormManagementPageState extends State<DormManagementPage> {
                         value: _locationSummary(dorm),
                       ),
                       const SizedBox(height: AppSpacing.sm),
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: PrimaryButton(
-                              label: '编辑宿舍名称',
-                              icon: Icons.edit_rounded,
-                              size: PrimaryButtonSize.compact,
-                              variant: PrimaryButtonVariant.soft,
-                              onPressed: () => _renameDorm(services, dorm),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.xs),
-                          Expanded(
-                            child: PrimaryButton(
-                              label: _isSavingDormAnchor ? '记录中...' : '重新记录位置',
-                              icon: Icons.my_location_rounded,
-                              size: PrimaryButtonSize.compact,
-                              variant: PrimaryButtonVariant.soft,
-                              onPressed: _isSavingDormAnchor
-                                  ? null
-                                  : () => _refreshDormLocation(services),
-                            ),
-                          ),
-                        ],
+                      PrimaryButton(
+                        label: '重新记录位置',
+                        icon: Icons.my_location_rounded,
+                        size: PrimaryButtonSize.compact,
+                        variant: PrimaryButtonVariant.soft,
+                        isLoading: _isSavingDormAnchor,
+                        loadingLabel: '记录中...',
+                        onPressed: () => _refreshDormLocation(services),
                       ),
                     ],
                   ),

@@ -199,3 +199,37 @@ For local packaging during this line of work, continue using the local bat-equiv
 ```bash
 flutter build apk --dart-define-from-file=D:\sleep_dorm_app\.cloudbase.local.json --no-tree-shake-icons
 ```
+
+## 2026-04-23 Follow-Up Refinements
+
+### Settings page
+
+- Rename `切换心情` to `切换心情主题`
+- Remove the decorative glow treatment around the mood choices on the settings page
+- Shrink the selected mood ring and reduce the top / bottom empty space around each mood circle
+- Keep the settings landing page compact and preserve the shared bottom `退出登录` action
+- In `睡眠偏好`, keep the bed icon visually centered by reserving a stable leading slot and letting the slider begin slightly to the right
+- Normalize the sleep-preference row heights so toggle rows sit closer to the `睡前提醒时间` reference height
+- Keep sleep-preference child labels lighter than the section heading
+
+### Account management child pages
+
+- In `个人资料`, keep the summary card only for avatar / name / phone / edit action
+- Move `个性签名 / 角色 / 寝室` into a separate grouped settings-style card
+- In `登录管理`, keep the status summary card only for the high-level account state
+- Move `登录方式 / 手机验证 / 最近绑定` into a separate grouped settings-style card
+- Reuse the shared account sign-out action button instead of a page-local logout implementation
+
+### Dorm management
+
+- Remove the `查看宿舍空间` shortcut from `寝室管理`
+- Move `编辑宿舍名称` into the same grouped entry section as `邀请舍友` and `查看宿舍规则`
+- Keep the overall compact density of the `寝室管理` page because that layout direction was explicitly approved
+- Leave the location-status card focused on status plus the `重新记录位置` action
+
+### Invite roommate page
+
+- Compress page padding and card spacing to match the compact settings/account density standard
+- Tighten text-field and content spacing so the page no longer feels oversized
+- Rework `刷新邀请码 / 复制邀请码` into compact shared-button actions with a cleaner horizontal wrap layout
+- Apply the same compact shared-button sizing to `创建宿舍 / 加入宿舍 / 返回选择`

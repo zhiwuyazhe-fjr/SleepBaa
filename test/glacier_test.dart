@@ -7,6 +7,7 @@ import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 void main() {
@@ -93,6 +94,40 @@ void main() {
     await tester.tap(find.text('寝室管理'));
     await tester.pumpAndSettle();
     expect(find.text('寝室管理'), findsWidgets);
+  });
+
+  testWidgets('profile account details use grouped settings sections', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.profileAccountProfile);
+
+    expect(find.text('编辑资料'), findsOneWidget);
+    expect(find.text('个性签名'), findsOneWidget);
+    expect(find.text('角色'), findsOneWidget);
+    expect(find.text('寝室'), findsOneWidget);
+    expect(find.byType(AppSettingsGroup), findsOneWidget);
+  });
+
+  testWidgets('login management metadata uses grouped settings section', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.profileAccountLogin);
+
+    expect(find.text('登录方式'), findsOneWidget);
+    expect(find.text('手机验证'), findsOneWidget);
+    expect(find.text('最近绑定'), findsOneWidget);
+    expect(find.text('退出当前账号'), findsOneWidget);
+    expect(find.byType(AppSettingsGroup), findsOneWidget);
+  });
+
+  testWidgets('dorm management removes dorm-space shortcut', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.profileAccountDorm);
+
+    expect(find.text('查看宿舍空间'), findsNothing);
+    expect(find.text('查看宿舍规则'), findsOneWidget);
+    expect(find.text('编辑宿舍名称'), findsOneWidget);
   });
 
   testWidgets('filled primary button uses welcome accent colors', (

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -10,10 +12,7 @@ import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 enum _DormInviteMode { choose, create, join, manage }
 
 class DormInvitePage extends StatefulWidget {
-  const DormInvitePage({
-    super.key,
-    this.showAppBar = true,
-  });
+  const DormInvitePage({super.key, this.showAppBar = true});
 
   final bool showAppBar;
 
@@ -185,33 +184,37 @@ class _DormInvitePageState extends State<DormInvitePage> {
 
           return SafeArea(
             child: ListView(
-              padding: const EdgeInsets.all(AppSpacing.xl),
+              padding: AppPageInsets.page(bottom: AppSpacing.lg),
               children: <Widget>[
                 AppCard(
                   color: AppColors.surfaceMuted,
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  borderRadius: AppRadius.compactCard,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
                         mode == _DormInviteMode.manage ? dorm.name : '邀请舍友一起协作',
-                        style: Theme.of(context).textTheme.headlineSmall,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                      const SizedBox(height: AppSpacing.sm),
+                      const SizedBox(height: AppSpacing.xxs),
                       Text(
                         mode == _DormInviteMode.manage
                             ? (dorm.overview.isEmpty
                                   ? '现在可以把邀请码发给舍友，大家一起同步睡眠状态和宿舍动态。'
                                   : dorm.overview)
                             : '初次使用时，先决定是创建宿舍还是通过邀请码加入宿舍。本页会把首轮流程一次走完。',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppColors.textSecondary,
-                          height: 1.45,
+                          height: 1.35,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xl),
+                const SizedBox(height: AppSpacing.sm),
                 ...switch (mode) {
                   _DormInviteMode.choose => _buildChooseMode(),
                   _DormInviteMode.create => _buildCreateMode(services),
@@ -234,40 +237,60 @@ class _DormInvitePageState extends State<DormInvitePage> {
     return <Widget>[
       AppCard(
         onTap: () => setState(() => _preferredMode = _DormInviteMode.create),
+        padding: const EdgeInsets.all(AppSpacing.md),
+        borderRadius: AppRadius.compactCard,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('创建宿舍', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '创建宿舍',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: AppSpacing.xxs),
             Text(
               '适合你是当前宿舍里第一个使用 App 的人，先完成宿舍初始化，再生成邀请码邀请舍友。',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: AppColors.textSecondary,
-                height: 1.45,
+                height: 1.35,
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
-            const Text('会设置：宿舍名称、简介，并在创建后直接生成邀请模块'),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '会设置：宿舍名称、简介，并在创建后直接生成邀请模块',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ],
         ),
       ),
-      const SizedBox(height: AppSpacing.md),
+      const SizedBox(height: AppSpacing.sm),
       AppCard(
         onTap: () => setState(() => _preferredMode = _DormInviteMode.join),
+        padding: const EdgeInsets.all(AppSpacing.md),
+        borderRadius: AppRadius.compactCard,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('加入宿舍', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '加入宿舍',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: AppSpacing.xxs),
             Text(
               '如果你的舍友已经创建过宿舍，直接输入邀请码就能加入当前宿舍协作空间。',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: AppColors.textSecondary,
-                height: 1.45,
+                height: 1.35,
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
-            const Text('加入后会自动同步宿舍成员、规则和室友动态。'),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '加入后会自动同步宿舍成员、规则和室友动态。',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ],
         ),
       ),
@@ -277,24 +300,31 @@ class _DormInvitePageState extends State<DormInvitePage> {
   List<Widget> _buildCreateMode(AppServices services) {
     return <Widget>[
       AppCard(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        borderRadius: AppRadius.compactCard,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('创建宿舍', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: AppSpacing.md),
+            Text(
+              '创建宿舍',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: AppSpacing.sm),
             _LabeledField(
               label: '宿舍名称',
               controller: _nameController,
               hintText: '例如 梅苑 2 栋 204',
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.sm),
             _LabeledField(
               label: '宿舍简介',
               controller: _overviewController,
               maxLines: 2,
               hintText: '简单描述宿舍氛围或协作目标',
             ),
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.sm),
             Wrap(
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
@@ -303,12 +333,14 @@ class _DormInvitePageState extends State<DormInvitePage> {
                   label: _isBusy ? '创建中...' : '创建宿舍',
                   icon: Icons.home_work_rounded,
                   expand: false,
+                  size: PrimaryButtonSize.compact,
                   onPressed: _isBusy ? null : () => _createDorm(services),
                 ),
                 PrimaryButton(
                   label: '返回选择',
                   icon: Icons.arrow_back_rounded,
                   expand: false,
+                  size: PrimaryButtonSize.compact,
                   variant: PrimaryButtonVariant.ghost,
                   onPressed: _isBusy
                       ? null
@@ -327,26 +359,33 @@ class _DormInvitePageState extends State<DormInvitePage> {
   List<Widget> _buildJoinMode(AppServices services) {
     return <Widget>[
       AppCard(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        borderRadius: AppRadius.compactCard,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('加入宿舍', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '加入宿舍',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: AppSpacing.xxs),
             Text(
               '输入舍友分享的邀请码即可加入宿舍。加入成功后，宿舍页会自动刷新。',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: AppColors.textSecondary,
-                height: 1.45,
+                height: 1.35,
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.sm),
             _LabeledField(
               label: '邀请码',
               controller: _inviteCodeController,
               hintText: '例如 DORM-AB12CD',
               keyboardType: TextInputType.text,
             ),
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.sm),
             Wrap(
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
@@ -355,12 +394,14 @@ class _DormInvitePageState extends State<DormInvitePage> {
                   label: _isBusy ? '加入中...' : '确认加入',
                   icon: Icons.group_add_rounded,
                   expand: false,
+                  size: PrimaryButtonSize.compact,
                   onPressed: _isBusy ? null : () => _acceptInvite(services),
                 ),
                 PrimaryButton(
                   label: '返回选择',
                   icon: Icons.arrow_back_rounded,
                   expand: false,
+                  size: PrimaryButtonSize.compact,
                   variant: PrimaryButtonVariant.ghost,
                   onPressed: _isBusy
                       ? null
@@ -383,6 +424,8 @@ class _DormInvitePageState extends State<DormInvitePage> {
   }) {
     return <Widget>[
       AppCard(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        borderRadius: AppRadius.compactCard,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -395,48 +438,58 @@ class _DormInvitePageState extends State<DormInvitePage> {
             ),
             if (invite != null)
               _InfoRow(label: '有效期至', value: _formatDateTime(invite.expiresAt)),
-            const SizedBox(height: AppSpacing.md),
-            Row(
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
               children: <Widget>[
-                Expanded(
-                  child: PrimaryButton(
-                    label: invite == null ? '生成邀请码' : '刷新邀请码',
-                    icon: Icons.qr_code_rounded,
-                    onPressed: _isBusy ? null : () => _generateInvite(services),
-                  ),
+                PrimaryButton(
+                  label: invite == null ? '生成邀请码' : '刷新邀请码',
+                  icon: Icons.qr_code_rounded,
+                  expand: false,
+                  size: PrimaryButtonSize.compact,
+                  isLoading: _isBusy,
+                  loadingLabel: '处理中...',
+                  onPressed: () => _generateInvite(services),
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: PrimaryButton(
-                    label: '复制邀请码',
-                    icon: Icons.copy_rounded,
-                    variant: PrimaryButtonVariant.soft,
-                    onPressed: invite == null
-                        ? null
-                        : () => _copyInviteCode(invite),
-                  ),
+                PrimaryButton(
+                  label: '复制邀请码',
+                  icon: Icons.copy_rounded,
+                  expand: false,
+                  size: PrimaryButtonSize.compact,
+                  variant: PrimaryButtonVariant.soft,
+                  onPressed: invite == null
+                      ? null
+                      : () => _copyInviteCode(invite),
                 ),
               ],
             ),
           ],
         ),
       ),
-      const SizedBox(height: AppSpacing.md),
+      const SizedBox(height: AppSpacing.sm),
       AppCard(
         color: AppColors.surfaceMuted,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        borderRadius: AppRadius.compactCard,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('当前可邀请的协作内容', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: AppSpacing.md),
+            Text(
+              '当前可邀请的协作内容',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: AppSpacing.sm),
             ...dorm.members.map(
               (DormMember member) => Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                padding: const EdgeInsets.only(bottom: AppSpacing.xxs),
                 child: Text(
                   '• ${member.name}：${member.note}',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppColors.textSecondary,
-                    height: 1.45,
+                    height: 1.35,
                   ),
                 ),
               ),
@@ -444,9 +497,9 @@ class _DormInvitePageState extends State<DormInvitePage> {
             if (dorm.members.isEmpty)
               Text(
                 '宿舍成员还没有同步过来，先生成邀请码邀请舍友加入。',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
               ),
           ],
         ),
@@ -503,7 +556,25 @@ class _LabeledField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         hintText: hintText,
-        border: const OutlineInputBorder(),
+        isDense: true,
+        filled: true,
+        fillColor: AppColors.surfaceMuted,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: AppRadius.card,
+          borderSide: const BorderSide(color: AppColors.surfaceBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: AppRadius.card,
+          borderSide: const BorderSide(color: AppColors.surfaceBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: AppRadius.card,
+          borderSide: const BorderSide(color: AppColors.textHint),
+        ),
       ),
     );
   }
@@ -526,17 +597,17 @@ class _InfoRow extends StatelessWidget {
         ? SelectableText(value, style: Theme.of(context).textTheme.bodyMedium)
         : Text(value, style: Theme.of(context).textTheme.bodyMedium);
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           SizedBox(
-            width: 92,
+            width: 84,
             child: Text(
               label,
               style: Theme.of(
                 context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+              ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
