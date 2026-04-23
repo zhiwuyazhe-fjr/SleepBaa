@@ -50,6 +50,8 @@ enum AssistantMessageStatus { pending, complete, error }
 
 enum AssistantReplySourceMode { remoteSuccess, fallbackSuccess, error }
 
+enum AssistantReplyMotionLevel { low, medium, high }
+
 enum PhoneVerificationTarget { any, existingUser, newUser }
 
 class PhoneVerificationChallenge {
@@ -366,6 +368,7 @@ class UserSettings {
     required this.bedtimeReminder,
     required this.preferredTrackTitle,
     required this.smartSuggestionsEnabled,
+    this.assistantReplyMotionLevel = AssistantReplyMotionLevel.medium,
     this.selectedNightMood,
   });
 
@@ -376,6 +379,7 @@ class UserSettings {
   final TimeOfDay bedtimeReminder;
   final String preferredTrackTitle;
   final bool smartSuggestionsEnabled;
+  final AssistantReplyMotionLevel assistantReplyMotionLevel;
   final NightMood? selectedNightMood;
 
   UserSettings copyWith({
@@ -386,6 +390,7 @@ class UserSettings {
     TimeOfDay? bedtimeReminder,
     String? preferredTrackTitle,
     bool? smartSuggestionsEnabled,
+    AssistantReplyMotionLevel? assistantReplyMotionLevel,
     NightMood? selectedNightMood,
     bool clearSelectedNightMood = false,
   }) {
@@ -400,6 +405,8 @@ class UserSettings {
       preferredTrackTitle: preferredTrackTitle ?? this.preferredTrackTitle,
       smartSuggestionsEnabled:
           smartSuggestionsEnabled ?? this.smartSuggestionsEnabled,
+      assistantReplyMotionLevel:
+          assistantReplyMotionLevel ?? this.assistantReplyMotionLevel,
       selectedNightMood: clearSelectedNightMood
           ? null
           : selectedNightMood ?? this.selectedNightMood,

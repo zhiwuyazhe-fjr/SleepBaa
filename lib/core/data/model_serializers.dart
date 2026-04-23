@@ -54,6 +54,7 @@ abstract final class ModelSerializers {
       'bedtimeReminder': timeOfDayToMap(settings.bedtimeReminder),
       'preferredTrackTitle': settings.preferredTrackTitle,
       'smartSuggestionsEnabled': settings.smartSuggestionsEnabled,
+      'assistantReplyMotionLevel': settings.assistantReplyMotionLevel.name,
       'selectedNightMood': settings.selectedNightMood?.name,
     };
   }
@@ -70,6 +71,10 @@ abstract final class ModelSerializers {
       ),
       preferredTrackTitle: map['preferredTrackTitle'] as String? ?? '深海海浪',
       smartSuggestionsEnabled: map['smartSuggestionsEnabled'] as bool? ?? true,
+      assistantReplyMotionLevel: _assistantReplyMotionLevelFromName(
+            map['assistantReplyMotionLevel'] as String?,
+          ) ??
+          AssistantReplyMotionLevel.medium,
       selectedNightMood: _nightMoodFromName(
         map['selectedNightMood'] as String?,
       ),
@@ -872,6 +877,15 @@ abstract final class ModelSerializers {
     return _firstWhereOrNull(
       AssistantReplySourceMode.values,
       (AssistantReplySourceMode item) => item.name == value,
+    );
+  }
+
+  static AssistantReplyMotionLevel? _assistantReplyMotionLevelFromName(
+    String? value,
+  ) {
+    return _firstWhereOrNull(
+      AssistantReplyMotionLevel.values,
+      (AssistantReplyMotionLevel item) => item.name == value,
     );
   }
 

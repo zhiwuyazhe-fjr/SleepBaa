@@ -111,7 +111,7 @@ class AssistantSurfacePalette {
     final Color midGlow = Color.lerp(
       mood.heroGradientMid,
       AppColors.darkBackground,
-      0.18,
+      0.08,
     )!;
     final Color textBlend = Color.lerp(AppColors.onDark, surface, 0.42)!;
 
@@ -131,9 +131,9 @@ class AssistantSurfacePalette {
       userCardFill: _alpha(surface, 0.91),
       userCardBorder: _alpha(accent, 0.22),
       userText: _alpha(Color.lerp(AppColors.onDark, surface, 0.18)!, 0.93),
-      bottomGlowStart: _alpha(accent, 0.15),
-      bottomGlowMid: _alpha(midGlow, 0.82),
-      bottomGlowCore: _alpha(accent, 0.24),
+      bottomGlowStart: _alpha(accent, 0.24),
+      bottomGlowMid: _alpha(midGlow, 0.92),
+      bottomGlowCore: _alpha(accent, 0.38),
     );
   }
 
@@ -204,13 +204,13 @@ class AssistantShellScaffold extends StatelessWidget {
                 child: Align(
                   alignment: Alignment.bottomCenter,
                   child: FractionallySizedBox(
-                    heightFactor: 0.46,
+                    heightFactor: 0.56,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.bottomCenter,
                           end: Alignment.topCenter,
-                          stops: const <double>[0, 0.34, 1],
+                          stops: const <double>[0, 0.38, 1],
                           colors: <Color>[
                             palette.bottomGlowStart,
                             palette.bottomGlowMid,
@@ -226,19 +226,19 @@ class AssistantShellScaffold extends StatelessWidget {
                 child: Align(
                   alignment: Alignment.bottomCenter,
                   child: FractionallySizedBox(
-                    widthFactor: 0.94,
-                    heightFactor: 0.20,
+                    widthFactor: 1,
+                    heightFactor: 0.28,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: RadialGradient(
                           center: const Alignment(0, 0.95),
-                          radius: 1.1,
+                          radius: 1.34,
                           colors: <Color>[
                             palette.bottomGlowCore,
                             palette.bottomGlowStart,
                             Colors.transparent,
                           ],
-                          stops: const <double>[0, 0.46, 1],
+                          stops: const <double>[0, 0.52, 1],
                         ),
                       ),
                     ),
@@ -251,9 +251,9 @@ class AssistantShellScaffold extends StatelessWidget {
                   curve: Curves.easeOutCubic,
                   padding: EdgeInsets.fromLTRB(
                     metrics.unit(20),
-                    metrics.unit(18),
+                    metrics.unit(8),
                     metrics.unit(20),
-                    metrics.unit(12) + keyboardInset,
+                    metrics.unit(8) + keyboardInset,
                   ),
                   child: Column(
                     children: <Widget>[
@@ -263,9 +263,9 @@ class AssistantShellScaffold extends StatelessWidget {
                         onTapAdd: onTapAdd,
                         onTapHistory: onTapHistory,
                       ),
-                      SizedBox(height: metrics.unit(20)),
+                      SizedBox(height: metrics.unit(12)),
                       Expanded(child: bodyBuilder(context, metrics, palette)),
-                      SizedBox(height: metrics.unit(16)),
+                      SizedBox(height: metrics.unit(8)),
                       composerBuilder(context, metrics, palette),
                     ],
                   ),
@@ -470,8 +470,8 @@ class AssistantComposer extends StatelessWidget {
           ),
           child: Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: metrics.unit(18),
-              vertical: metrics.unit(18),
+              horizontal: metrics.unit(14),
+              vertical: metrics.unit(12),
             ),
             child: ListenableBuilder(
               listenable: controller,
@@ -484,11 +484,11 @@ class AssistantComposer extends StatelessWidget {
                     _AssistantActionIconButton(
                       key: const ValueKey<String>('assistant-composer-add'),
                       icon: Icons.add,
-                      size: metrics.unit(22),
+                      size: metrics.unit(20),
                       color: palette.headerIcon,
                       onTap: onTapAdd,
                     ),
-                    SizedBox(width: metrics.unit(14)),
+                    SizedBox(width: metrics.unit(8)),
                     Expanded(
                       child: TextField(
                         key: const ValueKey<String>('assistant-composer-field'),
@@ -501,9 +501,9 @@ class AssistantComposer extends StatelessWidget {
                         onSubmitted: (_) => onSubmit(),
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: palette.composerText,
-                          fontSize: metrics.unit(16),
+                          fontSize: metrics.unit(15),
                           fontWeight: FontWeight.w500,
-                          height: 1.34,
+                          height: 1.28,
                         ),
                         decoration: InputDecoration(
                           isCollapsed: true,
@@ -513,25 +513,25 @@ class AssistantComposer extends StatelessWidget {
                           hintStyle: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
                                 color: palette.composerHint,
-                                fontSize: metrics.unit(isBusy ? 15 : 16),
+                                fontSize: metrics.unit(isBusy ? 14 : 15),
                                 fontWeight: FontWeight.w500,
-                                height: 1.34,
+                                height: 1.28,
                               ),
                         ),
                       ),
                     ),
-                    SizedBox(width: metrics.unit(8)),
+                    SizedBox(width: metrics.unit(6)),
                     _AssistantActionIconButton(
                       key: const ValueKey<String>('assistant-composer-mic'),
                       icon: Icons.mic_none_rounded,
-                      size: metrics.unit(22),
+                      size: metrics.unit(20),
                       color: palette.headerIcon,
                       onTap: isBusy ? null : onTapMic,
                     ),
-                    SizedBox(width: metrics.unit(2)),
+                    SizedBox(width: metrics.unit(1)),
                     _AssistantActionIconButton(
                       key: const ValueKey<String>('assistant-composer-submit'),
-                      size: metrics.unit(22),
+                      size: metrics.unit(20),
                       color: palette.headerIcon,
                       onTap: canSubmit ? onSubmit : null,
                       child: AnimatedSwitcher(
@@ -545,7 +545,7 @@ class AssistantComposer extends StatelessWidget {
                                 ),
                                 child: Icon(
                                   Icons.autorenew_rounded,
-                                  size: metrics.unit(22),
+                                  size: metrics.unit(20),
                                   color: palette.headerIcon,
                                 ),
                               )
@@ -554,7 +554,7 @@ class AssistantComposer extends StatelessWidget {
                                 key: const ValueKey<String>(
                                   'assistant-composer-send-icon',
                                 ),
-                                size: metrics.unit(22),
+                                size: metrics.unit(20),
                                 color: canSubmit
                                     ? palette.headerIcon
                                     : _alpha(palette.headerIcon, 0.34),
@@ -624,7 +624,7 @@ class AssistantInlineStatusList extends StatelessWidget {
         final AssistantToolStatus status = statuses[index];
         return Padding(
           padding: EdgeInsets.only(
-            bottom: index == statuses.length - 1 ? 0 : metrics.unit(8),
+            bottom: index == statuses.length - 1 ? 0 : metrics.unit(6),
           ),
           child: Padding(
             padding: EdgeInsets.symmetric(vertical: metrics.unit(2)),
@@ -636,7 +636,7 @@ class AssistantInlineStatusList extends StatelessWidget {
                   size: metrics.unit(14),
                   color: palette.mutedText,
                 ),
-                SizedBox(width: metrics.unit(10)),
+                SizedBox(width: metrics.unit(8)),
                 Flexible(
                   child: Text(
                     status.label,
@@ -679,7 +679,7 @@ class AssistantBulletStatusList extends StatelessWidget {
       children: statuses
           .map((AssistantToolStatus status) {
             return Padding(
-              padding: EdgeInsets.only(bottom: metrics.unit(8)),
+              padding: EdgeInsets.only(bottom: metrics.unit(6)),
               child: Text(
                 '· ${status.label}',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -804,7 +804,7 @@ class _AssistantActionIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double hitSize = math.max(size * 1.82, 40);
+    final double hitSize = math.max(size * 1.56, 36);
     return SizedBox(
       width: hitSize,
       height: hitSize,
@@ -816,7 +816,7 @@ class _AssistantActionIconButton extends StatelessWidget {
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           foregroundColor: color,
           disabledForegroundColor: _alpha(color, 0.34),
-          overlayColor: _alpha(color, 0.14),
+          overlayColor: _alpha(color, 0.18),
         ),
         onPressed: onTap == null
             ? null

@@ -28,9 +28,8 @@ class AssistantPage extends StatefulWidget {
 
 class _AssistantPageState extends State<AssistantPage>
     with SingleTickerProviderStateMixin {
-  static const Duration _archiveAnimationDuration = Duration(
-    milliseconds: 320,
-  );
+  static const Duration _archiveAnimationDuration = Duration(milliseconds: 320);
+  static const Duration _archiveHintMemoryDuration = Duration(seconds: 5);
 
   final TextEditingController _inputController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
@@ -40,7 +39,10 @@ class _AssistantPageState extends State<AssistantPage>
     duration: _archiveAnimationDuration,
   );
   late AssistantCaptureTab _selectedTab;
+  Timer? _archiveHintTimer;
   String? _lastHapticAssistantMessageId;
+  bool _archiveExpansionArmed = false;
+  bool _archiveAtBottom = true;
   double _replyPullExtent = 0;
   double _archiveOverscrollExtent = 0;
 
@@ -63,6 +65,7 @@ class _AssistantPageState extends State<AssistantPage>
 
   @override
   void dispose() {
+    _archiveHintTimer?.cancel();
     _archiveController.dispose();
     _inputController.dispose();
     _focusNode.dispose();
@@ -130,6 +133,11 @@ class _AssistantPageState extends State<AssistantPage>
 
   Future<void> _startNewConversation(AppServices services) async {
     _resetArchiveState();
+    setState(() {
+      _inputController.clear();
+      _lastHapticAssistantMessageId = null;
+    });
+    _focusNode.unfocus();
     await services.assistantFacade.createThread(
       title: widget.captureModeEnabled
           ? (_activeCaptureType == SleepCaptureType.dream ? '梦记收纳' : '事记收纳')
@@ -138,11 +146,6 @@ class _AssistantPageState extends State<AssistantPage>
     if (!mounted) {
       return;
     }
-    setState(() {
-      _inputController.clear();
-      _lastHapticAssistantMessageId = null;
-    });
-    _focusNode.unfocus();
   }
 
   Future<void> _emitReplyHaptics({required bool hasStatuses}) async {
@@ -158,11 +161,39 @@ class _AssistantPageState extends State<AssistantPage>
   }
 
   void _resetArchiveState() {
+    _archiveHintTimer?.cancel();
+    _archiveHintTimer = null;
+    _archiveExpansionArmed = false;
+    _archiveAtBottom = true;
     _replyPullExtent = 0;
     _archiveOverscrollExtent = 0;
     if (_archiveController.value != 0) {
       _archiveController.value = 0;
     }
+  }
+
+  void _armArchiveExpansion() {
+    _archiveHintTimer?.cancel();
+    setState(() {
+      _archiveExpansionArmed = true;
+      _replyPullExtent = 0;
+      _archiveController.value = 0;
+    });
+    _archiveHintTimer = Timer(_archiveHintMemoryDuration, () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _archiveExpansionArmed = false;
+        _replyPullExtent = 0;
+      });
+    });
+  }
+
+  void _disarmArchiveExpansion() {
+    _archiveHintTimer?.cancel();
+    _archiveHintTimer = null;
+    _archiveExpansionArmed = false;
   }
 
   Future<void> _animateArchiveTo(double target) async {
@@ -186,16 +217,16 @@ class _AssistantPageState extends State<AssistantPage>
     if (_archiveController.value >= 1) {
       return 0;
     }
+    if (_archiveExpansionArmed) {
+      return (1 - _archiveController.value).clamp(0, 1);
+    }
     final double reveal = (_replyPullExtent / metrics.unit(28)).clamp(0, 1);
     return (reveal * (1 - _archiveController.value)).clamp(0, 1);
   }
 
   void _syncArchiveProgressFromPull(AssistantSurfaceMetrics metrics) {
     final double progress =
-        ((_replyPullExtent - metrics.unit(24)) / metrics.unit(110)).clamp(
-          0,
-          1,
-        );
+        ((_replyPullExtent - metrics.unit(18)) / metrics.unit(96)).clamp(0, 1);
     _archiveController.value = progress;
   }
 
@@ -204,17 +235,20 @@ class _AssistantPageState extends State<AssistantPage>
     AssistantSurfaceMetrics metrics,
     _AssistantStageState stageState,
   ) {
-    if (stageState != _AssistantStageState.reply || _archiveController.isAnimating) {
+    if (stageState != _AssistantStageState.reply ||
+        _archiveController.isAnimating) {
       return;
     }
     final double delta = details.primaryDelta ?? 0;
-    if (delta == 0) {
+    if (delta <= 0) {
       return;
     }
 
     setState(() {
-      _replyPullExtent = (_replyPullExtent - delta).clamp(0, metrics.unit(180));
-      _syncArchiveProgressFromPull(metrics);
+      _replyPullExtent = (_replyPullExtent + delta).clamp(0, metrics.unit(180));
+      if (_archiveExpansionArmed) {
+        _syncArchiveProgressFromPull(metrics);
+      }
     });
   }
 
@@ -228,16 +262,54 @@ class _AssistantPageState extends State<AssistantPage>
     }
 
     final double velocity = details.primaryVelocity ?? 0;
+    if (!_archiveExpansionArmed) {
+      final bool shouldArm =
+          _replyPullExtent > metrics.unit(28) || velocity > 420;
+      setState(() {
+        _replyPullExtent = 0;
+      });
+      if (shouldArm) {
+        _armArchiveExpansion();
+      }
+      return;
+    }
+
     final bool shouldExpand =
-        _archiveController.value > 0.42 || velocity < -420;
+        _archiveController.value > 0.34 ||
+        _replyPullExtent > metrics.unit(64) ||
+        velocity > 460;
 
     setState(() {
       _replyPullExtent = 0;
     });
-    unawaited(_animateArchiveTo(shouldExpand ? 1 : 0));
+    if (shouldExpand) {
+      _disarmArchiveExpansion();
+      unawaited(_animateArchiveTo(1));
+      return;
+    }
+    _archiveController.value = 0;
   }
 
-  void _handleArchivePullDownUpdate(
+  bool _handleArchiveScrollNotification(
+    ScrollNotification notification,
+    AssistantSurfaceMetrics metrics,
+  ) {
+    final bool atArchiveBottom = notification.metrics.extentAfter <= 0.5;
+    if (_archiveAtBottom != atArchiveBottom) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _archiveAtBottom == atArchiveBottom) {
+          return;
+        }
+        setState(() {
+          _archiveAtBottom = atArchiveBottom;
+        });
+      });
+    }
+
+    return false;
+  }
+
+  void _handleArchiveCollapsePullUpdate(
     DragUpdateDetails details,
     AssistantSurfaceMetrics metrics,
   ) {
@@ -245,85 +317,31 @@ class _AssistantPageState extends State<AssistantPage>
       return;
     }
     final double delta = details.primaryDelta ?? 0;
-    if (delta <= 0) {
+    if (delta >= 0) {
       return;
     }
     setState(() {
-      _archiveOverscrollExtent =
-          (_archiveOverscrollExtent + delta).clamp(0, metrics.unit(180));
+      _archiveOverscrollExtent = (_archiveOverscrollExtent + delta.abs()).clamp(
+        0,
+        metrics.unit(180),
+      );
       final double progress = (_archiveOverscrollExtent / metrics.unit(110))
           .clamp(0, 1);
       _archiveController.value = 1 - progress;
     });
   }
 
-  void _handleArchivePullDownEnd(DragEndDetails details) {
+  void _handleArchiveCollapsePullEnd(DragEndDetails details) {
     final double velocity = details.primaryVelocity ?? 0;
     final bool shouldCollapse =
-        _archiveController.value < 0.76 || velocity > 420;
+        _archiveController.value < 0.76 || velocity < -420;
     _archiveOverscrollExtent = 0;
-    unawaited(_animateArchiveTo(shouldCollapse ? 0 : 1));
-  }
-
-  bool _handleArchiveScrollNotification(
-    ScrollNotification notification,
-    AssistantSurfaceMetrics metrics,
-  ) {
-    if (!_archiveController.isCompleted &&
-        !(_archiveController.value > 0 && notification is ScrollEndNotification)) {
-      return false;
+    if (shouldCollapse) {
+      _disarmArchiveExpansion();
+      unawaited(_animateArchiveTo(0));
+      return;
     }
-
-    final ScrollMetrics scrollMetrics = notification.metrics;
-    if (scrollMetrics.pixels > scrollMetrics.minScrollExtent + 0.5) {
-      if (_archiveController.value != 1 && !_archiveController.isAnimating) {
-        _archiveController.value = 1;
-      }
-      _archiveOverscrollExtent = 0;
-      return false;
-    }
-
-    if (notification is OverscrollNotification &&
-        notification.overscroll < 0 &&
-        scrollMetrics.pixels <= scrollMetrics.minScrollExtent + 0.5) {
-      setState(() {
-        _archiveOverscrollExtent =
-            (_archiveOverscrollExtent + notification.overscroll.abs()).clamp(
-              0,
-              metrics.unit(180),
-            );
-        final double progress = (_archiveOverscrollExtent / metrics.unit(110))
-            .clamp(0, 1);
-        _archiveController.value = 1 - progress;
-      });
-      return true;
-    }
-
-    if (notification is ScrollUpdateNotification &&
-        _archiveOverscrollExtent > 0 &&
-        notification.scrollDelta != null &&
-        notification.scrollDelta! > 0) {
-      setState(() {
-        _archiveOverscrollExtent =
-            (_archiveOverscrollExtent - notification.scrollDelta!.abs()).clamp(
-              0,
-              metrics.unit(180),
-            );
-        final double progress = (_archiveOverscrollExtent / metrics.unit(110))
-            .clamp(0, 1);
-        _archiveController.value = 1 - progress;
-      });
-      return true;
-    }
-
-    if (notification is ScrollEndNotification && _archiveOverscrollExtent > 0) {
-      final bool shouldCollapse = _archiveController.value < 0.76;
-      _archiveOverscrollExtent = 0;
-      unawaited(_animateArchiveTo(shouldCollapse ? 0 : 1));
-      return true;
-    }
-
-    return false;
+    unawaited(_animateArchiveTo(1));
   }
 
   @override
@@ -333,6 +351,7 @@ class _AssistantPageState extends State<AssistantPage>
       listenable: Listenable.merge(<Listenable>[
         services.assistantFacade,
         services.assistantConversationController,
+        services.settingsRepository,
       ]),
       builder: (BuildContext context, Widget? child) {
         final AssistantConversationController controller =
@@ -340,6 +359,8 @@ class _AssistantPageState extends State<AssistantPage>
         final AssistantConversationSlice slice =
             AssistantConversationSlice.fromMessages(controller.currentMessages);
         final bool isBusy = controller.isBusy;
+        final AssistantReplyMotionLevel replyMotionLevel =
+            services.profileFacade.currentSettings.assistantReplyMotionLevel;
         final _AssistantStageState stageState = _resolveStageState(
           slice: slice,
           isBusy: isBusy,
@@ -381,15 +402,17 @@ class _AssistantPageState extends State<AssistantPage>
                   slice: slice,
                   statuses: latestStatuses,
                   controller: controller,
+                  replyMotionLevel: replyMotionLevel,
                   archiveController: _archiveController,
                   pullHintOpacity: _pullHintOpacity(metrics),
+                  archiveAtBottom: _archiveAtBottom,
                   onReplyPullUpdate: (DragUpdateDetails details) =>
                       _handleReplyPullUpdate(details, metrics, stageState),
                   onReplyPullEnd: (DragEndDetails details) =>
                       _handleReplyPullEnd(details, metrics, stageState),
-                  onArchivePullDownUpdate: (DragUpdateDetails details) =>
-                      _handleArchivePullDownUpdate(details, metrics),
-                  onArchivePullDownEnd: _handleArchivePullDownEnd,
+                  onArchiveCollapsePullUpdate: (DragUpdateDetails details) =>
+                      _handleArchiveCollapsePullUpdate(details, metrics),
+                  onArchiveCollapsePullEnd: _handleArchiveCollapsePullEnd,
                   onArchiveScrollNotification:
                       (ScrollNotification notification) =>
                           _handleArchiveScrollNotification(
@@ -447,12 +470,14 @@ class _AssistantStageViewport extends StatelessWidget {
     required this.slice,
     required this.statuses,
     required this.controller,
+    required this.replyMotionLevel,
     required this.archiveController,
     required this.pullHintOpacity,
+    required this.archiveAtBottom,
     required this.onReplyPullUpdate,
     required this.onReplyPullEnd,
-    required this.onArchivePullDownUpdate,
-    required this.onArchivePullDownEnd,
+    required this.onArchiveCollapsePullUpdate,
+    required this.onArchiveCollapsePullEnd,
     required this.onArchiveScrollNotification,
   });
 
@@ -462,13 +487,16 @@ class _AssistantStageViewport extends StatelessWidget {
   final AssistantConversationSlice slice;
   final List<AssistantToolStatus> statuses;
   final AssistantConversationController controller;
+  final AssistantReplyMotionLevel replyMotionLevel;
   final AnimationController archiveController;
   final double pullHintOpacity;
+  final bool archiveAtBottom;
   final ValueChanged<DragUpdateDetails> onReplyPullUpdate;
   final ValueChanged<DragEndDetails> onReplyPullEnd;
-  final ValueChanged<DragUpdateDetails> onArchivePullDownUpdate;
-  final ValueChanged<DragEndDetails> onArchivePullDownEnd;
-  final ValueChanged<ScrollNotification> onArchiveScrollNotification;
+  final ValueChanged<DragUpdateDetails> onArchiveCollapsePullUpdate;
+  final ValueChanged<DragEndDetails> onArchiveCollapsePullEnd;
+  final bool Function(ScrollNotification notification)
+  onArchiveScrollNotification;
 
   @override
   Widget build(BuildContext context) {
@@ -497,7 +525,7 @@ class _AssistantStageViewport extends StatelessWidget {
                 child: Opacity(
                   opacity: 1 - archiveProgress,
                   child: Transform.translate(
-                    offset: Offset(0, -metrics.unit(30) * archiveProgress),
+                    offset: Offset(0, metrics.unit(24) * archiveProgress),
                     child: _AssistantPrimaryStage(
                       metrics: metrics,
                       palette: palette,
@@ -506,6 +534,7 @@ class _AssistantStageViewport extends StatelessWidget {
                       latestAssistantText:
                           slice.latestAssistant?.content.trim() ?? '',
                       statuses: statuses,
+                      replyMotionLevel: replyMotionLevel,
                     ),
                   ),
                 ),
@@ -518,13 +547,10 @@ class _AssistantStageViewport extends StatelessWidget {
                     child: Transform.translate(
                       offset: Offset(
                         0,
-                        metrics.unit(44) * (1 - archiveProgress),
+                        -metrics.unit(40) * (1 - archiveProgress),
                       ),
                       child: NotificationListener<ScrollNotification>(
-                        onNotification: (ScrollNotification notification) {
-                          onArchiveScrollNotification(notification);
-                          return false;
-                        },
+                        onNotification: onArchiveScrollNotification,
                         child: _AssistantArchiveStage(
                           metrics: metrics,
                           palette: palette,
@@ -535,19 +561,21 @@ class _AssistantStageViewport extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (showArchive && archiveController.value > 0.98)
+              if (showArchive &&
+                  archiveController.value > 0.98 &&
+                  archiveAtBottom)
                 Align(
-                  alignment: Alignment.topCenter,
+                  alignment: Alignment.bottomCenter,
                   child: GestureDetector(
                     key: const ValueKey<String>(
                       'assistant-history-collapse-zone',
                     ),
                     behavior: HitTestBehavior.opaque,
-                    onVerticalDragUpdate: onArchivePullDownUpdate,
-                    onVerticalDragEnd: onArchivePullDownEnd,
+                    onVerticalDragUpdate: onArchiveCollapsePullUpdate,
+                    onVerticalDragEnd: onArchiveCollapsePullEnd,
                     child: SizedBox(
                       width: double.infinity,
-                      height: metrics.unit(84),
+                      height: metrics.unit(112),
                     ),
                   ),
                 ),
@@ -563,7 +591,7 @@ class _AssistantStageViewport extends StatelessWidget {
                       child: AssistantPullHint(
                         metrics: metrics,
                         palette: palette,
-                        text: '再次上拉查看对话记录',
+                        text: '再次下拉查看对话记录',
                       ),
                     ),
                   ),
@@ -584,6 +612,7 @@ class _AssistantPrimaryStage extends StatelessWidget {
     required this.latestUserText,
     required this.latestAssistantText,
     required this.statuses,
+    required this.replyMotionLevel,
   });
 
   final AssistantSurfaceMetrics metrics;
@@ -592,10 +621,17 @@ class _AssistantPrimaryStage extends StatelessWidget {
   final String latestUserText;
   final String latestAssistantText;
   final List<AssistantToolStatus> statuses;
+  final AssistantReplyMotionLevel replyMotionLevel;
 
   @override
   Widget build(BuildContext context) {
-    final Key stageKey = ValueKey<String>('assistant-stage-${stageState.name}');
+    final String stageIdentity = switch (stageState) {
+      _AssistantStageState.empty => 'empty',
+      _AssistantStageState.waiting => 'waiting:$latestUserText',
+      _AssistantStageState.reply =>
+        'reply:$latestAssistantText:${statuses.map((AssistantToolStatus item) => item.label).join('|')}',
+    };
+    final Key stageKey = ValueKey<String>('assistant-stage-$stageIdentity');
     final Widget activeStage = switch (stageState) {
       _AssistantStageState.empty => _AssistantEmptyStage(
         key: stageKey,
@@ -614,15 +650,16 @@ class _AssistantPrimaryStage extends StatelessWidget {
         palette: palette,
         replyText: latestAssistantText,
         statuses: statuses,
+        motionLevel: replyMotionLevel,
       ),
     };
 
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 420),
+      duration: const Duration(milliseconds: 760),
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
-      layoutBuilder:
-          (Widget? currentChild, List<Widget> previousChildren) => Stack(
+      layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) =>
+          Stack(
             fit: StackFit.expand,
             alignment: Alignment.center,
             children: <Widget>[
@@ -632,23 +669,33 @@ class _AssistantPrimaryStage extends StatelessWidget {
           ),
       transitionBuilder: (Widget child, Animation<double> animation) {
         final bool isIncoming = child.key == stageKey;
-        final Animation<Offset> position = isIncoming
-            ? animation.drive(
-                Tween<Offset>(
-                  begin: const Offset(0, 0.14),
-                  end: Offset.zero,
-                ).chain(CurveTween(curve: Curves.easeOutCubic)),
-              )
-            : ReverseAnimation(animation).drive(
-                Tween<Offset>(
-                  begin: Offset.zero,
-                  end: const Offset(0, -0.14),
-                ).chain(CurveTween(curve: Curves.easeInCubic)),
-              );
+        final Animation<double> stageOpacity;
+        final Animation<Offset> stageOffset;
+        if (isIncoming) {
+          final Animation<double> progress = CurvedAnimation(
+            parent: animation,
+            curve: const Interval(0.38, 1, curve: Curves.easeOutCubic),
+          );
+          stageOpacity = progress;
+          stageOffset = Tween<Offset>(
+            begin: const Offset(0, 0.12),
+            end: Offset.zero,
+          ).animate(progress);
+        } else {
+          final Animation<double> progress = CurvedAnimation(
+            parent: ReverseAnimation(animation),
+            curve: const Interval(0, 0.58, curve: Curves.easeInOutCubic),
+          );
+          stageOpacity = Tween<double>(begin: 1, end: 0).animate(progress);
+          stageOffset = Tween<Offset>(
+            begin: Offset.zero,
+            end: const Offset(0, -0.12),
+          ).animate(progress);
+        }
 
         return FadeTransition(
-          opacity: animation,
-          child: SlideTransition(position: position, child: child),
+          opacity: stageOpacity,
+          child: SlideTransition(position: stageOffset, child: child),
         );
       },
       child: activeStage,
@@ -674,32 +721,39 @@ class _AssistantEmptyStage extends StatelessWidget {
         return Center(
           child: SizedBox(
             width: contentWidth,
-            child: Column(
-              key: const ValueKey<String>('assistant-empty-stage'),
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text(
-                  '你好，我是小眠',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: palette.secondaryText,
-                    fontSize: metrics.unit(20),
-                    fontWeight: FontWeight.w500,
+            child: AssistantFloatingMotion(
+              transformKey: const ValueKey<String>(
+                'assistant-empty-floating-motion',
+              ),
+              travelDistance: metrics.unit(6),
+              duration: const Duration(milliseconds: 3800),
+              child: Column(
+                key: const ValueKey<String>('assistant-empty-stage'),
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    '你好，我是小眠',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: palette.secondaryText,
+                      fontSize: metrics.unit(20),
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
-                SizedBox(height: metrics.unit(10)),
-                _AssistantEmptyHeadline(metrics: metrics, palette: palette),
-                SizedBox(height: metrics.unit(10)),
-                Text(
-                  '可以和小眠聊聊睡不着的原因，也可以把脑海里还没放下的念头交给我。',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: palette.bodyText,
-                    fontSize: metrics.unit(14),
-                    fontWeight: FontWeight.w400,
-                    height: 1.56,
+                  SizedBox(height: metrics.unit(10)),
+                  _AssistantEmptyHeadline(metrics: metrics, palette: palette),
+                  SizedBox(height: metrics.unit(10)),
+                  Text(
+                    '可以和小眠聊聊睡不着的原因，也可以把脑海里还没放下的念头交给我。',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: palette.bodyText,
+                      fontSize: metrics.unit(14),
+                      fontWeight: FontWeight.w400,
+                      height: 1.56,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
@@ -716,19 +770,15 @@ class _AssistantEmptyHeadline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AssistantFloatingMotion(
-      transformKey: const ValueKey<String>('assistant-empty-floating-motion'),
-      travelDistance: metrics.unit(6),
-      child: Text(
-        '今晚想聊点什么',
-        key: const ValueKey<String>('assistant-empty-headline-text'),
-        textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.displaySmall?.copyWith(
-          color: palette.headlineText,
-          fontSize: metrics.unit(34),
-          fontWeight: FontWeight.w700,
-          height: 1.02,
-        ),
+    return Text(
+      '今晚想聊点什么',
+      key: const ValueKey<String>('assistant-empty-headline-text'),
+      textAlign: TextAlign.center,
+      style: Theme.of(context).textTheme.displaySmall?.copyWith(
+        color: palette.headlineText,
+        fontSize: metrics.unit(34),
+        fontWeight: FontWeight.w700,
+        height: 1.02,
       ),
     );
   }
@@ -807,12 +857,14 @@ class _AssistantReplyStage extends StatelessWidget {
     required this.palette,
     required this.replyText,
     required this.statuses,
+    required this.motionLevel,
   });
 
   final AssistantSurfaceMetrics metrics;
   final AssistantSurfacePalette palette;
   final String replyText;
   final List<AssistantToolStatus> statuses;
+  final AssistantReplyMotionLevel motionLevel;
 
   @override
   Widget build(BuildContext context) {
@@ -832,7 +884,8 @@ class _AssistantReplyStage extends StatelessWidget {
                   transformKey: const ValueKey<String>(
                     'assistant-current-floating-motion',
                   ),
-                  travelDistance: metrics.unit(6),
+                  duration: const Duration(milliseconds: 3600),
+                  travelDistance: _replyFloatingDistance(metrics, motionLevel),
                   child: Text(
                     replyText,
                     key: const ValueKey<String>(
@@ -861,6 +914,17 @@ class _AssistantReplyStage extends StatelessWidget {
       },
     );
   }
+}
+
+double _replyFloatingDistance(
+  AssistantSurfaceMetrics metrics,
+  AssistantReplyMotionLevel level,
+) {
+  return switch (level) {
+    AssistantReplyMotionLevel.low => metrics.unit(4),
+    AssistantReplyMotionLevel.medium => metrics.unit(6),
+    AssistantReplyMotionLevel.high => metrics.unit(8),
+  };
 }
 
 class _AssistantArchiveStage extends StatelessWidget {
@@ -928,7 +992,9 @@ class _AssistantArchiveStage extends StatelessWidget {
                       if (showEarlierLabel) ...<Widget>[
                         Text(
                           '更早的对话',
-                          key: const ValueKey<String>('assistant-history-earlier'),
+                          key: const ValueKey<String>(
+                            'assistant-history-earlier',
+                          ),
                           style: Theme.of(context).textTheme.labelSmall
                               ?.copyWith(
                                 color: palette.mutedText,
@@ -938,7 +1004,9 @@ class _AssistantArchiveStage extends StatelessWidget {
                         ),
                         SizedBox(height: metrics.unit(16)),
                       ],
-                      ...earlierMessages.expand<Widget>((AssistantMessage message) {
+                      ...earlierMessages.expand<Widget>((
+                        AssistantMessage message,
+                      ) {
                         if (message.role == AssistantMessageRole.user) {
                           return <Widget>[
                             AssistantUserCard(
@@ -979,7 +1047,9 @@ class _AssistantArchiveStage extends StatelessWidget {
                       if (showCurrentLabel) ...<Widget>[
                         Text(
                           '刚刚',
-                          key: const ValueKey<String>('assistant-history-current'),
+                          key: const ValueKey<String>(
+                            'assistant-history-current',
+                          ),
                           style: Theme.of(context).textTheme.labelSmall
                               ?.copyWith(
                                 color: palette.mutedText,

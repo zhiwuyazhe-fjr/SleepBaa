@@ -36,14 +36,6 @@ class _AssistantHistoryPageState extends State<AssistantHistoryPage> {
     context.pop();
   }
 
-  Future<void> _createThread() async {
-    await context.appServices.assistantFacade.createThread(title: '新对话');
-    if (!mounted) {
-      return;
-    }
-    context.pop();
-  }
-
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
@@ -56,152 +48,179 @@ class _AssistantHistoryPageState extends State<AssistantHistoryPage> {
         final List<AssistantThread> threads = services.assistantFacade.threads;
         final String? currentThreadId =
             services.assistantFacade.currentThread?.id;
-        return Scaffold(
-          backgroundColor: AppColors.darkBackground,
-          body: LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              final AssistantSurfaceMetrics metrics =
-                  AssistantSurfaceMetrics.fromWidth(constraints.maxWidth);
-              final AssistantSurfacePalette palette =
-                  AssistantSurfacePalette.fromMood(context.nightMoodPalette);
-              return Stack(
-                fit: StackFit.expand,
-                children: <Widget>[
-                  const DecoratedBox(
-                    decoration: BoxDecoration(color: AppColors.darkBackground),
-                  ),
-                  IgnorePointer(
-                    child: Align(
-                      alignment: Alignment.bottomCenter,
-                      child: FractionallySizedBox(
-                        heightFactor: 0.36,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                              colors: <Color>[
-                                palette.bottomGlowStart,
-                                palette.bottomGlowMid,
-                                Colors.transparent,
-                              ],
-                              stops: const <double>[0, 0.42, 1],
+        return PopScope<void>(
+          canPop: false,
+          onPopInvokedWithResult: (bool didPop, void _) {
+            if (didPop) {
+              return;
+            }
+            context.pop();
+          },
+          child: Scaffold(
+            backgroundColor: AppColors.darkBackground,
+            body: LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                final AssistantSurfaceMetrics metrics =
+                    AssistantSurfaceMetrics.fromWidth(constraints.maxWidth);
+                final AssistantSurfacePalette palette =
+                    AssistantSurfacePalette.fromMood(context.nightMoodPalette);
+                final double headerActionSize = metrics.unit(36);
+                return Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    const DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: AppColors.darkBackground,
+                      ),
+                    ),
+                    IgnorePointer(
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: FractionallySizedBox(
+                          heightFactor: 0.56,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                                colors: <Color>[
+                                  palette.bottomGlowStart,
+                                  palette.bottomGlowMid,
+                                  Colors.transparent,
+                                ],
+                                stops: const <double>[0, 0.38, 1],
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  SafeArea(
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        metrics.unit(20),
-                        metrics.unit(18),
-                        metrics.unit(20),
-                        metrics.unit(12),
-                      ),
-                      child: Column(
-                        children: <Widget>[
-                          Row(
-                            children: <Widget>[
-                              _AssistantThreadHistoryIconButton(
-                                key: const ValueKey<String>(
-                                  'assistant-thread-history-close',
-                                ),
-                                size: metrics.unit(40),
-                                onPressed: () => context.pop(),
-                                child: Icon(
-                                  Icons.close_rounded,
-                                  size: metrics.unit(22),
-                                  color: palette.headerIcon,
-                                ),
+                    IgnorePointer(
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: FractionallySizedBox(
+                          widthFactor: 1,
+                          heightFactor: 0.28,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: RadialGradient(
+                                center: const Alignment(0, 0.95),
+                                radius: 1.34,
+                                colors: <Color>[
+                                  palette.bottomGlowCore,
+                                  palette.bottomGlowStart,
+                                  Colors.transparent,
+                                ],
+                                stops: const <double>[0, 0.52, 1],
                               ),
-                              Expanded(
-                                child: Center(
-                                  child: Text(
-                                    '历史对话',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(
-                                          color: palette.titleText,
-                                          fontSize: metrics.unit(20),
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                  ),
-                                ),
-                              ),
-                              _AssistantThreadHistoryIconButton(
-                                key: const ValueKey<String>(
-                                  'assistant-thread-history-add',
-                                ),
-                                size: metrics.unit(40),
-                                onPressed: _createThread,
-                                child: Icon(
-                                  Icons.add_rounded,
-                                  size: metrics.unit(22),
-                                  color: palette.headerIcon,
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
-                          SizedBox(height: metrics.unit(20)),
-                          Expanded(
-                            child: threads.isEmpty
-                                ? Center(
-                                    child: Text(
-                                      '还没有保存的对话',
-                                      key: const ValueKey<String>(
-                                        'assistant-thread-history-empty',
-                                      ),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                            color: palette.secondaryText,
-                                            fontSize: metrics.unit(14),
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                    ),
-                                  )
-                                : ListView.separated(
-                                    key: const ValueKey<String>(
-                                      'assistant-thread-history-list',
-                                    ),
-                                    itemCount: threads.length,
-                                    separatorBuilder:
-                                        (BuildContext context, int index) =>
-                                            SizedBox(height: metrics.unit(12)),
-                                    itemBuilder:
-                                        (BuildContext context, int index) {
-                                          final AssistantThread thread =
-                                              threads[index];
-                                          final bool isCurrent =
-                                              thread.id == currentThreadId;
-                                          final List<AssistantMessage> messages =
-                                              services.assistantFacade
-                                                  .messagesForThread(thread.id);
-                                          return _AssistantThreadTile(
-                                            key: ValueKey<String>(
-                                              'assistant-thread-item-${thread.id}',
-                                            ),
-                                            metrics: metrics,
-                                            palette: palette,
-                                            thread: thread,
-                                            preview: _threadPreview(messages),
-                                            isCurrent: isCurrent,
-                                            onTap: () => _selectThread(thread.id),
-                                          );
-                                        },
-                                  ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              );
-            },
+                    SafeArea(
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          metrics.unit(20),
+                          metrics.unit(8),
+                          metrics.unit(20),
+                          metrics.unit(8),
+                        ),
+                        child: Column(
+                          children: <Widget>[
+                            Row(
+                              children: <Widget>[
+                                _AssistantThreadHistoryIconButton(
+                                  key: const ValueKey<String>(
+                                    'assistant-thread-history-close',
+                                  ),
+                                  size: headerActionSize,
+                                  onPressed: () => context.pop(),
+                                  child: Icon(
+                                    Icons.close_rounded,
+                                    size: metrics.unit(22),
+                                    color: palette.headerIcon,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Center(
+                                    child: Text(
+                                      '历史对话',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            color: palette.titleText,
+                                            fontSize: metrics.unit(20),
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: headerActionSize),
+                              ],
+                            ),
+                            SizedBox(height: metrics.unit(12)),
+                            Expanded(
+                              child: threads.isEmpty
+                                  ? Center(
+                                      child: Text(
+                                        '还没有保存的对话',
+                                        key: const ValueKey<String>(
+                                          'assistant-thread-history-empty',
+                                        ),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                              color: palette.secondaryText,
+                                              fontSize: metrics.unit(14),
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                      ),
+                                    )
+                                  : ListView.separated(
+                                      key: const ValueKey<String>(
+                                        'assistant-thread-history-list',
+                                      ),
+                                      itemCount: threads.length,
+                                      separatorBuilder:
+                                          (BuildContext context, int index) =>
+                                              SizedBox(
+                                                height: metrics.unit(12),
+                                              ),
+                                      itemBuilder:
+                                          (BuildContext context, int index) {
+                                            final AssistantThread thread =
+                                                threads[index];
+                                            final bool isCurrent =
+                                                thread.id == currentThreadId;
+                                            final List<AssistantMessage>
+                                            messages = services.assistantFacade
+                                                .messagesForThread(thread.id);
+                                            return _AssistantThreadTile(
+                                              key: ValueKey<String>(
+                                                'assistant-thread-item-${thread.id}',
+                                              ),
+                                              metrics: metrics,
+                                              palette: palette,
+                                              thread: thread,
+                                              preview: _threadPreview(messages),
+                                              isCurrent: isCurrent,
+                                              onTap: () =>
+                                                  _selectThread(thread.id),
+                                            );
+                                          },
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         );
       },

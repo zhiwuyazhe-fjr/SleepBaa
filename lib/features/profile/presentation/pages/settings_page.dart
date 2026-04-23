@@ -33,6 +33,8 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _morningReminderEnabled = true;
   bool _dormAlertsEnabled = true;
   bool _smartSuggestionsEnabled = true;
+  AssistantReplyMotionLevel _assistantReplyMotionLevel =
+      AssistantReplyMotionLevel.medium;
   TimeOfDay _bedtimeReminder = const TimeOfDay(hour: 23, minute: 10);
 
   void _syncState(UserProfile profile, UserSettings settings) {
@@ -45,6 +47,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _morningReminderEnabled = settings.morningReminderEnabled;
     _dormAlertsEnabled = settings.dormAlertsEnabled;
     _smartSuggestionsEnabled = settings.smartSuggestionsEnabled;
+    _assistantReplyMotionLevel = settings.assistantReplyMotionLevel;
     _bedtimeReminder = settings.bedtimeReminder;
   }
 
@@ -59,6 +62,7 @@ class _SettingsPageState extends State<SettingsPage> {
             dormAlertsEnabled: _dormAlertsEnabled,
             smartSuggestionsEnabled: _smartSuggestionsEnabled,
             bedtimeReminder: _bedtimeReminder,
+            assistantReplyMotionLevel: _assistantReplyMotionLevel,
           );
       await services.settingsRepository.saveSettings(nextSettings);
       if (!mounted) {
@@ -164,10 +168,7 @@ class _SettingsPageState extends State<SettingsPage> {
         if (!mounted) {
           return;
         }
-        await notifyPassiveToast(
-          context,
-          message: '未能获取定位，请检查定位权限和系统定位开关。',
-        );
+        await notifyPassiveToast(context, message: '未能获取定位，请检查定位权限和系统定位开关。');
         return;
       }
       await services.dormPresenceSyncController.persistDormLocationAnchor(
@@ -258,10 +259,7 @@ class _SettingsPageState extends State<SettingsPage> {
     await notifyPassiveToast(context, message: '已退出登录。');
   }
 
-  String _locationSummary(
-    Dorm dorm, {
-    DormLocationAnchor? effectiveAnchor,
-  }) {
+  String _locationSummary(Dorm dorm, {DormLocationAnchor? effectiveAnchor}) {
     final DormLocationAnchor? anchor = effectiveAnchor ?? dorm.locationAnchor;
     if (dorm.id.isEmpty) {
       return '加入宿舍后可记录宿舍坐标，用于自动判断“已返 / 未返”。';
@@ -291,15 +289,20 @@ class _SettingsPageState extends State<SettingsPage> {
           ]),
           builder: (BuildContext context, Widget? child) {
             final UserProfile profile = services.profileFacade.currentUser;
-            final UserSettings settings = services.profileFacade.currentSettings;
+            final UserSettings settings =
+                services.profileFacade.currentSettings;
             final Dorm dorm = services.dormFacade.currentDorm;
-            final String displayedPhone = <String?>[
-              profile.phoneNumber,
-              services.authRepository.currentUser.phoneNumber,
-            ].whereType<String>().map((String item) => item.trim()).firstWhere(
-              (String item) => item.isNotEmpty,
-              orElse: () => '',
-            );
+            final String displayedPhone =
+                <String?>[
+                      profile.phoneNumber,
+                      services.authRepository.currentUser.phoneNumber,
+                    ]
+                    .whereType<String>()
+                    .map((String item) => item.trim())
+                    .firstWhere(
+                      (String item) => item.isNotEmpty,
+                      orElse: () => '',
+                    );
             _syncState(profile, settings);
 
             return ListView(
@@ -336,7 +339,9 @@ class _SettingsPageState extends State<SettingsPage> {
                             const SizedBox(height: AppSpacing.sm),
                             _ProfileLine(
                               label: '角色',
-                              value: profile.role.isEmpty ? '暂未设置' : profile.role,
+                              value: profile.role.isEmpty
+                                  ? '暂未设置'
+                                  : profile.role,
                             ),
                           ],
                         ),
@@ -431,9 +436,8 @@ class _SettingsPageState extends State<SettingsPage> {
                           keySuffix: '-settings-unknown',
                           selected: settings.selectedNightMood == null,
                           enabled: !_isApplyingNightMood,
-                          onTap: () => unawaited(
-                            _applyNightMood(services, null),
-                          ),
+                          onTap: () =>
+                              unawaited(_applyNightMood(services, null)),
                         ),
                       ),
                     ],
@@ -502,6 +506,55 @@ class _SettingsPageState extends State<SettingsPage> {
                         onChanged: (bool value) {
                           setState(() => _smartSuggestionsEnabled = value);
                         },
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        '陪伴回复漂浮强度',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        '控制主舞台上 AI 回复文字的浮动幅度。',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                          height: 1.45,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      SegmentedButton<AssistantReplyMotionLevel>(
+                        showSelectedIcon: false,
+                        segments:
+                            const <ButtonSegment<AssistantReplyMotionLevel>>[
+                              ButtonSegment<AssistantReplyMotionLevel>(
+                                value: AssistantReplyMotionLevel.low,
+                                label: Text('低'),
+                              ),
+                              ButtonSegment<AssistantReplyMotionLevel>(
+                                value: AssistantReplyMotionLevel.medium,
+                                label: Text('中'),
+                              ),
+                              ButtonSegment<AssistantReplyMotionLevel>(
+                                value: AssistantReplyMotionLevel.high,
+                                label: Text('高'),
+                              ),
+                            ],
+                        selected: <AssistantReplyMotionLevel>{
+                          _assistantReplyMotionLevel,
+                        },
+                        onSelectionChanged:
+                            (Set<AssistantReplyMotionLevel> selection) =>
+                                setState(
+                                  () => _assistantReplyMotionLevel =
+                                      selection.first,
+                                ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        _assistantReplyMotionLabel(_assistantReplyMotionLevel),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                          height: 1.45,
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.md),
                       PrimaryButton(
@@ -575,13 +628,16 @@ class _SettingsPageState extends State<SettingsPage> {
                                     label: '编辑宿舍名称',
                                     variant: PrimaryButtonVariant.soft,
                                     icon: Icons.edit_rounded,
-                                    onPressed: () => _renameDorm(services, dorm),
+                                    onPressed: () =>
+                                        _renameDorm(services, dorm),
                                   ),
                                 ),
                                 const SizedBox(width: AppSpacing.sm),
                                 Expanded(
                                   child: PrimaryButton(
-                                    label: _isSavingDormAnchor ? '记录中...' : '重新记录位置',
+                                    label: _isSavingDormAnchor
+                                        ? '记录中...'
+                                        : '重新记录位置',
                                     variant: PrimaryButtonVariant.soft,
                                     icon: Icons.my_location_rounded,
                                     onPressed: _isSavingDormAnchor
@@ -601,7 +657,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                   expand: false,
                                   variant: PrimaryButtonVariant.soft,
                                   icon: Icons.group_add_rounded,
-                                  onPressed: () => context.push(AppRoutes.dormInvite),
+                                  onPressed: () =>
+                                      context.push(AppRoutes.dormInvite),
                                 ),
                                 PrimaryButton(
                                   label: '退出宿舍',
@@ -795,4 +852,12 @@ class _ActionRow extends StatelessWidget {
       onTap: onTap,
     );
   }
+}
+
+String _assistantReplyMotionLabel(AssistantReplyMotionLevel level) {
+  return switch (level) {
+    AssistantReplyMotionLevel.low => '低：最轻的浮动，存在感更弱。',
+    AssistantReplyMotionLevel.medium => '中：默认档，维持现在的陪伴感。',
+    AssistantReplyMotionLevel.high => '高：浮动更明显，但仍保持克制。',
+  };
 }
