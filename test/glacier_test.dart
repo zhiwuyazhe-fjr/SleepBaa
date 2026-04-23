@@ -154,14 +154,7 @@ void main() {
         expect(item.leadingWidth, 28, reason: title);
         expect(item.minHeight, isNull, reason: title);
         expect(item.titleStyle, isNull, reason: title);
-        expect(
-          item.padding,
-          const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: AppSpacing.sm,
-          ),
-          reason: title,
-        );
+        expect(item.padding.horizontal, AppSpacing.md * 2, reason: title);
       }
     },
   );
@@ -200,6 +193,31 @@ void main() {
           )
           .height;
       expect(sleepRowHeight, accountEntryHeight, reason: title);
+    }
+  });
+
+  testWidgets('sleep preference toggles are wider without stretching rows', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
+
+    final List<String> switchItemTitles = <String>[
+      '睡前提醒',
+      '晨间反馈提醒',
+      '宿舍动态提醒',
+      '智能建议',
+    ];
+
+    for (final String title in switchItemTitles) {
+      final Size rowSize = tester.getSize(
+        find.ancestor(of: find.text(title), matching: find.byType(InkWell)),
+      );
+      final Size toggleSize = tester.getSize(
+        find.byKey(ValueKey<String>('settings-toggle-$title')),
+      );
+      expect(toggleSize.width, 52, reason: title);
+      expect(toggleSize.height, 26, reason: title);
+      expect(toggleSize.height, lessThan(rowSize.height), reason: title);
     }
   });
 

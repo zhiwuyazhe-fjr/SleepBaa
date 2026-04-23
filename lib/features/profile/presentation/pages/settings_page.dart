@@ -451,25 +451,57 @@ class _SettingsSwitchRow extends StatelessWidget {
       icon: icon,
       iconColor: context.nightMoodPalette.primaryDeep,
       title: title,
-      trailing: SizedBox(
-        width: 44,
-        height: 24,
-        child: FittedBox(
-          fit: BoxFit.contain,
-          alignment: Alignment.centerRight,
-          child: Switch(
-            value: value,
-            onChanged: (bool next) {
-              HapticFeedback.selectionClick();
-              onChanged(next);
-            },
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            activeThumbColor: context.nightMoodPalette.primary,
-            activeTrackColor: context.nightMoodPalette.primarySoft,
+      trailing: _SettingsToggle(
+        key: ValueKey<String>('settings-toggle-$title'),
+        value: value,
+      ),
+      onTap: () => onChanged(!value),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: 11,
+      ),
+    );
+  }
+}
+
+class _SettingsToggle extends StatelessWidget {
+  const _SettingsToggle({super.key, required this.value});
+
+  final bool value;
+
+  @override
+  Widget build(BuildContext context) {
+    final NightMoodPalette palette = context.nightMoodPalette;
+    return Semantics(
+      toggled: value,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        width: 52,
+        height: 26,
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: value ? palette.primarySoft : AppColors.surfaceMuted,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: value
+                ? palette.primary.withValues(alpha: 0.28)
+                : AppColors.surfaceBorder,
+          ),
+        ),
+        child: AnimatedAlign(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: 22,
+            height: 22,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: value ? palette.primary : AppColors.textHint,
+            ),
           ),
         ),
       ),
-      onTap: () => onChanged(!value),
     );
   }
 }
