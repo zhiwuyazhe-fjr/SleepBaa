@@ -105,6 +105,16 @@ class ThrowingTempUrlFileStorage extends TestFileStorage {
   }
 }
 
+class ThrowingUploadFileStorage extends TestFileStorage {
+  override async uploadBytes(_params: {
+    fileName: string;
+    bytes: Buffer;
+    contentType?: string;
+  }): Promise<{ fileId: string; url: string }> {
+    throw new Error("upload failed");
+  }
+}
+
 test("createDorm writes current member displayBadgeId", async () => {
   const store = new TestDocumentStore();
   const repo = new FirestoreRepository(store as any, new TestFileStorage());
@@ -231,7 +241,7 @@ test("getDorm backfills avatarUrl and displayBadgeId from latest user profile", 
   await repo.saveUserProfile("roommate-user", {
     displayName: "Roommate",
     dormId,
-    avatarUrl: null,
+    avatarUrl: "https://images.example.com/expired-user-avatar.png",
     avatarStoragePath: "avatar-file-1",
     earnedBadgeIds: ["first-week", "latest-earned"],
     equippedBadgeId: null,
@@ -288,6 +298,91 @@ test("getDorm backfills avatarUrl and displayBadgeId from latest user profile", 
     roommate?.avatarUrl,
     "https://old.example.com/member-only-avatar.png",
   );
+});
+
+test("updateAvatar uploads base64 avatar and syncs dorm member", async () => {
+  const store = new TestDocumentStore();
+  const repo = new FirestoreRepository(store as any, new TestFileStorage());
+  const uid = "avatar-user";
+  const dormId = "dorm-avatar-upload";
+
+  await store.set("dorms", dormId, {
+    id: dormId,
+    name: "Dorm",
+  });
+  await repo.saveUserProfile(uid, {
+    displayName: "Resident",
+    dormId,
+    avatarUrl: "https://old.example.com/avatar.png",
+    avatarStoragePath: "old-avatar-file",
+  });
+  await store.set("dorm_members", `${dormId}:${uid}`, {
+    dormId,
+    uid,
+    name: "Resident",
+    status: "quiet",
+    presenceStatus: "returned",
+    sleepModeActive: false,
+    lastActiveAt: "2026-04-13T15:00:00.000Z",
+    note: "",
+    avatarUrl: "https://old.example.com/member-avatar.png",
+  });
+
+  const result = await repo.updateAvatar(uid, {
+    avatarBase64: Buffer.from("avatar-bytes").toString("base64"),
+    fileName: "avatar.jpg",
+    avatarPath: "local/avatar.jpg",
+  });
+
+  assert.equal(result.avatarStoragePath, "uploaded-avatar.jpg");
+  assert.equal(
+    result.avatarUrl,
+    "https://cdn.example.com/uploaded-avatar.jpg",
+  );
+  const member = await store.get("dorm_members", `${dormId}:${uid}`);
+  assert.equal(
+    member?.avatarUrl,
+    "https://cdn.example.com/uploaded-avatar.jpg",
+  );
+});
+
+test("updateAvatar failures do not clear existing avatar fields", async () => {
+  for (const [name, repoFactory, expectedMessage] of [
+    [
+      "missing storage",
+      (store: TestDocumentStore) => new FirestoreRepository(store as any),
+      /storage is unavailable/,
+    ],
+    [
+      "upload failure",
+      (store: TestDocumentStore) =>
+        new FirestoreRepository(store as any, new ThrowingUploadFileStorage()),
+      /upload failed/,
+    ],
+  ] as const) {
+    const store = new TestDocumentStore();
+    const repo = repoFactory(store);
+    const uid = `avatar-failure-${name.replace(/\s+/g, "-")}`;
+
+    await repo.saveUserProfile(uid, {
+      displayName: "Resident",
+      avatarUrl: "https://old.example.com/avatar.png",
+      avatarStoragePath: "old-avatar-file",
+    });
+
+    await assert.rejects(
+      () =>
+        repo.updateAvatar(uid, {
+          avatarBase64: Buffer.from("avatar-bytes").toString("base64"),
+          fileName: "avatar.jpg",
+        }),
+      expectedMessage,
+    );
+
+    const user = await store.get("users", uid);
+    assert.equal(user?.avatarUrl, "https://old.example.com/avatar.png");
+    assert.equal(user?.avatarStoragePath, "old-avatar-file");
+  }
 });
 
 test("getDorm logs avatar diagnostics when temp-url signing fails or avatar data is missing", async () => {
