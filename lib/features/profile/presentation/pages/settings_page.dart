@@ -132,7 +132,6 @@ class _SettingsPageState extends State<SettingsPage> {
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
                         title: Text(_assistantReplyMotionTitle(level)),
-                        subtitle: Text(_assistantReplyMotionDescription(level)),
                         trailing: isSelected
                             ? const Icon(Icons.check_rounded)
                             : null,
@@ -365,6 +364,27 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 AppSettingsGroup(
+                  title: 'AI陪伴',
+                  children: <Widget>[
+                    AppSettingsItem(
+                      icon: Icons.auto_awesome_rounded,
+                      title: '回复文字浮动',
+                      iconColor: context.nightMoodPalette.primaryDeep,
+                      trailing: _SettingsValueTrailing(
+                        value: _isSavingAssistantMotion
+                            ? '保存中...'
+                            : _assistantReplyMotionTitle(
+                                _assistantReplyMotionLevel,
+                              ),
+                      ),
+                      onTap: _isSavingAssistantMotion
+                          ? null
+                          : () => _showAssistantMotionSheet(services),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                AppSettingsGroup(
                   title: '睡眠偏好',
                   children: <Widget>[
                     Column(
@@ -437,27 +457,6 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                       ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                AppSettingsGroup(
-                  title: '陪伴动效',
-                  children: <Widget>[
-                    AppSettingsItem(
-                      icon: Icons.auto_awesome_rounded,
-                      title: '回复文字浮动',
-                      iconColor: context.nightMoodPalette.primaryDeep,
-                      trailing: _SettingsValueTrailing(
-                        value: _isSavingAssistantMotion
-                            ? '保存中...'
-                            : _assistantReplyMotionTitle(
-                                _assistantReplyMotionLevel,
-                              ),
-                      ),
-                      onTap: _isSavingAssistantMotion
-                          ? null
-                          : () => _showAssistantMotionSheet(services),
                     ),
                   ],
                 ),
@@ -792,13 +791,5 @@ String _assistantReplyMotionTitle(AssistantReplyMotionLevel level) {
     AssistantReplyMotionLevel.low => '低',
     AssistantReplyMotionLevel.medium => '中',
     AssistantReplyMotionLevel.high => '高',
-  };
-}
-
-String _assistantReplyMotionDescription(AssistantReplyMotionLevel level) {
-  return switch (level) {
-    AssistantReplyMotionLevel.low => '更克制，存在感最低。',
-    AssistantReplyMotionLevel.medium => '默认档，柔和但能感知到呼吸感。',
-    AssistantReplyMotionLevel.high => '上浮更明显，转场戏剧性更强。',
   };
 }
