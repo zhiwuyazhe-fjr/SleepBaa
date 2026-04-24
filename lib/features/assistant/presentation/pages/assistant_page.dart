@@ -1,17 +1,23 @@
+import 'dart:async';
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
-import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
-import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
-import 'package:sleep_dorm_app/core/backend/assistant_reply_gateway.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
-import 'package:sleep_dorm_app/core/widgets/app_card.dart';
-import 'package:sleep_dorm_app/core/widgets/mood_avatar.dart';
+import 'package:sleep_dorm_app/features/assistant/presentation/controllers/assistant_conversation_controller.dart';
+import 'package:sleep_dorm_app/features/assistant/presentation/widgets/assistant_surface.dart';
+
+const Duration _assistantStageTransitionDuration = Duration(milliseconds: 2000);
 
 enum AssistantCaptureTab { dream, memo }
+
+enum _AssistantFlowHintMode { none, expand, collapse }
+
+enum _AssistantArchivePhase { collapsed, expanding, expanded, collapsing }
 
 class AssistantPage extends StatefulWidget {
   const AssistantPage({
@@ -27,1397 +33,1337 @@ class AssistantPage extends StatefulWidget {
   State<AssistantPage> createState() => _AssistantPageState();
 }
 
-class _AssistantPageState extends State<AssistantPage> {
+class _AssistantPageState extends State<AssistantPage>
+    with SingleTickerProviderStateMixin {
+  static const Duration _archiveHintMemoryDuration = Duration(seconds: 5);
+
   final TextEditingController _inputController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
 
-  int _lastRenderedMessageCount = 0;
+  late final AnimationController _archiveController = AnimationController(
+    vsync: this,
+    duration: _assistantStageTransitionDuration,
+  );
   late AssistantCaptureTab _selectedTab;
-
-  bool get _hasDraft => _inputController.text.trim().isNotEmpty;
-  bool get _isCaptureMode => widget.captureModeEnabled;
+  Timer? _archiveHintTimer;
+  Timer? _archiveCollapseHintTimer;
+  String? _lastHapticAssistantMessageId;
+  _AssistantArchivePhase _archivePhase = _AssistantArchivePhase.collapsed;
+  bool _archiveExpansionArmed = false;
+  bool _archiveCollapseArmed = false;
+  bool _archiveCollapseHintPrimedFromEntry = false;
+  bool _archiveAtBottom = true;
+  double _replyPullExtent = 0;
+  double _archiveOverscrollExtent = 0;
+  _AssistantFlowHintMode _flowHintMode = _AssistantFlowHintMode.none;
 
   SleepCaptureType get _activeCaptureType =>
       _selectedTab == AssistantCaptureTab.memo
       ? SleepCaptureType.memo
       : SleepCaptureType.dream;
 
-  AssistantThreadTurnState? _currentTurnState(AppServices services) {
-    final AssistantThread? thread = services.assistantFacade.currentThread;
-    if (thread == null) {
-      return null;
-    }
-    return services.assistantRepository.turnStateForThread(thread.id);
+  bool get _archiveTransitioning =>
+      _archivePhase == _AssistantArchivePhase.expanding ||
+      _archivePhase == _AssistantArchivePhase.collapsing;
+
+  bool get _archiveExpanded => _archivePhase == _AssistantArchivePhase.expanded;
+
+  String? _flowHintText() {
+    return switch (_flowHintMode) {
+      _AssistantFlowHintMode.expand => '再次下拉查看对话记录',
+      _AssistantFlowHintMode.collapse =>
+        _archiveCollapseHintPrimedFromEntry ? '上拉返回当前回复' : '再次上拉返回当前回复',
+      _AssistantFlowHintMode.none => null,
+    };
   }
 
-  String _nextTurnId() {
-    return 'assistant-turn-${DateTime.now().microsecondsSinceEpoch}';
-  }
-
-  Future<void> _showThreadBusyToast() {
-    return notifyPassiveToast(context, message: '上一条还在处理中，请稍后再发');
-  }
-
-  String? _errorCodeOf(Object error) {
-    return assistantErrorCodeFromException(error);
-  }
-
-  _CaptureCopy get _copy {
-    if (!_isCaptureMode) {
-      return const _CaptureCopy(
-        title: '现在想聊些什么？',
-        subtitle: '我会陪你慢慢放松，也可以帮你把脑海里的念头整理清楚。',
-        prompt: '如果你愿意，可以先告诉我今晚最在意的一件事，我会顺着你的节奏陪你说下去。',
-        inputHint: '说一说吧',
-        footnote: '',
-        suggestions: <String>['我现在有点睡不着', '宿舍有点吵', '帮我看看今晚该怎么放松'],
-      );
-    }
-    if (_selectedTab == AssistantCaptureTab.memo) {
-      return const _CaptureCopy(
-        title: '把事也先安放下来',
-        subtitle: '怕睡前突然想到的事明早忘掉，就先在这里交给我保管。',
-        prompt: '你可以写下明天要做的事、突然想到的人名任务，或者一句不想忘记的话。我会先帮你整理成简短提要，让你今晚不用一直惦记着它。',
-        inputHint: '例如：明早要给导师发材料，还要记得问室友借充电器...',
-        footnote: '会保存到“我的 / 事记仓库”；结束睡眠模式后，首页会短暂提醒你回看。',
-        suggestions: <String>[
-          '明早要给导师发材料，还要记得问室友借充电器',
-          '记得把实验数据发给组会同学',
-          '明天起床后先回老师消息',
-        ],
-      );
-    }
-    return const _CaptureCopy(
-      title: '把梦先轻轻记下来',
-      subtitle: '不用一次写完整，先把还记得的画面、人物、颜色或一句话留住就好。',
-      prompt: '如果刚醒来还模糊，可以先从“我看到什么”“我当时什么感觉”“有没有一句特别清楚的话”开始写，我会帮你把梦记轻轻收好。',
-      inputHint: '例如：我梦见自己站在很高的桥上，风很冷，但并不害怕...',
-      footnote: '会保存到“我的 / 梦境记录”。',
-      suggestions: <String>[
-        '我梦见自己站在很高的桥上，风很冷，但并不害怕',
-        '梦里一直在找教室，可怎么也走不到',
-        '我只记得一片很亮的蓝色，还有一句重复的话',
-      ],
-    );
+  bool _shouldShowFlowHint() {
+    return switch (_flowHintMode) {
+      _AssistantFlowHintMode.none => false,
+      _AssistantFlowHintMode.expand =>
+        _archiveExpansionArmed &&
+            _replyPullExtent <= 0.001 &&
+            !_archiveTransitioning &&
+            _archivePhase == _AssistantArchivePhase.collapsed,
+      _AssistantFlowHintMode.collapse =>
+        _archiveCollapseArmed &&
+            _archiveOverscrollExtent <= 0.001 &&
+            !_archiveTransitioning &&
+            _archivePhase == _AssistantArchivePhase.expanded,
+    };
   }
 
   @override
   void initState() {
     super.initState();
     _selectedTab = widget.initialCaptureTab;
-    _focusNode.addListener(_handleComposerStateChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) {
         return;
       }
-      await context.appServices.assistantFacade.selectMostRecentThread();
-      _scrollToBottom();
+      await context.appServices.assistantConversationController.bootstrap();
     });
   }
 
   @override
   void dispose() {
-    _focusNode.removeListener(_handleComposerStateChanged);
+    _archiveHintTimer?.cancel();
+    _archiveCollapseHintTimer?.cancel();
+    _archiveController.dispose();
     _inputController.dispose();
-    _scrollController.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
-  Future<void> _handleSubmit(AppServices services, {String? prompt}) async {
-    final String normalizedPrompt = (prompt ?? _inputController.text).trim();
-    if (normalizedPrompt.isEmpty) {
+  Future<void> _handleSubmit(AppServices services) async {
+    final String prompt = _inputController.text.trim();
+    if (prompt.isEmpty) {
       _focusNode.requestFocus();
       return;
     }
 
-    final String? activeSessionId =
-        services.sleepSessionRepository.activeSession?.id;
-    if (_isCaptureMode &&
-        (activeSessionId == null || activeSessionId.isEmpty)) {
-      await notifyPassiveToast(context, message: '只有在睡眠模式中，才能使用梦记和事记收纳。');
-      _focusNode.requestFocus();
-      return;
-    }
+    _resetArchiveState();
 
-    final AssistantThread thread = await services.assistantRepository
-        .ensureThread(
-          title: _isCaptureMode
-              ? (_activeCaptureType == SleepCaptureType.dream ? '梦记收纳' : '事记收纳')
-              : '今晚睡前聊聊',
-        );
-    await services.assistantRepository.setCurrentThread(thread.id);
-    final String turnId = _nextTurnId();
-    final bool started = await services.assistantRepository.tryStartThreadTurn(
-      threadId: thread.id,
-      turnId: turnId,
-    );
-    if (!started) {
-      await _showThreadBusyToast();
-      return;
-    }
-
-    if (prompt == null && mounted) {
-      setState(() => _inputController.clear());
-    }
-    _focusNode.unfocus();
-    _scrollToBottom();
-
-    try {
-      if (_isCaptureMode) {
-        await _sendCaptureStream(
-          services,
-          selectedThread: thread,
-          turnId: turnId,
-          prompt: normalizedPrompt,
-          captureType: _activeCaptureType,
-          sessionId: activeSessionId!,
-        );
-      } else {
-        await _sendReplyStream(
-          services,
-          selectedThread: thread,
-          turnId: turnId,
-          prompt: normalizedPrompt,
-        );
-      }
-    } finally {
-      _scrollToBottom();
-    }
-  }
-
-  Future<void> _sendReplyStream(
-    AppServices services, {
-    required AssistantThread selectedThread,
-    required String turnId,
-    required String prompt,
-  }) async {
-    final AssistantThread thread = selectedThread;
-    final String clientUserMessageId =
-        'assistant-msg-user-${DateTime.now().microsecondsSinceEpoch}';
-    final String clientAssistantMessageId =
-        'assistant-msg-assistant-${DateTime.now().microsecondsSinceEpoch}';
-    await services.assistantRepository.sendUserMessage(
-      threadId: thread.id,
-      content: prompt,
-      messageId: clientUserMessageId,
-    );
-    await services.assistantRepository.addAssistantMessage(
-      threadId: thread.id,
-      content: '小眠正在整理回复...',
-      messageId: clientAssistantMessageId,
-      status: AssistantMessageStatus.pending,
-    );
-    _scrollToBottom();
-
-    bool turnFinished = false;
-    Future<void> finishTurn() async {
-      if (turnFinished) {
-        return;
-      }
-      turnFinished = true;
-      await services.assistantRepository.finishThreadTurn(
-        threadId: thread.id,
-        turnId: turnId,
-      );
-    }
-
-    try {
-      String bufferedReply = '';
-      bool completed = false;
-      await for (final AssistantStreamEvent event
-          in services.assistantReplyGateway.streamReply(
+    final AssistantConversationController controller =
+        services.assistantConversationController;
+    final AssistantConversationSubmitResult result = widget.captureModeEnabled
+        ? await controller.submitCapturePrompt(
             prompt: prompt,
-            threadId: thread.id,
-            clientUserMessageId: clientUserMessageId,
-            clientAssistantMessageId: clientAssistantMessageId,
-            dorm: services.dormRepository.currentDorm,
-          )) {
-        switch (event.type) {
-          case AssistantStreamEventType.messageDelta:
-            bufferedReply += event.delta ?? '';
-            await services.assistantRepository.updateAssistantMessage(
-              threadId: thread.id,
-              messageId: clientAssistantMessageId,
-              content: bufferedReply,
-              status: AssistantMessageStatus.pending,
-            );
-            break;
-          case AssistantStreamEventType.messageCompleted:
-            completed = true;
-            await services.assistantRepository.markThreadTurnFinalizing(
-              threadId: thread.id,
-              turnId: turnId,
-            );
-            await _upsertAssistantReply(
-              services,
-              threadId: thread.id,
-              defaultMessageId: clientAssistantMessageId,
-              reply: event.reply ?? bufferedReply,
-              sourceMode:
-                  event.sourceMode ?? AssistantReplySourceMode.remoteSuccess,
-              provider: event.provider,
-              model: event.model,
-              errorMessage: event.errorMessage,
-              assistantMessageId:
-                  event.assistantMessageId ?? clientAssistantMessageId,
-            );
-            break;
-          case AssistantStreamEventType.error:
-            completed = true;
-            await _setAssistantError(
-              services,
-              threadId: thread.id,
-              messageId: clientAssistantMessageId,
-              error: event.errorMessage ?? 'stream error',
-              errorCode: event.errorCode,
-            );
-            await finishTurn();
-            break;
-          case AssistantStreamEventType.ack:
-          case AssistantStreamEventType.surfacePatch:
-          case AssistantStreamEventType.captureRecord:
-          case AssistantStreamEventType.memorySynced:
-            break;
-          case AssistantStreamEventType.done:
-            await finishTurn();
-            break;
+            captureType: _activeCaptureType,
+          )
+        : await controller.submitPrompt(prompt);
+
+    switch (result) {
+      case AssistantConversationSubmitResult.sent:
+        if (mounted) {
+          setState(() {
+            _inputController.clear();
+          });
         }
-      }
-
-      if (!completed) {
-        await _setAssistantError(
-          services,
-          threadId: thread.id,
-          messageId: clientAssistantMessageId,
-          error: 'reply stream ended before completion',
-        );
-      }
-    } catch (error) {
-      await _setAssistantError(
-        services,
-        threadId: thread.id,
-        messageId: clientAssistantMessageId,
-        error: error,
-        errorCode: _errorCodeOf(error),
-      );
-    } finally {
-      await finishTurn();
-    }
-  }
-
-  Future<void> _sendCaptureStream(
-    AppServices services, {
-    required AssistantThread selectedThread,
-    required String turnId,
-    required String prompt,
-    required SleepCaptureType captureType,
-    required String sessionId,
-  }) async {
-    final AssistantThread thread = await services.assistantRepository
-        .ensureThread(
-          title: captureType == SleepCaptureType.dream ? '梦记收纳' : '事记收纳',
-        );
-    await services.assistantRepository.setCurrentThread(thread.id);
-    final String clientUserMessageId =
-        'assistant-msg-user-${DateTime.now().microsecondsSinceEpoch}';
-    final String clientAssistantMessageId =
-        'assistant-msg-assistant-${DateTime.now().microsecondsSinceEpoch}';
-    await services.assistantRepository.sendUserMessage(
-      threadId: thread.id,
-      content: prompt,
-      messageId: clientUserMessageId,
-    );
-    await services.assistantRepository.addAssistantMessage(
-      threadId: thread.id,
-      content: '小眠正在整理这段记录...',
-      messageId: clientAssistantMessageId,
-      status: AssistantMessageStatus.pending,
-    );
-    _scrollToBottom();
-
-    bool turnFinished = false;
-    Future<void> finishTurn() async {
-      if (turnFinished) {
-        return;
-      }
-      turnFinished = true;
-      await services.assistantRepository.finishThreadTurn(
-        threadId: thread.id,
-        turnId: turnId,
-      );
-    }
-
-    try {
-      String bufferedReply = '';
-      SleepCaptureRecord? streamedRecord;
-      bool completed = false;
-      await for (final AssistantStreamEvent event
-          in services.assistantReplyGateway.streamCapture(
-            prompt: prompt,
-            threadId: thread.id,
-            sessionId: sessionId,
-            captureType: captureType,
-            clientUserMessageId: clientUserMessageId,
-            clientAssistantMessageId: clientAssistantMessageId,
-            dorm: services.dormRepository.currentDorm,
-          )) {
-        switch (event.type) {
-          case AssistantStreamEventType.messageDelta:
-            bufferedReply += event.delta ?? '';
-            await services.assistantRepository.updateAssistantMessage(
-              threadId: thread.id,
-              messageId: clientAssistantMessageId,
-              content: bufferedReply,
-              status: AssistantMessageStatus.pending,
-            );
-            break;
-          case AssistantStreamEventType.captureRecord:
-            streamedRecord = event.record;
-            break;
-          case AssistantStreamEventType.messageCompleted:
-            completed = true;
-            await services.assistantRepository.markThreadTurnFinalizing(
-              threadId: thread.id,
-              turnId: turnId,
-            );
-            streamedRecord ??= await services.sleepCaptureRepository.addRecord(
-              type: captureType,
-              sessionId: sessionId,
-              content: prompt,
-            );
-            await _upsertAssistantReply(
-              services,
-              threadId: thread.id,
-              defaultMessageId: clientAssistantMessageId,
-              reply: event.reply ?? bufferedReply,
-              sourceMode:
-                  event.sourceMode ?? AssistantReplySourceMode.remoteSuccess,
-              provider: event.provider,
-              model: event.model,
-              errorMessage: event.errorMessage,
-              assistantMessageId:
-                  event.assistantMessageId ?? clientAssistantMessageId,
-            );
-            break;
-          case AssistantStreamEventType.error:
-            completed = true;
-            await _setAssistantError(
-              services,
-              threadId: thread.id,
-              messageId: clientAssistantMessageId,
-              error: event.errorMessage ?? 'stream error',
-              errorCode: event.errorCode,
-            );
-            await finishTurn();
-            break;
-          case AssistantStreamEventType.ack:
-          case AssistantStreamEventType.surfacePatch:
-          case AssistantStreamEventType.memorySynced:
-            break;
-          case AssistantStreamEventType.done:
-            await finishTurn();
-            break;
+        _focusNode.unfocus();
+        break;
+      case AssistantConversationSubmitResult.busy:
+        if (!mounted) {
+          return;
         }
-      }
-
-      if (!completed) {
-        await _setAssistantError(
-          services,
-          threadId: thread.id,
-          messageId: clientAssistantMessageId,
-          error: 'capture stream ended before completion',
-        );
-      }
-    } catch (error) {
-      await _setAssistantError(
-        services,
-        threadId: thread.id,
-        messageId: clientAssistantMessageId,
-        error: error,
-        errorCode: _errorCodeOf(error),
-      );
-    } finally {
-      await finishTurn();
+        await notifyPassiveToast(context, message: '上一条还在处理中，请稍后再发');
+        break;
+      case AssistantConversationSubmitResult.missingActiveSession:
+        if (!mounted) {
+          return;
+        }
+        await notifyPassiveToast(context, message: '只有在睡眠模式中，才能使用梦记和事记收纳。');
+        break;
+      case AssistantConversationSubmitResult.empty:
+        _focusNode.requestFocus();
+        break;
     }
   }
 
-  Future<void> _upsertAssistantReply(
-    AppServices services, {
-    required String threadId,
-    required String defaultMessageId,
-    required String reply,
-    required AssistantReplySourceMode sourceMode,
-    required String? provider,
-    required String? model,
-    required String? errorMessage,
-    String? assistantMessageId,
-  }) async {
-    final List<AssistantMessage> existingMessages = services.assistantRepository
-        .messagesForThread(threadId);
-    final String nextMessageId = assistantMessageId ?? defaultMessageId;
-    final String? nextErrorMessage =
-        sourceMode == AssistantReplySourceMode.error
-        ? '请直接重试上一条消息。'
-        : errorMessage;
-    if (existingMessages.any(
-      (AssistantMessage item) => item.id == nextMessageId,
-    )) {
-      await services.assistantRepository.updateAssistantMessage(
-        threadId: threadId,
-        messageId: nextMessageId,
-        content: reply,
-        status: sourceMode == AssistantReplySourceMode.error
-            ? AssistantMessageStatus.error
-            : AssistantMessageStatus.complete,
-        sourceMode: sourceMode,
-        provider: provider,
-        model: model,
-        errorMessage: nextErrorMessage,
-      );
-    } else {
-      await services.assistantRepository.addAssistantMessage(
-        threadId: threadId,
-        content: reply,
-        messageId: nextMessageId,
-        status: sourceMode == AssistantReplySourceMode.error
-            ? AssistantMessageStatus.error
-            : AssistantMessageStatus.complete,
-        sourceMode: sourceMode,
-        provider: provider,
-        model: model,
-        errorMessage: nextErrorMessage,
-      );
-    }
-  }
-
-  Future<void> _setAssistantError(
-    AppServices services, {
-    required String threadId,
-    required String messageId,
-    required Object error,
-    String? errorCode,
-  }) async {
-    final String? normalizedErrorCode = errorCode ?? _errorCodeOf(error);
-    final String errorContent = assistantErrorContentForCode(
-      normalizedErrorCode,
-    );
-    final String errorHint = assistantErrorHintForCode(normalizedErrorCode);
-    if (services.assistantRepository
-        .messagesForThread(threadId)
-        .any((AssistantMessage item) => item.id == messageId)) {
-      await services.assistantRepository.updateAssistantMessage(
-        threadId: threadId,
-        messageId: messageId,
-        content: errorContent,
-        status: AssistantMessageStatus.error,
-        sourceMode: AssistantReplySourceMode.error,
-        errorMessage: errorHint,
-      );
-    } else {
-      await services.assistantRepository.addAssistantMessage(
-        threadId: threadId,
-        content: errorContent,
-        status: AssistantMessageStatus.error,
-        sourceMode: AssistantReplySourceMode.error,
-        errorMessage: errorHint,
-      );
-    }
-  }
-
-  Future<void> _showRenameDialog(
-    BuildContext context,
-    AppServices services,
-    AssistantProfile profile,
-  ) async {
-    final TextEditingController controller = TextEditingController(
-      text: profile.assistantName,
-    );
-    final String? nextName = await showDialog<String>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('修改助手名字'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            maxLength: 12,
-            decoration: const InputDecoration(hintText: '例如：小眠、阿眠、今晚陪伴官'),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(controller.text.trim()),
-              child: const Text('保存'),
-            ),
-          ],
-        );
-      },
-    );
-    controller.dispose();
-    if (nextName == null || nextName.trim().isEmpty) {
+  Future<void> _handleComposerAddTap() async {
+    if (!mounted) {
       return;
     }
-    await services.assistantFacade.updateAssistantProfileName(nextName.trim());
-    if (!context.mounted) {
-      return;
-    }
-    await notifyPassiveToast(context, message: '助手名字已更新');
+    await notifyPassiveToast(context, message: '更多输入能力会在后续版本开放。');
   }
 
-  void _showVoiceHint() {
-    notifyPassiveToast(context, message: '语音输入即将上线');
-  }
-
-  Future<void> _retryLatestPrompt(AppServices services) async {
-    final AssistantThread? thread = services.assistantFacade.currentThread;
-    if (thread == null) {
+  Future<void> _handleComposerMicTap() async {
+    if (!mounted) {
       return;
     }
-    final List<AssistantMessage> messages =
-        services.assistantFacade.currentMessages;
-    final AssistantMessage latestUserMessage = messages.lastWhere(
-      (AssistantMessage item) => item.role == AssistantMessageRole.user,
-      orElse: () => AssistantMessage(
-        id: '',
-        threadId: '',
-        role: AssistantMessageRole.system,
-        content: '',
-        createdAt: DateTime.fromMillisecondsSinceEpoch(0),
-      ),
-    );
-    if (latestUserMessage.id.isEmpty ||
-        latestUserMessage.content.trim().isEmpty) {
-      return;
-    }
-    await _handleSubmit(services, prompt: latestUserMessage.content);
+    await notifyPassiveToast(context, message: '语音输入还在接入中。');
   }
 
   Future<void> _startNewConversation(AppServices services) async {
+    _resetArchiveState();
+    setState(() {
+      _inputController.clear();
+      _lastHapticAssistantMessageId = null;
+    });
+    _focusNode.unfocus();
     await services.assistantFacade.createThread(
-      title: _isCaptureMode
+      title: widget.captureModeEnabled
           ? (_activeCaptureType == SleepCaptureType.dream ? '梦记收纳' : '事记收纳')
           : '新对话',
     );
     if (!mounted) {
       return;
     }
-    _scrollToBottom();
   }
 
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) {
+  Future<void> _emitReplyHaptics({required bool hasStatuses}) async {
+    await HapticFeedback.lightImpact();
+    if (!hasStatuses) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!mounted) {
+      return;
+    }
+    await HapticFeedback.selectionClick();
+  }
+
+  void _resetArchiveState() {
+    _archiveHintTimer?.cancel();
+    _archiveCollapseHintTimer?.cancel();
+    _archiveHintTimer = null;
+    _archiveCollapseHintTimer = null;
+    _archiveController.stop();
+    _archiveController.value = 0;
+    _archivePhase = _AssistantArchivePhase.collapsed;
+    _archiveExpansionArmed = false;
+    _archiveCollapseArmed = false;
+    _archiveCollapseHintPrimedFromEntry = false;
+    _archiveAtBottom = true;
+    _replyPullExtent = 0;
+    _archiveOverscrollExtent = 0;
+    _flowHintMode = _AssistantFlowHintMode.none;
+  }
+
+  void _armArchiveExpansion() {
+    _archiveHintTimer?.cancel();
+    _archiveCollapseHintTimer?.cancel();
+    setState(() {
+      _archiveExpansionArmed = true;
+      _archiveCollapseArmed = false;
+      _flowHintMode = _AssistantFlowHintMode.expand;
+      _replyPullExtent = 0;
+      _archiveController.value = 0;
+    });
+    _archiveHintTimer = Timer(_archiveHintMemoryDuration, () {
+      if (!mounted) {
         return;
       }
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
+      setState(() {
+        _archiveExpansionArmed = false;
+        _replyPullExtent = 0;
+        if (!_archiveCollapseArmed) {
+          _flowHintMode = _AssistantFlowHintMode.none;
+        }
+      });
+    });
+  }
+
+  void _disarmArchiveExpansion() {
+    _archiveHintTimer?.cancel();
+    _archiveHintTimer = null;
+    _archiveExpansionArmed = false;
+    if (!_archiveCollapseArmed) {
+      _flowHintMode = _AssistantFlowHintMode.none;
+    }
+  }
+
+  void _armArchiveCollapse({bool primedFromEntry = false}) {
+    _archiveCollapseHintTimer?.cancel();
+    setState(() {
+      _archiveCollapseArmed = true;
+      _archiveCollapseHintPrimedFromEntry = primedFromEntry;
+      _flowHintMode = _AssistantFlowHintMode.collapse;
+      _archiveOverscrollExtent = 0;
+      _archiveController.value = 1;
+    });
+    _archiveCollapseHintTimer = Timer(_archiveHintMemoryDuration, () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _archiveCollapseArmed = false;
+        _archiveCollapseHintPrimedFromEntry = false;
+        _archiveOverscrollExtent = 0;
+        if (!_archiveExpansionArmed) {
+          _flowHintMode = _AssistantFlowHintMode.none;
+        }
+      });
+    });
+  }
+
+  void _disarmArchiveCollapse() {
+    _archiveCollapseHintTimer?.cancel();
+    _archiveCollapseHintTimer = null;
+    _archiveCollapseArmed = false;
+    _archiveCollapseHintPrimedFromEntry = false;
+    if (!_archiveExpansionArmed) {
+      _flowHintMode = _AssistantFlowHintMode.none;
+    }
+  }
+
+  Future<void> _playArchiveTransition(_AssistantArchivePhase nextPhase) async {
+    if (_archiveTransitioning) {
+      return;
+    }
+    setState(() {
+      _archivePhase = nextPhase;
+      _archiveExpansionArmed = false;
+      _archiveCollapseArmed = false;
+      _replyPullExtent = 0;
+      _archiveOverscrollExtent = 0;
+      _flowHintMode = _AssistantFlowHintMode.none;
+    });
+    await _archiveController.forward(from: 0);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _archivePhase = nextPhase == _AssistantArchivePhase.expanding
+          ? _AssistantArchivePhase.expanded
+          : _AssistantArchivePhase.collapsed;
+      if (_archivePhase == _AssistantArchivePhase.collapsed) {
+        _archiveAtBottom = true;
+      }
+      _replyPullExtent = 0;
+      _archiveOverscrollExtent = 0;
+    });
+    if (_archivePhase == _AssistantArchivePhase.expanded) {
+      _armArchiveCollapse(primedFromEntry: true);
+    }
+    if (_archivePhase == _AssistantArchivePhase.collapsed) {
+      _archiveController.value = 0;
+    }
+  }
+
+  void _handleReplyPullUpdate(
+    DragUpdateDetails details,
+    AssistantSurfaceMetrics metrics,
+    _AssistantStageState stageState,
+  ) {
+    if (stageState != _AssistantStageState.reply ||
+        _archiveTransitioning ||
+        _archivePhase != _AssistantArchivePhase.collapsed) {
+      return;
+    }
+    final double delta = details.primaryDelta ?? 0;
+    if (delta <= 0) {
+      return;
+    }
+
+    setState(() {
+      _replyPullExtent = (_replyPullExtent + delta).clamp(0, metrics.unit(180));
+    });
+  }
+
+  void _handleReplyPullEnd(
+    DragEndDetails details,
+    AssistantSurfaceMetrics metrics,
+    _AssistantStageState stageState,
+  ) {
+    if (stageState != _AssistantStageState.reply) {
+      return;
+    }
+
+    final double velocity = details.primaryVelocity ?? 0;
+    if (!_archiveExpansionArmed) {
+      final bool shouldArm =
+          _replyPullExtent > metrics.unit(28) || velocity > 420;
+      setState(() {
+        _replyPullExtent = 0;
+      });
+      if (shouldArm) {
+        _armArchiveExpansion();
+      }
+      return;
+    }
+
+    final bool shouldExpand =
+        _replyPullExtent > metrics.unit(64) || velocity > 460;
+
+    setState(() {
+      _replyPullExtent = 0;
+    });
+    if (shouldExpand) {
+      _disarmArchiveExpansion();
+      unawaited(_playArchiveTransition(_AssistantArchivePhase.expanding));
+      return;
+    }
+  }
+
+  bool _handleArchiveScrollNotification(
+    ScrollNotification notification,
+    AssistantSurfaceMetrics metrics,
+  ) {
+    final bool atArchiveBottom = notification.metrics.extentAfter <= 0.5;
+    if (_archiveAtBottom != atArchiveBottom) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _archiveAtBottom == atArchiveBottom) {
+          return;
+        }
+        setState(() {
+          _archiveAtBottom = atArchiveBottom;
+        });
+      });
+    }
+
+    return false;
+  }
+
+  void _handleArchiveCollapsePullUpdate(
+    DragUpdateDetails details,
+    AssistantSurfaceMetrics metrics,
+  ) {
+    if (_archiveTransitioning || !_archiveExpanded) {
+      return;
+    }
+    final double delta = details.primaryDelta ?? 0;
+    if (delta >= 0) {
+      return;
+    }
+    setState(() {
+      _archiveOverscrollExtent = (_archiveOverscrollExtent + delta.abs()).clamp(
+        0,
+        metrics.unit(180),
       );
     });
   }
 
-  void _handleComposerStateChanged() {
-    if (!mounted) {
+  void _handleArchiveCollapsePullEnd(
+    DragEndDetails details,
+    AssistantSurfaceMetrics metrics,
+  ) {
+    final double velocity = details.primaryVelocity ?? 0;
+    if (!_archiveCollapseArmed) {
+      final bool shouldArm =
+          _archiveOverscrollExtent > metrics.unit(28) || velocity < -420;
+      setState(() {
+        _archiveOverscrollExtent = 0;
+      });
+      if (shouldArm) {
+        _armArchiveCollapse();
+      }
       return;
     }
-    setState(() {});
-  }
 
-  Widget _buildComposer(AppServices services) {
-    final bool isFocused = _focusNode.hasFocus;
-    final _CaptureCopy copy = _copy;
-    final AssistantThreadTurnState? turnState = _currentTurnState(services);
-    final bool isThreadBusy =
-        turnState != null && turnState.status != AssistantThreadTurnStatus.idle;
-    final bool showSendingIndicator =
-        turnState?.status == AssistantThreadTurnStatus.streaming;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xFF0A111D).withAlpha(242),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: isFocused ? const Color(0xFF3E5E86) : const Color(0xFF1A2740),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: <Widget>[
-            _InputActionButton(
-              icon: Icons.add_rounded,
-              onPressed: () => _startNewConversation(services),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.sm,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF111A2B),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: isFocused
-                        ? const Color(0xFF5D7BA2)
-                        : const Color(0xFF22314C),
-                  ),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: <Widget>[
-                    Expanded(
-                      child: TextField(
-                        key: const ValueKey<String>('assistant-composer-field'),
-                        controller: _inputController,
-                        focusNode: _focusNode,
-                        minLines: 1,
-                        maxLines: 4,
-                        enabled: true,
-                        textInputAction: TextInputAction.newline,
-                        onChanged: (_) => setState(() {}),
-                        style: const TextStyle(
-                          color: AppColors.onDark,
-                          height: 1.4,
-                        ),
-                        decoration: InputDecoration(
-                          isCollapsed: true,
-                          border: InputBorder.none,
-                          hintText: copy.inputHint,
-                          hintStyle: TextStyle(
-                            color: AppColors.onDark.withAlpha(125),
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (!_hasDraft && !isThreadBusy) ...<Widget>[
-                      const SizedBox(width: AppSpacing.sm),
-                      IconButton(
-                        onPressed: _showVoiceHint,
-                        icon: const Icon(
-                          Icons.mic_none_rounded,
-                          color: Color(0xFF8FA6C7),
-                        ),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            FilledButton(
-              onPressed: (isThreadBusy || !_hasDraft)
-                  ? null
-                  : () => _handleSubmit(services),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF4E8DF7),
-                disabledBackgroundColor: const Color(0xFF26364F),
-                foregroundColor: Colors.white,
-                minimumSize: const Size(74, 46),
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-              child: showSendingIndicator
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('发送'),
-            ),
-          ],
-        ),
-      ),
-    );
+    final bool shouldCollapse =
+        _archiveOverscrollExtent > metrics.unit(70) || velocity < -520;
+    setState(() {
+      _archiveOverscrollExtent = 0;
+    });
+    if (shouldCollapse) {
+      _disarmArchiveCollapse();
+      _disarmArchiveExpansion();
+      unawaited(_playArchiveTransition(_AssistantArchivePhase.collapsing));
+      return;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
-    final double keyboardInset = MediaQuery.of(context).viewInsets.bottom;
-    final bool keyboardVisible = keyboardInset > 0;
-    final _CaptureCopy copy = _copy;
+    return ListenableBuilder(
+      listenable: Listenable.merge(<Listenable>[
+        services.assistantFacade,
+        services.assistantConversationController,
+        services.settingsRepository,
+      ]),
+      builder: (BuildContext context, Widget? child) {
+        final AssistantConversationController controller =
+            services.assistantConversationController;
+        final AssistantConversationSlice slice =
+            AssistantConversationSlice.fromMessages(controller.currentMessages);
+        final bool isBusy = controller.isBusy;
+        final AssistantReplyMotionLevel replyMotionLevel =
+            services.profileFacade.currentSettings.assistantReplyMotionLevel;
+        final _AssistantStageState stageState = _resolveStageState(
+          slice: slice,
+          isBusy: isBusy,
+        );
+        final AssistantMessage? latestAssistant = slice.latestAssistant;
+        final List<AssistantToolStatus> latestStatuses =
+            assistantToolStatusesFromSurfaceIds(
+              controller.updatedSurfacesForMessage(latestAssistant?.id),
+            );
+        final String? latestAssistantMessageId = latestAssistant?.id;
+        if (stageState == _AssistantStageState.reply &&
+            latestAssistantMessageId != null &&
+            latestAssistantMessageId != _lastHapticAssistantMessageId) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted ||
+                latestAssistantMessageId == _lastHapticAssistantMessageId) {
+              return;
+            }
+            _lastHapticAssistantMessageId = latestAssistantMessageId;
+            unawaited(
+              _emitReplyHaptics(hasStatuses: latestStatuses.isNotEmpty),
+            );
+          });
+        }
 
-    return Scaffold(
-      backgroundColor: AppColors.darkBackground,
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: <Color>[
-              Color(0xFF0B1220),
-              Color(0xFF111B30),
-              Color(0xFF090F18),
+        return AssistantShellScaffold(
+          onTapAdd: () => _startNewConversation(services),
+          onTapHistory: () => context.push(AppRoutes.assistantHistory),
+          bodyBuilder:
+              (
+                BuildContext context,
+                AssistantSurfaceMetrics metrics,
+                AssistantSurfacePalette palette,
+              ) {
+                return _AssistantStageViewport(
+                  metrics: metrics,
+                  palette: palette,
+                  stageState: stageState,
+                  slice: slice,
+                  statuses: latestStatuses,
+                  controller: controller,
+                  replyMotionLevel: replyMotionLevel,
+                  archiveController: _archiveController,
+                  archivePhase: _archivePhase,
+                  flowHintText: _shouldShowFlowHint() ? _flowHintText() : null,
+                  archiveAtBottom: _archiveAtBottom,
+                  onReplyPullUpdate: (DragUpdateDetails details) =>
+                      _handleReplyPullUpdate(details, metrics, stageState),
+                  onReplyPullEnd: (DragEndDetails details) =>
+                      _handleReplyPullEnd(details, metrics, stageState),
+                  onArchiveCollapsePullUpdate: (DragUpdateDetails details) =>
+                      _handleArchiveCollapsePullUpdate(details, metrics),
+                  onArchiveCollapsePullEnd: (DragEndDetails details) =>
+                      _handleArchiveCollapsePullEnd(details, metrics),
+                  onArchiveScrollNotification:
+                      (ScrollNotification notification) =>
+                          _handleArchiveScrollNotification(
+                            notification,
+                            metrics,
+                          ),
+                );
+              },
+          composerBuilder:
+              (
+                BuildContext context,
+                AssistantSurfaceMetrics metrics,
+                AssistantSurfacePalette palette,
+              ) {
+                return AssistantComposer(
+                  controller: _inputController,
+                  focusNode: _focusNode,
+                  metrics: metrics,
+                  palette: palette,
+                  hintText: isBusy ? '小眠正在整理你的心绪...' : '和小眠说说现在的心情...',
+                  isBusy: isBusy,
+                  onSubmit: () => _handleSubmit(services),
+                  onTapAdd: _handleComposerAddTap,
+                  onTapMic: _handleComposerMicTap,
+                );
+              },
+        );
+      },
+    );
+  }
+}
+
+enum _AssistantStageState { empty, waiting, reply }
+
+_AssistantStageState _resolveStageState({
+  required AssistantConversationSlice slice,
+  required bool isBusy,
+}) {
+  if (!slice.hasVisibleConversation && !isBusy) {
+    return _AssistantStageState.empty;
+  }
+  if (isBusy ||
+      slice.latestAssistant == null ||
+      slice.latestAssistant!.status == AssistantMessageStatus.pending) {
+    return _AssistantStageState.waiting;
+  }
+  return _AssistantStageState.reply;
+}
+
+class _AssistantStageViewport extends StatelessWidget {
+  const _AssistantStageViewport({
+    required this.metrics,
+    required this.palette,
+    required this.stageState,
+    required this.slice,
+    required this.statuses,
+    required this.controller,
+    required this.replyMotionLevel,
+    required this.archiveController,
+    required this.archivePhase,
+    required this.flowHintText,
+    required this.archiveAtBottom,
+    required this.onReplyPullUpdate,
+    required this.onReplyPullEnd,
+    required this.onArchiveCollapsePullUpdate,
+    required this.onArchiveCollapsePullEnd,
+    required this.onArchiveScrollNotification,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+  final _AssistantStageState stageState;
+  final AssistantConversationSlice slice;
+  final List<AssistantToolStatus> statuses;
+  final AssistantConversationController controller;
+  final AssistantReplyMotionLevel replyMotionLevel;
+  final AnimationController archiveController;
+  final _AssistantArchivePhase archivePhase;
+  final String? flowHintText;
+  final bool archiveAtBottom;
+  final ValueChanged<DragUpdateDetails> onReplyPullUpdate;
+  final ValueChanged<DragEndDetails> onReplyPullEnd;
+  final ValueChanged<DragUpdateDetails> onArchiveCollapsePullUpdate;
+  final ValueChanged<DragEndDetails> onArchiveCollapsePullEnd;
+  final bool Function(ScrollNotification notification)
+  onArchiveScrollNotification;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: archiveController,
+      builder: (BuildContext context, Widget? child) {
+        final double archiveProgress = archiveController.value.clamp(0, 1);
+        final bool canDragReply =
+            stageState == _AssistantStageState.reply &&
+            archivePhase == _AssistantArchivePhase.collapsed;
+
+        final Widget primaryStage = _AssistantPrimaryStage(
+          metrics: metrics,
+          palette: palette,
+          stageState: stageState,
+          latestUserText: slice.latestUser?.content.trim() ?? '',
+          latestAssistantText: slice.latestAssistant?.content.trim() ?? '',
+          statuses: statuses,
+          replyMotionLevel: replyMotionLevel,
+        );
+        final Widget archiveStage = NotificationListener<ScrollNotification>(
+          onNotification: onArchiveScrollNotification,
+          child: IgnorePointer(
+            ignoring: archivePhase != _AssistantArchivePhase.expanded,
+            child: _AssistantArchiveStage(
+              metrics: metrics,
+              palette: palette,
+              messages: slice.visibleMessages,
+              controller: controller,
+            ),
+          ),
+        );
+
+        final Widget viewportBody = switch (archivePhase) {
+          _AssistantArchivePhase.collapsed => primaryStage,
+          _AssistantArchivePhase.expanded => archiveStage,
+          _AssistantArchivePhase.expanding => Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              _AssistantFlowMotionLayer(
+                metrics: metrics,
+                progress: archiveProgress,
+                mode: _AssistantFlowMotionMode.outgoing,
+                child: primaryStage,
+              ),
+              _AssistantFlowMotionLayer(
+                metrics: metrics,
+                progress: archiveProgress,
+                mode: _AssistantFlowMotionMode.incoming,
+                child: archiveStage,
+              ),
             ],
           ),
-        ),
-        child: SafeArea(
-          child: ListenableBuilder(
-            listenable: services.assistantFacade,
-            builder: (BuildContext context, Widget? child) {
-              final AssistantProfile profile =
-                  services.assistantFacade.assistantProfile;
-              final List<AssistantMessage> messages =
-                  services.assistantFacade.currentMessages;
-              if (_lastRenderedMessageCount != messages.length) {
-                _lastRenderedMessageCount = messages.length;
-                _scrollToBottom();
-              }
+          _AssistantArchivePhase.collapsing => Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              _AssistantFlowMotionLayer(
+                metrics: metrics,
+                progress: archiveProgress,
+                mode: _AssistantFlowMotionMode.outgoing,
+                child: archiveStage,
+              ),
+              _AssistantFlowMotionLayer(
+                metrics: metrics,
+                progress: archiveProgress,
+                mode: _AssistantFlowMotionMode.incoming,
+                child: primaryStage,
+              ),
+            ],
+          ),
+        };
 
-              return Column(
-                children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.lg,
-                      AppSpacing.md,
-                      AppSpacing.lg,
-                      AppSpacing.md,
+        return GestureDetector(
+          key: const ValueKey<String>('assistant-stage-viewport'),
+          behavior: HitTestBehavior.translucent,
+          onVerticalDragUpdate: canDragReply ? onReplyPullUpdate : null,
+          onVerticalDragEnd: canDragReply ? onReplyPullEnd : null,
+          child: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              Positioned.fill(child: viewportBody),
+              if (archivePhase == _AssistantArchivePhase.expanded &&
+                  archiveAtBottom)
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: GestureDetector(
+                    key: const ValueKey<String>(
+                      'assistant-history-collapse-zone',
                     ),
-                    child: Row(
-                      children: <Widget>[
-                        _CircleActionButton(
-                          icon: Icons.arrow_back_ios_new_rounded,
-                          onPressed: () => Navigator.of(context).maybePop(),
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                _isCaptureMode
-                                    ? copy.title
-                                    : profile.assistantName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleLarge
-                                    ?.copyWith(
-                                      color: AppColors.onDark,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                              ),
-                              Text(
-                                _isCaptureMode ? copy.subtitle : '线程记忆已开启',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: AppColors.onDark.withAlpha(170),
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        _CircleActionButton(
-                          icon: Icons.edit_outlined,
-                          onPressed: () =>
-                              _showRenameDialog(context, services, profile),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        _CircleActionButton(
-                          icon: Icons.add_rounded,
-                          onPressed: () => _startNewConversation(services),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        _CircleActionButton(
-                          icon: Icons.history_rounded,
-                          onPressed: () =>
-                              context.push(AppRoutes.assistantHistory),
-                        ),
-                      ],
+                    behavior: HitTestBehavior.opaque,
+                    onVerticalDragUpdate: onArchiveCollapsePullUpdate,
+                    onVerticalDragEnd: onArchiveCollapsePullEnd,
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: metrics.unit(144),
                     ),
                   ),
-                  if (_isCaptureMode)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.lg,
-                        0,
-                        AppSpacing.lg,
-                        AppSpacing.md,
-                      ),
-                      child: _CaptureTabSwitcher(
-                        selected: _selectedTab,
-                        onChanged: (AssistantCaptureTab value) {
-                          setState(() => _selectedTab = value);
-                        },
+                ),
+              IgnorePointer(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: metrics.unit(16)),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      reverseDuration: const Duration(milliseconds: 180),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder:
+                          (Widget child, Animation<double> animation) =>
+                              FadeTransition(opacity: animation, child: child),
+                      child: flowHintText == null
+                          ? const SizedBox(
+                              key: ValueKey<String>(
+                                'assistant-history-hint-hidden',
+                              ),
+                            )
+                          : AssistantPullHint(
+                              key: ValueKey<String>(
+                                'assistant-history-hint-$flowHintText',
+                              ),
+                              metrics: metrics,
+                              palette: palette,
+                              text: flowHintText!,
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+enum _AssistantFlowMotionMode { incoming, outgoing }
+
+class _AssistantFlowMotionLayer extends StatelessWidget {
+  const _AssistantFlowMotionLayer({
+    required this.metrics,
+    required this.progress,
+    required this.mode,
+    required this.child,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final double progress;
+  final _AssistantFlowMotionMode mode;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final double easedProgress = switch (mode) {
+      _AssistantFlowMotionMode.incoming => Curves.easeOutCubic.transform(
+        const Interval(0.34, 1).transform(progress),
+      ),
+      _AssistantFlowMotionMode.outgoing => Curves.easeInOutCubic.transform(
+        const Interval(0, 0.64).transform(progress),
+      ),
+    };
+    final double opacity = switch (mode) {
+      _AssistantFlowMotionMode.incoming => easedProgress,
+      _AssistantFlowMotionMode.outgoing => 1 - easedProgress,
+    };
+    final double translateY = switch (mode) {
+      _AssistantFlowMotionMode.incoming => lerpDouble(
+        metrics.unit(136),
+        0,
+        easedProgress,
+      )!,
+      _AssistantFlowMotionMode.outgoing => lerpDouble(
+        0,
+        -metrics.unit(228),
+        easedProgress,
+      )!,
+    };
+
+    return IgnorePointer(
+      ignoring: true,
+      child: Opacity(
+        opacity: opacity.clamp(0, 1),
+        child: Transform.translate(offset: Offset(0, translateY), child: child),
+      ),
+    );
+  }
+}
+
+class _AssistantPrimaryStage extends StatelessWidget {
+  const _AssistantPrimaryStage({
+    required this.metrics,
+    required this.palette,
+    required this.stageState,
+    required this.latestUserText,
+    required this.latestAssistantText,
+    required this.statuses,
+    required this.replyMotionLevel,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+  final _AssistantStageState stageState;
+  final String latestUserText;
+  final String latestAssistantText;
+  final List<AssistantToolStatus> statuses;
+  final AssistantReplyMotionLevel replyMotionLevel;
+
+  @override
+  Widget build(BuildContext context) {
+    final String stageIdentity = switch (stageState) {
+      _AssistantStageState.empty => 'empty',
+      _AssistantStageState.waiting => 'waiting:$latestUserText',
+      _AssistantStageState.reply =>
+        'reply:$latestAssistantText:${statuses.map((AssistantToolStatus item) => item.label).join('|')}',
+    };
+    final Key stageKey = ValueKey<String>('assistant-stage-$stageIdentity');
+    final Widget activeStage = switch (stageState) {
+      _AssistantStageState.empty => _AssistantEmptyStage(
+        key: stageKey,
+        metrics: metrics,
+        palette: palette,
+      ),
+      _AssistantStageState.waiting => _AssistantWaitingStage(
+        key: stageKey,
+        metrics: metrics,
+        palette: palette,
+        text: latestUserText,
+      ),
+      _AssistantStageState.reply => _AssistantReplyStage(
+        key: stageKey,
+        metrics: metrics,
+        palette: palette,
+        replyText: latestAssistantText,
+        statuses: statuses,
+        motionLevel: replyMotionLevel,
+      ),
+    };
+
+    return AnimatedSwitcher(
+      duration: _assistantStageTransitionDuration,
+      switchInCurve: Curves.linear,
+      switchOutCurve: Curves.linear,
+      layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) =>
+          Stack(
+            fit: StackFit.expand,
+            alignment: Alignment.center,
+            children: <Widget>[
+              ...previousChildren,
+              if (currentChild case final Widget currentChild) currentChild,
+            ],
+          ),
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        final bool isIncoming = child.key == stageKey;
+        final Animation<double> stageOpacity;
+        final Animation<double> stageProgress;
+        final double beginDy;
+        final double endDy;
+        if (isIncoming) {
+          stageProgress = CurvedAnimation(
+            parent: animation,
+            curve: const Interval(0.60, 1, curve: Curves.easeOutCubic),
+          );
+          stageOpacity = stageProgress;
+          beginDy = metrics.unit(136);
+          endDy = 0;
+        } else {
+          stageProgress = CurvedAnimation(
+            parent: ReverseAnimation(animation),
+            curve: const Interval(0, 0.40, curve: Curves.easeInOutCubic),
+          );
+          stageOpacity = Tween<double>(begin: 1, end: 0).animate(stageProgress);
+          beginDy = 0;
+          endDy = -metrics.unit(228);
+        }
+
+        return AnimatedBuilder(
+          animation: stageProgress,
+          child: child,
+          builder: (BuildContext context, Widget? child) {
+            final double translateY = lerpDouble(
+              beginDy,
+              endDy,
+              stageProgress.value,
+            )!;
+            return Opacity(
+              opacity: stageOpacity.value.clamp(0, 1),
+              child: Transform.translate(
+                offset: Offset(0, translateY),
+                child: child,
+              ),
+            );
+          },
+        );
+      },
+      child: activeStage,
+    );
+  }
+}
+
+class _AssistantEmptyStage extends StatelessWidget {
+  const _AssistantEmptyStage({
+    super.key,
+    required this.metrics,
+    required this.palette,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double contentWidth = metrics.contentWidth(constraints.maxWidth);
+        return Center(
+          child: SizedBox(
+            width: contentWidth,
+            child: AssistantFloatingMotion(
+              transformKey: const ValueKey<String>(
+                'assistant-empty-floating-motion',
+              ),
+              travelDistance: metrics.unit(6),
+              duration: const Duration(milliseconds: 3800),
+              child: Column(
+                key: const ValueKey<String>('assistant-empty-stage'),
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    '你好，我是小眠',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: palette.secondaryText,
+                      fontSize: metrics.unit(20),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  SizedBox(height: metrics.unit(10)),
+                  _AssistantEmptyHeadline(metrics: metrics, palette: palette),
+                  SizedBox(height: metrics.unit(10)),
+                  Text(
+                    '可以和小眠聊聊睡不着的原因，也可以把脑海里还没放下的念头交给我。',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: palette.bodyText,
+                      fontSize: metrics.unit(14),
+                      fontWeight: FontWeight.w400,
+                      height: 1.56,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AssistantEmptyHeadline extends StatelessWidget {
+  const _AssistantEmptyHeadline({required this.metrics, required this.palette});
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      '今晚想聊点什么',
+      key: const ValueKey<String>('assistant-empty-headline-text'),
+      textAlign: TextAlign.center,
+      style: Theme.of(context).textTheme.displaySmall?.copyWith(
+        color: palette.headlineText,
+        fontSize: metrics.unit(34),
+        fontWeight: FontWeight.w700,
+        height: 1.02,
+      ),
+    );
+  }
+}
+
+class _AssistantWaitingStage extends StatelessWidget {
+  const _AssistantWaitingStage({
+    super.key,
+    required this.metrics,
+    required this.palette,
+    required this.text,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double contentWidth = metrics.contentWidth(constraints.maxWidth);
+        return Align(
+          alignment: const Alignment(0, -0.03),
+          child: SizedBox(
+            width: contentWidth,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  text,
+                  key: const ValueKey<String>('assistant-waiting-user-message'),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: palette.secondaryText,
+                    fontSize: metrics.unit(14),
+                    fontWeight: FontWeight.w500,
+                    height: 1.6,
+                  ),
+                ),
+                SizedBox(height: metrics.unit(12)),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    AssistantLoopingRotation(
+                      child: Icon(
+                        Icons.autorenew_rounded,
+                        size: metrics.unit(14),
+                        color: palette.mutedText,
                       ),
                     ),
-                  if (!keyboardVisible) ...<Widget>[
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg,
-                      ),
-                      child: _AssistantHero(
-                        profile: profile,
-                        copy: copy,
-                        captureModeEnabled: _isCaptureMode,
+                    SizedBox(width: metrics.unit(8)),
+                    Text(
+                      '小眠正在整理你的心绪...',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: palette.mutedText,
+                        fontSize: metrics.unit(12),
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.lg),
                   ],
-                  Expanded(
-                    child: ListView(
-                      controller: _scrollController,
-                      padding: EdgeInsets.fromLTRB(
-                        AppSpacing.lg,
-                        0,
-                        AppSpacing.lg,
-                        keyboardVisible ? AppSpacing.sm : AppSpacing.lg,
-                      ),
-                      children: <Widget>[
-                        if (messages.isEmpty)
-                          _AssistantEmptyState(
-                            assistantName: profile.assistantName,
-                            copy: copy,
-                            onSuggestionTap: (String suggestion) {
-                              setState(() {
-                                _inputController.text = suggestion;
-                                _inputController.selection =
-                                    TextSelection.collapsed(
-                                      offset: suggestion.length,
-                                    );
-                              });
-                              _focusNode.requestFocus();
-                            },
-                          )
-                        else
-                          ...messages.map(
-                            (AssistantMessage message) => Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: AppSpacing.md,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AssistantReplyStage extends StatelessWidget {
+  const _AssistantReplyStage({
+    super.key,
+    required this.metrics,
+    required this.palette,
+    required this.replyText,
+    required this.statuses,
+    required this.motionLevel,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+  final String replyText;
+  final List<AssistantToolStatus> statuses;
+  final AssistantReplyMotionLevel motionLevel;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double contentWidth = metrics.contentWidth(constraints.maxWidth);
+        return Align(
+          alignment: const Alignment(0, -0.01),
+          child: SizedBox(
+            width: contentWidth,
+            child: Column(
+              key: const ValueKey<String>('assistant-page-reply-stage'),
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                AssistantFloatingMotion(
+                  transformKey: const ValueKey<String>(
+                    'assistant-current-floating-motion',
+                  ),
+                  duration: const Duration(milliseconds: 3600),
+                  travelDistance: _replyFloatingDistance(metrics, motionLevel),
+                  child: Text(
+                    replyText,
+                    key: const ValueKey<String>(
+                      'assistant-current-assistant-message',
+                    ),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: palette.headlineText,
+                      fontSize: metrics.unit(20),
+                      fontWeight: FontWeight.w500,
+                      height: 1.62,
+                    ),
+                  ),
+                ),
+                if (statuses.isNotEmpty) ...<Widget>[
+                  SizedBox(height: metrics.unit(12)),
+                  AssistantInlineStatusList(
+                    statuses: statuses,
+                    metrics: metrics,
+                    palette: palette,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+double _replyFloatingDistance(
+  AssistantSurfaceMetrics metrics,
+  AssistantReplyMotionLevel level,
+) {
+  return switch (level) {
+    AssistantReplyMotionLevel.low => metrics.unit(4),
+    AssistantReplyMotionLevel.medium => metrics.unit(6),
+    AssistantReplyMotionLevel.high => metrics.unit(8),
+  };
+}
+
+class _AssistantArchiveStage extends StatefulWidget {
+  const _AssistantArchiveStage({
+    required this.metrics,
+    required this.palette,
+    required this.messages,
+    required this.controller,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+  final List<AssistantMessage> messages;
+  final AssistantConversationController controller;
+
+  @override
+  State<_AssistantArchiveStage> createState() => _AssistantArchiveStageState();
+}
+
+class _AssistantArchiveStageState extends State<_AssistantArchiveStage> {
+  final ScrollController _scrollController = ScrollController();
+  bool _hasAnchoredToLatest = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleAnchorToLatest();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AssistantArchiveStage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.messages.length == widget.messages.length) {
+      return;
+    }
+    final bool shouldStayPinned =
+        !_scrollController.hasClients ||
+        (_scrollController.position.maxScrollExtent -
+                _scrollController.position.pixels) <=
+            widget.metrics.unit(28);
+    if (shouldStayPinned) {
+      _scheduleAnchorToLatest(animated: _hasAnchoredToLatest);
+    }
+  }
+
+  void _scheduleAnchorToLatest({bool animated = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+      final double target = _scrollController.position.maxScrollExtent;
+      if (animated) {
+        _scrollController.animateTo(
+          target,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+        );
+      } else {
+        _scrollController.jumpTo(target);
+      }
+      _hasAnchoredToLatest = true;
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.messages.isEmpty) {
+      return const SizedBox.expand();
+    }
+
+    AssistantMessage? latestAssistant;
+    for (final AssistantMessage message in widget.messages.reversed) {
+      if (message.role == AssistantMessageRole.assistant) {
+        latestAssistant = message;
+        break;
+      }
+    }
+    final int latestAssistantIndex = latestAssistant == null
+        ? -1
+        : widget.messages.lastIndexOf(latestAssistant);
+    final List<AssistantMessage> earlierMessages = latestAssistantIndex <= 0
+        ? widget.messages
+              .take(latestAssistantIndex == -1 ? widget.messages.length : 0)
+              .toList(growable: false)
+        : widget.messages.sublist(0, latestAssistantIndex);
+    final bool showEarlierLabel = earlierMessages.any(
+      (AssistantMessage message) =>
+          message.role == AssistantMessageRole.assistant,
+    );
+    final bool showCurrentLabel =
+        latestAssistant != null && earlierMessages.isNotEmpty;
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double contentWidth = widget.metrics.contentWidth(
+          constraints.maxWidth,
+        );
+        return SingleChildScrollView(
+          controller: _scrollController,
+          key: const ValueKey<String>('assistant-history-scroll'),
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: EdgeInsets.only(top: widget.metrics.unit(8)),
+                child: SizedBox(
+                  width: contentWidth,
+                  child: Column(
+                    key: const ValueKey<String>('assistant-history-flow'),
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      if (showEarlierLabel) ...<Widget>[
+                        Text(
+                          '更早的对话',
+                          key: const ValueKey<String>(
+                            'assistant-history-earlier',
+                          ),
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: widget.palette.mutedText,
+                                fontSize: widget.metrics.unit(11),
+                                fontWeight: FontWeight.w500,
                               ),
-                              child: _MessageBubble(
-                                message: message,
-                                assistantName: profile.assistantName,
-                                onRetry:
-                                    message.status ==
-                                        AssistantMessageStatus.error
-                                    ? () => _retryLatestPrompt(services)
-                                    : null,
+                        ),
+                        SizedBox(height: widget.metrics.unit(16)),
+                      ],
+                      ...earlierMessages.expand<Widget>((
+                        AssistantMessage message,
+                      ) {
+                        if (message.role == AssistantMessageRole.user) {
+                          return <Widget>[
+                            AssistantUserCard(
+                              text: message.content.trim(),
+                              metrics: widget.metrics,
+                              palette: widget.palette,
+                            ),
+                            SizedBox(height: widget.metrics.unit(16)),
+                          ];
+                        }
+
+                        final List<AssistantToolStatus> messageStatuses =
+                            assistantToolStatusesFromSurfaceIds(
+                              widget.controller.updatedSurfacesForMessage(
+                                message.id,
                               ),
+                            );
+                        return <Widget>[
+                          Text(
+                            message.content.trim(),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: widget.palette.bodyText,
+                                  fontSize: widget.metrics.unit(13),
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.58,
+                                ),
+                          ),
+                          if (messageStatuses.isNotEmpty) ...<Widget>[
+                            SizedBox(height: widget.metrics.unit(8)),
+                            AssistantBulletStatusList(
+                              statuses: messageStatuses,
+                              metrics: widget.metrics,
+                              palette: widget.palette,
+                            ),
+                          ],
+                          SizedBox(height: widget.metrics.unit(16)),
+                        ];
+                      }),
+                      if (showCurrentLabel) ...<Widget>[
+                        Text(
+                          '刚刚',
+                          key: const ValueKey<String>(
+                            'assistant-history-current',
+                          ),
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: widget.palette.mutedText,
+                                fontSize: widget.metrics.unit(11),
+                                fontWeight: FontWeight.w500,
+                              ),
+                        ),
+                        SizedBox(height: widget.metrics.unit(16)),
+                      ],
+                      if (latestAssistant != null) ...<Widget>[
+                        Text(
+                          latestAssistant.content.trim(),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                color: widget.palette.headlineText,
+                                fontSize: widget.metrics.unit(20),
+                                fontWeight: FontWeight.w500,
+                                height: 1.62,
+                              ),
+                        ),
+                        SizedBox(height: widget.metrics.unit(12)),
+                        AssistantBulletStatusList(
+                          statuses: assistantToolStatusesFromSurfaceIds(
+                            widget.controller.updatedSurfacesForMessage(
+                              latestAssistant.id,
                             ),
                           ),
-                      ],
-                    ),
-                  ),
-                  AnimatedPadding(
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOutCubic,
-                    padding: EdgeInsets.fromLTRB(
-                      AppSpacing.lg,
-
-                      keyboardVisible ? 0 : AppSpacing.sm,
-                      AppSpacing.lg,
-                      keyboardVisible ? AppSpacing.sm : AppSpacing.lg,
-                    ),
-                    child: _buildComposer(services),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CaptureCopy {
-  const _CaptureCopy({
-    required this.title,
-    required this.subtitle,
-    required this.prompt,
-    required this.inputHint,
-    required this.footnote,
-    required this.suggestions,
-  });
-
-  final String title;
-  final String subtitle;
-  final String prompt;
-  final String inputHint;
-  final String footnote;
-  final List<String> suggestions;
-}
-
-class _AssistantHero extends StatelessWidget {
-  const _AssistantHero({
-    required this.profile,
-    required this.copy,
-    required this.captureModeEnabled,
-  });
-
-  final AssistantProfile profile;
-  final _CaptureCopy copy;
-  final bool captureModeEnabled;
-
-  @override
-  Widget build(BuildContext context) {
-    final NightMood? mood = context.nightMoodPalette.mood;
-    return AppCard(
-      color: const Color(0xFF10192A),
-      border: Border.all(color: const Color(0xFF24334E)),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: <Color>[
-                  const Color(0xFF7BC4FF),
-                  context.nightMoodPalette.primarySoft,
-                ],
-              ),
-            ),
-            alignment: Alignment.center,
-            child: mood == null
-                ? const Icon(
-                    key: ValueKey<String>('assistant-page-default-avatar'),
-                    Icons.auto_awesome_rounded,
-                    color: Color(0xFF16334E),
-                    size: 30,
-                  )
-                : MoodAvatar(
-                    key: const ValueKey<String>('assistant-page-mood-avatar'),
-                    mood: mood,
-                    size: 48,
-                    fillColor: context.nightMoodPalette.welcomeFaceColor,
-                  ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  captureModeEnabled
-                      ? copy.title
-                      : '${profile.assistantName}会记住你的节奏',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.onDark,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  captureModeEnabled
-                      ? copy.subtitle
-                      : '温和、低压、不评判。你可以直接说困意、心情、宿舍状态，或者只是想被陪一会儿。',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.onDark.withAlpha(180),
-                    height: 1.45,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CircleActionButton extends StatelessWidget {
-  const _CircleActionButton({required this.icon, required this.onPressed});
-
-  final IconData icon;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: const Color(0xFF121B2A),
-      shape: const CircleBorder(),
-      child: IconButton(
-        onPressed: onPressed,
-        icon: Icon(icon, color: AppColors.onDark),
-      ),
-    );
-  }
-}
-
-class _InputActionButton extends StatelessWidget {
-  const _InputActionButton({required this.icon, required this.onPressed});
-
-  final IconData icon;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onPressed,
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          color: const Color(0xFF141F31),
-          border: Border.all(color: const Color(0xFF25344F)),
-        ),
-        alignment: Alignment.center,
-        child: Icon(icon, color: const Color(0xFFB5C8E6), size: 20),
-      ),
-    );
-  }
-}
-
-class _CaptureTabSwitcher extends StatelessWidget {
-  const _CaptureTabSwitcher({required this.selected, required this.onChanged});
-
-  final AssistantCaptureTab selected;
-  final ValueChanged<AssistantCaptureTab> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF10192A),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFF24334E)),
-      ),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: _CaptureTabChip(
-              label: '梦记',
-              selected: selected == AssistantCaptureTab.dream,
-              onTap: () => onChanged(AssistantCaptureTab.dream),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: _CaptureTabChip(
-              label: '事记',
-              selected: selected == AssistantCaptureTab.memo,
-              onTap: () => onChanged(AssistantCaptureTab.memo),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CaptureTabChip extends StatelessWidget {
-  const _CaptureTabChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm,
-        ),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFF4E8DF7) : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: selected ? Colors.white : AppColors.onDark.withAlpha(190),
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AssistantEmptyState extends StatelessWidget {
-  const _AssistantEmptyState({
-    required this.assistantName,
-    required this.copy,
-    required this.onSuggestionTap,
-  });
-
-  final String assistantName;
-  final _CaptureCopy copy;
-  final ValueChanged<String> onSuggestionTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      color: const Color(0xFF10192A),
-      border: Border.all(color: const Color(0xFF24334E)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            copy.title.isEmpty ? '先跟 $assistantName 说一句吧' : copy.title,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: AppColors.onDark,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            copy.prompt,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.onDark.withAlpha(180),
-              height: 1.5,
-            ),
-          ),
-          if (copy.footnote.isNotEmpty) ...<Widget>[
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              copy.footnote,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: AppColors.onDark.withAlpha(160),
-              ),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.lg),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: copy.suggestions
-                .map(
-                  (String label) => InkWell(
-                    borderRadius: BorderRadius.circular(999),
-                    onTap: () => onSuggestionTap(label),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md,
-                        vertical: AppSpacing.sm,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF172235),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: const Color(0xFF26354F)),
-                      ),
-                      child: Text(
-                        label,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.onDark.withAlpha(220),
+                          metrics: widget.metrics,
+                          palette: widget.palette,
                         ),
-                      ),
-                    ),
-                  ),
-                )
-                .toList(growable: false),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({
-    required this.message,
-    required this.assistantName,
-    this.onRetry,
-  });
-
-  final AssistantMessage message;
-  final String assistantName;
-  final VoidCallback? onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool isUser = message.role == AssistantMessageRole.user;
-    final Color bubbleColor = isUser
-        ? const Color(0xFF6AA8FF)
-        : message.status == AssistantMessageStatus.error
-        ? const Color(0xFF41212C)
-        : message.status == AssistantMessageStatus.pending
-        ? const Color(0xFF162234)
-        : const Color(0xFF10192A);
-    final Color textColor = isUser ? Colors.white : AppColors.onDark;
-    final String? statusLabel = _messageStatusLabel(message);
-    final String? statusDescription = _messageStatusDescription(message);
-
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 328),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: bubbleColor,
-            borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(22),
-              topRight: const Radius.circular(22),
-              bottomLeft: Radius.circular(isUser ? 22 : 8),
-              bottomRight: Radius.circular(isUser ? 8 : 22),
-            ),
-            border: isUser ? null : Border.all(color: const Color(0xFF24334E)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg,
-              vertical: AppSpacing.md,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                if (!isUser)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                    child: Text(
-                      assistantName,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: textColor.withAlpha(170),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                Text(
-                  message.content,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: textColor,
-                    height: 1.55,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: <Widget>[
-                    Text(
-                      _formatTime(message.createdAt),
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: textColor.withAlpha(150),
-                      ),
-                    ),
-                    if (statusLabel != null) ...<Widget>[
-                      const SizedBox(width: AppSpacing.sm),
-                      Text(
-                        statusLabel,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: textColor.withAlpha(180),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                      ] else
+                        ...widget.messages
+                            .where(
+                              (AssistantMessage message) =>
+                                  message.role == AssistantMessageRole.user,
+                            )
+                            .map(
+                              (AssistantMessage message) => Padding(
+                                padding: EdgeInsets.only(
+                                  bottom: widget.metrics.unit(16),
+                                ),
+                                child: AssistantUserCard(
+                                  text: message.content.trim(),
+                                  metrics: widget.metrics,
+                                  palette: widget.palette,
+                                ),
+                              ),
+                            ),
                     ],
-                  ],
+                  ),
                 ),
-                if (statusDescription != null) ...<Widget>[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    statusDescription,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: textColor.withAlpha(150),
-                      height: 1.45,
-                    ),
-                  ),
-                ],
-                if (message.status == AssistantMessageStatus.error &&
-                    onRetry != null) ...<Widget>[
-                  const SizedBox(height: AppSpacing.sm),
-                  TextButton.icon(
-                    onPressed: onRetry,
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFFFFC7D1),
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(0, 0),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    icon: const Icon(Icons.refresh_rounded, size: 16),
-                    label: const Text('重试'),
-                  ),
-                ],
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
-
-  String? _messageStatusLabel(AssistantMessage message) {
-    if (message.status == AssistantMessageStatus.pending) {
-      return '生成中';
-    }
-    return switch (message.sourceMode) {
-      AssistantReplySourceMode.remoteSuccess => '联网回复',
-      AssistantReplySourceMode.fallbackSuccess => '备用回复',
-      AssistantReplySourceMode.error => '回复失败',
-      _ => null,
-    };
-  }
-
-  String? _messageStatusDescription(AssistantMessage message) {
-    if (message.sourceMode == AssistantReplySourceMode.error &&
-        message.errorMessage?.trim().isNotEmpty == true) {
-      return message.errorMessage;
-    }
-    return switch (message.sourceMode) {
-      AssistantReplySourceMode.fallbackSuccess => '这次使用了备用回复，不影响你继续对话。',
-      AssistantReplySourceMode.error => '这次没有拿到有效回复，可以直接重试上一条消息。',
-      _ => null,
-    };
-  }
-
-  // ignore: unused_element
-  String? _statusLabel(AssistantMessage message) {
-    if (message.status == AssistantMessageStatus.pending) {
-      return '生成中';
-    }
-    return switch (message.sourceMode) {
-      AssistantReplySourceMode.remoteSuccess => '联网回复',
-      AssistantReplySourceMode.fallbackSuccess => '回退回复',
-      AssistantReplySourceMode.error => '回复失败',
-      _ => null,
-    };
-  }
-
-  // ignore: unused_element
-  String? _statusDescription(AssistantMessage message) {
-    return switch (message.sourceMode) {
-      AssistantReplySourceMode.fallbackSuccess =>
-        message.errorMessage?.trim().isNotEmpty == true
-            ? '远端模型未成功返回：${message.errorMessage}'
-            : '远端模型未成功返回，本次使用了稳定回退回复。',
-      AssistantReplySourceMode.error =>
-        message.errorMessage?.trim().isNotEmpty == true
-            ? '这次没有拿到有效回复：${message.errorMessage}'
-            : '这次没有拿到有效回复，可以直接重试上一条消息。',
-      _ => null,
-    };
-  }
-}
-
-String _formatTime(DateTime time) {
-  final String month = time.month.toString().padLeft(2, '0');
-  final String day = time.day.toString().padLeft(2, '0');
-  final String hour = time.hour.toString().padLeft(2, '0');
-  final String minute = time.minute.toString().padLeft(2, '0');
-  return '$month-$day $hour:$minute';
 }

@@ -4521,6 +4521,40 @@ class CloudBaseAssistantRepository extends ChangeNotifier
     _messagesByThread.putIfAbsent(thread.id, () => <AssistantMessage>[]);
   }
 
+  void _replaceLocalThreadId({
+    required String previousThreadId,
+    required AssistantThread nextThread,
+  }) {
+    final List<AssistantThread> filtered = _threads
+        .where(
+          (AssistantThread item) =>
+              item.id != previousThreadId && item.id != nextThread.id,
+        )
+        .toList(growable: false);
+    _threads = <AssistantThread>[nextThread, ...filtered];
+
+    final List<AssistantMessage> previousMessages = List<AssistantMessage>.from(
+      _messagesByThread.remove(previousThreadId) ??
+          _messagesByThread[nextThread.id] ??
+          const <AssistantMessage>[],
+    );
+    _messagesByThread[nextThread.id] = previousMessages
+        .map(
+          (AssistantMessage item) => item.threadId == nextThread.id
+              ? item
+              : item.copyWith(threadId: nextThread.id),
+        )
+        .toList(growable: false);
+
+    final AssistantThreadTurnState? previousTurnState = _turnStatesByThread
+        .remove(previousThreadId);
+    if (previousTurnState != null) {
+      _turnStatesByThread[nextThread.id] = previousTurnState.copyWith(
+        threadId: nextThread.id,
+      );
+    }
+  }
+
   Map<String, List<AssistantMessage>> _copyMessagesByThread() {
     return <String, List<AssistantMessage>>{
       for (final MapEntry<String, List<AssistantMessage>> entry
@@ -4594,6 +4628,10 @@ class CloudBaseAssistantRepository extends ChangeNotifier
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
+    _optimisticThreadIds.add(localThread.id);
+    _upsertLocalThread(localThread);
+    _currentThreadId = localThread.id;
+    notifyListeners();
     if (_appApiClient.isConfigured) {
       try {
         await _authRepository.ensureAuthenticated();
@@ -4615,26 +4653,20 @@ class CloudBaseAssistantRepository extends ChangeNotifier
               ? localThread.updatedAt
               : _dateOf(data['updatedAt']),
         );
-        if (!_threads.any(
-          (AssistantThread item) => item.id == remoteThread.id,
-        )) {
-          _optimisticThreadIds.add(remoteThread.id);
-          _upsertLocalThread(remoteThread);
-        } else {
-          _optimisticThreadIds.remove(remoteThread.id);
-        }
+        _replaceLocalThreadId(
+          previousThreadId: localThread.id,
+          nextThread: remoteThread,
+        );
+        _optimisticThreadIds.remove(localThread.id);
         _currentThreadId = remoteThread.id;
         notifyListeners();
         return currentThread ?? remoteThread;
       } catch (_) {
-        // Fall back to local state.
+        return currentThread ?? localThread;
       }
     }
-    _threads = <AssistantThread>[localThread, ..._threads];
-    _messagesByThread[localThread.id] = <AssistantMessage>[];
-    _currentThreadId = localThread.id;
-    notifyListeners();
-    return localThread;
+    _optimisticThreadIds.remove(localThread.id);
+    return currentThread ?? localThread;
   }
 
   @override

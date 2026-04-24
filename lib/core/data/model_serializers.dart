@@ -57,6 +57,7 @@ abstract final class ModelSerializers {
       'homeQuickActionIds': normalizeHomeQuickActionIds(
         settings.homeQuickActionIds,
       ),
+      'assistantReplyMotionLevel': settings.assistantReplyMotionLevel.name,
       'selectedNightMood': settings.selectedNightMood?.name,
       'eveningEncouragementPeriodKey': settings.eveningEncouragementPeriodKey,
       'eveningEncouragementLine': settings.eveningEncouragementLine,
@@ -82,6 +83,10 @@ abstract final class ModelSerializers {
       homeQuickActionIds: normalizeHomeQuickActionIds(
         _stringListFromDynamic(map['homeQuickActionIds']),
       ),
+      assistantReplyMotionLevel: _assistantReplyMotionLevelFromName(
+            map['assistantReplyMotionLevel'] as String?,
+          ) ??
+          AssistantReplyMotionLevel.medium,
       selectedNightMood: _nightMoodFromName(
         map['selectedNightMood'] as String?,
       ),
@@ -803,16 +808,6 @@ abstract final class ModelSerializers {
     return null;
   }
 
-  static NightMood? _nightMoodFromName(String? value) {
-    if (value == null || value.isEmpty) {
-      return null;
-    }
-    return _firstWhereOrNull(
-      NightMood.values,
-      (NightMood item) => item.name == value,
-    );
-  }
-
   static List<String> _stringListFromDynamic(Object? value) {
     if (value is Iterable) {
       return value.whereType<String>().toList(growable: false);
@@ -820,7 +815,6 @@ abstract final class ModelSerializers {
     return const <String>[];
   }
 
-  /// `null` snapshot means the impatient/unknown quote pool; persisted as `'unknown'`.
   static NightMood? _eveningEncouragementMoodSnapshotFromMap(
     Map<String, dynamic> map,
   ) {
@@ -833,6 +827,16 @@ abstract final class ModelSerializers {
       return null;
     }
     return _nightMoodFromName(raw);
+  }
+
+  static NightMood? _nightMoodFromName(String? value) {
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    return _firstWhereOrNull(
+      NightMood.values,
+      (NightMood item) => item.name == value,
+    );
   }
 
   static SleepSessionStatus? _sleepStatusFromName(String? value) {
@@ -911,6 +915,15 @@ abstract final class ModelSerializers {
     return _firstWhereOrNull(
       AssistantReplySourceMode.values,
       (AssistantReplySourceMode item) => item.name == value,
+    );
+  }
+
+  static AssistantReplyMotionLevel? _assistantReplyMotionLevelFromName(
+    String? value,
+  ) {
+    return _firstWhereOrNull(
+      AssistantReplyMotionLevel.values,
+      (AssistantReplyMotionLevel item) => item.name == value,
     );
   }
 

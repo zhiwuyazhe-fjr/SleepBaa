@@ -225,6 +225,12 @@ class StubAssistantReplyGateway implements AssistantReplyGateway {
       sourceMode: result.sourceMode,
       updatedSurfaces: result.updatedSurfaces,
     );
+    if (result.updatedSurfaces.isNotEmpty) {
+      yield AssistantStreamEvent(
+        type: AssistantStreamEventType.surfacePatch,
+        updatedSurfaces: result.updatedSurfaces,
+      );
+    }
     yield const AssistantStreamEvent(type: AssistantStreamEventType.done);
   }
 
@@ -267,6 +273,12 @@ class StubAssistantReplyGateway implements AssistantReplyGateway {
       sourceMode: result.sourceMode,
       updatedSurfaces: result.updatedSurfaces,
     );
+    if (result.updatedSurfaces.isNotEmpty) {
+      yield AssistantStreamEvent(
+        type: AssistantStreamEventType.surfacePatch,
+        updatedSurfaces: result.updatedSurfaces,
+      );
+    }
     yield AssistantStreamEvent(
       type: AssistantStreamEventType.captureRecord,
       record: result.record,
@@ -283,24 +295,33 @@ class StubAssistantReplyGateway implements AssistantReplyGateway {
     required Dorm dorm,
   }) async {
     final String normalized = prompt.toLowerCase();
-    if (normalized.contains('noise') || normalized.contains('loud')) {
+    if (normalized.contains('noise') ||
+        normalized.contains('loud') ||
+        prompt.contains('吵') ||
+        prompt.contains('噪')) {
       return AssistantReplyResult(
         reply: '现在宿舍环境大约 ${dorm.noiseDb} dB，先做一点降噪，再慢慢把节奏放下来。',
         sourceMode: AssistantReplySourceMode.fallbackSuccess,
         intent: 'noise_issue',
         provider: 'stub',
         model: 'rules-local',
+        updatedSurfaces: const <String>['dorm_quiet', 'sleep_mode'],
       );
     }
     if (normalized.contains('sleep') ||
         normalized.contains('can\'t') ||
-        normalized.contains('awake')) {
+        normalized.contains('awake') ||
+        prompt.contains('睡不着') ||
+        prompt.contains('失眠') ||
+        prompt.contains('停不下来') ||
+        prompt.contains('累')) {
       return const AssistantReplyResult(
         reply: '先别急着逼自己立刻睡着，先把刺激降下来，再做一个最小的放松动作就够了。',
         sourceMode: AssistantReplySourceMode.fallbackSuccess,
         intent: 'sleep_difficulty',
         provider: 'stub',
         model: 'rules-local',
+        updatedSurfaces: <String>['alarm', 'dorm_quiet', 'bedtime_reminder'],
       );
     }
     return const AssistantReplyResult(
@@ -309,6 +330,7 @@ class StubAssistantReplyGateway implements AssistantReplyGateway {
       intent: 'general_support',
       provider: 'stub',
       model: 'rules-local',
+      updatedSurfaces: <String>['assistant_context'],
     );
   }
 
@@ -333,6 +355,7 @@ class StubAssistantReplyGateway implements AssistantReplyGateway {
       provider: 'stub',
       model: 'rules-local',
       intent: 'general_support',
+      updatedSurfaces: const <String>['assistant_context'],
       recordPersistedRemotely: false,
       record: SleepCaptureRecord(
         id: 'capture-${now.microsecondsSinceEpoch}',
