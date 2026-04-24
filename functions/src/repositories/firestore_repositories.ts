@@ -1228,9 +1228,10 @@ export class FirestoreRepository implements AssistantDataRepository {
         );
         const memberUid = asString(value.uid);
         const avatarStoragePath = asString(userDoc.avatarStoragePath);
-        let fallbackAvatarUrl = asString(userDoc.avatarUrl) || null;
+        const storedAvatarUrl = asString(userDoc.avatarUrl) || null;
+        let fallbackAvatarUrl = storedAvatarUrl;
         let avatarTempUrlFailed = false;
-        if (!fallbackAvatarUrl && avatarStoragePath && this.fileStorage) {
+        if (avatarStoragePath && this.fileStorage) {
           try {
             fallbackAvatarUrl =
               await this.fileStorage.getTemporaryUrl(avatarStoragePath);
@@ -1239,7 +1240,7 @@ export class FirestoreRepository implements AssistantDataRepository {
             logRepo(
               `dorm avatar temp-url failed uid=${memberUid} storagePath=${avatarStoragePath}`,
             );
-            fallbackAvatarUrl = null;
+            fallbackAvatarUrl = storedAvatarUrl;
           }
         }
         const fallbackDisplayBadgeId =
@@ -2334,13 +2335,25 @@ export class FirestoreRepository implements AssistantDataRepository {
     let avatarStoragePath = asString(payload.avatarStoragePath);
     let avatarUrl = asString(payload.avatarUrl);
     const avatarBase64 = asString(payload.avatarBase64);
-    if (avatarBase64 && this.fileStorage) {
+    if (avatarBase64) {
+      if (!this.fileStorage) {
+        throw new Error("Avatar storage is unavailable.");
+      }
       const uploaded = await this.fileStorage.uploadBytes({
         fileName: asString(payload.fileName, `${uid}.jpg`),
         bytes: Buffer.from(avatarBase64, "base64"),
       });
+      if (!uploaded.fileId) {
+        throw new Error("Avatar upload did not return a file id.");
+      }
       avatarStoragePath = uploaded.fileId;
       avatarUrl = uploaded.url;
+      if (!avatarUrl) {
+        avatarUrl = await this.fileStorage.getTemporaryUrl(avatarStoragePath);
+      }
+      if (!avatarUrl) {
+        throw new Error("Avatar upload did not return an accessible URL.");
+      }
     } else if (avatarStoragePath && this.fileStorage && !avatarUrl) {
       avatarUrl = await this.fileStorage.getTemporaryUrl(avatarStoragePath);
     }

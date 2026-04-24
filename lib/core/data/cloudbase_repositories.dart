@@ -162,6 +162,31 @@ UserProfile _blankCloudBaseUserProfile({
   );
 }
 
+Map<String, dynamic> _profileSavePatch(UserProfile profile) {
+  return <String, dynamic>{
+    'uid': profile.uid,
+    'displayName': profile.displayName,
+    'tagline': profile.tagline,
+    'role': profile.role,
+    'earnedBadgeIds': profile.earnedBadgeIds,
+    'equippedBadgeId': profile.equippedBadgeId,
+    'showDormPulseBadge': profile.showDormPulseBadge,
+    'selectedDormBadgeId': profile.selectedDormBadgeId,
+    'dormId': profile.dormId,
+    'phoneNumber': profile.phoneNumber,
+    'phoneLinkedAt': profile.phoneLinkedAt?.toIso8601String(),
+    'avatarFallbackSeed': profile.avatarFallbackSeed,
+  };
+}
+
+String? _nonEmptyString(dynamic value) {
+  if (value is! String) {
+    return null;
+  }
+  final String trimmed = value.trim();
+  return trimmed.isEmpty ? null : value;
+}
+
 String _avatarResourceKey(String? url) {
   final String trimmed = url?.trim() ?? '';
   if (trimmed.isEmpty) {
@@ -1346,9 +1371,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       try {
         await _appApiClient.post(
           '/api/profile/save',
-          body: <String, dynamic>{
-            'profile': ModelSerializers.userProfileToMap(next),
-          },
+          body: <String, dynamic>{'profile': _profileSavePatch(next)},
         );
         await _snapshotStore.refresh();
       } catch (error) {
@@ -1487,7 +1510,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       await _appApiClient.post(
         '/api/profile/save',
         body: <String, dynamic>{
-          'profile': ModelSerializers.userProfileToMap(profile),
+          'profile': _profileSavePatch(profile),
           'settings': ModelSerializers.userSettingsToMap(settings),
         },
       );
@@ -1505,16 +1528,17 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     required String? avatarPath,
     required Uint8List? avatarBytes,
   }) async {
-    _currentUser = (await ensureAuthenticated()).copyWith(
+    final UserProfile previous = await ensureAuthenticated();
+    _currentUser = previous.copyWith(
       avatarPath: avatarPath,
       avatarBytes: avatarBytes,
-      avatarUrl: avatarPath ?? _currentUser.avatarUrl,
-      avatarStoragePath: _currentUser.avatarStoragePath,
+      avatarUrl: previous.avatarUrl,
+      avatarStoragePath: previous.avatarStoragePath,
     );
     notifyListeners();
     if (_appApiClient.isConfigured) {
       try {
-        await _appApiClient.post(
+        final Map<String, dynamic> result = await _appApiClient.post(
           '/api/profile/avatar',
           body: <String, dynamic>{
             'avatarPath': avatarPath,
@@ -1524,10 +1548,38 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
             'fileName': avatarPath?.split('/').last.split('\\').last,
           },
         );
+        final Map<String, dynamic> resultProfile =
+            _mapOf(result['profile']).isNotEmpty
+            ? _mapOf(result['profile'])
+            : result;
+        final String? nextAvatarUrl = _nonEmptyString(
+          resultProfile['avatarUrl'],
+        );
+        final String? nextAvatarStoragePath = _nonEmptyString(
+          resultProfile['avatarStoragePath'],
+        );
+        if (avatarBytes != null &&
+            (nextAvatarStoragePath == null || nextAvatarUrl == null)) {
+          throw const CloudBaseAppApiException(
+            message: 'Avatar upload did not return a persisted file.',
+          );
+        }
         await _snapshotStore.refresh();
+        _currentUser = _currentUser.copyWith(
+          avatarPath:
+              _nonEmptyString(resultProfile['avatarPath']) ?? avatarPath,
+          avatarBytes: avatarBytes,
+          avatarUrl: nextAvatarUrl ?? _currentUser.avatarUrl,
+          avatarStoragePath:
+              nextAvatarStoragePath ?? _currentUser.avatarStoragePath,
+        );
+        await _persistCurrentUserToAuthProfileCache();
+        notifyListeners();
       } catch (error) {
+        _currentUser = previous;
         _lastAuthError = error.toString();
         notifyListeners();
+        rethrow;
       }
     }
   }

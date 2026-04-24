@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -567,6 +568,209 @@ void main() {
 
       expect(bootstrapCount, greaterThanOrEqualTo(2));
       expect(repository.currentUser.showDormPulseBadge, isFalse);
+    },
+  );
+
+  test(
+    'cloudbase auth repository applies persisted avatar response after upload',
+    () async {
+      bool avatarSaved = false;
+      final CloudBaseAuthRepository repository = _buildHarness(
+        MockClient((http.Request request) async {
+          if (request.url.path == '/auth/v1/user/me') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'sub': 'tester',
+                'name': 'Tester',
+                'phone_number': '+86 13800138000',
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/app/bootstrap') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'data': <String, dynamic>{
+                  'user': <String, dynamic>{
+                    'uid': 'tester',
+                    'displayName': 'Tester',
+                    'phoneNumber': '+86 13800138000',
+                    'phoneLinkedAt': '2026-04-18T08:00:00.000Z',
+                    'avatarUrl': avatarSaved
+                        ? 'https://cdn.example.com/avatar.png?sig=fresh'
+                        : 'https://cdn.example.com/old.png?sig=old',
+                    'avatarStoragePath': avatarSaved
+                        ? 'avatars/new-avatar.png'
+                        : 'avatars/old-avatar.png',
+                  },
+                },
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/profile/avatar') {
+            final Map<String, dynamic> body =
+                jsonDecode(request.body) as Map<String, dynamic>;
+            expect(body['avatarBase64'], isNotEmpty);
+            expect(body['fileName'], 'avatar.png');
+            avatarSaved = true;
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'uid': 'tester',
+                'avatarPath': '/tmp/avatar.png',
+                'avatarUrl': 'https://cdn.example.com/avatar.png?sig=fresh',
+                'avatarStoragePath': 'avatars/new-avatar.png',
+              }),
+              200,
+            );
+          }
+          throw StateError('Unexpected path: ${request.url.path}');
+        }),
+      ).repository;
+
+      await repository.updateAvatar(
+        avatarPath: '/tmp/avatar.png',
+        avatarBytes: Uint8List.fromList(<int>[1, 2, 3, 4]),
+      );
+
+      expect(repository.currentUser.avatarPath, '/tmp/avatar.png');
+      expect(repository.currentUser.avatarBytes, isNotNull);
+      expect(
+        repository.currentUser.avatarUrl,
+        'https://cdn.example.com/avatar.png?sig=fresh',
+      );
+      expect(
+        repository.currentUser.avatarStoragePath,
+        'avatars/new-avatar.png',
+      );
+      expect(repository.lastAuthError, isNull);
+    },
+  );
+
+  test(
+    'cloudbase auth repository rolls back avatar preview when upload fails',
+    () async {
+      final CloudBaseAuthRepository repository = _buildHarness(
+        MockClient((http.Request request) async {
+          if (request.url.path == '/auth/v1/user/me') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'sub': 'tester',
+                'name': 'Tester',
+                'phone_number': '+86 13800138000',
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/app/bootstrap') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'data': <String, dynamic>{
+                  'user': <String, dynamic>{
+                    'uid': 'tester',
+                    'displayName': 'Tester',
+                    'phoneNumber': '+86 13800138000',
+                    'phoneLinkedAt': '2026-04-18T08:00:00.000Z',
+                    'avatarUrl': 'https://cdn.example.com/old.png?sig=old',
+                    'avatarStoragePath': 'avatars/old-avatar.png',
+                  },
+                },
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/profile/avatar') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'code': 'AVATAR_UPLOAD_FAILED',
+                'message': 'Avatar upload failed.',
+              }),
+              500,
+            );
+          }
+          throw StateError('Unexpected path: ${request.url.path}');
+        }),
+      ).repository;
+
+      await repository.ensureAuthenticated();
+
+      await expectLater(
+        repository.updateAvatar(
+          avatarPath: '/tmp/avatar.png',
+          avatarBytes: Uint8List.fromList(<int>[1, 2, 3, 4]),
+        ),
+        throwsA(isA<CloudBaseAppApiException>()),
+      );
+
+      expect(
+        repository.currentUser.avatarUrl,
+        'https://cdn.example.com/old.png?sig=old',
+      );
+      expect(
+        repository.currentUser.avatarStoragePath,
+        'avatars/old-avatar.png',
+      );
+      expect(repository.currentUser.avatarBytes, isNull);
+      expect(repository.lastAuthError, contains('Avatar upload failed.'));
+    },
+  );
+
+  test(
+    'cloudbase auth repository omits avatar fields from profile save',
+    () async {
+      final CloudBaseAuthRepository repository = _buildHarness(
+        MockClient((http.Request request) async {
+          if (request.url.path == '/auth/v1/user/me') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'sub': 'tester',
+                'name': 'Tester',
+                'phone_number': '+86 13800138000',
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/app/bootstrap') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'data': <String, dynamic>{
+                  'user': <String, dynamic>{
+                    'uid': 'tester',
+                    'displayName': 'Tester',
+                    'phoneNumber': '+86 13800138000',
+                    'phoneLinkedAt': '2026-04-18T08:00:00.000Z',
+                    'avatarUrl': 'https://cdn.example.com/avatar.png?sig=old',
+                    'avatarStoragePath': 'avatars/avatar.png',
+                    'avatarPath': '/tmp/avatar.png',
+                  },
+                },
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/profile/save') {
+            final Map<String, dynamic> body =
+                jsonDecode(request.body) as Map<String, dynamic>;
+            final Map<String, dynamic> profile =
+                body['profile'] as Map<String, dynamic>;
+            expect(profile['displayName'], 'Updated');
+            expect(profile.containsKey('avatarUrl'), isFalse);
+            expect(profile.containsKey('avatarPath'), isFalse);
+            expect(profile.containsKey('avatarStoragePath'), isFalse);
+            return http.Response(
+              jsonEncode(<String, dynamic>{'ok': true}),
+              200,
+            );
+          }
+          throw StateError('Unexpected path: ${request.url.path}');
+        }),
+      ).repository;
+
+      await repository.updateProfile(
+        displayName: 'Updated',
+        tagline: 'Tagline',
+        role: 'Role',
+      );
     },
   );
 
