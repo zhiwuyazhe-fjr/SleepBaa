@@ -6,10 +6,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sleep_dorm_app/app/app.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
+import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/widgets/assistant_surface.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/settings_page.dart';
 
@@ -35,6 +39,265 @@ void main() {
         .setMockMethodCallHandler(_secureStorageChannel, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_platformChannel, null);
+  });
+
+  testWidgets('settings hub exposes account settings entry', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
+
+    expect(find.text('账号设置'), findsNothing);
+    expect(find.text('资料摘要'), findsNothing);
+    expect(find.byType(Divider), findsNothing);
+    expect(find.text('账号管理'), findsOneWidget);
+
+    await tester.tap(find.text('账号管理'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('账号管理'), findsOneWidget);
+    expect(find.text('个人资料'), findsOneWidget);
+    expect(find.text('重置密码'), findsOneWidget);
+    expect(find.text('登录管理'), findsOneWidget);
+    expect(find.text('寝室管理'), findsOneWidget);
+  });
+
+  testWidgets('account management routes to profile detail and edit pages', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.profileAccountCenter);
+
+    await tester.tap(find.text('个人资料').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('个人资料'), findsWidgets);
+    expect(find.text('编辑资料'), findsOneWidget);
+
+    await tester.tap(find.text('编辑资料'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('编辑个人资料'), findsOneWidget);
+  });
+
+  testWidgets('account routes open password login and dorm pages', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.profileAccountCenter);
+
+    await tester.tap(find.text('重置密码'));
+    await tester.pumpAndSettle();
+    expect(find.text('找回密码'), findsWidgets);
+
+    await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('登录管理'));
+    await tester.pumpAndSettle();
+    expect(find.text('登录管理'), findsWidgets);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.dragUntilVisible(
+      find.text('寝室管理'),
+      find.byType(Scrollable).first,
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('寝室管理'));
+    await tester.pumpAndSettle();
+    expect(find.text('寝室管理'), findsWidgets);
+  });
+
+  testWidgets('profile account details use grouped settings sections', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.profileAccountProfile);
+
+    expect(find.text('编辑资料'), findsOneWidget);
+    expect(find.text('个性签名'), findsOneWidget);
+    expect(find.text('角色'), findsOneWidget);
+    expect(find.text('寝室'), findsOneWidget);
+    expect(find.byType(AppSettingsGroup), findsOneWidget);
+  });
+
+  testWidgets('login management metadata uses grouped settings section', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.profileAccountLogin);
+
+    expect(find.text('登录方式'), findsOneWidget);
+    expect(find.text('手机验证'), findsOneWidget);
+    expect(find.text('最近绑定'), findsOneWidget);
+    expect(find.text('退出当前账号'), findsOneWidget);
+    expect(find.byType(AppSettingsGroup), findsOneWidget);
+  });
+
+  testWidgets('dorm management removes dorm-space shortcut', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.profileAccountDorm);
+
+    expect(find.text('查看宿舍空间'), findsNothing);
+    expect(find.text('查看宿舍规则'), findsOneWidget);
+    expect(find.text('编辑宿舍名称'), findsOneWidget);
+  });
+
+  testWidgets(
+    'sleep preference action rows keep shared settings item baseline',
+    (WidgetTester tester) async {
+      await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
+
+      final Iterable<AppSettingsItem> settingsItems = tester.widgetList(
+        find.byType(AppSettingsItem),
+      );
+      final List<String> sleepItemTitles = <String>[
+        '睡前提醒时间',
+        '睡前提醒',
+        '晨间反馈提醒',
+        '宿舍动态提醒',
+        '智能建议',
+      ];
+
+      for (final String title in sleepItemTitles) {
+        final AppSettingsItem item = settingsItems.singleWhere(
+          (AppSettingsItem candidate) => candidate.title == title,
+        );
+        expect(item.leadingWidth, 28, reason: title);
+        expect(item.minHeight, isNull, reason: title);
+        expect(item.titleStyle, isNull, reason: title);
+        expect(item.padding.horizontal, AppSpacing.md * 2, reason: title);
+      }
+    },
+  );
+
+  testWidgets('sleep preference rows match account and dorm entry heights', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.profileAccountCenter);
+    final double accountEntryHeight = tester
+        .getSize(
+          find.ancestor(of: find.text('个人资料'), matching: find.byType(InkWell)),
+        )
+        .height;
+
+    await _pumpApp(tester, initialLocation: AppRoutes.profileAccountDorm);
+    final double dormEntryHeight = tester
+        .getSize(
+          find.ancestor(of: find.text('邀请舍友'), matching: find.byType(InkWell)),
+        )
+        .height;
+
+    await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
+    final List<String> sleepItemTitles = <String>[
+      '睡前提醒时间',
+      '睡前提醒',
+      '晨间反馈提醒',
+      '宿舍动态提醒',
+      '智能建议',
+    ];
+
+    expect(dormEntryHeight, accountEntryHeight);
+    for (final String title in sleepItemTitles) {
+      final double sleepRowHeight = tester
+          .getSize(
+            find.ancestor(of: find.text(title), matching: find.byType(InkWell)),
+          )
+          .height;
+      expect(sleepRowHeight, accountEntryHeight, reason: title);
+    }
+  });
+
+  testWidgets('sleep preference toggles are wider without stretching rows', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
+
+    final List<String> switchItemTitles = <String>[
+      '睡前提醒',
+      '晨间反馈提醒',
+      '宿舍动态提醒',
+      '智能建议',
+    ];
+
+    for (final String title in switchItemTitles) {
+      final Size rowSize = tester.getSize(
+        find.ancestor(of: find.text(title), matching: find.byType(InkWell)),
+      );
+      final Size toggleSize = tester.getSize(
+        find.byKey(ValueKey<String>('settings-toggle-$title')),
+      );
+      expect(toggleSize.width, 52, reason: title);
+      expect(toggleSize.height, 26, reason: title);
+      expect(toggleSize.height, lessThan(rowSize.height), reason: title);
+    }
+  });
+
+  testWidgets('settings page exposes assistant reply motion entry', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
+
+    expect(find.text('AI陪伴'), findsOneWidget);
+    expect(find.text('睡眠偏好'), findsOneWidget);
+    expect(find.text('回复文字浮动'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('AI陪伴')).dy,
+      lessThan(tester.getTopLeft(find.text('睡眠偏好')).dy),
+    );
+  });
+
+  testWidgets('filled primary button uses welcome accent colors', (
+    WidgetTester tester,
+  ) async {
+    const NightMoodPalette palette = NightMoodPalette(
+      mood: NightMood.happy,
+      primary: Color(0xFF111111),
+      primarySoft: Color(0xFF222222),
+      primaryHighlight: Color(0xFF333333),
+      primaryDeep: Color(0xFF444444),
+      calmBlue: Color(0xFF555555),
+      welcomeCardColor: Color(0xFF666666),
+      welcomeFaceColor: Color(0xFF777777),
+      welcomeAccentColor: Color(0xFFABCDEF),
+      welcomeTextOnAccent: Color(0xFF123456),
+      welcomeSurfaceColor: Color(0xFF888888),
+      heroGradientStart: Color(0xFF999999),
+      heroGradientMid: Color(0xFFAAAAAA),
+      heroGradientEnd: Color(0xFFBBBBBB),
+      moonGradientStart: Color(0xFFCCCCCC),
+      moonGradientMid: Color(0xFFDDDDDD),
+      moonGradientEnd: Color(0xFFEEEEEE),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(extensions: const <ThemeExtension<dynamic>>[palette]),
+        home: const Scaffold(
+          body: Center(child: PrimaryButton(label: '保存')),
+        ),
+      ),
+    );
+
+    final FilledButton button = tester.widget<FilledButton>(
+      find.byType(FilledButton),
+    );
+
+    expect(
+      button.style?.backgroundColor?.resolve(<WidgetState>{}),
+      palette.welcomeAccentColor,
+    );
+    expect(
+      button.style?.foregroundColor?.resolve(<WidgetState>{}),
+      palette.welcomeTextOnAccent,
+    );
+
+    final RoundedRectangleBorder shape =
+        button.style?.shape?.resolve(<WidgetState>{}) as RoundedRectangleBorder;
+    expect(shape.borderRadius, AppRadius.button);
+    expect(
+      button.style?.minimumSize?.resolve(<WidgetState>{}),
+      const Size(0, 56),
+    );
   });
 
   testWidgets('assistant glacier empty stage matches the pencil shell', (
@@ -156,6 +419,23 @@ void main() {
   );
 
   testWidgets(
+    'assistant stage viewport extends beneath the composer for reply scroll',
+    (WidgetTester tester) async {
+      await _pumpGlacierApp(tester);
+      await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+      final Rect viewportRect = tester.getRect(
+        find.byKey(const ValueKey<String>('assistant-stage-viewport')),
+      );
+      final Rect composerRect = tester.getRect(
+        find.byKey(const ValueKey<String>('assistant-composer-field')),
+      );
+
+      expect(viewportRect.bottom, greaterThan(composerRect.top));
+    },
+  );
+
+  testWidgets(
     'assistant reply requires two pulls to open and one pull to exit while return hint is visible',
     (WidgetTester tester) async {
       await _pumpGlacierApp(tester);
@@ -223,7 +503,7 @@ void main() {
       );
 
       final TestGesture firstPull = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await firstPull.moveBy(const Offset(0, 54));
       await tester.pump();
@@ -233,7 +513,7 @@ void main() {
       expect(find.text('再次下拉查看对话记录'), findsOneWidget);
 
       final TestGesture secondPull = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await secondPull.moveBy(const Offset(0, 72));
       await tester.pump();
@@ -264,7 +544,7 @@ void main() {
       );
 
       final TestGesture firstPull = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await firstPull.moveBy(const Offset(0, 54));
       await tester.pump();
@@ -295,7 +575,7 @@ void main() {
       );
 
       final TestGesture firstPull = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await firstPull.moveBy(const Offset(0, 54));
       await tester.pump();
@@ -303,7 +583,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 220));
 
       final TestGesture secondPull = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await secondPull.moveBy(const Offset(0, 180));
       await tester.pump();
@@ -334,7 +614,7 @@ void main() {
       );
 
       final TestGesture revealHintGesture = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await revealHintGesture.moveBy(const Offset(0, 54));
       await tester.pump();
@@ -342,7 +622,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 220));
 
       final TestGesture expandGesture = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await expandGesture.moveBy(const Offset(0, 180));
       await tester.pump();
@@ -444,7 +724,7 @@ void main() {
       );
 
       final TestGesture firstGesture = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await firstGesture.moveBy(const Offset(0, 54));
       await tester.pump();
@@ -465,7 +745,7 @@ void main() {
       );
 
       final TestGesture secondGesture = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await secondGesture.moveBy(const Offset(0, 180));
       await tester.pump();
@@ -496,7 +776,7 @@ void main() {
       );
 
       final TestGesture firstPull = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await firstPull.moveBy(const Offset(0, 54));
       await tester.pump();
@@ -504,7 +784,7 @@ void main() {
       await _pumpAssistantFrames(tester);
 
       final TestGesture secondPull = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await secondPull.moveBy(const Offset(0, 200));
       await tester.pump();
@@ -663,20 +943,17 @@ void main() {
       );
 
       expect(find.byType(SettingsPage), findsOneWidget);
-      await tester.scrollUntilVisible(
-        find.text('陪伴动效'),
-        240,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pump();
-
-      expect(find.text('陪伴动效'), findsOneWidget);
+      expect(find.text('AI陪伴'), findsOneWidget);
       expect(find.text('回复文字浮动'), findsOneWidget);
       expect(find.text('低'), findsOneWidget);
 
       await tester.tap(find.text('回复文字浮动'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 240));
+
+      expect(find.text('更克制，存在感最低。'), findsNothing);
+      expect(find.text('默认档，柔和但能感知到呼吸感。'), findsNothing);
+      expect(find.text('上浮更明显，转场戏剧性更强。'), findsNothing);
 
       await tester.tap(find.text('高').last);
       await _pumpAssistantFrames(tester);
@@ -690,6 +967,13 @@ void main() {
       );
     },
   );
+}
+
+Future<void> _pumpApp(
+  WidgetTester tester, {
+  required String initialLocation,
+}) async {
+  await _pumpRouteApp(tester, initialLocation);
 }
 
 Future<void> _pumpGlacierApp(
@@ -735,9 +1019,13 @@ Future<void> _openConversationFlow(WidgetTester tester) async {
   final Finder viewport = find.byKey(
     const ValueKey<String>('assistant-stage-viewport'),
   );
+  expect(
+    find.byKey(const ValueKey<String>('assistant-stage-pull-zone')),
+    findsOneWidget,
+  );
 
   final TestGesture revealHintGesture = await tester.startGesture(
-    tester.getCenter(viewport),
+    _assistantViewportTopPullStart(tester, viewport),
   );
   await revealHintGesture.moveBy(const Offset(0, 54));
   await tester.pump();
@@ -750,12 +1038,27 @@ Future<void> _openConversationFlow(WidgetTester tester) async {
   await _pumpAssistantFrames(tester);
 
   final TestGesture expandGesture = await tester.startGesture(
-    tester.getCenter(viewport),
+    _assistantViewportTopPullStart(tester, viewport),
   );
   await expandGesture.moveBy(const Offset(0, 180));
   await tester.pump();
   await expandGesture.up();
   await _pumpAssistantFrames(tester);
+}
+
+Offset _assistantViewportTopPullStart(WidgetTester tester, Finder viewport) {
+  final Finder pullZone = find.byKey(
+    const ValueKey<String>('assistant-stage-pull-zone'),
+  );
+  if (pullZone.evaluate().isNotEmpty) {
+    final Rect pullZoneRect = tester.getRect(pullZone);
+    return Offset(
+      pullZoneRect.center.dx,
+      pullZoneRect.top + (pullZoneRect.height * 0.5),
+    );
+  }
+  final Rect rect = tester.getRect(viewport);
+  return Offset(rect.center.dx, rect.top + (rect.height * 0.16));
 }
 
 Future<void> _pumpAssistantFrames(WidgetTester tester) async {

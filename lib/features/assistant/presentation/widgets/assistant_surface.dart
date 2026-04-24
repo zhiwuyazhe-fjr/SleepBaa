@@ -252,6 +252,7 @@ class AssistantShellScaffold extends StatelessWidget {
     BuildContext context,
     AssistantSurfaceMetrics metrics,
     AssistantSurfacePalette palette,
+    double bodyBottomOverlayInset,
   )
   bodyBuilder;
   final Widget Function(
@@ -275,6 +276,9 @@ class AssistantShellScaffold extends StatelessWidget {
           final AssistantSurfacePalette palette =
               AssistantSurfacePalette.fromMood(context.nightMoodPalette);
           final double keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+          final double headerHeight = _assistantHeaderHeight(metrics);
+          final double bodyBottomOverlayInset =
+              _assistantComposerHeight(metrics) + metrics.unit(20);
 
           return Stack(
             fit: StackFit.expand,
@@ -290,18 +294,37 @@ class AssistantShellScaffold extends StatelessWidget {
                     metrics.unit(20),
                     metrics.unit(8) + keyboardInset,
                   ),
-                  child: Column(
+                  child: Stack(
                     children: <Widget>[
-                      AssistantHeader(
-                        metrics: metrics,
-                        palette: palette,
-                        onTapAdd: onTapAdd,
-                        onTapHistory: onTapHistory,
+                      Positioned.fill(
+                        top: headerHeight + metrics.unit(12),
+                        child: bodyBuilder(
+                          context,
+                          metrics,
+                          palette,
+                          bodyBottomOverlayInset,
+                        ),
                       ),
-                      SizedBox(height: metrics.unit(12)),
-                      Expanded(child: bodyBuilder(context, metrics, palette)),
-                      SizedBox(height: metrics.unit(8)),
-                      composerBuilder(context, metrics, palette),
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: SizedBox(
+                          height: headerHeight,
+                          child: AssistantHeader(
+                            metrics: metrics,
+                            palette: palette,
+                            onTapAdd: onTapAdd,
+                            onTapHistory: onTapHistory,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: composerBuilder(context, metrics, palette),
+                      ),
                     ],
                   ),
                 ),
@@ -312,6 +335,18 @@ class AssistantShellScaffold extends StatelessWidget {
       ),
     );
   }
+}
+
+double _assistantHeaderHeight(AssistantSurfaceMetrics metrics) {
+  return math.max(metrics.unit(22) * 1.56, 36);
+}
+
+double _assistantComposerHeight(AssistantSurfaceMetrics metrics) {
+  final double contentHeight = math.max(
+    metrics.unit(20),
+    metrics.unit(15) * 1.28,
+  );
+  return contentHeight + (metrics.unit(12) * 2) + (metrics.unit(1.5) * 2);
 }
 
 class AssistantHeader extends StatelessWidget {

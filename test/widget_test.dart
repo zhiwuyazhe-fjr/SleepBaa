@@ -1715,6 +1715,40 @@ void main() {
     expect(find.text('勋章详情'), findsNothing);
   });
 
+  testWidgets('profile badge preview sheet stays above the shell tab bar', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    final Finder previewSlot = find.byKey(
+      const ValueKey<String>('profile-badge-preview-slot-0'),
+    );
+    expect(find.byKey(BottomNavShell.navBarKey), findsOneWidget);
+    await tester.ensureVisible(previewSlot);
+    await tester.tap(previewSlot);
+    await tester.pumpAndSettle();
+
+    final Finder sheetFinder = find.byKey(
+      const ValueKey<String>('profile-badge-sheet-sleep-master'),
+    );
+    expect(sheetFinder, findsOneWidget);
+    expect(find.byType(ProfilePage), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.home_rounded), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ProfilePage), findsOneWidget);
+    expect(find.byType(HomePreSleepPage), findsNothing);
+    expect(sheetFinder, findsOneWidget);
+  });
+
   testWidgets('badge gallery summary reflects automatic latest badge mode', (
     WidgetTester tester,
   ) async {

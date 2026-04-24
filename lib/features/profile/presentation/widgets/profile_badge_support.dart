@@ -94,12 +94,14 @@ Future<void> showProfileBadgeDetailsSheet(
   BuildContext context, {
   required HonorBadge badge,
 }) {
+  final AppServices services = context.appServices;
   return showModalBottomSheet<void>(
     context: context,
+    useRootNavigator: true,
+    useSafeArea: true,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
     builder: (BuildContext sheetContext) {
-      final AppServices services = sheetContext.appServices;
       final UserProfile profile = services.authRepository.currentUser;
       final bool unlocked = profile.hasEarnedBadge(badge.id);
       final bool selected = profile.displayBadgeId == badge.id;
@@ -142,14 +144,17 @@ Future<void> showProfileBadgeDetailsSheet(
             final double chipVertical = constraints.maxWidth * 0.02;
             final double ctaHeight = constraints.maxWidth * 0.14;
             final double topRadius = constraints.maxWidth * 0.1;
+            final double bottomSafeInset = MediaQuery.viewPaddingOf(
+              sheetContext,
+            ).bottom;
             final double bottomGestureInset = MediaQuery.systemGestureInsetsOf(
               sheetContext,
             ).bottom;
-            final double bottomPadding = bottomGestureInset > 0
-                ? bottomGestureInset.clamp(
-                    constraints.maxWidth * 0.015,
-                    constraints.maxWidth * 0.04,
-                  )
+            final double bottomInset = bottomSafeInset > bottomGestureInset
+                ? bottomSafeInset
+                : bottomGestureInset;
+            final double bottomPadding = bottomInset > 0
+                ? bottomInset + (constraints.maxWidth * 0.02)
                 : constraints.maxWidth * 0.03;
 
             return Container(

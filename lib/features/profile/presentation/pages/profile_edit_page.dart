@@ -1,11 +1,17 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
+import 'package:sleep_dorm_app/core/utils/avatar_picker.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
+import 'package:sleep_dorm_app/core/widgets/user_avatar.dart';
 
 class ProfileEditPage extends StatefulWidget {
   const ProfileEditPage({super.key});
@@ -65,9 +71,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   Future<void> _save(AppServices services) async {
     final String resolvedRole = _resolvedRole();
     if (resolvedRole.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请先选择角色')));
+      await notifyPassiveToast(context, message: '请先选择角色');
       return;
     }
     setState(() => _isSaving = true);
@@ -78,15 +82,19 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         role: resolvedRole,
         settings: services.profileFacade.currentSettings,
       );
-      if (mounted) {
-        Navigator.of(context).pop();
+      if (!mounted) {
+        return;
       }
+      await notifyPassiveToast(context, message: '个人资料已保存。');
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop();
     } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('保存失败：$error')));
+      if (!mounted) {
+        return;
       }
+      await notifyPassiveToast(context, message: '保存失败：$error');
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -97,6 +105,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    final UserProfile profile = services.profileFacade.currentUser;
     if (_nameController == null ||
         _taglineController == null ||
         _customRoleController == null) {
@@ -106,34 +115,89 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       appBar: AppBar(title: const Text('编辑个人资料')),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.xl),
+          padding: AppPageInsets.page(bottom: AppSpacing.lg),
           children: <Widget>[
             AppCard(
-              child: Column(
+              color: context.nightMoodPalette.primaryHighlight,
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              borderRadius: AppRadius.compactCard,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  TextField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(labelText: '昵称'),
+                  UserAvatar(
+                    profile: profile,
+                    size: 60,
+                    editable: true,
+                    onTap: () => pickAndSaveAvatar(context),
                   ),
-                  const SizedBox(height: AppSpacing.md),
-                  TextField(
-                    controller: _taglineController,
-                    minLines: 2,
-                    maxLines: 3,
-                    decoration: const InputDecoration(labelText: '个性签名'),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      '角色',
-                      style: Theme.of(context).textTheme.titleSmall,
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          '调整昵称、签名和角色，让账号页展示更完整。',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: AppSpacing.xxs),
+                        Text(
+                          '头像也可以直接点按更新。',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppColors.textSecondary,
+                                height: 1.3,
+                              ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.sm),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              borderRadius: AppRadius.compactCard,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const _EditSectionHeader(
+                    title: '基础信息',
+                    subtitle: '这些内容会直接影响你的账号展示。',
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  _LabeledEditor(
+                    label: '昵称',
+                    hintText: '输入你希望展示的昵称',
+                    controller: _nameController!,
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  _LabeledEditor(
+                    label: '个性签名',
+                    hintText: '写一句代表你当前状态的话',
+                    controller: _taglineController!,
+                    minLines: 3,
+                    maxLines: 4,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            AppCard(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              borderRadius: AppRadius.compactCard,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const _EditSectionHeader(
+                    title: '角色设定',
+                    subtitle: '先选常用角色，也可以写一个更贴近你状态的描述。',
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
                   Wrap(
                     spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.xs,
                     children: _presetRoles
                         .map((String role) {
                           final bool selected = _selectedRole == role;
@@ -152,34 +216,122 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                         })
                         .toList(growable: false),
                   ),
-                  const SizedBox(height: AppSpacing.md),
-                  TextField(
-                    controller: _customRoleController,
-                    decoration: const InputDecoration(
-                      labelText: 'Others……',
-                      hintText: '输入自定义角色',
-                    ),
+                  const SizedBox(height: AppSpacing.xs),
+                  _LabeledEditor(
+                    label: '自定义角色',
+                    hintText: '输入一个更贴近你状态的角色描述',
+                    controller: _customRoleController!,
                     onChanged: (String value) {
                       if (value.trim().isEmpty || _selectedRole == null) {
                         return;
                       }
-                      setState(() {
-                        _selectedRole = null;
-                      });
+                      setState(() => _selectedRole = null);
                     },
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.sm),
             PrimaryButton(
               label: _isSaving ? '保存中...' : '保存',
               icon: Icons.save_rounded,
+              size: PrimaryButtonSize.compact,
               onPressed: _isSaving ? null : () => _save(services),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _EditSectionHeader extends StatelessWidget {
+  const _EditSectionHeader({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          title,
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(
+          subtitle,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: AppColors.textSecondary,
+            height: 1.3,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LabeledEditor extends StatelessWidget {
+  const _LabeledEditor({
+    required this.label,
+    required this.hintText,
+    required this.controller,
+    this.minLines = 1,
+    this.maxLines = 1,
+    this.onChanged,
+  });
+
+  final String label;
+  final String hintText;
+  final TextEditingController controller;
+  final int minLines;
+  final int maxLines;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          label,
+          style: Theme.of(
+            context,
+          ).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        TextField(
+          controller: controller,
+          minLines: minLines,
+          maxLines: maxLines,
+          onChanged: onChanged,
+          decoration: InputDecoration(
+            hintText: hintText,
+            filled: true,
+            fillColor: AppColors.surface,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: AppSpacing.sm,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: AppRadius.control,
+              borderSide: const BorderSide(color: AppColors.surfaceBorder),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: AppRadius.control,
+              borderSide: const BorderSide(color: AppColors.surfaceBorder),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: AppRadius.control,
+              borderSide: BorderSide(color: context.nightMoodPalette.primary),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -197,24 +349,29 @@ class _RoleOptionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color primary = Theme.of(context).colorScheme.primary;
+    final NightMoodPalette palette = context.nightMoodPalette;
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
+        borderRadius: AppRadius.control,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          constraints: const BoxConstraints(minWidth: 140),
+          constraints: const BoxConstraints(minWidth: 120),
           padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: AppSpacing.md,
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xs,
           ),
           decoration: BoxDecoration(
-            color: selected ? primary.withAlpha(18) : AppColors.surface,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
+            color: selected
+                ? palette.welcomeAccentColor.withAlpha(70)
+                : AppColors.surfaceMuted,
+            borderRadius: AppRadius.compactCard,
             border: Border.all(
-              color: selected ? primary : AppColors.divider,
+              color: selected ? palette.welcomeAccentColor : AppColors.divider,
               width: selected ? 1.8 : 1,
             ),
           ),
@@ -224,14 +381,18 @@ class _RoleOptionButton extends StatelessWidget {
               Icon(
                 selected ? Icons.check_circle_rounded : Icons.circle_outlined,
                 size: 18,
-                color: selected ? primary : AppColors.textSecondary,
+                color: selected
+                    ? palette.welcomeTextOnAccent
+                    : AppColors.textSecondary,
               ),
               const SizedBox(width: AppSpacing.sm),
               Flexible(
                 child: Text(
                   label,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: selected ? primary : AppColors.textPrimary,
+                    color: selected
+                        ? palette.welcomeTextOnAccent
+                        : AppColors.textPrimary,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   ),
                 ),

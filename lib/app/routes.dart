@@ -23,6 +23,8 @@ import 'package:sleep_dorm_app/features/notifications/presentation/pages/notific
 import 'package:sleep_dorm_app/features/profile/presentation/pages/calendar_checkin_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/honor_badges_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_badges_page.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_account_pages.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_account_reset_password_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_edit_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_faq_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_page.dart';
@@ -65,7 +67,15 @@ abstract final class AppRoutes {
   static const String profileReport = '/profile/report';
   static const String profileCalendar = '/profile/calendar';
   static const String profileSettings = '/profile/settings';
-  static const String profileEdit = '/profile/settings/edit';
+  static const String profileAccountCenter = '/profile/settings/account';
+  static const String profileAccountProfile =
+      '/profile/settings/account/profile';
+  static const String profileEdit = '/profile/settings/account/profile/edit';
+  static const String profileEditLegacy = '/profile/settings/edit';
+  static const String profileAccountPassword =
+      '/profile/settings/account/password';
+  static const String profileAccountLogin = '/profile/settings/account/login';
+  static const String profileAccountDorm = '/profile/settings/account/dorm';
   static const String profileFaq = '/profile/faq';
   static const String profileThoughtVault = '/profile/thought_vault';
   static const String profileThoughtDetail = '/profile/thought_detail';
@@ -322,9 +332,39 @@ GoRouter createRouter({
             const SettingsPage(),
       ),
       GoRoute(
+        path: AppRoutes.profileAccountCenter,
+        builder: (BuildContext context, GoRouterState state) =>
+            const AccountManagementPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.profileAccountProfile,
+        builder: (BuildContext context, GoRouterState state) =>
+            const AccountProfilePage(),
+      ),
+      GoRoute(
+        path: AppRoutes.profileEditLegacy,
+        redirect: (BuildContext context, GoRouterState state) =>
+            AppRoutes.profileEdit,
+      ),
+      GoRoute(
         path: AppRoutes.profileEdit,
         builder: (BuildContext context, GoRouterState state) =>
             const ProfileEditPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.profileAccountPassword,
+        builder: (BuildContext context, GoRouterState state) =>
+            const AccountResetPasswordPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.profileAccountLogin,
+        builder: (BuildContext context, GoRouterState state) =>
+            const LoginManagementPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.profileAccountDorm,
+        builder: (BuildContext context, GoRouterState state) =>
+            const DormManagementPage(),
       ),
       GoRoute(
         path: AppRoutes.profileFaq,

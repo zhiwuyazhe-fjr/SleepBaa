@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 abstract final class AppRadius {
   static const double xs = 8;
   static const double sm = 16;
+  static const double standard = 20;
   static const double md = 24;
   static const double lg = 32;
   static const double xl = 48;
@@ -14,6 +15,10 @@ abstract final class AppRadius {
 
   static BorderRadius get card => BorderRadius.circular(md);
   static BorderRadius get cardLarge => BorderRadius.circular(lg);
+  static BorderRadius get button => BorderRadius.circular(sm);
+  static BorderRadius get toast => BorderRadius.circular(sm);
+  static BorderRadius get control => BorderRadius.circular(standard);
+  static BorderRadius get compactCard => BorderRadius.circular(standard);
   static BorderRadius get pill => BorderRadius.circular(xl);
   static BorderRadius get sheetTop =>
       const BorderRadius.vertical(top: Radius.circular(xl));

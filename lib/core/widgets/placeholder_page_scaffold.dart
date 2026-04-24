@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 
 class PlaceholderPageScaffold extends StatelessWidget {
@@ -36,12 +39,7 @@ class PlaceholderPageScaffold extends StatelessWidget {
       appBar: AppBar(title: Text(title)),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.md,
-            AppSpacing.md,
-            AppSpacing.md,
-            96,
-          ),
+          padding: AppPageInsets.floatingPage(top: AppSpacing.sm, bottom: 96),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -56,7 +54,7 @@ class PlaceholderPageScaffold extends StatelessWidget {
               AppCard(
                 onTap: () => _showPendingToast(context),
                 color: AppColors.surface,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: AppRadius.compactCard,
                 padding: const EdgeInsets.all(AppSpacing.md),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -83,7 +81,7 @@ class PlaceholderPageScaffold extends StatelessWidget {
               const SizedBox(height: AppSpacing.sm),
               AppCard(
                 color: AppColors.legacyCardSurface,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: AppRadius.compactCard,
                 padding: const EdgeInsets.all(AppSpacing.md),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -125,25 +123,12 @@ class PlaceholderPageScaffold extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: FilledButton.icon(
-                  onPressed: () => _showPendingToast(context),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: palette.welcomeAccentColor,
-                    foregroundColor: palette.welcomeTextOnAccent,
-                    elevation: 0,
-                    shadowColor: Colors.transparent,
-                    shape: const StadiumBorder(),
-                    textStyle: textTheme.labelLarge?.copyWith(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  icon: const Icon(Icons.insights_rounded, size: 18),
-                  label: Text(primaryActionLabel),
-                ),
+              PrimaryButton(
+                label: primaryActionLabel,
+                icon: Icons.insights_rounded,
+                variant: PrimaryButtonVariant.soft,
+                size: PrimaryButtonSize.compact,
+                onPressed: () => _showPendingToast(context),
               ),
             ],
           ),
