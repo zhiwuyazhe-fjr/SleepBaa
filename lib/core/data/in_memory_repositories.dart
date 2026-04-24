@@ -32,6 +32,7 @@ UserSettings buildDefaultUserSettings() {
     bedtimeReminder: TimeOfDay(hour: 23, minute: 10),
     preferredTrackTitle: '深海海浪',
     smartSuggestionsEnabled: true,
+    assistantReplyMotionLevel: AssistantReplyMotionLevel.medium,
   );
 }
 

@@ -48,6 +48,7 @@ const List<String> kAllHomeQuickActionIds = <String>[
 
 List<String> normalizeHomeQuickActionIds(Iterable<String>? rawIds) {
   final List<String> normalized = <String>[];
+
   void addIfAllowed(String id) {
     if (!kAllHomeQuickActionIds.contains(id) || normalized.contains(id)) {
       return;
@@ -61,12 +62,14 @@ List<String> normalizeHomeQuickActionIds(Iterable<String>? rawIds) {
       return List<String>.unmodifiable(normalized);
     }
   }
+
   for (final String id in kDefaultHomeQuickActionIds) {
     addIfAllowed(id);
     if (normalized.length == kHomeQuickActionSelectionCount) {
       break;
     }
   }
+
   return List<String>.unmodifiable(normalized);
 }
 
@@ -101,6 +104,8 @@ enum AssistantMessageRole { user, assistant, system }
 enum AssistantMessageStatus { pending, complete, error }
 
 enum AssistantReplySourceMode { remoteSuccess, fallbackSuccess, error }
+
+enum AssistantReplyMotionLevel { low, medium, high }
 
 enum PhoneVerificationTarget { any, existingUser, newUser }
 
@@ -421,6 +426,7 @@ class UserSettings {
     required this.preferredTrackTitle,
     required this.smartSuggestionsEnabled,
     this.homeQuickActionIds = kDefaultHomeQuickActionIds,
+    this.assistantReplyMotionLevel = AssistantReplyMotionLevel.medium,
     this.selectedNightMood,
     this.eveningEncouragementPeriodKey,
     this.eveningEncouragementLine,
@@ -435,15 +441,10 @@ class UserSettings {
   final String preferredTrackTitle;
   final bool smartSuggestionsEnabled;
   final List<String> homeQuickActionIds;
+  final AssistantReplyMotionLevel assistantReplyMotionLevel;
   final NightMood? selectedNightMood;
-
-  /// [eveningPeriodKey] for which [eveningEncouragementLine] was chosen.
   final String? eveningEncouragementPeriodKey;
-
-  /// One persisted encouragement line (quote + attribution) for [eveningEncouragementPeriodKey].
   final String? eveningEncouragementLine;
-
-  /// Mood bucket used when picking the line; `null` means the impatient/unknown quote pool.
   final NightMood? eveningEncouragementMoodSnapshot;
 
   UserSettings copyWith({
@@ -455,6 +456,7 @@ class UserSettings {
     String? preferredTrackTitle,
     bool? smartSuggestionsEnabled,
     List<String>? homeQuickActionIds,
+    AssistantReplyMotionLevel? assistantReplyMotionLevel,
     NightMood? selectedNightMood,
     bool clearSelectedNightMood = false,
     String? eveningEncouragementPeriodKey,
@@ -477,6 +479,8 @@ class UserSettings {
       homeQuickActionIds: normalizeHomeQuickActionIds(
         homeQuickActionIds ?? this.homeQuickActionIds,
       ),
+      assistantReplyMotionLevel:
+          assistantReplyMotionLevel ?? this.assistantReplyMotionLevel,
       selectedNightMood: clearSelectedNightMood
           ? null
           : selectedNightMood ?? this.selectedNightMood,

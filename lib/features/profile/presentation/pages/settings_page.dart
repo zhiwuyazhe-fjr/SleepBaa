@@ -25,27 +25,127 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   String? _boundUid;
+  String? _boundSettingsSignature;
   bool _isSavingSettings = false;
   bool _isSavingDormAnchor = false;
   bool _isApplyingNightMood = false;
+  bool _isSavingAssistantMotion = false;
   double _sleepGoalHours = 7.5;
   bool _bedtimeReminderEnabled = true;
   bool _morningReminderEnabled = true;
   bool _dormAlertsEnabled = true;
   bool _smartSuggestionsEnabled = true;
+  AssistantReplyMotionLevel _assistantReplyMotionLevel =
+      AssistantReplyMotionLevel.medium;
   TimeOfDay _bedtimeReminder = const TimeOfDay(hour: 23, minute: 10);
 
   void _syncState(UserProfile profile, UserSettings settings) {
-    if (_boundUid == profile.uid) {
+    final String settingsSignature = _settingsSignature(settings);
+    if (_boundUid == profile.uid &&
+        _boundSettingsSignature == settingsSignature) {
       return;
     }
     _boundUid = profile.uid;
+    _boundSettingsSignature = settingsSignature;
     _sleepGoalHours = settings.sleepGoalHours;
     _bedtimeReminderEnabled = settings.bedtimeReminderEnabled;
     _morningReminderEnabled = settings.morningReminderEnabled;
     _dormAlertsEnabled = settings.dormAlertsEnabled;
     _smartSuggestionsEnabled = settings.smartSuggestionsEnabled;
+    _assistantReplyMotionLevel = settings.assistantReplyMotionLevel;
     _bedtimeReminder = settings.bedtimeReminder;
+  }
+
+  Future<void> _changeAssistantMotionLevel(
+    AppServices services,
+    AssistantReplyMotionLevel level,
+  ) async {
+    if (_isSavingAssistantMotion || level == _assistantReplyMotionLevel) {
+      return;
+    }
+    setState(() {
+      _assistantReplyMotionLevel = level;
+      _isSavingAssistantMotion = true;
+    });
+    try {
+      final UserSettings nextSettings = services.profileFacade.currentSettings
+          .copyWith(assistantReplyMotionLevel: level);
+      await services.settingsRepository.saveSettings(nextSettings);
+      if (!mounted) {
+        return;
+      }
+      await notifyPassiveToast(context, message: '回复动效已更新。');
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _assistantReplyMotionLevel =
+            services.profileFacade.currentSettings.assistantReplyMotionLevel;
+      });
+      await notifyPassiveToast(context, message: '保存失败：$error');
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingAssistantMotion = false);
+      }
+    }
+  }
+
+  Future<void> _showAssistantMotionSheet(AppServices services) async {
+    final AssistantReplyMotionLevel? selected =
+        await showModalBottomSheet<AssistantReplyMotionLevel>(
+          context: context,
+          useSafeArea: true,
+          showDragHandle: true,
+          builder: (BuildContext sheetContext) {
+            final ThemeData theme = Theme.of(sheetContext);
+            return SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                  AppSpacing.lg,
+                  AppSpacing.xl,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text('回复动效强度', style: theme.textTheme.titleLarge),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      '调整主舞台上 AI 回复文字的漂浮感。',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        height: 1.45,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    ...AssistantReplyMotionLevel.values.map((
+                      AssistantReplyMotionLevel level,
+                    ) {
+                      final bool isSelected =
+                          level == _assistantReplyMotionLevel;
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(_assistantReplyMotionTitle(level)),
+                        subtitle: Text(_assistantReplyMotionDescription(level)),
+                        trailing: isSelected
+                            ? const Icon(Icons.check_rounded)
+                            : null,
+                        onTap: () => Navigator.of(sheetContext).pop(level),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+    if (selected == null || !mounted) {
+      return;
+    }
+    await _changeAssistantMotionLevel(services, selected);
   }
 
   Future<void> _saveSleepSettings(AppServices services) async {
@@ -59,6 +159,7 @@ class _SettingsPageState extends State<SettingsPage> {
             dormAlertsEnabled: _dormAlertsEnabled,
             smartSuggestionsEnabled: _smartSuggestionsEnabled,
             bedtimeReminder: _bedtimeReminder,
+            assistantReplyMotionLevel: _assistantReplyMotionLevel,
           );
       await services.settingsRepository.saveSettings(nextSettings);
       if (!mounted) {
@@ -164,10 +265,7 @@ class _SettingsPageState extends State<SettingsPage> {
         if (!mounted) {
           return;
         }
-        await notifyPassiveToast(
-          context,
-          message: '未能获取定位，请检查定位权限和系统定位开关。',
-        );
+        await notifyPassiveToast(context, message: '未能获取定位，请检查定位权限和系统定位开关。');
         return;
       }
       await services.dormPresenceSyncController.persistDormLocationAnchor(
@@ -258,10 +356,7 @@ class _SettingsPageState extends State<SettingsPage> {
     await notifyPassiveToast(context, message: '已退出登录。');
   }
 
-  String _locationSummary(
-    Dorm dorm, {
-    DormLocationAnchor? effectiveAnchor,
-  }) {
+  String _locationSummary(Dorm dorm, {DormLocationAnchor? effectiveAnchor}) {
     final DormLocationAnchor? anchor = effectiveAnchor ?? dorm.locationAnchor;
     if (dorm.id.isEmpty) {
       return '加入宿舍后可记录宿舍坐标，用于自动判断“已返 / 未返”。';
@@ -291,15 +386,20 @@ class _SettingsPageState extends State<SettingsPage> {
           ]),
           builder: (BuildContext context, Widget? child) {
             final UserProfile profile = services.profileFacade.currentUser;
-            final UserSettings settings = services.profileFacade.currentSettings;
+            final UserSettings settings =
+                services.profileFacade.currentSettings;
             final Dorm dorm = services.dormFacade.currentDorm;
-            final String displayedPhone = <String?>[
-              profile.phoneNumber,
-              services.authRepository.currentUser.phoneNumber,
-            ].whereType<String>().map((String item) => item.trim()).firstWhere(
-              (String item) => item.isNotEmpty,
-              orElse: () => '',
-            );
+            final String displayedPhone =
+                <String?>[
+                      profile.phoneNumber,
+                      services.authRepository.currentUser.phoneNumber,
+                    ]
+                    .whereType<String>()
+                    .map((String item) => item.trim())
+                    .firstWhere(
+                      (String item) => item.isNotEmpty,
+                      orElse: () => '',
+                    );
             _syncState(profile, settings);
 
             return ListView(
@@ -336,7 +436,9 @@ class _SettingsPageState extends State<SettingsPage> {
                             const SizedBox(height: AppSpacing.sm),
                             _ProfileLine(
                               label: '角色',
-                              value: profile.role.isEmpty ? '暂未设置' : profile.role,
+                              value: profile.role.isEmpty
+                                  ? '暂未设置'
+                                  : profile.role,
                             ),
                           ],
                         ),
@@ -431,9 +533,8 @@ class _SettingsPageState extends State<SettingsPage> {
                           keySuffix: '-settings-unknown',
                           selected: settings.selectedNightMood == null,
                           enabled: !_isApplyingNightMood,
-                          onTap: () => unawaited(
-                            _applyNightMood(services, null),
-                          ),
+                          onTap: () =>
+                              unawaited(_applyNightMood(services, null)),
                         ),
                       ),
                     ],
@@ -515,6 +616,25 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
+                Text('陪伴动效', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: AppSpacing.md),
+                AppCard(
+                  child: _ActionRow(
+                    title: '回复文字浮动',
+                    subtitle: _isSavingAssistantMotion
+                        ? '保存中...'
+                        : _assistantReplyMotionTitle(
+                            _assistantReplyMotionLevel,
+                          ),
+                    supportingText: _assistantReplyMotionDescription(
+                      _assistantReplyMotionLevel,
+                    ),
+                    onTap: _isSavingAssistantMotion
+                        ? null
+                        : () => _showAssistantMotionSheet(services),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
                 Text('账号与安全', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: AppSpacing.md),
                 AppCard(
@@ -575,13 +695,16 @@ class _SettingsPageState extends State<SettingsPage> {
                                     label: '编辑宿舍名称',
                                     variant: PrimaryButtonVariant.soft,
                                     icon: Icons.edit_rounded,
-                                    onPressed: () => _renameDorm(services, dorm),
+                                    onPressed: () =>
+                                        _renameDorm(services, dorm),
                                   ),
                                 ),
                                 const SizedBox(width: AppSpacing.sm),
                                 Expanded(
                                   child: PrimaryButton(
-                                    label: _isSavingDormAnchor ? '记录中...' : '重新记录位置',
+                                    label: _isSavingDormAnchor
+                                        ? '记录中...'
+                                        : '重新记录位置',
                                     variant: PrimaryButtonVariant.soft,
                                     icon: Icons.my_location_rounded,
                                     onPressed: _isSavingDormAnchor
@@ -601,7 +724,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                   expand: false,
                                   variant: PrimaryButtonVariant.soft,
                                   icon: Icons.group_add_rounded,
-                                  onPressed: () => context.push(AppRoutes.dormInvite),
+                                  onPressed: () =>
+                                      context.push(AppRoutes.dormInvite),
                                 ),
                                 PrimaryButton(
                                   label: '退出宿舍',
@@ -779,20 +903,69 @@ class _ActionRow extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.supportingText,
   });
 
   final String title;
   final String subtitle;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final String? supportingText;
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       title: Text(title),
-      subtitle: Text(subtitle),
-      trailing: const Icon(Icons.chevron_right_rounded),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(subtitle),
+          if (supportingText case final String supportingText) ...<Widget>[
+            const SizedBox(height: 4),
+            Text(
+              supportingText,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ],
+      ),
+      trailing: onTap == null ? null : const Icon(Icons.chevron_right_rounded),
       onTap: onTap,
     );
   }
+}
+
+String _settingsSignature(UserSettings settings) {
+  final TimeOfDay bedtimeReminder = settings.bedtimeReminder;
+  return <Object?>[
+    settings.sleepGoalHours,
+    settings.bedtimeReminderEnabled,
+    settings.morningReminderEnabled,
+    settings.dormAlertsEnabled,
+    settings.smartSuggestionsEnabled,
+    bedtimeReminder.hour,
+    bedtimeReminder.minute,
+    settings.assistantReplyMotionLevel.name,
+    settings.selectedNightMood?.name,
+  ].join('|');
+}
+
+String _assistantReplyMotionTitle(AssistantReplyMotionLevel level) {
+  return switch (level) {
+    AssistantReplyMotionLevel.low => '低',
+    AssistantReplyMotionLevel.medium => '中',
+    AssistantReplyMotionLevel.high => '高',
+  };
+}
+
+String _assistantReplyMotionDescription(AssistantReplyMotionLevel level) {
+  return switch (level) {
+    AssistantReplyMotionLevel.low => '更克制，存在感最低。',
+    AssistantReplyMotionLevel.medium => '默认档，柔和但能感知到呼吸感。',
+    AssistantReplyMotionLevel.high => '上浮更明显，转场戏剧性更强。',
+  };
 }

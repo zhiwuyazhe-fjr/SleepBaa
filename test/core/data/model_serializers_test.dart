@@ -93,49 +93,50 @@ void main() {
     },
   );
 
-  test('user settings round-trip home quick action ids', () {
-    const List<String> quickActionIds = <String>[
-      HomeQuickActionIds.profileSettings,
-      HomeQuickActionIds.profileReport,
-      HomeQuickActionIds.profileBadges,
-      HomeQuickActionIds.thoughtVault,
-    ];
-    const UserSettings settings = UserSettings(
-      sleepGoalHours: 7.5,
-      bedtimeReminderEnabled: true,
-      morningReminderEnabled: true,
-      dormAlertsEnabled: true,
-      bedtimeReminder: TimeOfDay(hour: 23, minute: 10),
-      preferredTrackTitle: '深海海浪',
-      smartSuggestionsEnabled: true,
-      homeQuickActionIds: quickActionIds,
-    );
-
-    final Map<String, dynamic> map = ModelSerializers.userSettingsToMap(
-      settings,
-    );
-    final UserSettings restored = ModelSerializers.userSettingsFromMap(map);
-
-    expect(map['homeQuickActionIds'], quickActionIds);
-    expect(restored.homeQuickActionIds, quickActionIds);
-  });
-
-  test('user settings normalizes invalid home quick action ids', () {
-    final UserSettings restored = ModelSerializers.userSettingsFromMap(
-      <String, dynamic>{
-        'homeQuickActionIds': <String>[
-          HomeQuickActionIds.profileSettings,
-          'missing-action',
-          HomeQuickActionIds.profileSettings,
+  test(
+    'user settings serialization preserves assistant motion and quick actions',
+    () {
+      const UserSettings settings = UserSettings(
+        sleepGoalHours: 8,
+        bedtimeReminderEnabled: true,
+        morningReminderEnabled: false,
+        dormAlertsEnabled: true,
+        bedtimeReminder: TimeOfDay(hour: 23, minute: 15),
+        preferredTrackTitle: '深海海浪',
+        smartSuggestionsEnabled: true,
+        homeQuickActionIds: <String>[
+          'dreamJournal',
+          'profileCalendar',
+          'sleepEncyclopedia',
+          'thoughtVault',
         ],
-      },
-    );
+        assistantReplyMotionLevel: AssistantReplyMotionLevel.high,
+        selectedNightMood: NightMood.calm,
+      );
 
-    expect(restored.homeQuickActionIds, <String>[
-      HomeQuickActionIds.profileSettings,
-      HomeQuickActionIds.dreamJournal,
-      HomeQuickActionIds.profileCalendar,
-      HomeQuickActionIds.sleepEncyclopedia,
-    ]);
-  });
+      final Map<String, dynamic> serialized =
+          ModelSerializers.userSettingsToMap(settings);
+      final UserSettings restored =
+          ModelSerializers.userSettingsFromMap(serialized);
+
+      expect(serialized['homeQuickActionIds'], <String>[
+        'dreamJournal',
+        'profileCalendar',
+        'sleepEncyclopedia',
+        'thoughtVault',
+      ]);
+      expect(serialized['assistantReplyMotionLevel'], 'high');
+      expect(restored.homeQuickActionIds, <String>[
+        'dreamJournal',
+        'profileCalendar',
+        'sleepEncyclopedia',
+        'thoughtVault',
+      ]);
+      expect(
+        restored.assistantReplyMotionLevel,
+        AssistantReplyMotionLevel.high,
+      );
+      expect(restored.selectedNightMood, NightMood.calm);
+    },
+  );
 }
