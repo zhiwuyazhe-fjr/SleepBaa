@@ -237,15 +237,13 @@ void main() {
   ) async {
     await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
 
-    await tester.scrollUntilVisible(
-      find.text('陪伴动效'),
-      240,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pump();
-
-    expect(find.text('陪伴动效'), findsOneWidget);
+    expect(find.text('AI陪伴'), findsOneWidget);
+    expect(find.text('睡眠偏好'), findsOneWidget);
     expect(find.text('回复文字浮动'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('AI陪伴')).dy,
+      lessThan(tester.getTopLeft(find.text('睡眠偏好')).dy),
+    );
   });
 
   testWidgets('filled primary button uses welcome accent colors', (
@@ -928,20 +926,17 @@ void main() {
       );
 
       expect(find.byType(SettingsPage), findsOneWidget);
-      await tester.scrollUntilVisible(
-        find.text('陪伴动效'),
-        240,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pump();
-
-      expect(find.text('陪伴动效'), findsOneWidget);
+      expect(find.text('AI陪伴'), findsOneWidget);
       expect(find.text('回复文字浮动'), findsOneWidget);
       expect(find.text('低'), findsOneWidget);
 
       await tester.tap(find.text('回复文字浮动'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 240));
+
+      expect(find.text('更克制，存在感最低。'), findsNothing);
+      expect(find.text('默认档，柔和但能感知到呼吸感。'), findsNothing);
+      expect(find.text('上浮更明显，转场戏剧性更强。'), findsNothing);
 
       await tester.tap(find.text('高').last);
       await _pumpAssistantFrames(tester);
