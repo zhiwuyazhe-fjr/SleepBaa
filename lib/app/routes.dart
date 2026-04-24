@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/widgets/bottom_nav_shell.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/features/analysis/presentation/pages/interference_factor_page.dart';
@@ -13,6 +14,7 @@ import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_status_page
 import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_detail_page.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_journal_page.dart';
 import 'package:sleep_dorm_app/features/feedback/presentation/pages/morning_feedback_page.dart';
+import 'package:sleep_dorm_app/features/home/presentation/pages/home_quick_actions_edit_page.dart';
 import 'package:sleep_dorm_app/features/home/presentation/pages/home_post_sleep_page.dart';
 import 'package:sleep_dorm_app/features/intervention/presentation/pages/micro_intervention_task_page.dart';
 import 'package:sleep_dorm_app/features/logs/presentation/pages/night_awakening_log_page.dart';
@@ -31,12 +33,18 @@ import 'package:sleep_dorm_app/features/profile/presentation/pages/sleep_report_
 import 'package:sleep_dorm_app/features/profile/presentation/pages/thought_note_detail_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/thought_vault_page.dart';
 import 'package:sleep_dorm_app/features/sleep/presentation/pages/cant_sleep_page.dart';
+import 'package:sleep_dorm_app/features/sleep_encyclopedia/presentation/pages/sleep_encyclopedia_category_page.dart';
+import 'package:sleep_dorm_app/features/sleep_encyclopedia/presentation/pages/sleep_encyclopedia_page.dart';
+import 'package:sleep_dorm_app/features/sleep_encyclopedia/presentation/pages/sleep_encyclopedia_topic_page.dart';
 
 abstract final class AppRoutes {
   static const String root = '/';
   static const String home = '/home';
   static const String homePreSleep = '/home/pre_sleep';
   static const String homePostSleep = '/home/post_sleep';
+  static const String homeQuickActionsEdit = '/home/quick_actions/edit';
+  static const String feedbackReceivedNotice = 'feedback_received';
+  static const String feedbackSubmittedNotice = 'feedback_submitted';
   static const String analysisInterferenceFactors =
       '/analysis/interference_factors';
   static const String interventionTask = '/intervention/task';
@@ -45,6 +53,10 @@ abstract final class AppRoutes {
   static const String dreamDetail = '/dream/detail';
   static const String dreamJournal = '/dream/journal';
   static const String sleepCantSleep = '/sleep/cant_sleep';
+  static const String sleepEncyclopedia = '/sleep/encyclopedia';
+  static const String sleepEncyclopediaCategory =
+      '/sleep/encyclopedia/category';
+  static const String sleepEncyclopediaTopic = '/sleep/encyclopedia/topic';
   static const String dorm = '/dorm';
   static const String dormRules = '/dorm/rules';
   static const String dormInvite = '/dorm/invite';
@@ -71,14 +83,82 @@ abstract final class AppRoutes {
   static const String assistant = '/assistant';
   static const String assistantHistory = '/assistant/history';
   static const String authPhone = '/auth/phone';
+
+  static String homePreSleepLocation({String? notice}) {
+    final String normalizedNotice = notice?.trim() ?? '';
+    if (normalizedNotice.isEmpty) {
+      return homePreSleep;
+    }
+    return Uri(
+      path: homePreSleep,
+      queryParameters: <String, String>{'notice': normalizedNotice},
+    ).toString();
+  }
+
+  static String feedbackMorningLocation({
+    String? sessionId,
+    bool resumeToSleep = false,
+  }) {
+    final String normalizedSessionId = sessionId?.trim() ?? '';
+    if (normalizedSessionId.isEmpty && !resumeToSleep) {
+      return feedbackMorning;
+    }
+    final Map<String, String> queryParameters = <String, String>{
+      if (normalizedSessionId.isNotEmpty) 'sessionId': normalizedSessionId,
+      if (resumeToSleep) 'resumeToSleep': '1',
+    };
+    return Uri(
+      path: feedbackMorning,
+      queryParameters: queryParameters,
+    ).toString();
+  }
+
+  static bool isFeedbackMorningRoute(String route) {
+    final Uri? parsed = Uri.tryParse(route);
+    return (parsed?.path ?? route) == feedbackMorning;
+  }
+
+  static String sleepEncyclopediaCategoryLocation(String slug) {
+    return Uri(
+      path: sleepEncyclopediaCategory,
+      queryParameters: <String, String>{'slug': slug},
+    ).toString();
+  }
+
+  static String sleepEncyclopediaTopicLocation(String slug) {
+    return Uri(
+      path: sleepEncyclopediaTopic,
+      queryParameters: <String, String>{'slug': slug},
+    ).toString();
+  }
 }
 
 GoRouter createRouter({
+  required bool usesCloudBase,
+  required AuthRepository authRepository,
   HomeMode homeMode = HomeMode.preSleep,
   String initialLocation = AppRoutes.home,
 }) {
   return GoRouter(
     initialLocation: initialLocation,
+    refreshListenable: authRepository,
+    redirect: (BuildContext context, GoRouterState state) {
+      if (!usesCloudBase) {
+        return null;
+      }
+      if (!authRepository.hasCompletedInitialAuthBootstrap ||
+          authRepository.isAuthenticating) {
+        return null;
+      }
+
+      final bool isAuthRoute = state.uri.path == AppRoutes.authPhone;
+      final bool hasVerifiedPhoneIdentity =
+          authRepository.hasVerifiedPhoneIdentity == true;
+      if (!hasVerifiedPhoneIdentity && !isAuthRoute) {
+        return AppRoutes.authPhone;
+      }
+      return null;
+    },
     routes: <RouteBase>[
       GoRoute(
         path: AppRoutes.root,
@@ -108,7 +188,9 @@ GoRouter createRouter({
                 pageBuilder: (BuildContext context, GoRouterState state) =>
                     _noTransitionPage(
                       state: state,
-                      child: const NightWelcomeGatePage(),
+                      child: NightWelcomeGatePage(
+                        notice: state.uri.queryParameters['notice'],
+                      ),
                     ),
               ),
             ],
@@ -139,6 +221,11 @@ GoRouter createRouter({
             const HomePostSleepPage(),
       ),
       GoRoute(
+        path: AppRoutes.homeQuickActionsEdit,
+        builder: (BuildContext context, GoRouterState state) =>
+            const HomeQuickActionsEditPage(),
+      ),
+      GoRoute(
         path: AppRoutes.analysisInterferenceFactors,
         builder: (BuildContext context, GoRouterState state) =>
             const InterferenceFactorPage(),
@@ -150,8 +237,14 @@ GoRouter createRouter({
       ),
       GoRoute(
         path: AppRoutes.feedbackMorning,
-        builder: (BuildContext context, GoRouterState state) =>
-            const MorningFeedbackPage(),
+        builder: (BuildContext context, GoRouterState state) => MorningFeedbackPage(
+          key: ValueKey<String>(
+            '${state.uri.queryParameters['sessionId'] ?? '__latest__'}:'
+            '${state.uri.queryParameters['resumeToSleep'] == '1' ? 'resume' : 'plain'}',
+          ),
+          sessionId: state.uri.queryParameters['sessionId'],
+          allowReturnToSleep: state.uri.queryParameters['resumeToSleep'] == '1',
+        ),
       ),
       GoRoute(
         path: AppRoutes.logNightAwakening,
@@ -172,6 +265,25 @@ GoRouter createRouter({
         path: AppRoutes.sleepCantSleep,
         builder: (BuildContext context, GoRouterState state) =>
             const CantSleepPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.sleepEncyclopedia,
+        builder: (BuildContext context, GoRouterState state) =>
+            const SleepEncyclopediaPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.sleepEncyclopediaCategory,
+        builder: (BuildContext context, GoRouterState state) =>
+            SleepEncyclopediaCategoryPage(
+              categorySlug: state.uri.queryParameters['slug'] ?? '',
+            ),
+      ),
+      GoRoute(
+        path: AppRoutes.sleepEncyclopediaTopic,
+        builder: (BuildContext context, GoRouterState state) =>
+            SleepEncyclopediaTopicPage(
+              topicSlug: state.uri.queryParameters['slug'] ?? '',
+            ),
       ),
       GoRoute(
         path: AppRoutes.dormRules,

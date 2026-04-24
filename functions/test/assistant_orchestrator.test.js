@@ -19,6 +19,13 @@ function buildContext() {
         },
         settings: {
             sleepGoalHours: 7.5,
+            bedtimeReminderEnabled: true,
+            morningReminderEnabled: true,
+            dormAlertsEnabled: true,
+            bedtimeReminder: {
+                hour: 23,
+                minute: 10,
+            },
             preferredTrackTitle: "Deep Ocean Waves",
             smartSuggestionsEnabled: true,
             selectedNightMood: "calm",
@@ -43,6 +50,7 @@ function buildContext() {
         recentSessions: [
             {
                 id: "session-1",
+                sleepDayKey: "2026-04-13",
                 status: "completed",
                 awakeningsCount: 1,
                 totalSleepHours: 6.8,

@@ -1,6 +1,48 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:sleep_dorm_app/core/backend/cloudbase_app_api_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_snapshot_store.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+
+const String assistantThreadTurnBusyCode = 'THREAD_TURN_BUSY';
+const String assistantReplyTimeoutCode = 'ASSISTANT_REPLY_TIMEOUT';
+
+String assistantErrorContentForCode(String? errorCode) {
+  switch (errorCode) {
+    case assistantThreadTurnBusyCode:
+      return '上一条还在处理中，请等它结束后再发。';
+    case assistantReplyTimeoutCode:
+      return '这次回复超时了，请重试。';
+    default:
+      return '暂时没有收到回复，请稍后再试。';
+  }
+}
+
+String assistantErrorHintForCode(String? errorCode) {
+  switch (errorCode) {
+    case assistantThreadTurnBusyCode:
+      return '请等它结束后再发。';
+    case assistantReplyTimeoutCode:
+      return '这次回复超时了，请直接重试上一条消息。';
+    default:
+      return '请直接重试上一条消息。';
+  }
+}
+
+String? assistantErrorCodeFromException(Object error) {
+  if (error is CloudBaseAppApiException) {
+    return error.code;
+  }
+  final String text = error.toString();
+  if (text.contains(assistantThreadTurnBusyCode)) {
+    return assistantThreadTurnBusyCode;
+  }
+  if (text.contains(assistantReplyTimeoutCode)) {
+    return assistantReplyTimeoutCode;
+  }
+  return null;
+}
 
 class AssistantReplyResult {
   const AssistantReplyResult({
@@ -12,6 +54,7 @@ class AssistantReplyResult {
     this.model,
     this.assistantMessageId,
     this.errorMessage,
+    this.errorCode,
     this.updatedSurfaces = const <String>[],
   });
 
@@ -23,6 +66,7 @@ class AssistantReplyResult {
   final String? model;
   final String? assistantMessageId;
   final String? errorMessage;
+  final String? errorCode;
   final List<String> updatedSurfaces;
 }
 
@@ -54,7 +98,76 @@ class AssistantCaptureResult {
   final List<String> updatedSurfaces;
 }
 
+enum AssistantStreamEventType {
+  ack,
+  messageDelta,
+  messageCompleted,
+  surfacePatch,
+  captureRecord,
+  memorySynced,
+  done,
+  error,
+}
+
+class AssistantStreamEvent {
+  const AssistantStreamEvent({
+    required this.type,
+    this.delta,
+    this.reply,
+    this.runId,
+    this.intent,
+    this.provider,
+    this.model,
+    this.assistantMessageId,
+    this.errorMessage,
+    this.errorCode,
+    this.sourceMode,
+    this.updatedSurfaces = const <String>[],
+    this.patch,
+    this.record,
+    this.count,
+    this.backgroundSyncPending,
+    this.reconcileAfterMs,
+  });
+
+  final AssistantStreamEventType type;
+  final String? delta;
+  final String? reply;
+  final String? runId;
+  final String? intent;
+  final String? provider;
+  final String? model;
+  final String? assistantMessageId;
+  final String? errorMessage;
+  final String? errorCode;
+  final AssistantReplySourceMode? sourceMode;
+  final List<String> updatedSurfaces;
+  final Map<String, dynamic>? patch;
+  final SleepCaptureRecord? record;
+  final int? count;
+  final bool? backgroundSyncPending;
+  final int? reconcileAfterMs;
+}
+
 abstract interface class AssistantReplyGateway {
+  Stream<AssistantStreamEvent> streamReply({
+    required String prompt,
+    required String threadId,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  });
+
+  Stream<AssistantStreamEvent> streamCapture({
+    required String prompt,
+    required String threadId,
+    required String sessionId,
+    required SleepCaptureType captureType,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  });
+
   Future<AssistantReplyResult> generateReply({
     required String prompt,
     required String threadId,
@@ -76,6 +189,90 @@ abstract interface class AssistantReplyGateway {
 
 class StubAssistantReplyGateway implements AssistantReplyGateway {
   const StubAssistantReplyGateway();
+
+  @override
+  Stream<AssistantStreamEvent> streamReply({
+    required String prompt,
+    required String threadId,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  }) async* {
+    final AssistantReplyResult result = await generateReply(
+      prompt: prompt,
+      threadId: threadId,
+      clientUserMessageId: clientUserMessageId,
+      clientAssistantMessageId: clientAssistantMessageId,
+      dorm: dorm,
+    );
+    yield AssistantStreamEvent(
+      type: AssistantStreamEventType.ack,
+      assistantMessageId: clientAssistantMessageId,
+    );
+    yield AssistantStreamEvent(
+      type: AssistantStreamEventType.messageDelta,
+      delta: result.reply,
+    );
+    yield AssistantStreamEvent(
+      type: AssistantStreamEventType.messageCompleted,
+      reply: result.reply,
+      runId: result.runId,
+      intent: result.intent,
+      provider: result.provider,
+      model: result.model,
+      assistantMessageId: result.assistantMessageId ?? clientAssistantMessageId,
+      errorMessage: result.errorMessage,
+      sourceMode: result.sourceMode,
+      updatedSurfaces: result.updatedSurfaces,
+    );
+    yield const AssistantStreamEvent(type: AssistantStreamEventType.done);
+  }
+
+  @override
+  Stream<AssistantStreamEvent> streamCapture({
+    required String prompt,
+    required String threadId,
+    required String sessionId,
+    required SleepCaptureType captureType,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  }) async* {
+    final AssistantCaptureResult result = await generateCapture(
+      prompt: prompt,
+      threadId: threadId,
+      sessionId: sessionId,
+      captureType: captureType,
+      clientUserMessageId: clientUserMessageId,
+      clientAssistantMessageId: clientAssistantMessageId,
+      dorm: dorm,
+    );
+    yield AssistantStreamEvent(
+      type: AssistantStreamEventType.ack,
+      assistantMessageId: clientAssistantMessageId,
+    );
+    yield AssistantStreamEvent(
+      type: AssistantStreamEventType.messageDelta,
+      delta: result.reply,
+    );
+    yield AssistantStreamEvent(
+      type: AssistantStreamEventType.messageCompleted,
+      reply: result.reply,
+      runId: result.runId,
+      intent: result.intent,
+      provider: result.provider,
+      model: result.model,
+      assistantMessageId: result.assistantMessageId ?? clientAssistantMessageId,
+      errorMessage: result.errorMessage,
+      sourceMode: result.sourceMode,
+      updatedSurfaces: result.updatedSurfaces,
+    );
+    yield AssistantStreamEvent(
+      type: AssistantStreamEventType.captureRecord,
+      record: result.record,
+    );
+    yield const AssistantStreamEvent(type: AssistantStreamEventType.done);
+  }
 
   @override
   Future<AssistantReplyResult> generateReply({
@@ -159,6 +356,206 @@ class CloudBaseAssistantReplyGateway implements AssistantReplyGateway {
 
   final CloudBaseAppApiClient _appApiClient;
   final CloudBaseSnapshotStore _snapshotStore;
+  bool _reconcileQueued = false;
+  bool _reconcileInFlight = false;
+
+  @override
+  Stream<AssistantStreamEvent> streamReply({
+    required String prompt,
+    required String threadId,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  }) async* {
+    final Map<String, dynamic> requestBody = <String, dynamic>{
+      'threadId': threadId,
+      'prompt': prompt,
+      'clientUserMessageId': clientUserMessageId,
+      'clientAssistantMessageId': clientAssistantMessageId,
+      'dorm': <String, dynamic>{
+        'id': dorm.id,
+        'noiseDb': dorm.noiseDb,
+        'quietLabel': dorm.quietLabel,
+        'memberCount': dorm.members.length,
+      },
+    };
+
+    for (int attempt = 0; attempt < 2; attempt += 1) {
+      bool sawReplyPayload = false;
+      AssistantStreamEvent? completedEvent;
+      try {
+        final Stream<CloudBaseSseFrame> frames = await _appApiClient.postSse(
+          '/api/assistant/reply/stream',
+          body: requestBody,
+        );
+
+        await for (final CloudBaseSseFrame frame in frames) {
+          final AssistantStreamEvent event = _assistantEventFromFrame(frame);
+          if (event.type == AssistantStreamEventType.messageDelta ||
+              event.type == AssistantStreamEventType.messageCompleted) {
+            sawReplyPayload = true;
+          }
+          if (event.type == AssistantStreamEventType.messageCompleted) {
+            completedEvent = event;
+          }
+          if (event.type == AssistantStreamEventType.surfacePatch &&
+              event.patch != null) {
+            _snapshotStore.applyAssistantSurfacePatch(event.patch!);
+          }
+          if (event.type == AssistantStreamEventType.done) {
+            if (event.backgroundSyncPending == true) {
+              _scheduleBackgroundReconcileAttempts(
+                _replyReconcileBackoffs(event.reconcileAfterMs),
+              );
+            }
+          }
+          yield event;
+          if (event.type == AssistantStreamEventType.error ||
+              event.type == AssistantStreamEventType.done) {
+            return;
+          }
+        }
+        if (completedEvent != null) {
+          final AssistantStreamEvent syntheticDone = AssistantStreamEvent(
+            type: AssistantStreamEventType.done,
+            runId: completedEvent.runId,
+            assistantMessageId: completedEvent.assistantMessageId,
+            backgroundSyncPending: true,
+            reconcileAfterMs: 1500,
+          );
+          _scheduleBackgroundReconcileAttempts(
+            _replyReconcileBackoffs(syntheticDone.reconcileAfterMs),
+          );
+          yield syntheticDone;
+        }
+        return;
+      } catch (error) {
+        if (error is CloudBaseAppApiException &&
+            (error.code == assistantThreadTurnBusyCode ||
+                error.code == assistantReplyTimeoutCode)) {
+          yield AssistantStreamEvent(
+            type: AssistantStreamEventType.error,
+            errorCode: error.code,
+            errorMessage: error.message,
+            sourceMode: AssistantReplySourceMode.error,
+          );
+          return;
+        }
+        if (completedEvent != null) {
+          final AssistantStreamEvent syntheticDone = AssistantStreamEvent(
+            type: AssistantStreamEventType.done,
+            runId: completedEvent.runId,
+            assistantMessageId: completedEvent.assistantMessageId,
+            backgroundSyncPending: true,
+            reconcileAfterMs: 1500,
+          );
+          _scheduleBackgroundReconcileAttempts(
+            _replyReconcileBackoffs(syntheticDone.reconcileAfterMs),
+          );
+          yield syntheticDone;
+          return;
+        }
+        final bool canRetry =
+            attempt == 0 &&
+            !sawReplyPayload &&
+            _isRetryableAssistantStreamError(error);
+        if (!canRetry) {
+          rethrow;
+        }
+      }
+    }
+  }
+
+  @override
+  Stream<AssistantStreamEvent> streamCapture({
+    required String prompt,
+    required String threadId,
+    required String sessionId,
+    required SleepCaptureType captureType,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  }) async* {
+    final Map<String, dynamic> requestBody = <String, dynamic>{
+      'threadId': threadId,
+      'prompt': prompt,
+      'sessionId': sessionId,
+      'captureType': captureType.name,
+      'clientUserMessageId': clientUserMessageId,
+      'clientAssistantMessageId': clientAssistantMessageId,
+      'dorm': <String, dynamic>{
+        'id': dorm.id,
+        'noiseDb': dorm.noiseDb,
+        'quietLabel': dorm.quietLabel,
+        'memberCount': dorm.members.length,
+      },
+    };
+
+    for (int attempt = 0; attempt < 2; attempt += 1) {
+      bool sawSurfacePatch = false;
+      bool sawReplyPayload = false;
+      try {
+        final Stream<CloudBaseSseFrame> frames = await _appApiClient.postSse(
+          '/api/assistant/capture/stream',
+          body: requestBody,
+        );
+
+        await for (final CloudBaseSseFrame frame in frames) {
+          final AssistantStreamEvent event = _assistantEventFromFrame(
+            frame,
+            fallbackCaptureType: captureType,
+            fallbackSessionId: sessionId,
+          );
+          if (event.type == AssistantStreamEventType.messageDelta ||
+              event.type == AssistantStreamEventType.messageCompleted) {
+            sawReplyPayload = true;
+          }
+          if (event.type == AssistantStreamEventType.surfacePatch &&
+              event.patch != null) {
+            sawSurfacePatch = true;
+            _snapshotStore.applyAssistantSurfacePatch(event.patch!);
+          }
+          if (event.type == AssistantStreamEventType.captureRecord &&
+              event.record != null) {
+            _snapshotStore.upsertSleepCaptureRecord(
+              _sleepCaptureRecordToMap(event.record!),
+            );
+          }
+          if (event.type == AssistantStreamEventType.done) {
+            _scheduleBackgroundReconcile(
+              delay: sawSurfacePatch
+                  ? const Duration(milliseconds: 1600)
+                  : const Duration(milliseconds: 250),
+            );
+          }
+          yield event;
+          if (event.type == AssistantStreamEventType.error ||
+              event.type == AssistantStreamEventType.done) {
+            return;
+          }
+        }
+        return;
+      } catch (error) {
+        if (error is CloudBaseAppApiException &&
+            error.code == 'THREAD_TURN_BUSY') {
+          yield AssistantStreamEvent(
+            type: AssistantStreamEventType.error,
+            errorCode: error.code,
+            errorMessage: error.message,
+            sourceMode: AssistantReplySourceMode.error,
+          );
+          return;
+        }
+        final bool canRetry =
+            attempt == 0 &&
+            !sawReplyPayload &&
+            _isRetryableAssistantStreamError(error);
+        if (!canRetry) {
+          rethrow;
+        }
+      }
+    }
+  }
 
   @override
   Future<AssistantReplyResult> generateReply({
@@ -168,55 +565,59 @@ class CloudBaseAssistantReplyGateway implements AssistantReplyGateway {
     required String clientAssistantMessageId,
     required Dorm dorm,
   }) async {
-    try {
-      final Map<String, dynamic> data = await _appApiClient.post(
-        '/api/assistant/reply',
-        body: <String, dynamic>{
-          'threadId': threadId,
-          'prompt': prompt,
-          'clientUserMessageId': clientUserMessageId,
-          'clientAssistantMessageId': clientAssistantMessageId,
-          'dorm': <String, dynamic>{
-            'id': dorm.id,
-            'noiseDb': dorm.noiseDb,
-            'quietLabel': dorm.quietLabel,
-            'memberCount': dorm.members.length,
-          },
-        },
-      );
-      final String reply = data['reply'] as String? ?? '';
-      if (reply.trim().isNotEmpty) {
-        try {
-          await _snapshotStore.refresh();
-        } catch (_) {
-          // Keep the remote reply visible even if snapshot refresh fails.
-        }
-        return AssistantReplyResult(
-          reply: reply,
-          sourceMode: _sourceModeFromWire(data['sourceMode']),
-          runId: data['runId'] as String?,
-          intent: data['intent'] as String?,
-          provider: data['provider'] as String?,
-          model: data['model'] as String?,
-          assistantMessageId: data['assistantMessageId'] as String?,
-          errorMessage: data['errorMessage'] as String?,
-          updatedSurfaces:
-              (data['updatedSurfaces'] as List<dynamic>? ?? const <dynamic>[])
-                  .map((dynamic item) => item.toString())
-                  .toList(growable: false),
-        );
+    String replyBuffer = '';
+    AssistantReplyResult? completed;
+
+    await for (final AssistantStreamEvent event in streamReply(
+      prompt: prompt,
+      threadId: threadId,
+      clientUserMessageId: clientUserMessageId,
+      clientAssistantMessageId: clientAssistantMessageId,
+      dorm: dorm,
+    )) {
+      switch (event.type) {
+        case AssistantStreamEventType.messageDelta:
+          replyBuffer += event.delta ?? '';
+          break;
+        case AssistantStreamEventType.messageCompleted:
+          completed = AssistantReplyResult(
+            reply: event.reply ?? replyBuffer,
+            sourceMode:
+                event.sourceMode ?? AssistantReplySourceMode.remoteSuccess,
+            runId: event.runId,
+            intent: event.intent,
+            provider: event.provider,
+            model: event.model,
+            assistantMessageId: event.assistantMessageId,
+            errorMessage: event.errorMessage,
+            errorCode: event.errorCode,
+            updatedSurfaces: event.updatedSurfaces,
+          );
+          break;
+        case AssistantStreamEventType.error:
+          return AssistantReplyResult(
+            reply: assistantErrorContentForCode(event.errorCode),
+            sourceMode: AssistantReplySourceMode.error,
+            errorMessage: event.errorMessage,
+            errorCode: event.errorCode,
+          );
+        case AssistantStreamEventType.ack:
+        case AssistantStreamEventType.surfacePatch:
+        case AssistantStreamEventType.captureRecord:
+        case AssistantStreamEventType.memorySynced:
+        case AssistantStreamEventType.done:
+          break;
       }
-      return AssistantReplyResult(
-        reply: '暂时没有收到回复，请稍后再试。',
-        sourceMode: AssistantReplySourceMode.error,
-      );
-    } catch (error) {
-      return AssistantReplyResult(
-        reply: '暂时没有收到回复，请稍后再试。',
-        sourceMode: AssistantReplySourceMode.error,
-        errorMessage: error.toString(),
-      );
     }
+
+    return completed ??
+        AssistantReplyResult(
+          reply: replyBuffer.isEmpty
+              ? assistantErrorContentForCode(null)
+              : replyBuffer,
+          sourceMode: AssistantReplySourceMode.error,
+          errorMessage: 'reply stream ended before completion',
+        );
   }
 
   @override
@@ -229,91 +630,231 @@ class CloudBaseAssistantReplyGateway implements AssistantReplyGateway {
     required String clientAssistantMessageId,
     required Dorm dorm,
   }) async {
+    String replyBuffer = '';
+    AssistantCaptureResult? completed;
+    SleepCaptureRecord? record;
+
+    await for (final AssistantStreamEvent event in streamCapture(
+      prompt: prompt,
+      threadId: threadId,
+      sessionId: sessionId,
+      captureType: captureType,
+      clientUserMessageId: clientUserMessageId,
+      clientAssistantMessageId: clientAssistantMessageId,
+      dorm: dorm,
+    )) {
+      switch (event.type) {
+        case AssistantStreamEventType.messageDelta:
+          replyBuffer += event.delta ?? '';
+          break;
+        case AssistantStreamEventType.messageCompleted:
+          completed = AssistantCaptureResult(
+            reply: event.reply ?? replyBuffer,
+            sourceMode:
+                event.sourceMode ?? AssistantReplySourceMode.remoteSuccess,
+            record:
+                record ??
+                SleepCaptureRecord(
+                  id: '',
+                  type: captureType,
+                  sessionId: sessionId,
+                  createdAt: DateTime.now(),
+                  title: '',
+                  outline: '',
+                  content: prompt.trim(),
+                ),
+            recordPersistedRemotely: record != null,
+            runId: event.runId,
+            intent: event.intent,
+            provider: event.provider,
+            model: event.model,
+            assistantMessageId: event.assistantMessageId,
+            errorMessage: event.errorMessage,
+            updatedSurfaces: event.updatedSurfaces,
+          );
+          break;
+        case AssistantStreamEventType.captureRecord:
+          record = event.record;
+          if (completed != null && record != null) {
+            completed = AssistantCaptureResult(
+              reply: completed.reply,
+              sourceMode: completed.sourceMode,
+              record: record,
+              recordPersistedRemotely: true,
+              runId: completed.runId,
+              intent: completed.intent,
+              provider: completed.provider,
+              model: completed.model,
+              assistantMessageId: completed.assistantMessageId,
+              errorMessage: completed.errorMessage,
+              updatedSurfaces: completed.updatedSurfaces,
+            );
+          }
+          break;
+        case AssistantStreamEventType.error:
+          return AssistantCaptureResult(
+            reply: '暂时没有收到整理结果，请稍后再试。',
+            sourceMode: AssistantReplySourceMode.error,
+            errorMessage: event.errorMessage,
+            record: SleepCaptureRecord(
+              id: '',
+              type: captureType,
+              sessionId: sessionId,
+              createdAt: DateTime.now(),
+              title: '',
+              outline: '',
+              content: prompt.trim(),
+            ),
+            recordPersistedRemotely: false,
+          );
+        case AssistantStreamEventType.ack:
+        case AssistantStreamEventType.surfacePatch:
+        case AssistantStreamEventType.memorySynced:
+        case AssistantStreamEventType.done:
+          break;
+      }
+    }
+
+    return completed ??
+        AssistantCaptureResult(
+          reply: replyBuffer.isEmpty ? '暂时没有收到整理结果，请稍后再试。' : replyBuffer,
+          sourceMode: AssistantReplySourceMode.error,
+          errorMessage: 'capture stream ended before completion',
+          record:
+              record ??
+              SleepCaptureRecord(
+                id: '',
+                type: captureType,
+                sessionId: sessionId,
+                createdAt: DateTime.now(),
+                title: '',
+                outline: '',
+                content: prompt.trim(),
+              ),
+          recordPersistedRemotely: record != null,
+        );
+  }
+
+  void _scheduleBackgroundReconcile({required Duration delay}) {
+    unawaited(
+      Future<void>.delayed(delay, () async {
+        _reconcileQueued = true;
+        await _backgroundReconcile();
+      }),
+    );
+  }
+
+  void _scheduleBackgroundReconcileAttempts(List<Duration> delays) {
+    for (final Duration delay in delays) {
+      _scheduleBackgroundReconcile(delay: delay);
+    }
+  }
+
+  Future<void> _backgroundReconcile() async {
+    if (_reconcileInFlight) {
+      return;
+    }
+    _reconcileInFlight = true;
     try {
-      final Map<String, dynamic> data = await _appApiClient.post(
-        '/api/assistant/capture',
-        body: <String, dynamic>{
-          'threadId': threadId,
-          'prompt': prompt,
-          'sessionId': sessionId,
-          'captureType': captureType.name,
-          'clientUserMessageId': clientUserMessageId,
-          'clientAssistantMessageId': clientAssistantMessageId,
-          'dorm': <String, dynamic>{
-            'id': dorm.id,
-            'noiseDb': dorm.noiseDb,
-            'quietLabel': dorm.quietLabel,
-            'memberCount': dorm.members.length,
-          },
-        },
-      );
-      final String reply = data['reply'] as String? ?? '';
-      final Map<String, dynamic> recordMap = Map<String, dynamic>.from(
-        (data['record'] as Map?) ?? const <String, dynamic>{},
-      );
-      if (reply.trim().isNotEmpty && recordMap.isNotEmpty) {
+      while (_reconcileQueued) {
+        _reconcileQueued = false;
         try {
           await _snapshotStore.refresh();
         } catch (_) {
-          // Keep the remote capture visible even if snapshot refresh fails.
+          // Keep the streamed UI visible even if background reconcile fails.
         }
-        return AssistantCaptureResult(
-          reply: reply,
-          sourceMode: _sourceModeFromWire(data['sourceMode']),
-          runId: data['runId'] as String?,
-          intent: data['intent'] as String?,
-          provider: data['provider'] as String?,
-          model: data['model'] as String?,
-          assistantMessageId: data['assistantMessageId'] as String?,
-          errorMessage: data['errorMessage'] as String?,
-          updatedSurfaces:
-              (data['updatedSurfaces'] as List<dynamic>? ?? const <dynamic>[])
-                  .map((dynamic item) => item.toString())
-                  .toList(growable: false),
-          record: SleepCaptureRecord(
-            id: recordMap['id'] as String? ?? '',
-            type: captureType,
-            sessionId: recordMap['sessionId'] as String? ?? sessionId,
-            createdAt: _dateFromWire(recordMap['createdAt']) ?? DateTime.now(),
-            title: recordMap['title'] as String? ?? '',
-            outline: recordMap['outline'] as String? ?? '',
-            content: recordMap['content'] as String? ?? prompt.trim(),
-          ),
-          recordPersistedRemotely: true,
-        );
       }
-      return AssistantCaptureResult(
-        reply: '暂时没有收到整理结果，请稍后再试。',
-        sourceMode: AssistantReplySourceMode.error,
-        errorMessage: data['errorMessage'] as String?,
-        record: SleepCaptureRecord(
-          id: '',
-          type: captureType,
-          sessionId: sessionId,
-          createdAt: DateTime.now(),
-          title: '',
-          outline: '',
-          content: prompt.trim(),
-        ),
-        recordPersistedRemotely: false,
-      );
-    } catch (error) {
-      return AssistantCaptureResult(
-        reply: '暂时没有收到整理结果，请稍后再试。',
-        sourceMode: AssistantReplySourceMode.error,
-        errorMessage: error.toString(),
-        record: SleepCaptureRecord(
-          id: '',
-          type: captureType,
-          sessionId: sessionId,
-          createdAt: DateTime.now(),
-          title: '',
-          outline: '',
-          content: prompt.trim(),
-        ),
-        recordPersistedRemotely: false,
-      );
+    } finally {
+      _reconcileInFlight = false;
     }
+  }
+}
+
+List<Duration> _replyReconcileBackoffs(int? firstDelayMs) {
+  final int initialMs = firstDelayMs != null && firstDelayMs > 0
+      ? firstDelayMs
+      : 1500;
+  return <Duration>[
+    Duration(milliseconds: initialMs),
+    const Duration(milliseconds: 4000),
+    const Duration(milliseconds: 8000),
+  ];
+}
+
+AssistantStreamEvent _assistantEventFromFrame(
+  CloudBaseSseFrame frame, {
+  SleepCaptureType? fallbackCaptureType,
+  String? fallbackSessionId,
+}) {
+  final Map<String, dynamic> data = _decodeStreamPayload(frame.data);
+  switch (frame.event) {
+    case 'ack':
+      return AssistantStreamEvent(
+        type: AssistantStreamEventType.ack,
+        assistantMessageId: data['assistantMessageId'] as String?,
+      );
+    case 'message_delta':
+      return AssistantStreamEvent(
+        type: AssistantStreamEventType.messageDelta,
+        delta: data['delta'] as String? ?? '',
+      );
+    case 'message_completed':
+      return AssistantStreamEvent(
+        type: AssistantStreamEventType.messageCompleted,
+        reply: data['reply'] as String?,
+        runId: data['runId'] as String?,
+        intent: data['intent'] as String?,
+        provider: data['provider'] as String?,
+        model: data['model'] as String?,
+        assistantMessageId: data['assistantMessageId'] as String?,
+        errorMessage: data['errorMessage'] as String?,
+        sourceMode: _sourceModeFromWire(data['sourceMode']),
+        updatedSurfaces: _stringList(data['updatedSurfaces']),
+      );
+    case 'surface_patch':
+      return AssistantStreamEvent(
+        type: AssistantStreamEventType.surfacePatch,
+        patch: _mapOf(data['patch']),
+        updatedSurfaces: _stringList(data['updatedSurfaces']),
+      );
+    case 'capture_record':
+      return AssistantStreamEvent(
+        type: AssistantStreamEventType.captureRecord,
+        record: _sleepCaptureRecordFromMap(
+          _mapOf(data['record']),
+          fallbackCaptureType: fallbackCaptureType,
+          fallbackSessionId: fallbackSessionId,
+        ),
+      );
+    case 'memory_synced':
+      return AssistantStreamEvent(
+        type: AssistantStreamEventType.memorySynced,
+        count: (data['count'] as num?)?.toInt(),
+      );
+    case 'done':
+      return AssistantStreamEvent(
+        type: AssistantStreamEventType.done,
+        runId: data['runId'] as String?,
+        assistantMessageId: data['assistantMessageId'] as String?,
+        backgroundSyncPending: data['backgroundSyncPending'] as bool?,
+        reconcileAfterMs: (data['reconcileAfterMs'] as num?)?.toInt(),
+      );
+    case 'error':
+      return AssistantStreamEvent(
+        type: AssistantStreamEventType.error,
+        errorCode: data['code'] as String?,
+        errorMessage:
+            data['message'] as String? ??
+            data['error'] as String? ??
+            frame.data,
+        sourceMode: AssistantReplySourceMode.error,
+      );
+    default:
+      return AssistantStreamEvent(
+        type: AssistantStreamEventType.error,
+        errorMessage: 'unknown stream event: ${frame.event}',
+        sourceMode: AssistantReplySourceMode.error,
+      );
   }
 }
 
@@ -349,6 +890,105 @@ DateTime? _dateFromWire(dynamic value) {
     }
   }
   return null;
+}
+
+Map<String, dynamic> _decodeStreamPayload(String data) {
+  if (data.trim().isEmpty) {
+    return <String, dynamic>{};
+  }
+  try {
+    final Object? decoded = jsonDecode(data);
+    if (decoded is Map<String, dynamic>) {
+      return decoded;
+    }
+    if (decoded is Map) {
+      return Map<String, dynamic>.from(decoded);
+    }
+    return <String, dynamic>{'value': decoded};
+  } catch (_) {
+    return <String, dynamic>{'message': data};
+  }
+}
+
+bool _isRetryableAssistantStreamError(Object error) {
+  if (error is TimeoutException) {
+    return true;
+  }
+  if (error is CloudBaseAppApiException) {
+    final int? statusCode = error.statusCode;
+    if (statusCode != null &&
+        (statusCode == 408 ||
+            statusCode == 425 ||
+            statusCode == 429 ||
+            statusCode >= 500)) {
+      return true;
+    }
+  }
+  final String message = error.toString().toLowerCase();
+  return message.contains('aborted') ||
+      message.contains('connection closed') ||
+      message.contains('connection reset') ||
+      message.contains('socket') ||
+      message.contains('broken pipe') ||
+      message.contains('eof') ||
+      message.contains('http/2') ||
+      message.contains('clientexception');
+}
+
+Map<String, dynamic> _mapOf(dynamic value) {
+  if (value is Map<String, dynamic>) {
+    return Map<String, dynamic>.from(value);
+  }
+  if (value is Map) {
+    return Map<String, dynamic>.from(value);
+  }
+  return <String, dynamic>{};
+}
+
+List<String> _stringList(dynamic value) {
+  if (value is! List) {
+    return const <String>[];
+  }
+  return value.map((dynamic item) => item.toString()).toList(growable: false);
+}
+
+SleepCaptureRecord _sleepCaptureRecordFromMap(
+  Map<String, dynamic> map, {
+  SleepCaptureType? fallbackCaptureType,
+  String? fallbackSessionId,
+}) {
+  return SleepCaptureRecord(
+    id: map['id'] as String? ?? '',
+    type: _captureTypeFromWire(map['type'], fallbackCaptureType),
+    sessionId: map['sessionId'] as String? ?? fallbackSessionId ?? '',
+    createdAt: _dateFromWire(map['createdAt']) ?? DateTime.now(),
+    title: map['title'] as String? ?? '',
+    outline: map['outline'] as String? ?? '',
+    content: map['content'] as String? ?? '',
+  );
+}
+
+SleepCaptureType _captureTypeFromWire(
+  dynamic value,
+  SleepCaptureType? fallback,
+) {
+  return switch (value) {
+    'memo' => SleepCaptureType.memo,
+    'dream' => SleepCaptureType.dream,
+    _ => fallback ?? SleepCaptureType.memo,
+  };
+}
+
+Map<String, dynamic> _sleepCaptureRecordToMap(SleepCaptureRecord record) {
+  return <String, dynamic>{
+    'id': record.id,
+    'type': record.type.name,
+    'sessionId': record.sessionId,
+    'createdAt': record.createdAt.toIso8601String(),
+    'title': record.title,
+    'outline': record.outline,
+    'content': record.content,
+  };
 }
 
 String _localCaptureTitle(

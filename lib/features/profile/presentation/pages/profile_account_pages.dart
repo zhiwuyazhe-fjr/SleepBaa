@@ -735,6 +735,7 @@ String _presenceLabel(DormPresenceStatus status) {
   return switch (status) {
     DormPresenceStatus.returned => '已返宿',
     DormPresenceStatus.away => '未返宿',
+    DormPresenceStatus.unknown => '状态待确认',
   };
 }
 

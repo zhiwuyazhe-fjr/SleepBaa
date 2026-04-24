@@ -518,142 +518,158 @@ class _DreamMappingTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.xl,
-        AppSpacing.lg,
-        AppSpacing.xl,
-        120,
-      ),
-      children: <Widget>[
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: AppRadius.cardLarge,
-            boxShadow: AppColors.cardShadow,
+    final AppServices services = context.appServices;
+    return ListenableBuilder(
+      listenable: services.sleepCaptureRepository,
+      builder: (BuildContext context, Widget? child) {
+        final List<SleepCaptureRecord> records = services
+            .sleepCaptureRepository
+            .recordsByType(SleepCaptureType.dream);
+        final _DreamAnalysisViewData analysis = _buildDreamAnalysis(records);
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xl,
+            AppSpacing.lg,
+            AppSpacing.xl,
+            120,
           ),
-          child: Column(
-            children: <Widget>[
-              Container(
-                width: 116,
-                height: 116,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: palette.primaryHighlight.withAlpha(180),
-                  image: const DecorationImage(
-                    image: AssetImage('assets/images/dream_top.png'),
-                    fit: BoxFit.cover,
-                  ),
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: palette.primarySoft.withAlpha(90),
-                      blurRadius: 30,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                '学会梦的语言，解锁梦的启示',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                '从反复出现的场景、情绪和线索里，慢慢看见梦境在提醒你的东西。',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xl),
-        _PatternBreakdownCard(palette: palette),
-        const SizedBox(height: AppSpacing.md),
-        ...DreamContent.insights.map(
-          (DreamInsightData insight) => Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: Container(
-              padding: const EdgeInsets.all(AppSpacing.lg),
+          children: <Widget>[
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.xl),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: AppRadius.card,
+                borderRadius: AppRadius.cardLarge,
                 boxShadow: AppColors.cardShadow,
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Column(
                 children: <Widget>[
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: 116,
+                    height: 116,
                     decoration: BoxDecoration(
-                      color: palette.primaryHighlight.withAlpha(150),
-                      borderRadius: BorderRadius.circular(AppRadius.sm),
-                    ),
-                    child: Icon(insight.icon, color: palette.primary),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          insight.title,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          insight.summary,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: AppColors.textSecondary),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        ...insight.points.map(
-                          (String point) => Padding(
-                            padding: const EdgeInsets.only(
-                              bottom: AppSpacing.sm,
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Icon(
-                                    Icons.circle,
-                                    size: 6,
-                                    color: palette.primary,
-                                  ),
-                                ),
-                                const SizedBox(width: AppSpacing.sm),
-                                Expanded(
-                                  child: Text(
-                                    point,
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(
-                                          color: AppColors.textSecondary,
-                                          height: 1.45,
-                                        ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                      shape: BoxShape.circle,
+                      color: palette.primaryHighlight.withAlpha(180),
+                      image: const DecorationImage(
+                        image: AssetImage('assets/images/dream_top.png'),
+                        fit: BoxFit.cover,
+                      ),
+                      boxShadow: <BoxShadow>[
+                        BoxShadow(
+                          color: palette.primarySoft.withAlpha(90),
+                          blurRadius: 30,
                         ),
                       ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    analysis.mappingTitle,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    analysis.mappingDescription,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-        ),
-      ],
+            const SizedBox(height: AppSpacing.xl),
+            _PatternBreakdownCard(
+              palette: palette,
+              patterns: analysis.patterns,
+              badgeLabel: analysis.patternBadge,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            ...analysis.insights.map(
+              (DreamInsightData insight) => Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: Container(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: AppRadius.card,
+                    boxShadow: AppColors.cardShadow,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: palette.primaryHighlight.withAlpha(150),
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                        ),
+                        child: Icon(insight.icon, color: palette.primary),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              insight.title,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              insight.summary,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: AppColors.textSecondary),
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            ...insight.points.map(
+                              (String point) => Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: AppSpacing.sm,
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 6),
+                                      child: Icon(
+                                        Icons.circle,
+                                        size: 6,
+                                        color: palette.primary,
+                                      ),
+                                    ),
+                                    const SizedBox(width: AppSpacing.sm),
+                                    Expanded(
+                                      child: Text(
+                                        point,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: AppColors.textSecondary,
+                                              height: 1.45,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -665,92 +681,100 @@ class _HighlightCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: AppRadius.cardLarge,
-        boxShadow: AppColors.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            crossAxisAlignment: WrapCrossAlignment.center,
+    final AppServices services = context.appServices;
+    return ListenableBuilder(
+      listenable: services.sleepCaptureRepository,
+      builder: (BuildContext context, Widget? child) {
+        final _DreamAnalysisViewData analysis = _buildDreamAnalysis(
+          services.sleepCaptureRepository.recordsByType(SleepCaptureType.dream),
+        );
+        return Container(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: AppRadius.cardLarge,
+            boxShadow: AppColors.cardShadow,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.xs,
-                ),
-                decoration: BoxDecoration(
-                  color: palette.primaryHighlight.withAlpha(170),
-                  borderRadius: AppRadius.pill,
-                ),
-                child: Text(
-                  DreamContent.highlight.chipLabel,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: palette.primaryDeep,
-                    fontWeight: FontWeight.w700,
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: <Widget>[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.xs,
+                    ),
+                    decoration: BoxDecoration(
+                      color: palette.primaryHighlight.withAlpha(170),
+                      borderRadius: AppRadius.pill,
+                    ),
+                    child: Text(
+                      analysis.highlight.chipLabel,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: palette.primaryDeep,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
-                ),
+                  Icon(Icons.auto_awesome_rounded, color: palette.primary),
+                ],
               ),
-              Icon(Icons.auto_awesome_rounded, color: palette.primary),
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                analysis.highlight.title,
+                style: Theme.of(
+                  context,
+                ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                analysis.highlight.description,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: analysis.patterns.map((DreamPatternData pattern) {
+                  final Color barColor = _barColorForSeed(pattern.colorSeed);
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: <Widget>[
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 500),
+                            curve: Curves.easeOutCubic,
+                            height: 28 + (pattern.value * 80),
+                            decoration: BoxDecoration(
+                              color: barColor,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(24),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            pattern.label,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
             ],
           ),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            DreamContent.highlight.title,
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            DreamContent.highlight.description,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: DreamContent.patterns.map((DreamPatternData pattern) {
-              final Color barColor = _barColorForSeed(pattern.colorSeed);
-              return Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: <Widget>[
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 500),
-                        curve: Curves.easeOutCubic,
-                        height: 28 + (pattern.value * 80),
-                        decoration: BoxDecoration(
-                          color: barColor,
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(24),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        pattern.label,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -769,9 +793,15 @@ class _HighlightCard extends StatelessWidget {
 }
 
 class _PatternBreakdownCard extends StatelessWidget {
-  const _PatternBreakdownCard({required this.palette});
+  const _PatternBreakdownCard({
+    required this.palette,
+    required this.patterns,
+    required this.badgeLabel,
+  });
 
   final NightMoodPalette palette;
+  final List<DreamPatternData> patterns;
+  final String badgeLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -805,7 +835,7 @@ class _PatternBreakdownCard extends StatelessWidget {
                   borderRadius: AppRadius.pill,
                 ),
                 child: Text(
-                  '最近 30 天',
+                  badgeLabel,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
                     color: palette.primaryDeep,
                     fontWeight: FontWeight.w700,
@@ -817,7 +847,7 @@ class _PatternBreakdownCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.lg),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
-            children: DreamContent.patterns.asMap().entries.map((
+            children: patterns.asMap().entries.map((
               MapEntry<int, DreamPatternData> item,
             ) {
               final DreamPatternData pattern = item.value;
@@ -867,6 +897,146 @@ class _PatternBreakdownCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DreamAnalysisViewData {
+  const _DreamAnalysisViewData({
+    required this.highlight,
+    required this.patterns,
+    required this.insights,
+    required this.mappingTitle,
+    required this.mappingDescription,
+    required this.patternBadge,
+  });
+
+  final DreamHighlightData highlight;
+  final List<DreamPatternData> patterns;
+  final List<DreamInsightData> insights;
+  final String mappingTitle;
+  final String mappingDescription;
+  final String patternBadge;
+}
+
+_DreamAnalysisViewData _buildDreamAnalysis(List<SleepCaptureRecord> records) {
+  if (records.isEmpty) {
+    return const _DreamAnalysisViewData(
+      highlight: DreamContent.highlight,
+      patterns: DreamContent.patterns,
+      insights: DreamContent.insights,
+      mappingTitle: '学会梦的语言，解锁梦的启示',
+      mappingDescription: '从反复出现的场景、情绪和线索里，慢慢看见梦境在提醒你的东西。',
+      patternBadge: '最近 30 天',
+    );
+  }
+
+  final List<SleepCaptureRecord> sorted = List<SleepCaptureRecord>.from(records)
+    ..sort(
+      (SleepCaptureRecord a, SleepCaptureRecord b) =>
+          b.createdAt.compareTo(a.createdAt),
+    );
+  final int total = sorted.length;
+  final Map<String, int> counts = <String, int>{};
+  for (final SleepCaptureRecord record in sorted.take(12)) {
+    for (final String label in _dreamPatternLabelsForRecord(record)) {
+      counts.update(label, (int value) => value + 1, ifAbsent: () => 1);
+    }
+  }
+  final List<MapEntry<String, int>> topLabels =
+      counts.entries.toList()
+        ..sort((MapEntry<String, int> a, MapEntry<String, int> b) {
+          final int byCount = b.value.compareTo(a.value);
+          return byCount != 0 ? byCount : a.key.compareTo(b.key);
+        });
+
+  final List<DreamPatternData> patterns = <DreamPatternData>[
+    for (int index = 0; index < 4; index++)
+      DreamPatternData(
+        label: index < topLabels.length ? topLabels[index].key : '留白',
+        value: index < topLabels.length
+            ? (topLabels[index].value / math.max(1, total)).clamp(0.18, 0.92)
+            : 0.18,
+        colorSeed: index,
+      ),
+  ];
+
+  final String topLabel = topLabels.isEmpty ? '梦境' : topLabels.first.key;
+  final SleepCaptureRecord latest = sorted.first;
+  final String latestSummary = latest.outline.trim().isNotEmpty
+      ? latest.outline.trim()
+      : latest.content.trim();
+
+  return _DreamAnalysisViewData(
+    highlight: DreamHighlightData(
+      title: '最近的梦开始围绕“$topLabel”展开',
+      description:
+          '当前梦记已经接到真实记录，最近 $total 条里，$topLabel 出现得最频繁，主导情绪偏向“${latest.title}”，适合回看时重点关注人物、颜色、地点与提醒感受。',
+      chipLabel: '本周已记录 $total 次',
+    ),
+    patterns: patterns,
+    mappingTitle: '从真实梦境里读出重复线索',
+    mappingDescription:
+        '当前梦记已经接到真实云端数据。最近 $total 条里，高频线索更接近“$topLabel”，情绪倾向可结合醒后标题和摘要继续回看。',
+    patternBadge: '最近 $total 条',
+    insights: <DreamInsightData>[
+      DreamInsightData(
+        title: '高频意象',
+        summary: '最近梦记里最常见的是“$topLabel”，说明它已经开始成为你这段时间梦境的稳定主题。',
+        points: <String>[
+          '最近记录共 $total 条，最高频线索是“$topLabel”。',
+          if (topLabels.length > 1) '第二常见线索是“${topLabels[1].key}”，说明梦境主题不是完全单一的。',
+          '这类高频标签来自你真实输入内容和 AI 摘要中的关键词提取，而不是固定示例。',
+        ],
+        icon: Icons.explore_rounded,
+      ),
+      DreamInsightData(
+        title: '情绪映射',
+        summary: '最新一条梦记的标题是“${latest.title}”，可以先把它当作当前醒后主情绪的参考锚点。',
+        points: <String>[
+          '最新记录时间是 ${_formatRelativeDreamTime(latest.createdAt)}。',
+          '如果你发现最近标题经常重复某种情绪词，通常说明醒后的第一感觉比较稳定。',
+          '优先回看最近 3 条，比一次看太多更容易发现真实模式。',
+        ],
+        icon: Icons.favorite_rounded,
+      ),
+      DreamInsightData(
+        title: '调节建议',
+        summary: '先从最近一条真实梦记出发，做轻量回看，不要急着给梦下结论。',
+        points: <String>[
+          '先读一遍最近一条摘要：$latestSummary',
+          '如果某个标签连续几天出现，可以在白天简单记下现实里对应的人、事或地点。',
+          '映射页更适合做趋势观察，不一定每条梦都要立刻解释清楚。',
+        ],
+        icon: Icons.self_improvement_rounded,
+      ),
+    ],
+  );
+}
+
+Set<String> _dreamPatternLabelsForRecord(SleepCaptureRecord record) {
+  final String text = '${record.title} ${record.outline} ${record.content}'.toLowerCase();
+  final Set<String> labels = <String>{};
+  void match(String label, List<String> keywords) {
+    if (keywords.any((String keyword) => text.contains(keyword))) {
+      labels.add(label);
+    }
+  }
+
+  match('飞行', <String>['飞', '天空', '高空', '漂浮']);
+  match('追逐', <String>['追', '跑', '赶', '逃']);
+  match('熟人', <String>['同学', '朋友', '家人', '老师', '室友']);
+  match('场景', <String>['房间', '教室', '学校', '电影', '路', '桥']);
+  match('情绪', <String>['害怕', '开心', '紧张', '轻松', '平静']);
+
+  if (labels.isEmpty) {
+    labels.add('梦境');
+  }
+  return labels;
+}
+
+String _formatRelativeDreamTime(DateTime dateTime) {
+  final String hh = dateTime.hour.toString().padLeft(2, '0');
+  final String mm = dateTime.minute.toString().padLeft(2, '0');
+  return '今天 $hh:$mm';
 }
 
 class _DreamEntryCard extends StatelessWidget {

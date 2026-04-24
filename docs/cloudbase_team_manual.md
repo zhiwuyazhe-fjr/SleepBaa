@@ -516,3 +516,14 @@ AI_PROVIDER_MODEL
 AI_PROVIDER_TIMEOUT_MS
 
 
+现在你可以直接用：
+
+.\deploy_cloudbase_functions.cmd
+它不会再把现有 API key 清空。
+
+如果你要改 key：
+
+.\deploy_cloudbase_functions.cmd -AIProviderApiKey your_new_key
+如果你是故意清空：
+
+.\deploy_cloudbase_functions.cmd -ClearAIProviderApiKey

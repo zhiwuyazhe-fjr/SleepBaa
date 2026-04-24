@@ -8,6 +8,7 @@ import 'package:sleep_dorm_app/core/backend/cloudbase_app_api_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_auth_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_session_store.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_snapshot_store.dart';
+import 'package:sleep_dorm_app/core/backend/verified_phone_identity_store.dart';
 import 'package:sleep_dorm_app/core/data/backend_contract.dart';
 import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
 import 'package:sleep_dorm_app/core/data/model_serializers.dart';
@@ -100,6 +101,39 @@ double _doubleOf(dynamic value, [double fallback = 0]) {
     return value.toDouble();
   }
   return fallback;
+}
+
+double? _nullableDoubleOf(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is num) {
+    return value.toDouble();
+  }
+  return null;
+}
+
+SleepTrendSeries _sleepTrendSeriesFromCard(
+  Map<String, dynamic> card, {
+  required String metricKey,
+  required String unit,
+}) {
+  final Map<String, dynamic> payload = _mapOf(card['payload']);
+  final List<SleepTrendPoint> points = _mapListOf(payload['points'])
+      .map(
+        (Map<String, dynamic> point) => SleepTrendPoint(
+          dateKey: _stringOf(point['dateKey']),
+          weekdayLabel: _stringOf(point['weekdayLabel']),
+          value: _nullableDoubleOf(point['value']),
+        ),
+      )
+      .where((SleepTrendPoint point) => point.dateKey.isNotEmpty)
+      .toList(growable: false);
+  return SleepTrendSeries(
+    metricKey: _stringOf(payload['metricKey'], metricKey),
+    unit: _stringOf(payload['unit'], unit),
+    points: points,
+  );
 }
 
 T? _firstWhereOrNull<T>(Iterable<T> values, bool Function(T value) test) {
@@ -258,14 +292,20 @@ DormMemberStatus _activityStatusFromStorage(Map<String, dynamic> map) {
 
 DormPresenceStatus _presenceStatusFromStorage(Map<String, dynamic> map) {
   final String rawPresence = _stringOf(map['presenceStatus']);
+  if (rawPresence == DormPresenceStatus.returned.name) {
+    return DormPresenceStatus.returned;
+  }
   if (rawPresence == DormPresenceStatus.away.name) {
     return DormPresenceStatus.away;
+  }
+  if (rawPresence == DormPresenceStatus.unknown.name) {
+    return DormPresenceStatus.unknown;
   }
   final String rawStatus = _stringOf(map['status']);
   if (rawStatus == DormMemberStatus.away.name) {
     return DormPresenceStatus.away;
   }
-  return DormPresenceStatus.returned;
+  return DormPresenceStatus.unknown;
 }
 
 bool _sleepModeFromStorage(Map<String, dynamic> map) {
@@ -324,6 +364,9 @@ Dorm _unboundDorm() {
 }
 
 DormMember _dormMemberFromMap(Map<String, dynamic> map) {
+  final int? noise = map['noiseDb'] == null
+      ? null
+      : (map['noiseDb'] as num?)?.round();
   return DormMember(
     uid: _stringOf(map['uid']),
     name: _stringOf(map['name']),
@@ -334,6 +377,7 @@ DormMember _dormMemberFromMap(Map<String, dynamic> map) {
     note: _stringOf(map['note']),
     avatarUrl: map['avatarUrl'] as String?,
     displayBadgeId: map['displayBadgeId'] as String?,
+    noiseDb: noise,
   );
 }
 
@@ -582,11 +626,14 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     required CloudBaseAppApiClient appApiClient,
     required CloudBaseSessionStore sessionStore,
     required CloudBaseSnapshotStore snapshotStore,
+    VerifiedPhoneIdentityStore? verifiedPhoneStore,
   }) : _environment = environment,
        _authClient = authClient,
        _appApiClient = appApiClient,
        _sessionStore = sessionStore,
-       _snapshotStore = snapshotStore {
+       _snapshotStore = snapshotStore,
+       _verifiedPhoneStore =
+           verifiedPhoneStore ?? VerifiedPhoneIdentityStore() {
     _snapshotStore.addListener(_syncFromSnapshot);
     _currentUser = buildDefaultUserProfile().copyWith(uid: '', dormId: null);
   }
@@ -596,11 +643,16 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   final CloudBaseAppApiClient _appApiClient;
   final CloudBaseSessionStore _sessionStore;
   final CloudBaseSnapshotStore _snapshotStore;
+  final VerifiedPhoneIdentityStore _verifiedPhoneStore;
 
   late UserProfile _currentUser;
   bool _isAuthenticating = false;
+  Future<UserProfile>? _authenticationInFlight;
   bool _hasCompletedInitialAuthBootstrap = false;
   String? _lastAuthError;
+  DateTime? _lastSuccessfulAuthAt;
+  VerifiedPhoneIdentity? _cachedVerifiedIdentity;
+  static const Duration _authRevalidationInterval = Duration(minutes: 5);
 
   @override
   UserProfile get currentUser => _currentUser;
@@ -609,9 +661,61 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   bool get isAuthenticated => _currentUser.uid.isNotEmpty;
 
   @override
-  bool get hasVerifiedPhoneIdentity =>
-      _currentUser.uid.isNotEmpty &&
-      (_currentUser.phoneNumber?.trim().isNotEmpty == true);
+  bool get hasVerifiedPhoneIdentity {
+    if (_currentUser.uid.isEmpty) {
+      return false;
+    }
+    if (_currentUser.phoneNumber?.trim().isNotEmpty == true) {
+      return true;
+    }
+    final VerifiedPhoneIdentity? cached = _cachedVerifiedIdentity;
+    return cached != null &&
+        cached.subject == _currentUser.uid &&
+        cached.phoneNumber.trim().isNotEmpty;
+  }
+
+  bool _phoneIdentityResolvableFromLocalProfile() {
+    if (_currentUser.phoneNumber?.trim().isNotEmpty == true) {
+      return true;
+    }
+    final VerifiedPhoneIdentity? cached = _cachedVerifiedIdentity;
+    return cached != null &&
+        cached.subject == _currentUser.uid &&
+        cached.phoneNumber.trim().isNotEmpty;
+  }
+
+  void _mergePhoneFromCachedVerifiedIdentity() {
+    final VerifiedPhoneIdentity? v = _cachedVerifiedIdentity;
+    if (v == null || v.subject != _currentUser.uid) {
+      return;
+    }
+    if (_currentUser.phoneNumber?.trim().isNotEmpty == true) {
+      return;
+    }
+    _currentUser = _currentUser.copyWith(
+      phoneNumber: v.phoneNumber,
+      phoneLinkedAt: v.phoneLinkedAt ?? DateTime.now(),
+    );
+  }
+
+  void _hydrateUserAfterInvalidSession({required String sessionSubject}) {
+    final VerifiedPhoneIdentity? v = _cachedVerifiedIdentity;
+    if (v != null &&
+        v.subject == sessionSubject &&
+        v.phoneNumber.trim().isNotEmpty) {
+      _currentUser = buildDefaultUserProfile().copyWith(
+        uid: v.subject,
+        phoneNumber: v.phoneNumber,
+        phoneLinkedAt: v.phoneLinkedAt ?? DateTime.now(),
+        clearDormId: true,
+      );
+    } else {
+      _currentUser = buildDefaultUserProfile().copyWith(
+        uid: sessionSubject,
+        clearDormId: true,
+      );
+    }
+  }
 
   @override
   bool get isAuthenticating => _isAuthenticating;
@@ -645,6 +749,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     _snapshotStore.clear();
     _currentUser = _signedOutProfile();
     _lastAuthError = message;
+    _lastSuccessfulAuthAt = null;
     return _currentUser;
   }
 
@@ -662,7 +767,19 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   }
 
   Future<void> _persistVerifiedPhoneIdentityIfNeeded() async {
-    if (!_appApiClient.isConfigured || !hasVerifiedPhoneIdentity) {
+    if (_currentUser.uid.isEmpty ||
+        _currentUser.phoneNumber?.trim().isEmpty == true) {
+      return;
+    }
+    final VerifiedPhoneIdentity identity = VerifiedPhoneIdentity(
+      subject: _currentUser.uid,
+      phoneNumber: _currentUser.phoneNumber!.trim(),
+      phoneLinkedAt: _currentUser.phoneLinkedAt,
+    );
+    await _verifiedPhoneStore.write(identity);
+    _cachedVerifiedIdentity = identity;
+
+    if (!_appApiClient.isConfigured) {
       return;
     }
     try {
@@ -688,58 +805,99 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   Future<UserProfile> signInAnonymously() => ensureAuthenticated();
 
   @override
-  Future<UserProfile> ensureAuthenticated() async {
-    if (_isAuthenticating) {
-      return _currentUser;
+  Future<UserProfile> ensureAuthenticated() => _ensureAuthenticated();
+
+  Future<UserProfile> _ensureAuthenticated({bool forceRefresh = false}) async {
+    final Future<UserProfile>? inFlight = _authenticationInFlight;
+    if (inFlight != null) {
+      return inFlight;
     }
+    final Future<UserProfile> authenticationFuture = _performAuthentication(
+      forceRefresh: forceRefresh,
+    );
+    _authenticationInFlight = authenticationFuture;
+    try {
+      return await authenticationFuture;
+    } finally {
+      if (identical(_authenticationInFlight, authenticationFuture)) {
+        _authenticationInFlight = null;
+      }
+    }
+  }
+
+  Future<UserProfile> _performAuthentication({
+    required bool forceRefresh,
+  }) async {
     if (!_environment.usesCloudBase) {
       _hasCompletedInitialAuthBootstrap = true;
       return _currentUser.uid.isNotEmpty
           ? _currentUser
           : buildDefaultUserProfile();
     }
+    if (!forceRefresh && _canReuseCachedAuthState()) {
+      return _currentUser;
+    }
     _isAuthenticating = true;
     _lastAuthError = null;
     notifyListeners();
+    CloudBaseSession? readSession;
     try {
       if (!_environment.hasCloudBaseAuthConfig) {
         _lastAuthError =
             'CloudBase \u9274\u6743\u914d\u7f6e\u4e0d\u5b8c\u6574\uff0c\u5f53\u524d\u65e0\u6cd5\u6062\u590d\u767b\u5f55\u72b6\u6001\u3002';
         return _currentUser;
       }
+      _cachedVerifiedIdentity = await _verifiedPhoneStore.read();
       final String restoredDeviceId = await _sessionStore.ensureDeviceId();
-      CloudBaseSession? restoredSession = await _sessionStore.readSession();
-      if (restoredSession == null) {
+      readSession = await _sessionStore.readSession();
+      if (readSession == null) {
+        if (_cachedVerifiedIdentity != null) {
+          final VerifiedPhoneIdentity v = _cachedVerifiedIdentity!;
+          _currentUser = buildDefaultUserProfile().copyWith(
+            uid: v.subject,
+            phoneNumber: v.phoneNumber,
+            phoneLinkedAt: v.phoneLinkedAt ?? DateTime.now(),
+            clearDormId: true,
+          );
+          _lastAuthError = _transientAuthWarningMessage();
+          _lastSuccessfulAuthAt = DateTime.now();
+          return _currentUser;
+        }
         return _clearSessionAndReset();
       }
+      CloudBaseSession restoredSession = readSession;
+      bool tokenRefreshFailed = false;
       if (restoredSession.isExpired) {
         try {
-          final CloudBaseAuthTokenResponse refreshed = await _authClient
-              .refreshAccessToken(
-                refreshToken: restoredSession.refreshToken,
-                deviceId: restoredDeviceId,
-              );
-          restoredSession = CloudBaseSession(
-            accessToken: refreshed.accessToken,
-            refreshToken: refreshed.refreshToken,
-            subject: refreshed.subject,
-            expiresAt: DateTime.now().add(
-              Duration(seconds: refreshed.expiresIn),
-            ),
-            deviceId: restoredDeviceId,
-            scope: refreshed.scope,
-            tokenType: refreshed.tokenType,
+          restoredSession = await _appApiClient.refreshSession(
+            restoredSession.copyWith(deviceId: restoredDeviceId),
           );
-          await _sessionStore.writeSession(restoredSession);
+        } on CloudBaseAuthException catch (error) {
+          if (_isSessionInvalidError(error)) {
+            await _sessionStore.clearSession();
+            _lastAuthError =
+                '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002';
+            _hydrateUserAfterInvalidSession(
+              sessionSubject: restoredSession.subject,
+            );
+            return _currentUser;
+          }
+          tokenRefreshFailed = true;
+          _lastAuthError = _transientAuthWarningMessage();
         } catch (_) {
-          return _clearSessionAndReset(
-            message:
-                '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
-          );
+          tokenRefreshFailed = true;
+          _lastAuthError = _transientAuthWarningMessage();
         }
       }
+      // Even when the token refresh failed due to a transient error we must
+      // still hydrate _currentUser from the stored session so the auth gate
+      // can recognise a returning user and avoid forcing re-login on cold
+      // start.  The old (possibly expired) token may still work for reading
+      // /user/me; if it doesn't, _readCurrentCloudBaseUser returns null and
+      // we fall back to the session subject only.
       final CloudBaseUserInfo? restoredInfo =
-          !hasVerifiedPhoneIdentity || _currentUser.uid.isEmpty
+          _currentUser.uid.isEmpty ||
+              !_phoneIdentityResolvableFromLocalProfile()
           ? await _readCurrentCloudBaseUser(restoredSession)
           : null;
       if (_currentUser.uid.isEmpty) {
@@ -754,6 +912,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           avatarUrl: restoredInfo?.picture,
           clearDormId: true,
         );
+        _mergePhoneFromCachedVerifiedIdentity();
       } else if ((_currentUser.phoneNumber?.trim().isNotEmpty != true) &&
           restoredInfo?.phoneNumber?.trim().isNotEmpty == true) {
         _currentUser = _currentUser.copyWith(
@@ -761,20 +920,81 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           phoneLinkedAt: DateTime.now(),
           avatarUrl: restoredInfo.picture ?? _currentUser.avatarUrl,
         );
+      } else {
+        _mergePhoneFromCachedVerifiedIdentity();
       }
+      if (tokenRefreshFailed) {
+        // We hydrated the user from the stored session but the token is
+        // stale.  Return now — do NOT attempt snapshot refresh with an
+        // expired token, but keep the user profile we restored.
+        return _currentUser;
+      }
+      bool snapshotRefreshed = false;
+      bool softSnapshotFailure = false;
       if (_appApiClient.isConfigured) {
-        await _snapshotStore.refresh();
+        try {
+          await _snapshotStore.refresh();
+          // CloudBaseSnapshotStore swallows transport failures and stores
+          // them on lastError. Treat a populated lastError as a soft failure
+          // so we keep the login state and just surface a warning.
+          if (_snapshotStore.lastError != null) {
+            softSnapshotFailure = true;
+            _lastAuthError = _transientAuthWarningMessage();
+          } else {
+            snapshotRefreshed = true;
+          }
+        } catch (_) {
+          // Snapshot refresh failures must not invalidate the login state.
+          softSnapshotFailure = true;
+          _lastAuthError = _transientAuthWarningMessage();
+        }
+      } else {
+        snapshotRefreshed = true;
       }
       _syncFromSnapshot();
-      if (!hasVerifiedPhoneIdentity) {
+      final bool serverConfirmedMissingPhone =
+          snapshotRefreshed &&
+          restoredInfo != null &&
+          (restoredInfo.phoneNumber?.trim().isNotEmpty != true);
+      final bool persistedCoversServerGap =
+          _cachedVerifiedIdentity != null &&
+          _cachedVerifiedIdentity!.subject == restoredSession.subject &&
+          _cachedVerifiedIdentity!.phoneNumber.trim().isNotEmpty;
+      if (serverConfirmedMissingPhone &&
+          !hasVerifiedPhoneIdentity &&
+          !persistedCoversServerGap) {
         return _clearSessionAndReset(
           message:
               '\u5f53\u524d\u767b\u5f55\u72b6\u6001\u7f3a\u5c11\u5df2\u9a8c\u8bc1\u624b\u673a\u53f7\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
         );
       }
+      if (hasVerifiedPhoneIdentity) {
+        _lastSuccessfulAuthAt = DateTime.now();
+        if (!softSnapshotFailure) {
+          _lastAuthError = null;
+        }
+      }
       return _currentUser;
-    } catch (error) {
-      return _clearSessionAndReset(message: error.toString());
+    } on CloudBaseAuthException catch (error) {
+      if (_isSessionInvalidError(error)) {
+        if (readSession != null) {
+          await _sessionStore.clearSession();
+          _lastAuthError =
+              '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002';
+          _hydrateUserAfterInvalidSession(sessionSubject: readSession.subject);
+          return _currentUser;
+        }
+        return _clearSessionAndReset(
+          message:
+              '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
+        );
+      }
+      _lastAuthError = _transientAuthWarningMessage();
+      return _currentUser;
+    } catch (_) {
+      // Network / serialization blips must not wipe the persisted session.
+      _lastAuthError = _transientAuthWarningMessage();
+      return _currentUser;
     } finally {
       _isAuthenticating = false;
       _hasCompletedInitialAuthBootstrap = true;
@@ -782,15 +1002,54 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     }
   }
 
+  bool _canReuseCachedAuthState() {
+    if (!_hasCompletedInitialAuthBootstrap) {
+      return false;
+    }
+    if (!hasVerifiedPhoneIdentity) {
+      return false;
+    }
+    final DateTime? lastSuccess = _lastSuccessfulAuthAt;
+    if (lastSuccess == null) {
+      return false;
+    }
+    return DateTime.now().difference(lastSuccess) < _authRevalidationInterval;
+  }
+
+  bool _isSessionInvalidError(CloudBaseAuthException error) {
+    if (error.statusCode == 401 || error.statusCode == 403) {
+      return true;
+    }
+    final String code = (error.code ?? '').toLowerCase();
+    if (code.contains('invalid_grant') ||
+        code.contains('invalid_token') ||
+        code.contains('unauthorized') ||
+        code.contains('token_revoked') ||
+        code.contains('refresh_token_expired')) {
+      return true;
+    }
+    final String message = error.message.toLowerCase();
+    return message.contains('invalid_grant') ||
+        message.contains('invalid refresh token') ||
+        message.contains('refresh token expired');
+  }
+
+  String _transientAuthWarningMessage() {
+    return '\u7f51\u7edc\u6ce2\u52a8\u5bfc\u81f4\u767b\u5f55\u72b6\u6001\u540c\u6b65\u5931\u8d25\uff0c\u5df2\u4fdd\u7559\u767b\u5f55\u72b6\u6001\uff0c\u7a0d\u540e\u4f1a\u81ea\u52a8\u91cd\u8bd5\u3002';
+  }
+
   @override
   Future<UserProfile> retryAuthentication() async {
     _lastAuthError = null;
+    _lastSuccessfulAuthAt = null;
     notifyListeners();
-    return ensureAuthenticated();
+    return _ensureAuthenticated(forceRefresh: true);
   }
 
   @override
   Future<void> signOut() async {
+    await _verifiedPhoneStore.clear();
+    _cachedVerifiedIdentity = null;
     await _clearSessionAndReset(clearAll: false);
     notifyListeners();
   }
@@ -1040,9 +1299,15 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       if (_isCaptchaRequired(error)) {
         _throwCaptchaRequired();
       }
-      _throwAuthFlowError(
-        _phoneAuthErrorMessage(error, action: 'sendCode', target: target),
+      final String userMessage = _phoneAuthErrorMessage(
+        error,
+        action: 'sendCode',
+        target: target,
       );
+      if (_isSendCodeTargetMismatchMessage(userMessage, target)) {
+        _throwPhoneTargetMismatch(userMessage);
+      }
+      _throwAuthFlowError(userMessage);
     } catch (error) {
       _throwAuthFlowError(
         _unexpectedPhoneAuthError(
@@ -1076,10 +1341,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       _throwAuthFlowError(_phoneAuthErrorMessage(error, action: 'verifyCode'));
     } catch (error) {
       _throwAuthFlowError(
-        _unexpectedPhoneAuthError(
-          error,
-          fallbackMessage: '验证码校验失败，请稍后再试。',
-        ),
+        _unexpectedPhoneAuthError(error, fallbackMessage: '验证码校验失败，请稍后再试。'),
       );
     }
   }
@@ -1418,6 +1680,8 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       avatarUrl: info?.picture ?? baseProfile.avatarUrl,
       clearDormId: !hadCurrentUser,
     );
+    _lastSuccessfulAuthAt = DateTime.now();
+    _hasCompletedInitialAuthBootstrap = true;
     notifyListeners();
     await _persistVerifiedPhoneIdentityIfNeeded();
     await _safeRefreshSnapshot();
@@ -1479,26 +1743,32 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   }) {
     final String message = error.message.toLowerCase();
     final String code = (error.code ?? '').toLowerCase();
-    if (message.contains('verification') ||
-        message.contains('otp') ||
-        message.contains('code') ||
-        code.contains('verification')) {
+    final int? statusCode = error.statusCode;
+    if (_isPasswordCredentialError(message, code, statusCode)) {
+      return '\u8bf7\u68c0\u67e5\u624b\u673a\u53f7\u548c\u5bc6\u7801\u3002';
+    }
+    if (_isVerificationFailure(message, code)) {
       return '\u9a8c\u8bc1\u7801\u9519\u8bef\u6216\u5df2\u8fc7\u671f\uff0c\u8bf7\u91cd\u65b0\u83b7\u53d6\u540e\u518d\u8bd5\u3002';
     }
     if (message.contains('already') ||
         message.contains('exists') ||
+        message.contains('duplicate') ||
         message.contains('registered') ||
-        code.contains('already')) {
-      return '\u8fd9\u4e2a\u624b\u673a\u53f7\u5df2\u7ecf\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002';
+        code.contains('already') ||
+        code.contains('exists') ||
+        code.contains('registered') ||
+        code.contains('duplicate')) {
+      return '\u8be5\u624b\u673a\u53f7\u5df2\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002';
     }
     if (message.contains('not found') ||
+        message.contains('not registered') ||
         code.contains('not_found') ||
         code.contains('user_not_found')) {
-      return '\u672a\u627e\u5230\u8fd9\u4e2a\u624b\u673a\u53f7\u5bf9\u5e94\u7684\u8d26\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002';
+      return '\u672a\u627e\u5230\u8be5\u624b\u673a\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002';
     }
     if (message.contains('password') || code.contains('password')) {
       if (action == 'passwordSignIn') {
-        return '\u624b\u673a\u53f7\u6216\u5bc6\u7801\u4e0d\u6b63\u786e\uff0c\u8bf7\u91cd\u8bd5\u3002';
+        return '\u8bf7\u68c0\u67e5\u624b\u673a\u53f7\u548c\u5bc6\u7801\u3002';
       }
       return '\u5bc6\u7801\u6821\u9a8c\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u540e\u91cd\u8bd5\u3002';
     }
@@ -1509,16 +1779,6 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
         message.contains('too many') ||
         code.contains('rate_limit')) {
       return '\u64cd\u4f5c\u8fc7\u4e8e\u9891\u7e41\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002';
-    }
-    if (message.contains('phone') || code.contains('phone')) {
-      return switch (target ?? PhoneVerificationTarget.any) {
-        PhoneVerificationTarget.newUser =>
-          '\u8fd9\u4e2a\u624b\u673a\u53f7\u5df2\u7ecf\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002',
-        PhoneVerificationTarget.existingUser =>
-          '\u672a\u627e\u5230\u8fd9\u4e2a\u624b\u673a\u53f7\u5bf9\u5e94\u7684\u8d26\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002',
-        PhoneVerificationTarget.any =>
-          '\u624b\u673a\u53f7\u6821\u9a8c\u5931\u8d25\uff0c\u8bf7\u786e\u8ba4\u8f93\u5165\u65e0\u8bef\u3002',
-      };
     }
     return switch (action) {
       'sendCode' =>
@@ -1538,6 +1798,51 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       _ =>
         '\u624b\u673a\u53f7\u8ba4\u8bc1\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002',
     };
+  }
+
+  bool _isSendCodeTargetMismatchMessage(
+    String message,
+    PhoneVerificationTarget target,
+  ) {
+    return switch (target) {
+      PhoneVerificationTarget.newUser =>
+        message ==
+            '\u8be5\u624b\u673a\u53f7\u5df2\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002',
+      PhoneVerificationTarget.existingUser =>
+        message ==
+            '\u672a\u627e\u5230\u8be5\u624b\u673a\u53f7\uff0c\u8bf7\u5148\u6ce8\u518c\u3002',
+      PhoneVerificationTarget.any => false,
+    };
+  }
+
+  bool _isPasswordCredentialError(
+    String message,
+    String code,
+    int? statusCode,
+  ) {
+    return message.contains('password') ||
+        message.contains('credential') ||
+        message.contains('invalid login') ||
+        message.contains('invalid_credentials') ||
+        code.contains('password') ||
+        code.contains('credential') ||
+        code.contains('unauthorized') ||
+        code.contains('invalid_credentials') ||
+        statusCode == 401;
+  }
+
+  bool _isVerificationFailure(String message, String code) {
+    return message.contains('verification code') ||
+        message.contains('verification_code') ||
+        message.contains('verification token') ||
+        message.contains('otp') ||
+        message.contains('one-time code') ||
+        message.contains('invalid code') ||
+        message.contains('code expired') ||
+        message.contains('expired code') ||
+        message.contains('sms code') ||
+        code.contains('verification') ||
+        code.contains('otp');
   }
 
   String _unexpectedPhoneAuthError(
@@ -1645,6 +1950,7 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
 
   late UserSettings _settings;
   NightMood? _pendingMoodOverride;
+  List<String>? _pendingHomeQuickActionIds;
 
   @override
   UserSettings get currentSettings => _settings;
@@ -1658,8 +1964,14 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
   @override
   Future<void> saveSettings(UserSettings settings) async {
     final NightMood? previousMood = _settings.selectedNightMood;
+    final List<String> previousQuickActionIds = _settings.homeQuickActionIds;
     if (previousMood != settings.selectedNightMood) {
       _pendingMoodOverride = settings.selectedNightMood;
+    }
+    if (!_sameStringList(previousQuickActionIds, settings.homeQuickActionIds)) {
+      _pendingHomeQuickActionIds = normalizeHomeQuickActionIds(
+        settings.homeQuickActionIds,
+      );
     }
     replaceLocalSettings(settings);
     if (!_appApiClient.isConfigured) {
@@ -1696,7 +2008,10 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
       _snapshotStore.payload,
       _authRepository.currentUser.uid,
     );
-    final UserSettings incoming = snapshot.settings;
+    UserSettings incoming = _mergeEveningEncouragementIfServerOmitted(
+      snapshot.settings,
+    );
+    incoming = _mergePendingHomeQuickActionsIfServerOmitted(incoming);
     if (_pendingMoodOverride != null &&
         incoming.selectedNightMood != _pendingMoodOverride &&
         _settings.selectedNightMood == _pendingMoodOverride) {
@@ -1708,6 +2023,56 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
       }
     }
     notifyListeners();
+  }
+
+  /// Remote snapshot may omit `eveningEncouragement*` until the backend persists them;
+  /// keep the last local quote so the profile card does not clear after refresh.
+  UserSettings _mergeEveningEncouragementIfServerOmitted(
+    UserSettings incoming,
+  ) {
+    final String? prevLine = _settings.eveningEncouragementLine;
+    final String? prevKey = _settings.eveningEncouragementPeriodKey;
+    final NightMood? prevSnap = _settings.eveningEncouragementMoodSnapshot;
+    if (prevLine != null &&
+        prevKey != null &&
+        incoming.eveningEncouragementLine == null) {
+      return incoming.copyWith(
+        eveningEncouragementPeriodKey: prevKey,
+        eveningEncouragementLine: prevLine,
+        eveningEncouragementMoodSnapshot: prevSnap,
+      );
+    }
+    return incoming;
+  }
+
+  UserSettings _mergePendingHomeQuickActionsIfServerOmitted(
+    UserSettings incoming,
+  ) {
+    final List<String>? pending = _pendingHomeQuickActionIds;
+    if (pending == null) {
+      return incoming;
+    }
+    if (_sameStringList(incoming.homeQuickActionIds, pending)) {
+      _pendingHomeQuickActionIds = null;
+      return incoming;
+    }
+    if (_sameStringList(_settings.homeQuickActionIds, pending)) {
+      return incoming.copyWith(homeQuickActionIds: pending);
+    }
+    _pendingHomeQuickActionIds = null;
+    return incoming;
+  }
+
+  bool _sameStringList(List<String> first, List<String> second) {
+    if (first.length != second.length) {
+      return false;
+    }
+    for (var index = 0; index < first.length; index += 1) {
+      if (first[index] != second[index]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   @override
@@ -1934,6 +2299,127 @@ class _SerializedRemoteSyncQueue {
   }
 }
 
+bool _isActiveSleepSession(SleepSession session) {
+  return session.status == SleepSessionStatus.active && session.endedAt == null;
+}
+
+SleepSession _normalizeSleepSession(SleepSession session) {
+  SleepSession normalized = session;
+  if (normalized.status == SleepSessionStatus.active &&
+      normalized.endedAt != null) {
+    normalized = normalized.copyWith(
+      status: SleepSessionStatus.awaitingFeedback,
+      sleepModeActive: false,
+    );
+  }
+  if (normalized.status != SleepSessionStatus.active ||
+      !normalized.sleepModeActive) {
+    return _repairInactiveSleepSession(normalized);
+  }
+  return normalized;
+}
+
+SleepSession _normalizeSleepSessionForPhase(
+  SleepSession session, {
+  required String currentPhase,
+  required String activeSessionId,
+}) {
+  final SleepSession normalized = _normalizeSleepSession(session);
+  if (normalized.status != SleepSessionStatus.active) {
+    return normalized;
+  }
+  final bool isCurrentSleepModeSession =
+      currentPhase == 'sleep_mode' &&
+      (activeSessionId.isEmpty || activeSessionId == normalized.id);
+  if (isCurrentSleepModeSession) {
+    return normalized;
+  }
+  return _repairInactiveSleepSession(
+    normalized.copyWith(
+      status: SleepSessionStatus.awaitingFeedback,
+      sleepModeActive: false,
+    ),
+  );
+}
+
+SleepSession _repairInactiveSleepSession(SleepSession session) {
+  final List<SleepSegment> segments = _normalizedSleepSegments(session);
+  final DateTime? resolvedEndAt = _resolvedInactiveSessionEndAt(
+    session,
+    segments,
+  );
+  if (resolvedEndAt == null) {
+    return session;
+  }
+
+  bool changed = false;
+  final int openIndex = segments.lastIndexWhere(
+    (SleepSegment segment) => segment.isOpen,
+  );
+  if (openIndex != -1) {
+    segments[openIndex] = segments[openIndex].copyWith(endedAt: resolvedEndAt);
+    changed = true;
+  }
+
+  final int trackedDurationMinutes = session.isTrackingLocked
+      ? session.trackedDurationMinutes
+      : _closedSegmentsDurationMinutes(segments);
+  if (trackedDurationMinutes != session.trackedDurationMinutes) {
+    changed = true;
+  }
+  if (session.endedAt == null) {
+    changed = true;
+  }
+  if (!changed) {
+    return session;
+  }
+  return session.copyWith(
+    endedAt: resolvedEndAt,
+    segments: segments,
+    trackedDurationMinutes: trackedDurationMinutes,
+  );
+}
+
+List<SleepSegment> _normalizedSleepSegments(SleepSession session) {
+  if (session.segments.isNotEmpty) {
+    return List<SleepSegment>.from(session.segments);
+  }
+  return <SleepSegment>[
+    SleepSegment(
+      startedAt: session.startedAt,
+      endedAt: session.sleepModeActive ? null : session.endedAt,
+    ),
+  ];
+}
+
+DateTime? _resolvedInactiveSessionEndAt(
+  SleepSession session,
+  List<SleepSegment> segments,
+) {
+  if (session.endedAt != null) {
+    return session.endedAt;
+  }
+  for (int index = segments.length - 1; index >= 0; index--) {
+    final DateTime? endedAt = segments[index].endedAt;
+    if (endedAt != null) {
+      return endedAt;
+    }
+  }
+  return null;
+}
+
+int _closedSegmentsDurationMinutes(List<SleepSegment> segments) {
+  return segments.fold<int>(
+    0,
+    (int total, SleepSegment segment) =>
+        total + sleepSegmentDurationMinutes(segment),
+  );
+}
+
+bool _isValidAwaitingFeedbackSession(SleepSession session) {
+  return canSubmitMorningFeedbackForSession(session);
+}
+
 class CloudBaseSleepSessionRepository extends ChangeNotifier
     implements SleepSessionRepository {
   CloudBaseSleepSessionRepository({
@@ -1953,14 +2439,29 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
       _SerializedRemoteSyncQueue();
 
   List<SleepSession> _sessions = const <SleepSession>[];
+  String _currentPhase = '';
+  String _activeSessionId = '';
   int _latestRemoteSyncId = 0;
+  bool _hasObservedInitialSessionLookup = false;
+  bool _hasCompletedInitialSessionLookup = false;
 
   @override
   SleepSession? get activeSession {
-    try {
-      return _sessions.lastWhere(
-        (SleepSession session) => session.status == SleepSessionStatus.active,
+    if (_currentPhase.isNotEmpty && _currentPhase != 'sleep_mode') {
+      return null;
+    }
+    if (_activeSessionId.isNotEmpty) {
+      final SleepSession? activeById = _firstWhereOrNull(
+        _sessions,
+        (SleepSession session) => session.id == _activeSessionId,
       );
+      if (activeById != null && _isActiveSleepSession(activeById)) {
+        return activeById;
+      }
+      return null;
+    }
+    try {
+      return _sessions.lastWhere(_isActiveSleepSession);
     } on StateError {
       return null;
     }
@@ -1970,59 +2471,79 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
   List<SleepSession> get sessions => List<SleepSession>.unmodifiable(_sessions);
 
   @override
+  bool get isReadyForSessionLookup {
+    if (!_appApiClient.isConfigured || _snapshotStore.hasPayload) {
+      return true;
+    }
+    return _hasCompletedInitialSessionLookup;
+  }
+
+  @override
   SleepSession? get latestAwaitingFeedbackSession {
     final List<SleepSession> pending =
-        _sessions
+        _latestSleepDaySessions(_sessions)
             .where(
               (SleepSession session) =>
-                  session.status == SleepSessionStatus.awaitingFeedback,
+                  _isValidAwaitingFeedbackSession(session),
             )
             .toList()
           ..sort(
             (SleepSession a, SleepSession b) =>
-                b.startedAt.compareTo(a.startedAt),
+                b.sleepDayDate.compareTo(a.sleepDayDate),
           );
     return pending.isEmpty ? null : pending.first;
   }
 
   @override
   List<SleepSession> recentSessions({int count = 7}) {
-    final List<SleepSession> items = List<SleepSession>.from(_sessions)
-      ..sort(
-        (SleepSession a, SleepSession b) => a.startedAt.compareTo(b.startedAt),
-      );
+    final List<SleepSession> items = _latestSleepDaySessions(_sessions);
     return items.reversed.take(count).toList().reversed.toList();
   }
 
   @override
   List<SleepSession> sessionsForMonth(DateTime month) {
-    return _sessions
-        .where((SleepSession session) {
-          return session.startedAt.year == month.year &&
-              session.startedAt.month == month.month;
-        })
-        .toList(growable: false);
+    return _latestSleepDaySessions(
+      _sessions.where((SleepSession session) {
+        return session.sleepDayDate.year == month.year &&
+            session.sleepDayDate.month == month.month;
+      }),
+    );
   }
 
   @override
-  Future<SleepSession> startSleepSession({
+  Future<SleepSession> startOrResumeSleepSession({
     required List<NightRecommendation> recommendationSnapshot,
     required String? dormId,
+    DateTime? at,
   }) async {
-    final SleepSession? existing = activeSession;
-    if (existing != null) {
-      return existing;
+    final DateTime moment = at ?? DateTime.now();
+    final String sleepDayKey = sleepDayKeyFromDate(moment);
+    final SleepSession? currentActive = activeSession;
+    if (currentActive != null && currentActive.sleepDayKey == sleepDayKey) {
+      return currentActive;
     }
 
     final UserProfile user = _authRepository.currentUser.uid.isNotEmpty
         ? _authRepository.currentUser
         : await _authRepository.ensureAuthenticated();
-    final DateTime now = DateTime.now();
+    final SleepSession? existing = sessionForSleepDayKey(sleepDayKey);
+    if (existing != null) {
+      final SleepSession resumed = _resumeSession(
+        existing,
+        at: moment,
+        dormId: dormId,
+        recommendationSnapshot: recommendationSnapshot,
+      );
+      await saveSession(resumed);
+      return resumed;
+    }
+
     final SleepSession session = SleepSession(
       id: IdGenerator.next('session'),
       uid: user.uid,
-      startedAt: now,
+      startedAt: moment,
       endedAt: null,
+      sleepDayKey: sleepDayKey,
       status: SleepSessionStatus.active,
       sleepModeActive: true,
       dormId: dormId,
@@ -2034,10 +2555,12 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
           )
           .map((NightRecommendation item) => item.id)
           .toList(growable: false),
+      segments: <SleepSegment>[SleepSegment(startedAt: moment, endedAt: null)],
+      trackedDurationMinutes: 0,
       awakenings: const <NightAwakeningEntry>[],
       feedback: const <RecommendationFeedback>[],
       summary: null,
-      updatedAt: now,
+      updatedAt: moment,
     );
     _upsertLocalSession(session);
     if (_appApiClient.isConfigured) {
@@ -2047,39 +2570,200 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
   }
 
   @override
-  Future<void> updateActiveSession({
-    bool? sleepModeActive,
-    SleepSessionStatus? status,
-    DateTime? endedAt,
-    List<String>? selectedRecommendationIds,
-  }) async {
+  Future<SleepSession?> pauseActiveSleepSession({DateTime? at}) async {
     final SleepSession? existing = activeSession;
     if (existing == null) {
-      return;
+      return null;
     }
-    final SleepSession next = existing.copyWith(
-      sleepModeActive: sleepModeActive,
-      status: status,
-      endedAt: endedAt,
-      selectedRecommendationIds:
-          selectedRecommendationIds ?? existing.selectedRecommendationIds,
-      updatedAt: DateTime.now(),
+    final SleepSession paused = _closeActiveSession(
+      existing,
+      at: at ?? DateTime.now(),
+      targetStatus: existing.hasSubmittedFeedback
+          ? SleepSessionStatus.completed
+          : SleepSessionStatus.paused,
     );
-    await saveSession(next);
+    await saveSession(paused);
+    return paused;
   }
 
   @override
-  Future<void> saveSession(SleepSession session) async {
+  Future<SleepSession?> finishActiveSleepSession({DateTime? at}) async {
+    final SleepSession? existing = activeSession;
+    if (existing == null) {
+      return null;
+    }
+    final SleepSession finished = _closeActiveSession(
+      existing,
+      at: at ?? DateTime.now(),
+      targetStatus: existing.hasSubmittedFeedback
+          ? SleepSessionStatus.completed
+          : SleepSessionStatus.awaitingFeedback,
+    );
+    await saveSession(finished);
+    return finished;
+  }
+
+  @override
+  Future<void> saveSession(
+    SleepSession session, {
+    bool syncRemote = true,
+  }) async {
     _upsertLocalSession(session);
-    if (!_appApiClient.isConfigured) {
+    if (!_appApiClient.isConfigured || !syncRemote) {
       return;
     }
-    _enqueueSessionSync(
-      session: session,
-      path: session.status == SleepSessionStatus.active
-          ? '/api/sleep/enter'
-          : '/api/sleep/exit',
+    _enqueueSessionSync(session: session, path: _pathForSessionSync(session));
+  }
+
+  @override
+  SleepSession? sessionForSleepDayKey(String sleepDayKey) {
+    final List<SleepSession> matches =
+        _sessions
+            .where((SleepSession session) => session.sleepDayKey == sleepDayKey)
+            .toList()
+          ..sort(_compareSleepSessions);
+    return matches.isEmpty ? null : matches.last;
+  }
+
+  @override
+  Future<List<SleepSession>> archivePastCutoffSessions({
+    required DateTime now,
+  }) async {
+    final String currentSleepDayKey = sleepDayKeyFromDate(now);
+    final List<SleepSession> staleSessions =
+        _sessions
+            .where(
+              (SleepSession session) =>
+                  !session.hasSubmittedFeedback &&
+                  session.sleepDayKey != currentSleepDayKey,
+            )
+            .toList()
+          ..sort(_compareSleepSessions);
+    final List<SleepSession> archived = <SleepSession>[];
+    for (final SleepSession session in staleSessions) {
+      if (session.status != SleepSessionStatus.active &&
+          session.status != SleepSessionStatus.paused) {
+        continue;
+      }
+      final SleepSession normalized = _archivePastCutoffSession(
+        session,
+        now: now,
+      );
+      if (normalized.id == session.id &&
+          normalized.status == session.status &&
+          normalized.updatedAt == session.updatedAt &&
+          normalized.displayEndAt == session.displayEndAt) {
+        continue;
+      }
+      await saveSession(normalized);
+      archived.add(normalized);
+    }
+    return archived;
+  }
+
+  SleepSession _resumeSession(
+    SleepSession session, {
+    required DateTime at,
+    required String? dormId,
+    required List<NightRecommendation> recommendationSnapshot,
+  }) {
+    if (session.sleepModeActive) {
+      return session;
+    }
+    final List<SleepSegment> segments = _normalizedSegments(session);
+    if (segments.isEmpty || !segments.last.isOpen) {
+      segments.add(SleepSegment(startedAt: at, endedAt: null));
+    }
+    final List<NightRecommendation> recommendations =
+        session.recommendations.isNotEmpty
+        ? session.recommendations
+        : recommendationSnapshot;
+    final List<String> selectedRecommendationIds =
+        session.selectedRecommendationIds.isNotEmpty
+        ? session.selectedRecommendationIds
+        : recommendationSnapshot
+              .where(
+                (NightRecommendation item) =>
+                    item.executionState != RecommendationExecutionState.idle,
+              )
+              .map((NightRecommendation item) => item.id)
+              .toList(growable: false);
+    return session.copyWith(
+      startedAt: segments.first.startedAt,
+      clearEndedAt: true,
+      sleepModeActive: true,
+      status: session.hasSubmittedFeedback
+          ? SleepSessionStatus.completed
+          : SleepSessionStatus.active,
+      dormId: dormId ?? session.dormId,
+      recommendations: recommendations,
+      selectedRecommendationIds: selectedRecommendationIds,
+      segments: segments,
+      updatedAt: at,
     );
+  }
+
+  SleepSession _closeActiveSession(
+    SleepSession session, {
+    required DateTime at,
+    required SleepSessionStatus targetStatus,
+  }) {
+    final List<SleepSegment> segments = _normalizedSegments(session);
+    int trackedDurationMinutes = session.trackedDurationMinutes;
+    if (segments.isNotEmpty && segments.last.isOpen) {
+      final SleepSegment closed = segments.last.copyWith(endedAt: at);
+      segments[segments.length - 1] = closed;
+      if (!session.isTrackingLocked) {
+        trackedDurationMinutes += sleepSegmentDurationMinutes(closed);
+      }
+    }
+    return session.copyWith(
+      startedAt: segments.isNotEmpty
+          ? segments.first.startedAt
+          : session.startedAt,
+      endedAt: at,
+      status: targetStatus,
+      sleepModeActive: false,
+      segments: segments,
+      trackedDurationMinutes: session.isTrackingLocked
+          ? session.trackedDurationMinutes
+          : trackedDurationMinutes,
+      updatedAt: at,
+    );
+  }
+
+  SleepSession _archivePastCutoffSession(
+    SleepSession session, {
+    required DateTime now,
+  }) {
+    switch (session.status) {
+      case SleepSessionStatus.paused:
+        return session.copyWith(
+          status: SleepSessionStatus.awaitingFeedback,
+          sleepModeActive: false,
+          updatedAt: now,
+        );
+      case SleepSessionStatus.active:
+        return _closeActiveSession(
+          session,
+          at: _sleepDayCutoff(session),
+          targetStatus: SleepSessionStatus.awaitingFeedback,
+        );
+      case SleepSessionStatus.drafted:
+      case SleepSessionStatus.awaitingFeedback:
+      case SleepSessionStatus.completed:
+        return session;
+    }
+  }
+
+  String _pathForSessionSync(SleepSession session) {
+    if (session.sleepModeActive) {
+      return '/api/sleep/enter';
+    }
+    if (session.status == SleepSessionStatus.paused) {
+      return '/api/sleep/pause';
+    }
+    return '/api/sleep/exit';
   }
 
   void _enqueueSessionSync({
@@ -2105,33 +2789,195 @@ class CloudBaseSleepSessionRepository extends ChangeNotifier
   }
 
   void _upsertLocalSession(SleepSession session) {
+    final SleepSession normalized = _normalizeSleepSession(session);
+    _applyLocalSleepPhase(normalized);
     final int index = _sessions.indexWhere(
-      (SleepSession item) => item.id == session.id,
+      (SleepSession item) => item.id == normalized.id,
     );
     if (index == -1) {
-      _sessions = <SleepSession>[..._sessions, session];
+      _sessions = <SleepSession>[..._sessions, normalized];
     } else {
       final List<SleepSession> next = List<SleepSession>.from(_sessions);
-      next[index] = session;
+      next[index] = normalized;
       _sessions = next;
     }
-    _sessions = List<SleepSession>.from(_sessions)
-      ..sort(
-        (SleepSession a, SleepSession b) => a.startedAt.compareTo(b.startedAt),
-      );
+    _sessions = List<SleepSession>.from(_sessions)..sort(_compareSleepSessions);
     notifyListeners();
   }
 
+  static List<SleepSegment> _normalizedSegments(SleepSession session) {
+    if (session.segments.isNotEmpty) {
+      return List<SleepSegment>.from(session.segments);
+    }
+    return <SleepSegment>[
+      SleepSegment(
+        startedAt: session.startedAt,
+        endedAt: session.sleepModeActive ? null : session.endedAt,
+      ),
+    ];
+  }
+
+  static List<SleepSession> _latestSleepDaySessions(
+    Iterable<SleepSession> sessions,
+  ) {
+    final Map<String, SleepSession> latestByKey = <String, SleepSession>{};
+    for (final SleepSession session in sessions) {
+      final SleepSession? existing = latestByKey[session.sleepDayKey];
+      if (existing == null || _compareSleepSessions(existing, session) < 0) {
+        latestByKey[session.sleepDayKey] = session;
+      }
+    }
+    final List<SleepSession> items = latestByKey.values.toList()
+      ..sort(_compareSleepSessions);
+    return items;
+  }
+
+  static int _compareSleepSessions(SleepSession a, SleepSession b) {
+    final int dayCompare = a.sleepDayDate.compareTo(b.sleepDayDate);
+    if (dayCompare != 0) {
+      return dayCompare;
+    }
+    final DateTime aTimestamp = a.updatedAt ?? a.displayStartAt;
+    final DateTime bTimestamp = b.updatedAt ?? b.displayStartAt;
+    return aTimestamp.compareTo(bTimestamp);
+  }
+
+  static DateTime _sleepDayCutoff(SleepSession session) {
+    final DateTime sleepDayDate = session.sleepDayDate;
+    return DateTime(
+      sleepDayDate.year,
+      sleepDayDate.month,
+      sleepDayDate.day,
+      20,
+    );
+  }
+
   void _applySnapshot() {
+    if (_snapshotStore.isRefreshing) {
+      _hasObservedInitialSessionLookup = true;
+    } else if (_hasObservedInitialSessionLookup ||
+        _snapshotStore.hasPayload ||
+        _snapshotStore.lastError != null) {
+      _hasCompletedInitialSessionLookup = true;
+    }
     final _SnapshotData snapshot = _SnapshotData.fromPayload(
       _snapshotStore.payload,
       _authRepository.currentUser.uid,
     );
-    _sessions = List<SleepSession>.from(snapshot.sessions)
-      ..sort(
-        (SleepSession a, SleepSession b) => a.startedAt.compareTo(b.startedAt),
-      );
+    _currentPhase = _stringOf(snapshot.userState['currentPhase']);
+    _activeSessionId = _stringOf(snapshot.userState['activeSessionId']);
+    final List<SleepSession> snapshotSessions = snapshot.sessions
+        .map(
+          (SleepSession session) => _normalizeSleepSessionForPhase(
+            session,
+            currentPhase: _currentPhase,
+            activeSessionId: _activeSessionId,
+          ),
+        )
+        .toList(growable: false);
+    _sessions = _mergeSnapshotSessions(
+      previousLocalSessions: _sessions,
+      snapshotSessions: snapshotSessions,
+    )..sort(_compareSleepSessions);
     notifyListeners();
+  }
+
+  static List<SleepSession> _mergeSnapshotSessions({
+    required List<SleepSession> previousLocalSessions,
+    required List<SleepSession> snapshotSessions,
+  }) {
+    final Map<String, SleepSession> mergedById = <String, SleepSession>{
+      for (final SleepSession session in snapshotSessions) session.id: session,
+    };
+    for (final SleepSession localSession in previousLocalSessions) {
+      final SleepSession? snapshotSession = mergedById[localSession.id];
+      if (snapshotSession == null) {
+        mergedById[localSession.id] = localSession;
+        continue;
+      }
+      if (_shouldPreferLocalSession(localSession, snapshotSession)) {
+        mergedById[localSession.id] = localSession;
+      }
+    }
+    return mergedById.values.toList(growable: false);
+  }
+
+  static bool _shouldPreferLocalSession(
+    SleepSession localSession,
+    SleepSession snapshotSession,
+  ) {
+    if (_shouldPreferCompleteClosedLocalSession(
+      localSession,
+      snapshotSession,
+    )) {
+      return true;
+    }
+    final DateTime localTimestamp =
+        localSession.updatedAt ??
+        localSession.displayEndAt ??
+        localSession.displayStartAt;
+    final DateTime snapshotTimestamp =
+        snapshotSession.updatedAt ??
+        snapshotSession.displayEndAt ??
+        snapshotSession.displayStartAt;
+    if (localTimestamp.isAfter(snapshotTimestamp)) {
+      return true;
+    }
+    if (snapshotTimestamp.isAfter(localTimestamp)) {
+      return false;
+    }
+    if (localSession.hasSubmittedFeedback &&
+        !snapshotSession.hasSubmittedFeedback) {
+      return true;
+    }
+    if (localSession.status == SleepSessionStatus.completed &&
+        snapshotSession.status != SleepSessionStatus.completed) {
+      return true;
+    }
+    if (localSession.feedback.length > snapshotSession.feedback.length) {
+      return true;
+    }
+    return false;
+  }
+
+  static bool _shouldPreferCompleteClosedLocalSession(
+    SleepSession localSession,
+    SleepSession snapshotSession,
+  ) {
+    if (!canSubmitMorningFeedbackForSession(localSession) ||
+        canSubmitMorningFeedbackForSession(snapshotSession) ||
+        snapshotSession.sleepModeActive) {
+      return false;
+    }
+    final DateTime? localEndAt = resolveMorningFeedbackSessionEndAt(
+      localSession,
+    );
+    final DateTime? snapshotEndAt = resolveMorningFeedbackSessionEndAt(
+      snapshotSession,
+    );
+    if (localEndAt == null || snapshotEndAt != null) {
+      return false;
+    }
+    return snapshotSession.openSegment != null ||
+        snapshotSession.trackedDurationMinutes <
+            localSession.trackedDurationMinutes;
+  }
+
+  void _applyLocalSleepPhase(SleepSession session) {
+    if (_isActiveSleepSession(session) && session.sleepModeActive) {
+      _currentPhase = 'sleep_mode';
+      _activeSessionId = session.id;
+      return;
+    }
+    if (session.status == SleepSessionStatus.awaitingFeedback) {
+      _currentPhase = 'morning_feedback';
+      _activeSessionId = session.id;
+      return;
+    }
+    if (_activeSessionId == session.id) {
+      _currentPhase = 'home_pre_sleep';
+      _activeSessionId = '';
+    }
   }
 
   @override
@@ -2161,28 +3007,36 @@ class CloudBaseFeedbackRepository extends ChangeNotifier
     required MorningSummary summary,
     required List<RecommendationFeedback> recommendationFeedback,
   }) async {
+    final SleepSession completedSession = session.copyWith(
+      status: SleepSessionStatus.completed,
+      sleepModeActive: false,
+      summary: summary,
+      feedback: recommendationFeedback,
+      updatedAt: DateTime.now(),
+    );
     await _sleepSessionRepository.saveSession(
-      session.copyWith(
-        status: SleepSessionStatus.completed,
-        summary: summary,
-        feedback: recommendationFeedback,
-        updatedAt: DateTime.now(),
-      ),
+      completedSession,
+      syncRemote: false,
     );
     if (_appApiClient.isConfigured) {
       try {
         await _appApiClient.post(
           '/api/feedback/morning',
           body: <String, dynamic>{
-            'sessionId': session.id,
+            'sessionId': completedSession.id,
+            'session': ModelSerializers.sleepSessionToMap(completedSession),
             'summary': ModelSerializers.morningSummaryToMap(summary),
-            'recommendationFeedback': recommendationFeedback
+            'feedback': recommendationFeedback
                 .map(ModelSerializers.recommendationFeedbackToMap)
                 .toList(growable: false),
           },
         );
         await _snapshotStore.refresh();
-      } catch (_) {
+      } catch (error) {
+        debugPrint(
+          'CloudBase morning feedback sync failed for ${completedSession.id}: '
+          '$error',
+        );
         // Local state is already updated.
       }
     }
@@ -2470,15 +3324,17 @@ class CloudBaseNotificationRepository extends ChangeNotifier
   CloudBaseNotificationRepository({
     required AuthRepository authRepository,
     required CloudBaseSnapshotStore snapshotStore,
+    required CloudBaseAppApiClient appApiClient,
   }) : _authRepository = authRepository,
-       _snapshotStore = snapshotStore {
+       _snapshotStore = snapshotStore,
+       _appApiClient = appApiClient {
     _snapshotStore.addListener(_applySnapshot);
   }
 
   final AuthRepository _authRepository;
   final CloudBaseSnapshotStore _snapshotStore;
+  final CloudBaseAppApiClient _appApiClient;
   List<NotificationItem> _notifications = const <NotificationItem>[];
-  final Set<String> _tokens = <String>{};
 
   @override
   List<NotificationItem> get notifications {
@@ -2499,15 +3355,30 @@ class CloudBaseNotificationRepository extends ChangeNotifier
 
   @override
   Future<void> markRead(String notificationId) async {
+    final DateTime readAt = DateTime.now();
     _notifications = _notifications
         .map((NotificationItem item) {
           if (item.id != notificationId) {
             return item;
           }
-          return item.copyWith(readAt: DateTime.now());
+          return item.copyWith(readAt: readAt);
         })
         .toList(growable: false);
     notifyListeners();
+    if (_appApiClient.isConfigured) {
+      try {
+        await _authRepository.ensureAuthenticated();
+        await _appApiClient.post(
+          '/api/notifications/read',
+          body: <String, dynamic>{
+            'notificationId': notificationId,
+            'readAt': readAt.toIso8601String(),
+          },
+        );
+      } catch (_) {
+        // Keep the in-memory state responsive even if the remote sync fails.
+      }
+    }
   }
 
   @override
@@ -2524,15 +3395,6 @@ class CloudBaseNotificationRepository extends ChangeNotifier
       next[index] = notification;
       _notifications = next;
     }
-    notifyListeners();
-  }
-
-  @override
-  Future<void> registerDeviceToken({
-    required String token,
-    required String platform,
-  }) async {
-    _tokens.add('$platform:$token');
     notifyListeners();
   }
 
@@ -2646,7 +3508,9 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
           uid: _authRepository.currentUser.uid,
           name: _authRepository.currentUser.displayName,
           status: DormMemberStatus.quiet,
-          presenceStatus: DormPresenceStatus.returned,
+          presenceStatus: locationAnchor == null
+              ? DormPresenceStatus.unknown
+              : DormPresenceStatus.returned,
           sleepModeActive: false,
           lastActiveAt: now,
           note:
@@ -3091,7 +3955,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
                 uid: _authRepository.currentUser.uid,
                 name: _authRepository.currentUser.displayName,
                 status: DormMemberStatus.quiet,
-                presenceStatus: DormPresenceStatus.returned,
+                presenceStatus: DormPresenceStatus.unknown,
                 sleepModeActive: false,
                 lastActiveAt: DateTime.now(),
                 note:
@@ -3161,6 +4025,19 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
         : _currentDorm.copyWith(members: remainingMembers);
     _emitCurrentState();
     notifyListeners();
+  }
+
+  @override
+  Future<void> refreshDormSnapshot() async {
+    if (!_appApiClient.isConfigured) {
+      return;
+    }
+    try {
+      await _authRepository.ensureAuthenticated();
+      await _snapshotStore.refresh();
+    } catch (_) {
+      // Keep showing last known dorm; next poll will retry.
+    }
   }
 
   @override
@@ -3349,6 +4226,7 @@ class CloudBaseInsightsRepository extends ChangeNotifier
   }) : _authRepository = authRepository,
        _snapshotStore = snapshotStore,
        _appApiClient = appApiClient,
+       _sleepSessionRepository = sleepSessionRepository,
        _fallback = InMemoryInsightsRepository(
          sleepSessionRepository: sleepSessionRepository,
          dormRepository: dormRepository,
@@ -3361,6 +4239,7 @@ class CloudBaseInsightsRepository extends ChangeNotifier
   final AuthRepository _authRepository;
   final CloudBaseSnapshotStore _snapshotStore;
   final CloudBaseAppApiClient _appApiClient;
+  final SleepSessionRepository _sleepSessionRepository;
   final InMemoryInsightsRepository _fallback;
 
   Map<String, Map<String, dynamic>> _snapshotData =
@@ -3396,11 +4275,12 @@ class CloudBaseInsightsRepository extends ChangeNotifier
   SleepReport get currentReport {
     final Map<String, dynamic>? profileReport =
         _snapshotData[BackendSurfaceIds.profileReport];
-    if (profileReport == null) {
+    if (_shouldPreferFallbackProfileReport(profileReport)) {
       return _fallback.currentReport;
     }
-    final Map<String, dynamic> summaryCard = _mapListOf(profileReport['cards'])
-        .firstWhere(
+    final Map<String, dynamic> resolvedProfileReport = profileReport!;
+    final Map<String, dynamic> summaryCard =
+        _mapListOf(resolvedProfileReport['cards']).firstWhere(
           (Map<String, dynamic> card) => card['type'] == 'sleep_report_summary',
           orElse: () => <String, dynamic>{},
         );
@@ -3416,8 +4296,56 @@ class CloudBaseInsightsRepository extends ChangeNotifier
       calmNights: _doubleOf(payload['calmNights']).round(),
       dreamEntriesCount: _doubleOf(payload['dreamEntriesCount']).round(),
       highlights: _stringListOf(payload['highlights']),
-      generatedAt: _dateOf(profileReport['generatedAt']),
+      generatedAt: _dateOf(resolvedProfileReport['generatedAt']),
     );
+  }
+
+  @override
+  SleepTrendSeries get profileSleepDurationTrend {
+    final Map<String, dynamic>? profileReport =
+        _snapshotData[BackendSurfaceIds.profileReport];
+    if (_shouldPreferFallbackProfileReport(profileReport)) {
+      return _fallback.profileSleepDurationTrend;
+    }
+    final Map<String, dynamic> resolvedProfileReport = profileReport!;
+    final Map<String, dynamic> card = _mapListOf(resolvedProfileReport['cards'])
+        .firstWhere(
+          (Map<String, dynamic> item) => item['type'] == 'sleep_duration_trend',
+          orElse: () => <String, dynamic>{},
+        );
+    if (card.isEmpty) {
+      return _fallback.profileSleepDurationTrend;
+    }
+    final SleepTrendSeries series = _sleepTrendSeriesFromCard(
+      card,
+      metricKey: 'sleep_duration',
+      unit: 'hours',
+    );
+    return series.points.isEmpty ? _fallback.profileSleepDurationTrend : series;
+  }
+
+  @override
+  SleepTrendSeries get profileSleepQualityTrend {
+    final Map<String, dynamic>? profileReport =
+        _snapshotData[BackendSurfaceIds.profileReport];
+    if (_shouldPreferFallbackProfileReport(profileReport)) {
+      return _fallback.profileSleepQualityTrend;
+    }
+    final Map<String, dynamic> resolvedProfileReport = profileReport!;
+    final Map<String, dynamic> card = _mapListOf(resolvedProfileReport['cards'])
+        .firstWhere(
+          (Map<String, dynamic> item) => item['type'] == 'sleep_quality_trend',
+          orElse: () => <String, dynamic>{},
+        );
+    if (card.isEmpty) {
+      return _fallback.profileSleepQualityTrend;
+    }
+    final SleepTrendSeries series = _sleepTrendSeriesFromCard(
+      card,
+      metricKey: 'sleep_quality',
+      unit: 'score',
+    );
+    return series.points.isEmpty ? _fallback.profileSleepQualityTrend : series;
   }
 
   @override
@@ -3450,6 +4378,37 @@ class CloudBaseInsightsRepository extends ChangeNotifier
     );
     _snapshotData = snapshot.cardSnapshots;
     notifyListeners();
+  }
+
+  bool _shouldPreferFallbackProfileReport(Map<String, dynamic>? profileReport) {
+    if (profileReport == null) {
+      return true;
+    }
+    final dynamic generatedAt = profileReport['generatedAt'];
+    if (generatedAt == null) {
+      return true;
+    }
+    final DateTime snapshotGeneratedAt = _dateOf(generatedAt);
+    final DateTime? latestLocalCompletedAt = _latestLocalCompletedSessionAt();
+    if (latestLocalCompletedAt == null) {
+      return false;
+    }
+    return latestLocalCompletedAt.isAfter(snapshotGeneratedAt);
+  }
+
+  DateTime? _latestLocalCompletedSessionAt() {
+    DateTime? latest;
+    for (final SleepSession session in _sleepSessionRepository.sessions) {
+      if (!session.hasSubmittedFeedback) {
+        continue;
+      }
+      final DateTime timestamp =
+          session.updatedAt ?? session.displayEndAt ?? session.displayStartAt;
+      if (latest == null || timestamp.isAfter(latest)) {
+        latest = timestamp;
+      }
+    }
+    return latest;
   }
 
   @override
@@ -3501,6 +4460,8 @@ class CloudBaseAssistantRepository extends ChangeNotifier
   List<AssistantThread> _threads = const <AssistantThread>[];
   final Map<String, List<AssistantMessage>> _messagesByThread =
       <String, List<AssistantMessage>>{};
+  final Map<String, AssistantThreadTurnState> _turnStatesByThread =
+      <String, AssistantThreadTurnState>{};
   final Set<String> _optimisticThreadIds = <String>{};
   String? _currentThreadId;
 
@@ -3534,14 +4495,16 @@ class CloudBaseAssistantRepository extends ChangeNotifier
 
   @override
   List<AssistantMessage> messagesForThread(String threadId) {
-    final List<AssistantMessage> sorted =
-        List<AssistantMessage>.from(
-          _messagesByThread[threadId] ?? const <AssistantMessage>[],
-        )..sort(
-          (AssistantMessage a, AssistantMessage b) =>
-              a.createdAt.compareTo(b.createdAt),
-        );
-    return List<AssistantMessage>.unmodifiable(sorted);
+    return List<AssistantMessage>.unmodifiable(
+      List<AssistantMessage>.from(
+        _messagesByThread[threadId] ?? const <AssistantMessage>[],
+      ),
+    );
+  }
+
+  @override
+  AssistantThreadTurnState? turnStateForThread(String threadId) {
+    return _turnStatesByThread[threadId];
   }
 
   void _upsertLocalThread(AssistantThread thread) {
@@ -3563,6 +4526,62 @@ class CloudBaseAssistantRepository extends ChangeNotifier
       for (final MapEntry<String, List<AssistantMessage>> entry
           in _messagesByThread.entries)
         entry.key: List<AssistantMessage>.from(entry.value),
+    };
+  }
+
+  List<AssistantMessage> _mergeThreadMessages({
+    required List<AssistantMessage> snapshotMessages,
+    required List<AssistantMessage> localMessages,
+  }) {
+    if (localMessages.isEmpty) {
+      return List<AssistantMessage>.unmodifiable(snapshotMessages);
+    }
+    final Map<String, AssistantMessage> snapshotById =
+        <String, AssistantMessage>{
+          for (final AssistantMessage message in snapshotMessages)
+            message.id: message,
+        };
+    final List<AssistantMessage> merged = <AssistantMessage>[
+      for (final AssistantMessage message in localMessages)
+        snapshotById.remove(message.id) ?? message,
+    ];
+    for (final AssistantMessage remoteOnly in snapshotMessages) {
+      if (!snapshotById.containsKey(remoteOnly.id)) {
+        continue;
+      }
+      final int insertIndex = merged.indexWhere(
+        (AssistantMessage message) =>
+            message.createdAt.isAfter(remoteOnly.createdAt),
+      );
+      if (insertIndex == -1) {
+        merged.add(remoteOnly);
+      } else {
+        merged.insert(insertIndex, remoteOnly);
+      }
+      snapshotById.remove(remoteOnly.id);
+    }
+    return List<AssistantMessage>.unmodifiable(merged);
+  }
+
+  Map<String, List<AssistantMessage>> _mergeSnapshotMessagesByThread({
+    required List<AssistantThread> snapshotThreads,
+    required Map<String, List<AssistantMessage>> snapshotMessagesByThread,
+    required Map<String, List<AssistantMessage>> previousMessagesByThread,
+  }) {
+    return <String, List<AssistantMessage>>{
+      for (final AssistantThread thread in snapshotThreads)
+        if ((snapshotMessagesByThread[thread.id] ?? const <AssistantMessage>[])
+                .isNotEmpty ||
+            (previousMessagesByThread[thread.id] ?? const <AssistantMessage>[])
+                .isNotEmpty)
+          thread.id: _mergeThreadMessages(
+            snapshotMessages:
+                snapshotMessagesByThread[thread.id] ??
+                const <AssistantMessage>[],
+            localMessages:
+                previousMessagesByThread[thread.id] ??
+                const <AssistantMessage>[],
+          ),
     };
   }
 
@@ -3665,6 +4684,7 @@ class CloudBaseAssistantRepository extends ChangeNotifier
         .where((AssistantThread item) => item.id != threadId)
         .toList(growable: false);
     _messagesByThread.remove(threadId);
+    _turnStatesByThread.remove(threadId);
     if (_currentThreadId == threadId) {
       _currentThreadId = _threads.isEmpty ? null : _threads.first.id;
     }
@@ -3686,6 +4706,9 @@ class CloudBaseAssistantRepository extends ChangeNotifier
       await selectMostRecentThread();
       return currentThread!;
     }
+    if (_appApiClient.isConfigured) {
+      return createThread(title: title ?? '新的睡前陪伴对话');
+    }
     final AssistantThread thread = AssistantThread(
       id: IdGenerator.next('assistant-thread'),
       userId: _userId,
@@ -3698,6 +4721,55 @@ class CloudBaseAssistantRepository extends ChangeNotifier
     _messagesByThread[thread.id] = <AssistantMessage>[];
     notifyListeners();
     return thread;
+  }
+
+  @override
+  Future<bool> tryStartThreadTurn({
+    required String threadId,
+    required String turnId,
+  }) async {
+    final AssistantThreadTurnState? current = _turnStatesByThread[threadId];
+    if (current != null && current.status != AssistantThreadTurnStatus.idle) {
+      return false;
+    }
+    _turnStatesByThread[threadId] = AssistantThreadTurnState(
+      threadId: threadId,
+      turnId: turnId,
+      status: AssistantThreadTurnStatus.streaming,
+      startedAt: DateTime.now(),
+    );
+    notifyListeners();
+    return true;
+  }
+
+  @override
+  Future<void> markThreadTurnFinalizing({
+    required String threadId,
+    required String turnId,
+  }) async {
+    final AssistantThreadTurnState? current = _turnStatesByThread[threadId];
+    if (current == null || current.turnId != turnId) {
+      return;
+    }
+    _turnStatesByThread[threadId] = current.copyWith(
+      status: AssistantThreadTurnStatus.finalizing,
+    );
+    notifyListeners();
+  }
+
+  @override
+  Future<void> finishThreadTurn({
+    required String threadId,
+    required String turnId,
+  }) async {
+    final AssistantThreadTurnState? current = _turnStatesByThread[threadId];
+    if (current == null || current.turnId != turnId) {
+      return;
+    }
+    _turnStatesByThread[threadId] = current.copyWith(
+      status: AssistantThreadTurnStatus.idle,
+    );
+    notifyListeners();
   }
 
   @override
@@ -3825,10 +4897,21 @@ class CloudBaseAssistantRepository extends ChangeNotifier
     _threads = snapshot.threads;
     _messagesByThread
       ..clear()
-      ..addAll(snapshot.messagesByThread);
+      ..addAll(
+        _mergeSnapshotMessagesByThread(
+          snapshotThreads: snapshot.threads,
+          snapshotMessagesByThread: snapshot.messagesByThread,
+          previousMessagesByThread: previousMessagesByThread,
+        ),
+      );
     _optimisticThreadIds.removeWhere(
       (String threadId) =>
           _threads.any((AssistantThread item) => item.id == threadId),
+    );
+    _turnStatesByThread.removeWhere(
+      (String threadId, AssistantThreadTurnState _) =>
+          !_threads.any((AssistantThread item) => item.id == threadId) &&
+          !_optimisticThreadIds.contains(threadId),
     );
     final String latestThreadId = _stringOf(
       snapshot.userState['latestThreadId'],

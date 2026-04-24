@@ -5,6 +5,7 @@ import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/utils/evening_period.dart';
 import 'package:sleep_dorm_app/core/utils/avatar_picker.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/widgets/profile_badge_support.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/widgets/profile_page_sections.dart';
@@ -20,16 +21,27 @@ class ProfilePage extends StatelessWidget {
         services.authRepository,
         services.sleepSessionRepository,
         services.insightsFacade,
+        services.settingsRepository,
       ]),
       builder: (BuildContext context, Widget? child) {
         final UserProfile profile = services.authRepository.currentUser;
-        final List<SleepSession> weekly = services.sleepSessionRepository
-            .recentSessions();
+        final UserSettings settings = services.settingsRepository.currentSettings;
+        final String currentPeriodKey = eveningPeriodKey(DateTime.now());
+        final String encouragementQuote =
+            settings.eveningEncouragementPeriodKey == currentPeriodKey &&
+                    settings.eveningEncouragementLine != null &&
+                    settings.eveningEncouragementLine!.isNotEmpty
+                ? settings.eveningEncouragementLine!
+                : '完成今晚心情选择，解锁一句陪伴语';
         final DateTime now = DateTime.now();
         final DateTime currentMonth = DateTime(now.year, now.month);
         final List<SleepSession> monthSessions = services.sleepSessionRepository
             .sessionsForMonth(currentMonth);
         final SleepReport report = services.insightsFacade.currentReport;
+        final SleepTrendSeries durationTrend =
+            services.insightsFacade.profileSleepDurationTrend;
+        final SleepTrendSeries qualityTrend =
+            services.insightsFacade.profileSleepQualityTrend;
         final List<ProfileBadgeStatusData> previewBadges =
             buildProfileBadgePreview(profile);
 
@@ -51,13 +63,14 @@ class ProfilePage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xl),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-                    child: ProfileQuoteCard(quote: '每天都是成长和积极改变的新机会。'),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+                    child: ProfileQuoteCard(quote: encouragementQuote),
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   ProfileDataCarousel(
-                    sessions: weekly,
+                    durationTrend: durationTrend,
+                    qualityTrend: qualityTrend,
                     heatmapValues: _buildMonthPreviewIntensity(
                       month: currentMonth,
                       sessions: monthSessions,
@@ -111,7 +124,7 @@ class ProfilePage extends StatelessWidget {
   }) {
     final Map<DateTime, int> qualityByDay = <DateTime, int>{
       for (final SleepSession session in sessions)
-        DateUtils.dateOnly(session.startedAt):
+        DateUtils.dateOnly(session.sleepDayDate):
             (session.summary?.sleepQuality ?? 0).clamp(0, 5),
     };
     final int daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);

@@ -23,12 +23,16 @@ class DormPresenceSyncController {
   bool _isSyncing = false;
   bool _isRestoringAnchor = false;
   DormLocationAnchor? _pendingAnchor;
+  String? _pendingAnchorDormId;
 
   Future<DormLocationAnchor?> captureCurrentLocationAnchor({
     double radiusMeters = 100,
     bool requestPermission = true,
   }) async {
-    final String uid = (await _authRepository.ensureAuthenticated()).uid;
+    if (_authRepository.currentUser.uid.trim().isEmpty) {
+      return null;
+    }
+    final String uid = _authRepository.currentUser.uid;
     final Position? position = await _readCurrentPosition(
       requestPermission: requestPermission,
     );
@@ -48,16 +52,24 @@ class DormPresenceSyncController {
     if (_isSyncing) {
       return;
     }
+    if (!_authRepository.hasVerifiedPhoneIdentity) {
+      return;
+    }
     _isSyncing = true;
     try {
-      final UserProfile currentUser = await _authRepository.ensureAuthenticated();
+      final UserProfile currentUser = _authRepository.currentUser;
+      if (currentUser.uid.trim().isEmpty) {
+        return;
+      }
       await restoreCachedLocationAnchor();
       final Dorm dorm = _dormRepository.currentDorm;
       if (dorm.id.isEmpty) {
         return;
       }
       final DormLocationAnchor? anchor =
-          dorm.locationAnchor ?? _pendingAnchor ?? await resolveEffectiveLocationAnchor();
+          dorm.locationAnchor ??
+          _pendingAnchorForDorm(dorm.id) ??
+          await resolveEffectiveLocationAnchor();
       if (anchor == null) {
         return;
       }
@@ -65,6 +77,11 @@ class DormPresenceSyncController {
         requestPermission: false,
       );
       if (position == null) {
+        await _updateCurrentUserPresenceIfChanged(
+          uid: currentUser.uid,
+          dorm: dorm,
+          presenceStatus: DormPresenceStatus.unknown,
+        );
         return;
       }
       final double distance = Geolocator.distanceBetween(
@@ -76,16 +93,9 @@ class DormPresenceSyncController {
       final DormPresenceStatus nextPresence = distance <= anchor.radiusMeters
           ? DormPresenceStatus.returned
           : DormPresenceStatus.away;
-      final DormMember? currentMember = dorm.members.cast<DormMember?>().firstWhere(
-        (DormMember? member) => member?.uid == _authRepository.currentUser.uid,
-        orElse: () => null,
-      );
-      if (currentMember != null &&
-          currentMember.presenceStatus == nextPresence) {
-        return;
-      }
-      await _dormRepository.updateCurrentUserStatus(
+      await _updateCurrentUserPresenceIfChanged(
         uid: currentUser.uid,
+        dorm: dorm,
         presenceStatus: nextPresence,
       );
     } finally {
@@ -93,24 +103,51 @@ class DormPresenceSyncController {
     }
   }
 
+  Future<void> _updateCurrentUserPresenceIfChanged({
+    required String uid,
+    required Dorm dorm,
+    required DormPresenceStatus presenceStatus,
+  }) async {
+    DormMember? currentMember;
+    for (final DormMember member in dorm.members) {
+      if (member.uid == uid) {
+        currentMember = member;
+        break;
+      }
+    }
+    if (currentMember != null &&
+        currentMember.presenceStatus == presenceStatus) {
+      return;
+    }
+    await _dormRepository.updateCurrentUserStatus(
+      uid: uid,
+      presenceStatus: presenceStatus,
+    );
+  }
+
   Future<void> restoreCachedLocationAnchor() async {
     if (_isRestoringAnchor) {
       return;
     }
+    if (_authRepository.currentUser.uid.trim().isEmpty) {
+      return;
+    }
     _isRestoringAnchor = true;
     try {
-      final UserProfile currentUser = await _authRepository.ensureAuthenticated();
+      final UserProfile currentUser = _authRepository.currentUser;
       final Dorm dorm = _dormRepository.currentDorm;
+      final String dormId = dorm.id.trim();
+      if (dormId.isEmpty) {
+        return;
+      }
       final DormLocationAnchor? anchor =
           dorm.locationAnchor ??
-          (dorm.id.trim().isEmpty
-              ? null
-              : await _cache.read(uid: currentUser.uid, dormId: dorm.id)) ??
-          await _cache.readLatest(uid: currentUser.uid);
+          await _cache.read(uid: currentUser.uid, dormId: dorm.id);
       if (anchor == null) {
         return;
       }
       _pendingAnchor = anchor;
+      _pendingAnchorDormId = dorm.id;
       _applyPendingAnchor(currentUser.uid);
     } finally {
       _isRestoringAnchor = false;
@@ -120,7 +157,7 @@ class DormPresenceSyncController {
   Future<DormLocationAnchor?> resolveEffectiveLocationAnchor() async {
     await restoreCachedLocationAnchor();
     final Dorm dorm = _dormRepository.currentDorm;
-    return dorm.locationAnchor ?? _pendingAnchor;
+    return dorm.locationAnchor ?? _pendingAnchorForDorm(dorm.id);
   }
 
   Future<void> saveCurrentLocationAsDormAnchor() async {
@@ -132,9 +169,16 @@ class DormPresenceSyncController {
   }
 
   Future<void> persistDormLocationAnchor(DormLocationAnchor anchor) async {
-    final UserProfile currentUser = await _authRepository.ensureAuthenticated();
+    if (_authRepository.currentUser.uid.trim().isEmpty) {
+      return;
+    }
+    final UserProfile currentUser = _authRepository.currentUser;
     final String dormId = _dormRepository.currentDorm.id;
+    if (dormId.trim().isEmpty) {
+      return;
+    }
     _pendingAnchor = anchor;
+    _pendingAnchorDormId = dormId;
     await _cache.save(uid: currentUser.uid, dormId: dormId, anchor: anchor);
     _applyPendingAnchor(currentUser.uid);
     try {
@@ -158,20 +202,33 @@ class DormPresenceSyncController {
       return;
     }
     if (dorm.locationAnchor != null) {
-      _pendingAnchor = null;
+      _clearPendingAnchorIfForDorm(dorm.id);
       unawaited(
         _cache.save(uid: uid, dormId: dorm.id, anchor: dorm.locationAnchor!),
       );
       return;
     }
     final DormLocationAnchor? anchor = _pendingAnchor;
-    if (anchor == null) {
+    if (anchor == null || _pendingAnchorDormId != dorm.id) {
       return;
     }
     _pendingAnchor = null;
+    _pendingAnchorDormId = null;
     _dormRepository.hydrateCurrentDormLocationAnchor(anchor);
     unawaited(_cache.save(uid: uid, dormId: dorm.id, anchor: anchor));
     unawaited(_dormRepository.saveDormLocationAnchor(anchor));
+  }
+
+  DormLocationAnchor? _pendingAnchorForDorm(String dormId) {
+    return _pendingAnchorDormId == dormId ? _pendingAnchor : null;
+  }
+
+  void _clearPendingAnchorIfForDorm(String dormId) {
+    if (_pendingAnchorDormId != dormId) {
+      return;
+    }
+    _pendingAnchor = null;
+    _pendingAnchorDormId = null;
   }
 
   void dispose() {
@@ -195,11 +252,15 @@ class DormPresenceSyncController {
       return null;
     }
 
-    return Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 10),
-      ),
-    );
+    try {
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+    } catch (_) {
+      return null;
+    }
   }
 }

@@ -7,6 +7,7 @@ param(
   [string]$AIProviderBaseUrl = "",
   [string]$AIProviderApiKey = "",
   [string]$AIProviderModel = "hunyuan-2.0-instruct-20251111",
+  [switch]$ClearAIProviderApiKey,
   [switch]$SkipGateway
 )
 
@@ -192,13 +193,28 @@ function Resolve-ProviderName([string]$Mode, [string]$ExplicitName) {
   }
 }
 
+function Resolve-DesiredEnvValue(
+  [hashtable]$CurrentEnv,
+  [string]$RemoteKey,
+  [string]$DefaultValue,
+  [bool]$WasSpecified,
+  [string]$SpecifiedValue
+) {
+  if ($WasSpecified) {
+    return [string]$SpecifiedValue
+  }
+  if ($CurrentEnv.ContainsKey($RemoteKey)) {
+    return [string]$CurrentEnv[$RemoteKey]
+  }
+  return $DefaultValue
+}
+
 $repoRoot = Get-RepoRoot
 $config = Read-Config -RepoRoot $repoRoot -RelativePath $ConfigPath
 $envId = [string]$config.CLOUDBASE_ENV_ID
 if ([string]::IsNullOrWhiteSpace($envId)) {
   throw "Missing CLOUDBASE_ENV_ID in local config."
 }
-$resolvedProviderName = Resolve-ProviderName -Mode $AIProviderMode -ExplicitName $AIProviderName
 
 $functionRoot = ($repoRoot.Replace("\", "/") + "/functions")
 $functions = @(
@@ -239,14 +255,68 @@ try {
       $nextEnv[[string]$entry.Key] = [string]$entry.Value
     }
 
+    $desiredProviderMode = Resolve-DesiredEnvValue `
+      -CurrentEnv $currentEnv `
+      -RemoteKey "AI_PROVIDER_MODE" `
+      -DefaultValue "cloudbase_ai" `
+      -WasSpecified $PSBoundParameters.ContainsKey("AIProviderMode") `
+      -SpecifiedValue $AIProviderMode
+    $desiredProviderName = if ($PSBoundParameters.ContainsKey("AIProviderName")) {
+      [string]$AIProviderName
+    }
+    elseif (
+      -not $PSBoundParameters.ContainsKey("AIProviderMode") -and
+      $currentEnv.ContainsKey("AI_PROVIDER_NAME")
+    ) {
+      [string]$currentEnv["AI_PROVIDER_NAME"]
+    }
+    else {
+      Resolve-ProviderName -Mode $desiredProviderMode -ExplicitName ""
+    }
+    $desiredProviderGroup = Resolve-DesiredEnvValue `
+      -CurrentEnv $currentEnv `
+      -RemoteKey "AI_PROVIDER_GROUP" `
+      -DefaultValue "" `
+      -WasSpecified $PSBoundParameters.ContainsKey("AIProviderGroup") `
+      -SpecifiedValue $AIProviderGroup
+    $desiredProviderTimeoutMs = Resolve-DesiredEnvValue `
+      -CurrentEnv $currentEnv `
+      -RemoteKey "AI_PROVIDER_TIMEOUT_MS" `
+      -DefaultValue "60000" `
+      -WasSpecified $PSBoundParameters.ContainsKey("AIProviderTimeoutMs") `
+      -SpecifiedValue $AIProviderTimeoutMs
+    $desiredProviderBaseUrl = Resolve-DesiredEnvValue `
+      -CurrentEnv $currentEnv `
+      -RemoteKey "AI_PROVIDER_BASE_URL" `
+      -DefaultValue "" `
+      -WasSpecified $PSBoundParameters.ContainsKey("AIProviderBaseUrl") `
+      -SpecifiedValue $AIProviderBaseUrl
+    $desiredProviderApiKey = if ($ClearAIProviderApiKey) {
+      ""
+    }
+    else {
+      Resolve-DesiredEnvValue `
+        -CurrentEnv $currentEnv `
+        -RemoteKey "AI_PROVIDER_API_KEY" `
+        -DefaultValue "" `
+        -WasSpecified $PSBoundParameters.ContainsKey("AIProviderApiKey") `
+        -SpecifiedValue $AIProviderApiKey
+    }
+    $desiredProviderModel = Resolve-DesiredEnvValue `
+      -CurrentEnv $currentEnv `
+      -RemoteKey "AI_PROVIDER_MODEL" `
+      -DefaultValue "hunyuan-2.0-instruct-20251111" `
+      -WasSpecified $PSBoundParameters.ContainsKey("AIProviderModel") `
+      -SpecifiedValue $AIProviderModel
+
     $nextEnv["CLOUDBASE_ENV_ID"] = $envId
-    $nextEnv["AI_PROVIDER_MODE"] = $AIProviderMode
-    $nextEnv["AI_PROVIDER_NAME"] = $resolvedProviderName
-    $nextEnv["AI_PROVIDER_GROUP"] = $AIProviderGroup
-    $nextEnv["AI_PROVIDER_TIMEOUT_MS"] = $AIProviderTimeoutMs
-    $nextEnv["AI_PROVIDER_BASE_URL"] = $AIProviderBaseUrl
-    $nextEnv["AI_PROVIDER_API_KEY"] = $AIProviderApiKey
-    $nextEnv["AI_PROVIDER_MODEL"] = $AIProviderModel
+    $nextEnv["AI_PROVIDER_MODE"] = $desiredProviderMode
+    $nextEnv["AI_PROVIDER_NAME"] = $desiredProviderName
+    $nextEnv["AI_PROVIDER_GROUP"] = $desiredProviderGroup
+    $nextEnv["AI_PROVIDER_TIMEOUT_MS"] = $desiredProviderTimeoutMs
+    $nextEnv["AI_PROVIDER_BASE_URL"] = $desiredProviderBaseUrl
+    $nextEnv["AI_PROVIDER_API_KEY"] = $desiredProviderApiKey
+    $nextEnv["AI_PROVIDER_MODEL"] = $desiredProviderModel
 
     $envLiteral = Format-EnvLiteral $nextEnv
     Invoke-McporterWithRetry "cloudbase.manageFunctions(action: 'updateFunctionConfig', functionName: '$name', envVariables: { $envLiteral })"
@@ -258,15 +328,28 @@ try {
     $verifiedModel = [string](Get-MapValue $verifiedEnv "AI_PROVIDER_MODEL")
     $verifiedBaseUrl = [string](Get-MapValue $verifiedEnv "AI_PROVIDER_BASE_URL")
     $verifiedTimeout = [string](Get-MapValue $verifiedEnv "AI_PROVIDER_TIMEOUT_MS")
+    $verifiedApiKeyState = if ([string]::IsNullOrWhiteSpace([string](Get-MapValue $verifiedEnv "AI_PROVIDER_API_KEY"))) {
+      "empty"
+    }
+    else {
+      "set"
+    }
+    $expectedApiKeyState = if ([string]::IsNullOrWhiteSpace($desiredProviderApiKey)) {
+      "empty"
+    }
+    else {
+      "set"
+    }
     if (
-      $verifiedMode -ne $AIProviderMode -or
-      $verifiedName -ne $resolvedProviderName -or
-      $verifiedGroup -ne $AIProviderGroup -or
-      $verifiedModel -ne $AIProviderModel -or
-      $verifiedBaseUrl -ne $AIProviderBaseUrl -or
-      $verifiedTimeout -ne $AIProviderTimeoutMs
+      $verifiedMode -ne $desiredProviderMode -or
+      $verifiedName -ne $desiredProviderName -or
+      $verifiedGroup -ne $desiredProviderGroup -or
+      $verifiedModel -ne $desiredProviderModel -or
+      $verifiedBaseUrl -ne $desiredProviderBaseUrl -or
+      $verifiedTimeout -ne $desiredProviderTimeoutMs -or
+      $verifiedApiKeyState -ne $expectedApiKeyState
     ) {
-      throw "Function '$name' config verification failed. Expected mode=$AIProviderMode name=$resolvedProviderName group=$AIProviderGroup model=$AIProviderModel baseUrl=$AIProviderBaseUrl timeout=$AIProviderTimeoutMs but got mode=$verifiedMode name=$verifiedName group=$verifiedGroup model=$verifiedModel baseUrl=$verifiedBaseUrl timeout=$verifiedTimeout"
+      throw "Function '$name' config verification failed. Expected mode=$desiredProviderMode name=$desiredProviderName group=$desiredProviderGroup model=$desiredProviderModel baseUrl=$desiredProviderBaseUrl timeout=$desiredProviderTimeoutMs apiKey=$expectedApiKeyState but got mode=$verifiedMode name=$verifiedName group=$verifiedGroup model=$verifiedModel baseUrl=$verifiedBaseUrl timeout=$verifiedTimeout apiKey=$verifiedApiKeyState"
     }
     Write-Host "[$name] AI_PROVIDER_MODE=$verifiedMode"
     Write-Host "[$name] AI_PROVIDER_NAME=$verifiedName"
@@ -274,6 +357,7 @@ try {
     Write-Host "[$name] AI_PROVIDER_MODEL=$verifiedModel"
     Write-Host "[$name] AI_PROVIDER_BASE_URL=$verifiedBaseUrl"
     Write-Host "[$name] AI_PROVIDER_TIMEOUT_MS=$verifiedTimeout"
+    Write-Host "[$name] AI_PROVIDER_API_KEY=$verifiedApiKeyState"
   }
 
   try {

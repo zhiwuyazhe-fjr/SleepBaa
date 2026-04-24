@@ -18,6 +18,12 @@ export type AssistantRunSourceMode =
   | "fallbackSuccess"
   | "error";
 
+export type AssistantPromptMode =
+  | "chat_reply"
+  | "turn_insight_extract"
+  | "sleep_capture_dream"
+  | "sleep_capture_memo";
+
 export type SurfaceId =
   | "home_pre_sleep"
   | "sleep_mode"
@@ -41,11 +47,21 @@ export interface ContextUserProfile {
   avatarStoragePath?: string | null;
 }
 
+export interface ContextTimeOfDay {
+  hour: number;
+  minute: number;
+}
+
 export interface ContextUserSettings {
   sleepGoalHours: number;
+  bedtimeReminderEnabled: boolean;
+  morningReminderEnabled: boolean;
+  dormAlertsEnabled: boolean;
+  bedtimeReminder: ContextTimeOfDay;
   preferredTrackTitle: string;
   smartSuggestionsEnabled: boolean;
   selectedNightMood?: string | null;
+  homeQuickActionIds: string[];
 }
 
 export interface ContextAssistantProfile {
@@ -107,6 +123,7 @@ export interface ContextDorm {
   noiseDb: number;
   lightLabel: string;
   quietLabel: string;
+  activeMemberCount?: number;
   status?: string;
   archivedAt?: string | null;
   members: ContextDormMember[];
@@ -121,11 +138,13 @@ export interface ContextDorm {
 
 export interface ContextSleepSessionSummary {
   id: string;
+  sleepDayKey: string;
   startedAt?: string;
   endedAt?: string | null;
   status: string;
   awakeningsCount: number;
   totalSleepHours?: number | null;
+  sleepGoalMet?: boolean | null;
   sleepQuality?: number | null;
   restedLevel?: number | null;
   note?: string;
@@ -168,12 +187,28 @@ export interface AssistantMemoryItem {
   id: string;
   kind: string;
   content: string;
+  canonicalKey?: string | null;
+  keywords?: string[];
+  confidence?: number | null;
   sourceThreadId?: string | null;
+  sourceMessageId?: string | null;
   salience: number;
   lastUsedAt?: string | null;
   sourceRefs: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AssistantMemoryCandidate {
+  kind: string;
+  content: string;
+  canonicalKey: string;
+  keywords: string[];
+  confidence: number;
+  salience: number;
+  sourceThreadId?: string | null;
+  sourceMessageId?: string | null;
+  sourceRefs: string[];
 }
 
 export interface ProfileSummary {
@@ -315,6 +350,12 @@ export interface AssistantRunDoc {
   inputRefs: string[];
   outputRefs: string[];
   error?: string | null;
+  fastPath?: boolean;
+  replyContextMs?: number;
+  firstDeltaMs?: number | null;
+  replyCompletedMs?: number;
+  insightMs?: number;
+  totalMs?: number;
   createdAt: string;
 }
 
@@ -346,6 +387,14 @@ export interface DreamAnalysis {
   sourceRefs: string[];
 }
 
+export interface TurnInsightExtraction {
+  interferenceSignals: InterferenceSnapshotDoc[];
+  actionSuggestions: RecommendedAction[];
+  memoryCandidates: AssistantMemoryCandidate[];
+  shouldRefreshPlan: boolean;
+  updatedSurfaces: SurfaceId[];
+}
+
 export interface SleepCaptureRecordDoc {
   id: string;
   userId: string;
@@ -365,9 +414,30 @@ export interface SleepCaptureDraft {
   reply: string;
 }
 
+export interface AssistantSurfacePatchDoc {
+  userState?: Partial<UserStateDoc> | null;
+  cardSnapshots?: Partial<Record<SurfaceId, CardSnapshotDoc>>;
+  sleepCaptureRecords?: SleepCaptureRecordDoc[];
+}
+
 export interface MorningReviewResult {
   reviewSummary: string;
   effectiveActions: string[];
   ineffectiveActions: string[];
   profileSummary: ProfileSummary;
+}
+
+export type AssistantSseEventName =
+  | "ack"
+  | "message_delta"
+  | "message_completed"
+  | "surface_patch"
+  | "capture_record"
+  | "memory_synced"
+  | "done"
+  | "error";
+
+export interface AssistantSseEvent<T = Record<string, unknown>> {
+  event: AssistantSseEventName;
+  data: T;
 }

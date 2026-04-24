@@ -37,8 +37,8 @@ class DormStatusPage extends StatelessWidget {
               notifications: services.notificationRepository.notifications,
               palette: palette,
             );
-            final int onlineCount = returnedDormMemberCount(dorm.members);
             final int sleepingCount = sleepingDormMemberCount(dorm.members);
+            final String onlineLabel = dormOnlineCountLabel(dorm.members);
 
             return SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(
@@ -93,7 +93,7 @@ class DormStatusPage extends StatelessWidget {
                             spacing: AppSpacing.sm,
                             runSpacing: AppSpacing.sm,
                             children: <Widget>[
-                              _SummaryChip(label: '在线 $onlineCount 人'),
+                              _SummaryChip(label: onlineLabel),
                               _SummaryChip(label: '睡眠中 $sleepingCount 人'),
                               _SummaryChip(label: '安静 ${dorm.quietLabel}'),
                             ],
@@ -138,14 +138,26 @@ class DormStatusPage extends StatelessWidget {
                               height: 44,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: dormPresenceSleepColor(member).withAlpha(24),
+                                color: dormPresenceSleepColor(
+                                  member,
+                                  showPresence: shouldShowDormPresence(
+                                    dorm,
+                                    member,
+                                  ),
+                                ).withAlpha(24),
                               ),
                               alignment: Alignment.center,
                               child: Text(
                                 member.name.characters.first,
                                 style: Theme.of(context).textTheme.titleMedium
                                     ?.copyWith(
-                                      color: dormPresenceSleepColor(member),
+                                      color: dormPresenceSleepColor(
+                                        member,
+                                        showPresence: shouldShowDormPresence(
+                                          dorm,
+                                          member,
+                                        ),
+                                      ),
                                       fontWeight: FontWeight.w800,
                                     ),
                               ),
@@ -184,17 +196,35 @@ class DormStatusPage extends StatelessWidget {
                                     vertical: 6,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: dormPresenceSleepColor(member)
-                                        .withAlpha(18),
+                                    color: dormPresenceSleepColor(
+                                      member,
+                                      showPresence: shouldShowDormPresence(
+                                        dorm,
+                                        member,
+                                      ),
+                                    ).withAlpha(18),
                                     borderRadius: BorderRadius.circular(999),
                                   ),
                                   child: Text(
-                                    dormPresenceSleepLabel(member),
+                                    dormPresenceSleepLabel(
+                                      member,
+                                      showPresence: shouldShowDormPresence(
+                                        dorm,
+                                        member,
+                                      ),
+                                    ),
                                     style: Theme.of(context)
                                         .textTheme
                                         .labelSmall
                                         ?.copyWith(
-                                          color: dormPresenceSleepColor(member),
+                                          color: dormPresenceSleepColor(
+                                            member,
+                                            showPresence:
+                                                shouldShowDormPresence(
+                                                  dorm,
+                                                  member,
+                                                ),
+                                          ),
                                           fontWeight: FontWeight.w800,
                                         ),
                                   ),
@@ -206,8 +236,9 @@ class DormStatusPage extends StatelessWidget {
                                     vertical: 6,
                                   ),
                                   decoration: BoxDecoration(
-                                    color:
-                                        dormActivityColor(member).withAlpha(18),
+                                    color: dormActivityColor(
+                                      member,
+                                    ).withAlpha(18),
                                     borderRadius: BorderRadius.circular(999),
                                   ),
                                   child: Text(
@@ -384,4 +415,3 @@ class _EnvironmentRow extends StatelessWidget {
     );
   }
 }
-

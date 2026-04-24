@@ -8,9 +8,13 @@ import { createDormInviteCallable } from "../callables/create_dorm_invite";
 import { prepareTonightPlanCallable } from "../callables/prepare_tonight_plan";
 import { refreshUserCardsCallable } from "../callables/refresh_user_cards";
 import {
+  finalizeAssistantReplyPostprocess,
+  handleAssistantCapture,
   handleDreamEntryChange,
   handleSleepSessionChange,
+  prepareAssistantReplyPhase,
 } from "../orchestrators/assistant_orchestrator";
+import { AIProvider } from "../providers/ai_provider";
 import { createAIProviderFromEnv } from "../providers/provider_factory";
 import { createRepositoryFromEnv } from "../repositories/firestore_repositories";
 import {
@@ -29,8 +33,49 @@ interface AuthedRequest extends Request {
   authContext?: AuthContext;
 }
 
+class AssistantThreadTurnBusyError extends Error {
+  constructor(
+    message = "This assistant thread is already processing another turn.",
+  ) {
+    super(message);
+    this.name = "AssistantThreadTurnBusyError";
+  }
+
+  readonly code = "THREAD_TURN_BUSY";
+}
+
+const ASSISTANT_REPLY_TIMEOUT_CODE = "ASSISTANT_REPLY_TIMEOUT";
+const ASSISTANT_REPLY_TIMEOUT_MESSAGE =
+  "Assistant reply timed out before completion. Please try again.";
+const ASSISTANT_THREAD_TURN_LEASE_MS = 60 * 1000;
+const ASSISTANT_THREAD_TURN_LEASE_RENEW_INTERVAL_MS = 20 * 1000;
+const ASSISTANT_REPLY_RECONCILE_AFTER_MS = 1500;
+const SSE_KEEPALIVE_INTERVAL_MS = 10 * 1000;
+
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function isAssistantThreadTurnBusyError(
+  error: unknown,
+): error is AssistantThreadTurnBusyError {
+  return error instanceof AssistantThreadTurnBusyError;
+}
+
+function errorMessageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isAssistantReplyTimeoutError(error: unknown): boolean {
+  const normalized = errorMessageOf(error).toLowerCase();
+  return (
+    normalized.includes("timeout after") ||
+    normalized.includes("request timeout") ||
+    normalized.includes("timed out") ||
+    normalized.includes("timeouterror") ||
+    normalized.includes("aborted due to timeout") ||
+    normalized.includes("the operation was aborted")
+  );
 }
 
 function logHttp(message: string): void {
@@ -58,8 +103,49 @@ function asList(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
 function asSleepCaptureKind(value: unknown): "dream" | "memo" {
   return asString(value) === "dream" ? "dream" : "memo";
+}
+
+function sleepDayKeyFromIso(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const shifted = new Date(date.getTime() + 4 * 60 * 60 * 1000);
+  const month = `${shifted.getMonth() + 1}`.padStart(2, "0");
+  const day = `${shifted.getDate()}`.padStart(2, "0");
+  return `${shifted.getFullYear()}-${month}-${day}`;
+}
+
+function fallbackTrackedDurationMinutes(input: {
+  summary: unknown;
+  startedAt: string;
+  endedAt: string;
+}): number {
+  const summary = asMap(input.summary);
+  if (typeof summary.totalSleepHours === "number") {
+    return Math.round(summary.totalSleepHours * 60);
+  }
+  if (!input.startedAt || !input.endedAt) {
+    return 0;
+  }
+  const startedAt = new Date(input.startedAt);
+  const endedAt = new Date(input.endedAt);
+  if (Number.isNaN(startedAt.getTime()) || Number.isNaN(endedAt.getTime())) {
+    return 0;
+  }
+  return Math.max(
+    0,
+    Math.min(
+      24 * 60,
+      Math.round((endedAt.getTime() - startedAt.getTime()) / 60000),
+    ),
+  );
 }
 
 export function normalizeCloudBasePhoneNumber(value: string): string {
@@ -239,12 +325,17 @@ async function maybeRepairBootstrapPhone(params: {
   }
   const accessToken = params.request.authContext?.accessToken?.trim() || "";
   if (!accessToken) {
-    logHttp(`bootstrap phone repair skipped uid=${params.uid} reason=no_access_token`);
+    logHttp(
+      `bootstrap phone repair skipped uid=${params.uid} reason=no_access_token`,
+    );
     return params.payload;
   }
 
   try {
-    const identity = await resolvePhoneAccountIdentity(params.request, accessToken);
+    const identity = await resolvePhoneAccountIdentity(
+      params.request,
+      accessToken,
+    );
     if (identity.uid !== params.uid) {
       logHttp(
         `bootstrap phone repair skipped uid=${params.uid} reason=uid_mismatch resolvedUid=${identity.uid}`,
@@ -256,7 +347,9 @@ async function maybeRepairBootstrapPhone(params: {
       phoneLinkedAt: nowIso(),
     });
     logHttp(`bootstrap phone repaired uid=${params.uid}`);
-    return (await params.repo.getBootstrapPayload(params.uid)) as unknown as JsonMap;
+    return (await params.repo.getBootstrapPayload(
+      params.uid,
+    )) as unknown as JsonMap;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logHttp(`bootstrap phone repair failed uid=${params.uid} error=${message}`);
@@ -290,6 +383,85 @@ function asyncMiddleware(
   };
 }
 
+function initSse(response: Response): void {
+  response.status(200);
+  response.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  response.setHeader("Cache-Control", "no-cache, no-transform");
+  response.setHeader("Connection", "keep-alive");
+  response.setHeader("X-Accel-Buffering", "no");
+  const socket = (
+    response as Response & {
+      socket?: { setNoDelay?: (noDelay?: boolean) => void };
+    }
+  ).socket;
+  socket?.setNoDelay?.(true);
+  const flushHeaders = (
+    response as Response & {
+      flushHeaders?: () => void;
+    }
+  ).flushHeaders;
+  flushHeaders?.call(response);
+}
+
+function flushSse(response: Response): void {
+  const flush = (
+    response as Response & {
+      flush?: () => void;
+    }
+  ).flush;
+  flush?.call(response);
+}
+
+function writeSseEvent(
+  response: Response,
+  event: string,
+  data: Record<string, unknown>,
+): void {
+  response.write(`event: ${event}\n`);
+  response.write(`data: ${JSON.stringify(data)}\n\n`);
+  flushSse(response);
+}
+
+function writeSseComment(response: Response, comment = "keepalive"): void {
+  response.write(`: ${comment}\n\n`);
+  flushSse(response);
+}
+
+function launchAssistantReplyPostprocess(params: {
+  repo: ReturnType<typeof createRepositoryFromEnv>;
+  provider: AIProvider;
+  uid: string;
+  threadId: string;
+  turnId: string;
+  phase: Awaited<ReturnType<typeof prepareAssistantReplyPhase>>;
+}): void {
+  setImmediate(() => {
+    void (async () => {
+      try {
+        logHttp(
+          `assistant reply postprocess start uid=${params.uid} threadId=${params.threadId} runId=${params.phase.runId}`,
+        );
+        const result = await finalizeAssistantReplyPostprocess({
+          repo: params.repo,
+          provider: params.provider,
+          uid: params.uid,
+          turnId: params.turnId,
+          phase: params.phase,
+        });
+        logHttp(
+          `assistant reply postprocess done uid=${params.uid} threadId=${params.threadId} runId=${params.phase.runId} updatedSurfaces=${result.updatedSurfaces.join(",")} memorySynced=${result.memorySyncedCount} skippedProjection=${result.skippedProjection}`,
+        );
+      } catch (error) {
+        logHttp(
+          `assistant reply postprocess error uid=${params.uid} threadId=${params.threadId} runId=${params.phase.runId} ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    })();
+  });
+}
+
 function buildSleepSessionPayload(input: {
   uid: string;
   existing?: JsonMap | null;
@@ -307,9 +479,12 @@ function buildSleepSessionPayload(input: {
   const awakenings = asList(input.body.awakenings ?? rawSession.awakenings).map(
     (item) => asMap(item),
   );
-  const feedback = asList(input.body.feedback ?? rawSession.feedback).map(
-    (item) => asMap(item),
-  );
+  const feedback = asList(
+    input.body.feedback ??
+      input.body.recommendationFeedback ??
+      rawSession.feedback ??
+      input.existing?.feedback,
+  ).map((item) => asMap(item));
   const summary =
     input.body.summary === null
       ? null
@@ -326,12 +501,50 @@ function buildSleepSessionPayload(input: {
     rawSession.startedAt,
     asString(input.existing?.startedAt, nowIso()),
   );
-  const endedAt = input.active
+  const sleepModeActive =
+    rawSession.sleepModeActive === undefined &&
+    input.body.sleepModeActive === undefined
+      ? input.active
+      : Boolean(
+          rawSession.sleepModeActive ??
+          input.body.sleepModeActive ??
+          input.active,
+        );
+  const endedAt = sleepModeActive
     ? null
     : asString(
         rawSession.endedAt,
         asString(input.body.endedAt, asString(input.existing?.endedAt)),
       );
+  const segments = asList(rawSession.segments ?? input.existing?.segments).map(
+    (item) => asMap(item),
+  );
+  const normalizedSegments =
+    segments.length > 0
+      ? segments
+      : [
+          {
+            startedAt,
+            endedAt,
+          },
+        ];
+  const sleepDayKey = asString(
+    rawSession.sleepDayKey,
+    asString(
+      input.body.sleepDayKey,
+      asString(input.existing?.sleepDayKey, sleepDayKeyFromIso(startedAt)),
+    ),
+  );
+  const trackedDurationMinutes = asNumber(
+    rawSession.trackedDurationMinutes ??
+      input.body.trackedDurationMinutes ??
+      input.existing?.trackedDurationMinutes,
+    fallbackTrackedDurationMinutes({
+      summary,
+      startedAt,
+      endedAt: asString(endedAt),
+    }),
+  );
 
   return {
     ...(input.existing ?? {}),
@@ -340,23 +553,26 @@ function buildSleepSessionPayload(input: {
     uid: input.uid,
     startedAt,
     endedAt,
-    status: input.active
-      ? "active"
-      : asString(
-          rawSession.status,
-          asString(input.body.status, "awaitingFeedback"),
+    sleepDayKey,
+    status: asString(
+      rawSession.status,
+      asString(
+        input.body.status,
+        asString(
+          input.existing?.status,
+          input.active ? "active" : "awaitingFeedback",
         ),
-    sleepModeActive: input.active
-      ? true
-      : Boolean(
-          rawSession.sleepModeActive ?? input.body.sleepModeActive ?? false,
-        ),
+      ),
+    ),
+    sleepModeActive,
     dormId: asString(
       input.body.dormId,
       asString(rawSession.dormId, asString(input.existing?.dormId)),
     ),
     recommendations: recommendationSnapshot,
     selectedRecommendationIds,
+    segments: normalizedSegments,
+    trackedDurationMinutes,
     awakenings,
     feedback,
     summary,
@@ -441,6 +657,24 @@ export function createAppApiServer() {
         result.settings = await repo.saveUserSettings(uid, settings);
       }
       response.json(result);
+    }),
+  );
+
+  app.post(
+    "/api/notifications/read",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      const body = asMap(request.body);
+      const notificationId = asString(body.notificationId);
+      if (!notificationId.trim()) {
+        throw new Error("notificationId is required.");
+      }
+      await repo.markNotificationRead(
+        request.authContext!.uid,
+        notificationId,
+        asString(body.readAt, nowIso()),
+      );
+      response.json({ ok: true, notificationId });
     }),
   );
 
@@ -548,7 +782,7 @@ export function createAppApiServer() {
   );
 
   app.post(
-    "/api/sleep/exit",
+    "/api/sleep/pause",
     asyncRoute(async (request, response) => {
       const repo = createRepositoryFromEnv();
       const provider = createAIProviderFromEnv();
@@ -561,8 +795,8 @@ export function createAppApiServer() {
       if (!existing) {
         throw new Error("Sleep session was not found.");
       }
-      const completed = asString(body.status) === "completed";
-      const nextStatus = completed ? "completed" : "awaitingFeedback";
+      const feedbackAlreadySubmitted = Boolean(existing.summary);
+      const nextStatus = feedbackAlreadySubmitted ? "completed" : "paused";
       const session = buildSleepSessionPayload({
         uid: request.authContext!.uid,
         existing,
@@ -587,22 +821,97 @@ export function createAppApiServer() {
         request.authContext!.uid,
         asString(session.id),
         asString(existing.status) || null,
-        nextStatus,
+        "paused",
       );
       await repo.patchSleepSession(asString(session.id), {
         _automation: buildCompletedAutomation({
           previous: session._automation,
           derivedAt: automationRequestedAt,
           derivedBy: "app-api",
-          lastHandledStatus: nextStatus,
+          lastHandledStatus: "paused",
         }),
       });
       response.json({
         sessionId: session.id,
         status: nextStatus,
+        feedbackAlreadySubmitted,
+        updatedSurfaces: ["profile_report"],
+      });
+    }),
+  );
+
+  app.post(
+    "/api/sleep/exit",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      const provider = createAIProviderFromEnv();
+      const body = asMap(request.body);
+      const sessionId = asString(
+        body.sessionId,
+        asString(asMap(body.session).id),
+      );
+      const existing = sessionId ? await repo.getSleepSession(sessionId) : null;
+      if (!existing) {
+        throw new Error("Sleep session was not found.");
+      }
+      const completed = asString(body.status) === "completed";
+      const feedbackAlreadySubmitted = Boolean(existing.summary);
+      const nextStatus = completed
+        ? "completed"
+        : feedbackAlreadySubmitted
+          ? asString(existing.status, "completed")
+          : "awaitingFeedback";
+      const session = buildSleepSessionPayload({
+        uid: request.authContext!.uid,
+        existing,
+        body: {
+          ...body,
+          status: nextStatus,
+          sleepModeActive: false,
+          endedAt: asString(body.endedAt, nowIso()),
+        },
+        active: false,
+      });
+      const automationRequestedAt = nowIso();
+      session._automation = buildRequestedAutomation(
+        "app-api",
+        automationRequestedAt,
+      );
+      session.updatedAt = automationRequestedAt;
+      await repo.saveSleepSession(session);
+      await handleSleepSessionChange(
+        repo,
+        provider,
+        request.authContext!.uid,
+        asString(session.id),
+        asString(existing.status) || null,
+        completed
+          ? "completed"
+          : feedbackAlreadySubmitted
+            ? "paused"
+            : "awaitingFeedback",
+      );
+      await repo.patchSleepSession(asString(session.id), {
+        _automation: buildCompletedAutomation({
+          previous: session._automation,
+          derivedAt: automationRequestedAt,
+          derivedBy: "app-api",
+          lastHandledStatus: completed
+            ? "completed"
+            : feedbackAlreadySubmitted
+              ? "paused"
+              : "awaitingFeedback",
+        }),
+      });
+      response.json({
+        sessionId: session.id,
+        status: nextStatus,
+        feedbackAlreadySubmitted,
         updatedSurfaces: completed
           ? ["morning_feedback", "profile_report", "assistant_context"]
-          : ["morning_feedback"],
+          : feedbackAlreadySubmitted
+            ? ["profile_report"]
+            : ["morning_feedback", "profile_report"],
       });
     }),
   );
@@ -676,9 +985,7 @@ export function createAppApiServer() {
       await repo.writeUserState(request.authContext!.uid, {
         sleepCapture: {
           pendingMemoBanner:
-            pendingMemoBanner === null
-              ? null
-              : (pendingMemoBanner as any),
+            pendingMemoBanner === null ? null : (pendingMemoBanner as any),
         },
       });
       response.json({
@@ -703,49 +1010,83 @@ export function createAppApiServer() {
       const repo = createRepositoryFromEnv();
       const provider = createAIProviderFromEnv();
       const body = asMap(request.body);
-      const sessionId = asString(
-        body.sessionId,
-        asString(asMap(body.session).id),
-      );
+      const sessionSnapshot = asMap(body.session);
+      const sessionId = asString(body.sessionId, asString(sessionSnapshot.id));
       const existing = sessionId ? await repo.getSleepSession(sessionId) : null;
-      if (!existing) {
+      if (!existing && Object.keys(sessionSnapshot).length === 0) {
         throw new Error("Sleep session was not found.");
       }
-      const automationRequestedAt = nowIso();
-      const session = await repo.saveSleepSession({
-        ...existing,
-        ...asMap(body.session),
-        id: sessionId,
-        uid: request.authContext!.uid,
-        status: "completed",
-        sleepModeActive: false,
-        summary: body.summary ?? existing.summary ?? null,
-        feedback: asList(body.feedback ?? existing.feedback).map((item) =>
-          asMap(item),
+      const summary =
+        body.summary === null
+          ? null
+          : (body.summary ??
+            sessionSnapshot.summary ??
+            existing?.summary ??
+            null);
+      const feedback = asList(
+        body.feedback ??
+          body.recommendationFeedback ??
+          sessionSnapshot.feedback ??
+          existing?.feedback,
+      ).map((item) => asMap(item));
+      const endedAt = asString(
+        body.endedAt,
+        asString(
+          sessionSnapshot.endedAt,
+          asString(existing?.endedAt, nowIso()),
         ),
-        endedAt: asString(body.endedAt, asString(existing.endedAt, nowIso())),
-        updatedAt: automationRequestedAt,
-        _automation: buildRequestedAutomation("app-api", automationRequestedAt),
+      );
+      const automationRequestedAt = nowIso();
+      const session = buildSleepSessionPayload({
+        uid: request.authContext!.uid,
+        existing,
+        body: {
+          ...body,
+          status: "completed",
+          sleepModeActive: false,
+          summary,
+          feedback,
+          endedAt,
+          session: {
+            ...(existing ?? {}),
+            ...sessionSnapshot,
+            id: sessionId,
+            uid: request.authContext!.uid,
+            status: "completed",
+            sleepModeActive: false,
+            summary,
+            feedback,
+            endedAt,
+          },
+        },
+        active: false,
       });
+      session.updatedAt = automationRequestedAt;
+      session._automation = buildRequestedAutomation(
+        "app-api",
+        automationRequestedAt,
+      );
+      const savedSession = await repo.saveSleepSession(session);
+      const savedSessionId = asString(savedSession.id, sessionId);
       await handleSleepSessionChange(
         repo,
         provider,
         request.authContext!.uid,
-        sessionId,
-        asString(existing.status) || null,
+        savedSessionId,
+        asString(existing?.status) || null,
         "completed",
       );
-      await repo.patchSleepSession(sessionId, {
+      await repo.patchSleepSession(savedSessionId, {
         _automation: buildCompletedAutomation({
-          previous: session._automation,
+          previous: savedSession._automation,
           derivedAt: automationRequestedAt,
           derivedBy: "app-api",
           lastHandledStatus: "completed",
         }),
       });
       response.json({
-        sessionId,
-        status: session.status,
+        sessionId: savedSessionId,
+        status: savedSession.status,
         updatedSurfaces: [
           "morning_feedback",
           "profile_report",
@@ -989,7 +1330,10 @@ export function createAppApiServer() {
       logHttp(
         `assistant reply start uid=${request.authContext!.uid} threadId=${threadId} provider=${provider.providerName} model=${provider.modelName}`,
       );
-      const clientUserMessageId = asString(body.clientUserMessageId, randomUUID());
+      const clientUserMessageId = asString(
+        body.clientUserMessageId,
+        randomUUID(),
+      );
       const clientAssistantMessageId = asString(
         body.clientAssistantMessageId,
         randomUUID(),
@@ -1037,6 +1381,264 @@ export function createAppApiServer() {
   );
 
   app.post(
+    "/api/assistant/reply/stream",
+    (request: Request, response: Response) => {
+      let replyDispatched = false;
+      let replyAssistantMessageId = "";
+      let replyRunId = "";
+      let sawFirstProviderDelta = false;
+      let streamStartedAt = Date.now();
+      let streamUid = "";
+      let streamThreadId = "";
+      void (async () => {
+        const authedRequest = request as AuthedRequest;
+        const repo = createRepositoryFromEnv();
+        const provider = createAIProviderFromEnv();
+        const body = asMap(authedRequest.body);
+        const threadId = asString(
+          body.threadId,
+          `thread-${authedRequest.authContext!.uid}`,
+        );
+        const prompt = asString(body.prompt);
+        if (!prompt.trim()) {
+          throw new Error("prompt is required.");
+        }
+
+        const clientUserMessageId = asString(
+          body.clientUserMessageId,
+          randomUUID(),
+        );
+        const clientAssistantMessageId = asString(
+          body.clientAssistantMessageId,
+          randomUUID(),
+        );
+        replyAssistantMessageId = clientAssistantMessageId;
+        const turnId = clientAssistantMessageId;
+        streamUid = authedRequest.authContext!.uid;
+        streamThreadId = threadId;
+        streamStartedAt = Date.now();
+        let deltaCount = 0;
+        let turnLeaseAcquired = false;
+        let turnLeaseTimer: NodeJS.Timeout | null = null;
+        let keepaliveTimer: NodeJS.Timeout | null = null;
+
+        try {
+          await repo.ensureAssistantThread(
+            authedRequest.authContext!.uid,
+            threadId,
+            asString(body.title, "今晚睡前聊聊"),
+          );
+          turnLeaseAcquired = await repo.tryAcquireAssistantThreadTurn({
+            uid: authedRequest.authContext!.uid,
+            threadId,
+            turnId,
+            status: "streaming",
+            leaseMs: ASSISTANT_THREAD_TURN_LEASE_MS,
+          });
+          if (!turnLeaseAcquired) {
+            throw new AssistantThreadTurnBusyError();
+          }
+          turnLeaseTimer = setInterval(() => {
+            void repo
+              .renewAssistantThreadTurn({
+                uid: authedRequest.authContext!.uid,
+                threadId,
+                turnId,
+                status: replyDispatched ? "finalizing" : "streaming",
+                leaseMs: ASSISTANT_THREAD_TURN_LEASE_MS,
+              })
+              .catch((renewError: unknown) => {
+                logHttp(
+                  `assistant reply stream renew error uid=${authedRequest.authContext!.uid} threadId=${threadId} ${
+                    renewError instanceof Error
+                      ? renewError.message
+                      : String(renewError)
+                  }`,
+                );
+              });
+          }, ASSISTANT_THREAD_TURN_LEASE_RENEW_INTERVAL_MS);
+          initSse(response);
+          keepaliveTimer = setInterval(() => {
+            if (!response.writableEnded) {
+              writeSseComment(response);
+            }
+          }, SSE_KEEPALIVE_INTERVAL_MS);
+        logHttp(
+          `assistant reply stream start uid=${authedRequest.authContext!.uid} threadId=${threadId}`,
+        );
+        writeSseEvent(response, "ack", {
+          threadId,
+          assistantMessageId: clientAssistantMessageId,
+        });
+        logHttp(
+          `assistant reply stream ack uid=${authedRequest.authContext!.uid} threadId=${threadId} elapsedMs=${
+            Date.now() - streamStartedAt
+          }`,
+        );
+
+        await repo.ensureAssistantThread(
+          authedRequest.authContext!.uid,
+          threadId,
+          asString(body.title, "今晚睡前聊聊"),
+        );
+        await repo.appendAssistantMessage({
+          id: clientUserMessageId,
+          threadId,
+          role: "user",
+          content: prompt,
+          createdAt: nowIso(),
+          status: "complete",
+        });
+
+        logHttp(
+          `assistant reply stream provider request start uid=${authedRequest.authContext!.uid} threadId=${threadId} elapsedMs=${
+            Date.now() - streamStartedAt
+          }`,
+        );
+        const phase = await prepareAssistantReplyPhase({
+            repo,
+            provider,
+            uid: authedRequest.authContext!.uid,
+            prompt,
+            threadId,
+            onDelta: async (delta) => {
+              if (!sawFirstProviderDelta) {
+                sawFirstProviderDelta = true;
+                logHttp(
+                  `assistant reply stream provider first delta uid=${authedRequest.authContext!.uid} threadId=${threadId} elapsedMs=${
+                    Date.now() - streamStartedAt
+                  }`,
+                );
+              }
+              deltaCount += 1;
+              logHttp(
+                `assistant reply stream delta uid=${authedRequest.authContext!.uid} threadId=${threadId} index=${deltaCount} len=${delta.length} elapsedMs=${
+                  Date.now() - streamStartedAt
+                }`,
+              );
+              writeSseEvent(response, "message_delta", { delta });
+            },
+          });
+          replyRunId = phase.runId;
+          await repo.renewAssistantThreadTurn({
+            uid: authedRequest.authContext!.uid,
+            threadId,
+            turnId,
+            status: "finalizing",
+            leaseMs: ASSISTANT_THREAD_TURN_LEASE_MS,
+          });
+          await repo.appendAssistantMessage({
+            id: clientAssistantMessageId,
+            threadId,
+            role: "assistant",
+            content: phase.reply,
+            createdAt: nowIso(),
+            status: "complete",
+            sourceMode: phase.sourceMode,
+            provider: phase.provider,
+            model: phase.model,
+            errorMessage: phase.errorMessage ?? undefined,
+          });
+          await repo.markAssistantThreadCommittedTurn({
+            uid: authedRequest.authContext!.uid,
+            threadId,
+            turnId,
+          });
+          replyDispatched = true;
+          writeSseEvent(response, "message_completed", {
+            reply: phase.reply,
+            runId: phase.runId,
+            intent: phase.intent,
+            provider: phase.provider,
+            model: phase.model,
+            sourceMode: phase.sourceMode,
+            errorMessage: phase.errorMessage,
+            assistantMessageId: clientAssistantMessageId,
+          });
+          writeSseEvent(response, "done", {
+            runId: phase.runId,
+            assistantMessageId: clientAssistantMessageId,
+            backgroundSyncPending: true,
+            reconcileAfterMs: ASSISTANT_REPLY_RECONCILE_AFTER_MS,
+          });
+          response.end();
+          logHttp(
+            `assistant reply stream completed uid=${authedRequest.authContext!.uid} threadId=${threadId} deltaCount=${deltaCount} elapsedMs=${
+              Date.now() - streamStartedAt
+            }`,
+          );
+          launchAssistantReplyPostprocess({
+            repo,
+            provider,
+            uid: authedRequest.authContext!.uid,
+            threadId,
+            turnId,
+            phase,
+          });
+        } finally {
+          if (keepaliveTimer != null) {
+            clearInterval(keepaliveTimer);
+          }
+          if (turnLeaseTimer != null) {
+            clearInterval(turnLeaseTimer);
+          }
+          if (turnLeaseAcquired) {
+            try {
+              await repo.releaseAssistantThreadTurn({
+                uid: authedRequest.authContext!.uid,
+                threadId,
+                turnId,
+              });
+            } catch (releaseError) {
+              logHttp(
+                `assistant reply stream release error uid=${authedRequest.authContext!.uid} threadId=${threadId} ${
+                  releaseError instanceof Error
+                    ? releaseError.message
+                    : String(releaseError)
+                }`,
+              );
+            }
+          }
+        }
+      })().catch((error: unknown) => {
+        const timedOut = isAssistantReplyTimeoutError(error);
+        if (timedOut) {
+          logHttp(
+            `assistant reply stream provider timeout uid=${streamUid} threadId=${streamThreadId} elapsedMs=${
+              Date.now() - streamStartedAt
+            } message=${errorMessageOf(error)}`,
+          );
+        }
+        logHttp(
+          `assistant reply stream error ${errorMessageOf(error)}`,
+        );
+        if (!response.headersSent) {
+          initSse(response);
+        }
+        if (replyDispatched && !response.writableEnded) {
+          writeSseEvent(response, "done", {
+            assistantMessageId: replyAssistantMessageId,
+            ...(replyRunId ? { runId: replyRunId } : {}),
+          });
+          response.end();
+        } else if (!response.writableEnded) {
+          writeSseEvent(response, "error", {
+            ...(isAssistantThreadTurnBusyError(error)
+              ? { code: error.code }
+              : timedOut
+                ? { code: ASSISTANT_REPLY_TIMEOUT_CODE }
+              : {}),
+            message: timedOut
+              ? ASSISTANT_REPLY_TIMEOUT_MESSAGE
+              : errorMessageOf(error),
+          });
+          response.end();
+        }
+      });
+    },
+  );
+
+  app.post(
     "/api/assistant/capture",
     asyncRoute(async (request, response) => {
       const repo = createRepositoryFromEnv();
@@ -1069,10 +1671,7 @@ export function createAppApiServer() {
       await repo.ensureAssistantThread(
         request.authContext!.uid,
         threadId,
-        asString(
-          body.title,
-          captureType === "dream" ? "梦记收纳" : "事记收纳",
-        ),
+        asString(body.title, captureType === "dream" ? "梦记收纳" : "事记收纳"),
       );
       await repo.appendAssistantMessage({
         id: clientUserMessageId,
@@ -1111,6 +1710,211 @@ export function createAppApiServer() {
         assistantMessageId: clientAssistantMessageId,
       });
     }),
+  );
+
+  app.post(
+    "/api/assistant/capture/stream",
+    (request: Request, response: Response) => {
+      void (async () => {
+        const authedRequest = request as AuthedRequest;
+        const repo = createRepositoryFromEnv();
+        const provider = createAIProviderFromEnv();
+        const body = asMap(authedRequest.body);
+        const threadId = asString(
+          body.threadId,
+          `thread-${authedRequest.authContext!.uid}`,
+        );
+        const prompt = asString(body.prompt);
+        const sessionId = asString(body.sessionId);
+        if (!prompt.trim()) {
+          throw new Error("prompt is required.");
+        }
+        if (!sessionId.trim()) {
+          throw new Error("sessionId is required.");
+        }
+        const captureType = asSleepCaptureKind(body.captureType);
+        const clientUserMessageId = asString(
+          body.clientUserMessageId,
+          randomUUID(),
+        );
+        const clientAssistantMessageId = asString(
+          body.clientAssistantMessageId,
+          randomUUID(),
+        );
+        const turnId = clientAssistantMessageId;
+        let turnLeaseAcquired = false;
+        let turnLeaseTimer: NodeJS.Timeout | null = null;
+        let keepaliveTimer: NodeJS.Timeout | null = null;
+
+        try {
+          await repo.ensureAssistantThread(
+            authedRequest.authContext!.uid,
+            threadId,
+            asString(
+              body.title,
+              captureType === "dream" ? "梦记收纳" : "事记收纳",
+            ),
+          );
+          turnLeaseAcquired = await repo.tryAcquireAssistantThreadTurn({
+            uid: authedRequest.authContext!.uid,
+            threadId,
+            turnId,
+            status: "streaming",
+            leaseMs: ASSISTANT_THREAD_TURN_LEASE_MS,
+          });
+          if (!turnLeaseAcquired) {
+            throw new AssistantThreadTurnBusyError();
+          }
+          turnLeaseTimer = setInterval(() => {
+            void repo
+              .renewAssistantThreadTurn({
+                uid: authedRequest.authContext!.uid,
+                threadId,
+                turnId,
+                status: "streaming",
+                leaseMs: ASSISTANT_THREAD_TURN_LEASE_MS,
+              })
+              .catch((renewError: unknown) => {
+                logHttp(
+                  `assistant capture stream renew error uid=${authedRequest.authContext!.uid} threadId=${threadId} ${
+                    renewError instanceof Error
+                      ? renewError.message
+                      : String(renewError)
+                  }`,
+                );
+              });
+          }, ASSISTANT_THREAD_TURN_LEASE_RENEW_INTERVAL_MS);
+
+          initSse(response);
+          keepaliveTimer = setInterval(() => {
+            if (!response.writableEnded) {
+              writeSseComment(response);
+            }
+          }, SSE_KEEPALIVE_INTERVAL_MS);
+        writeSseEvent(response, "ack", {
+          threadId,
+          assistantMessageId: clientAssistantMessageId,
+          captureType,
+          sessionId,
+        });
+
+        await repo.ensureAssistantThread(
+          authedRequest.authContext!.uid,
+          threadId,
+          asString(
+            body.title,
+            captureType === "dream" ? "梦记收纳" : "事记收纳",
+          ),
+        );
+        await repo.appendAssistantMessage({
+          id: clientUserMessageId,
+          threadId,
+          role: "user",
+          content: prompt,
+          createdAt: nowIso(),
+          status: "complete",
+        });
+
+        const ackReply =
+          captureType === "dream"
+            ? "我先帮你收好这段梦记。"
+            : "我先帮你收好这段事记。";
+        writeSseEvent(response, "message_delta", { delta: ackReply });
+
+        const result = await handleAssistantCapture(
+          repo,
+          provider,
+          authedRequest.authContext!.uid,
+          prompt,
+          threadId,
+          captureType,
+          sessionId,
+        );
+
+        await repo.renewAssistantThreadTurn({
+          uid: authedRequest.authContext!.uid,
+          threadId,
+          turnId,
+          status: "finalizing",
+          leaseMs: ASSISTANT_THREAD_TURN_LEASE_MS,
+        });
+
+        await repo.appendAssistantMessage({
+          id: clientAssistantMessageId,
+          threadId,
+          role: "assistant",
+          content: result.reply,
+          createdAt: nowIso(),
+          status: "complete",
+          sourceMode: result.sourceMode,
+          provider: result.provider,
+          model: result.model,
+          errorMessage: result.errorMessage ?? undefined,
+        });
+
+        writeSseEvent(response, "message_completed", {
+          reply: result.reply,
+          runId: result.runId,
+          provider: result.provider,
+          model: result.model,
+          sourceMode: result.sourceMode,
+          errorMessage: result.errorMessage,
+          assistantMessageId: clientAssistantMessageId,
+        });
+        writeSseEvent(response, "surface_patch", {
+          patch: result.surfacePatch,
+          updatedSurfaces: result.updatedSurfaces,
+        });
+        writeSseEvent(response, "capture_record", {
+          record: result.record,
+        });
+        writeSseEvent(response, "memory_synced", {
+          count: result.memorySyncedCount,
+        });
+        writeSseEvent(response, "done", {
+          runId: result.runId,
+          assistantMessageId: clientAssistantMessageId,
+        });
+        response.end();
+        } finally {
+          if (keepaliveTimer != null) {
+            clearInterval(keepaliveTimer);
+          }
+          if (turnLeaseTimer != null) {
+            clearInterval(turnLeaseTimer);
+          }
+          if (turnLeaseAcquired) {
+            try {
+              await repo.releaseAssistantThreadTurn({
+                uid: authedRequest.authContext!.uid,
+                threadId,
+                turnId,
+              });
+            } catch (releaseError) {
+              logHttp(
+                `assistant capture stream release error uid=${authedRequest.authContext!.uid} threadId=${threadId} ${
+                  releaseError instanceof Error
+                    ? releaseError.message
+                    : String(releaseError)
+                }`,
+              );
+            }
+          }
+        }
+      })().catch((error: unknown) => {
+        if (!response.headersSent) {
+          initSse(response);
+        }
+        writeSseEvent(response, "error", {
+          ...(isAssistantThreadTurnBusyError(error)
+            ? { code: error.code }
+            : {}),
+          message:
+            error instanceof Error ? error.message : "Unknown stream error.",
+        });
+        response.end();
+      });
+    },
   );
 
   app.post(
