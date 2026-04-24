@@ -99,6 +99,12 @@ class TestFileStorage {
   }
 }
 
+class ThrowingTempUrlFileStorage extends TestFileStorage {
+  override async getTemporaryUrl(_fileId: string): Promise<string> {
+    throw new Error("temp url signing failed");
+  }
+}
+
 test("createDorm writes current member displayBadgeId", async () => {
   const store = new TestDocumentStore();
   const repo = new FirestoreRepository(store as any, new TestFileStorage());
@@ -284,6 +290,80 @@ test("getDorm backfills avatarUrl and displayBadgeId from latest user profile", 
   );
 });
 
+test("getDorm logs avatar diagnostics when temp-url signing fails or avatar data is missing", async () => {
+  const originalConsoleLog = console.log;
+  const logs: string[] = [];
+  console.log = (...args: unknown[]) => {
+    logs.push(args.map((value) => String(value)).join(" "));
+  };
+
+  try {
+    const store = new TestDocumentStore();
+    const repo = new FirestoreRepository(
+      store as any,
+      new ThrowingTempUrlFileStorage(),
+    );
+    const dormId = "dorm-avatar-diagnostics";
+
+    await store.set("dorms", dormId, {
+      id: dormId,
+      name: "Dorm",
+    });
+    await repo.saveUserProfile("roommate-user", {
+      displayName: "Roommate",
+      dormId,
+      avatarUrl: null,
+      avatarStoragePath: "avatar-file-1",
+    });
+    await store.set("dorm_members", `${dormId}:roommate-user`, {
+      dormId,
+      uid: "roommate-user",
+      name: "Roommate",
+      status: "quiet",
+      presenceStatus: "returned",
+      sleepModeActive: false,
+      lastActiveAt: "2026-04-13T15:00:00.000Z",
+      note: "resting",
+      avatarUrl: null,
+    });
+
+    const dorm = await repo.getDorm(dormId, "owner-user");
+    const roommate = dorm.members.find((member) => member.uid === "roommate-user");
+    assert.equal(roommate?.avatarUrl, undefined);
+    assert.ok(
+      logs.some((line) =>
+        line.includes(
+          "[repo] dorm avatar temp-url failed uid=roommate-user storagePath=avatar-file-1",
+        ),
+      ),
+    );
+    assert.ok(
+      logs.some((line) =>
+        line.includes(
+          "[repo] dorm avatar missing uid=roommate-user reason=temp_url_failed",
+        ),
+      ),
+    );
+
+    logs.length = 0;
+    await store.merge("users", "roommate-user", {
+      avatarStoragePath: null,
+      avatarUrl: null,
+    });
+
+    await repo.getDorm(dormId, "owner-user");
+    assert.ok(
+      logs.some((line) =>
+        line.includes(
+          "[repo] dorm avatar missing uid=roommate-user reason=no_avatar_data",
+        ),
+      ),
+    );
+  } finally {
+    console.log = originalConsoleLog;
+  }
+});
+
 test("updateDormMemberStatus preserves sleepModeActive when omitted", async () => {
   const store = new TestDocumentStore();
   const repo = new FirestoreRepository(store as any, new TestFileStorage());
@@ -312,37 +392,34 @@ test("updateDormMemberStatus preserves sleepModeActive when omitted", async () =
   assert.equal(member.presenceStatus, "away");
 });
 
-test(
-  "updateDormMemberStatus normalizes legacy sleeping status when sleep mode is off",
-  async () => {
-    const store = new TestDocumentStore();
-    const repo = new FirestoreRepository(store as any, new TestFileStorage());
-    const uid = "sleeping-user";
-    const dormId = "dorm-sleep-normalize";
+test("updateDormMemberStatus normalizes legacy sleeping status when sleep mode is off", async () => {
+  const store = new TestDocumentStore();
+  const repo = new FirestoreRepository(store as any, new TestFileStorage());
+  const uid = "sleeping-user";
+  const dormId = "dorm-sleep-normalize";
 
-    await store.set("dorms", dormId, { id: dormId, name: "Dorm" });
-    await repo.saveUserProfile(uid, { displayName: "Sleeper", dormId });
-    await store.set("dorm_members", `${dormId}:${uid}`, {
-      dormId,
-      uid,
-      name: "Sleeper",
-      status: "sleeping",
-      presenceStatus: "returned",
-      sleepModeActive: true,
-      lastActiveAt: "2026-04-20T23:00:00.000Z",
-      note: "asleep",
-    });
+  await store.set("dorms", dormId, { id: dormId, name: "Dorm" });
+  await repo.saveUserProfile(uid, { displayName: "Sleeper", dormId });
+  await store.set("dorm_members", `${dormId}:${uid}`, {
+    dormId,
+    uid,
+    name: "Sleeper",
+    status: "sleeping",
+    presenceStatus: "returned",
+    sleepModeActive: true,
+    lastActiveAt: "2026-04-20T23:00:00.000Z",
+    note: "asleep",
+  });
 
-    const member = await repo.updateDormMemberStatus(uid, {
-      sleepModeActive: false,
-      note: "awake now",
-    });
+  const member = await repo.updateDormMemberStatus(uid, {
+    sleepModeActive: false,
+    note: "awake now",
+  });
 
-    assert.equal(member.sleepModeActive, false);
-    assert.equal(member.status, "quiet");
-    assert.equal(member.note, "awake now");
-  },
-);
+  assert.equal(member.sleepModeActive, false);
+  assert.equal(member.status, "quiet");
+  assert.equal(member.note, "awake now");
+});
 
 test("updateDormMemberHeartbeat writes app online fields only", async () => {
   const store = new TestDocumentStore();
@@ -375,4 +452,10 @@ test("updateDormMemberHeartbeat writes app online fields only", async () => {
   assert.equal(offline.appOnline, false);
   assert.equal(offline.sleepModeActive, true);
   assert.equal(offline.lastActiveAt, originalLastActiveAt);
+
+  const dorm = await repo.getDorm(dormId, uid);
+  const member = dorm.members.find((item) => item.uid === uid);
+  assert.equal(member?.appOnline, false);
+  assert.equal(typeof member?.appLastSeenAt, "string");
+  assert.equal(member?.sleepModeActive, true);
 });

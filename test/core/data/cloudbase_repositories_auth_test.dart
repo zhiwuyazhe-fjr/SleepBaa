@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_app_api_client.dart';
+import 'package:sleep_dorm_app/core/backend/cloudbase_auth_profile_cache_store.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_auth_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_session_store.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_snapshot_store.dart';
@@ -180,7 +181,7 @@ void main() {
   );
 
   test(
-    'ensureAuthenticated clears session but keeps verified identity when refresh is rejected with 401',
+    'ensureAuthenticated clears session and returns to phone login when refresh is rejected with 401',
     () async {
       final _FakeSessionStore sessionStore = _FakeSessionStore();
       sessionStore._session = CloudBaseSession(
@@ -196,6 +197,18 @@ void main() {
           phoneNumber: '+86 13800138000',
         ),
       );
+      final _MemoryAuthProfileCacheStore authProfileCacheStore =
+          _MemoryAuthProfileCacheStore(
+            const UserProfile(
+              uid: 'tester',
+              displayName: 'Tester',
+              tagline: 'tagline',
+              role: 'role',
+              dormId: 'dorm-204',
+              phoneNumber: '+86 13800138000',
+              avatarUrl: 'https://cdn.example.com/tester.png',
+            ),
+          );
       const AppEnvironment environment = AppEnvironment(
         target: AppBackendTarget.production,
         appIdPrefix: 'com.dormsleep.app',
@@ -237,19 +250,24 @@ void main() {
         sessionStore: sessionStore,
         snapshotStore: snapshotStore,
         verifiedPhoneStore: verifiedStore,
+        authProfileCacheStore: authProfileCacheStore,
       );
 
       await repository.ensureAuthenticated();
 
-      expect(repository.hasVerifiedPhoneIdentity, isTrue);
-      expect(repository.isAuthenticated, isTrue);
+      expect(repository.hasVerifiedPhoneIdentity, isFalse);
+      expect(repository.isAuthenticated, isFalse);
+      expect(repository.currentUser.uid, isEmpty);
+      expect(repository.currentUser.displayName, isNot('Paul'));
       expect(sessionStore._session, isNull);
+      expect(await verifiedStore.read(), isNull);
+      expect(await authProfileCacheStore.read(), isNull);
       expect(repository.lastAuthError, contains('登录状态已失效'));
     },
   );
 
   test(
-    'ensureAuthenticated restores profile from persisted identity when session is missing',
+    'ensureAuthenticated restores cached real profile when session is missing',
     () async {
       final _FakeSessionStore sessionStore = _FakeSessionStore();
       sessionStore._session = null;
@@ -259,6 +277,18 @@ void main() {
           phoneNumber: '+86 13900139000',
         ),
       );
+      final _MemoryAuthProfileCacheStore authProfileCacheStore =
+          _MemoryAuthProfileCacheStore(
+            const UserProfile(
+              uid: 'returning-user',
+              displayName: 'Returning User',
+              tagline: 'Back again',
+              role: 'role',
+              dormId: 'dorm-204',
+              phoneNumber: '+86 13900139000',
+              avatarUrl: 'https://cdn.example.com/returning.png',
+            ),
+          );
       const AppEnvironment environment = AppEnvironment(
         target: AppBackendTarget.production,
         appIdPrefix: 'com.dormsleep.app',
@@ -291,6 +321,7 @@ void main() {
         sessionStore: sessionStore,
         snapshotStore: snapshotStore,
         verifiedPhoneStore: verifiedStore,
+        authProfileCacheStore: authProfileCacheStore,
       );
 
       await repository.ensureAuthenticated();
@@ -298,6 +329,73 @@ void main() {
       expect(repository.hasVerifiedPhoneIdentity, isTrue);
       expect(repository.currentUser.uid, 'returning-user');
       expect(repository.currentUser.phoneNumber, '+86 13900139000');
+      expect(repository.currentUser.displayName, 'Returning User');
+      expect(repository.currentUser.dormId, 'dorm-204');
+      expect(
+        repository.currentUser.avatarUrl,
+        'https://cdn.example.com/returning.png',
+      );
+    },
+  );
+
+  test(
+    'ensureAuthenticated keeps a neutral profile when session is missing and no auth profile cache exists',
+    () async {
+      final _FakeSessionStore sessionStore = _FakeSessionStore();
+      sessionStore._session = null;
+      final _MemoryVerifiedPhoneStore verifiedStore = _MemoryVerifiedPhoneStore(
+        VerifiedPhoneIdentity(
+          subject: 'returning-user',
+          phoneNumber: '+86 13900139000',
+        ),
+      );
+      final _MemoryAuthProfileCacheStore authProfileCacheStore =
+          _MemoryAuthProfileCacheStore(null);
+      const AppEnvironment environment = AppEnvironment(
+        target: AppBackendTarget.production,
+        appIdPrefix: 'com.dormsleep.app',
+        cloudbaseEnvId: 'demo-env',
+        cloudbaseAuthBaseUrl: 'https://example.com',
+        cloudbaseAppApiBaseUrl: 'https://example.com',
+        cloudbasePublishableKey: 'publishable-key',
+        cloudbaseClientId: 'demo-env',
+      );
+      final http.Client httpClient = MockClient((http.Request request) async {
+        throw StateError('Unexpected path: ${request.url.path}');
+      });
+      final CloudBaseAuthClient authClient = CloudBaseAuthClient(
+        environment: environment,
+        httpClient: httpClient,
+      );
+      final CloudBaseAppApiClient appApiClient = CloudBaseAppApiClient(
+        environment: environment,
+        sessionStore: sessionStore,
+        authClient: authClient,
+        httpClient: httpClient,
+      );
+      final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final CloudBaseAuthRepository repository = CloudBaseAuthRepository(
+        environment: environment,
+        authClient: authClient,
+        appApiClient: appApiClient,
+        sessionStore: sessionStore,
+        snapshotStore: snapshotStore,
+        verifiedPhoneStore: verifiedStore,
+        authProfileCacheStore: authProfileCacheStore,
+      );
+
+      await repository.ensureAuthenticated();
+
+      expect(repository.hasVerifiedPhoneIdentity, isTrue);
+      expect(repository.currentUser.uid, 'returning-user');
+      expect(repository.currentUser.phoneNumber, '+86 13900139000');
+      expect(repository.currentUser.displayName, isNot('Paul'));
+      expect(repository.currentUser.displayName, isEmpty);
+      expect(repository.currentUser.dormId, isNull);
+      expect(repository.currentUser.avatarUrl, isNull);
+      expect(repository.lastAuthError, isNotNull);
     },
   );
 
@@ -605,6 +703,25 @@ class _MemoryVerifiedPhoneStore extends VerifiedPhoneIdentityStore {
   @override
   Future<void> write(VerifiedPhoneIdentity identity) async {
     _value = identity;
+  }
+
+  @override
+  Future<void> clear() async {
+    _value = null;
+  }
+}
+
+class _MemoryAuthProfileCacheStore extends CloudBaseAuthProfileCacheStore {
+  _MemoryAuthProfileCacheStore(this._value) : super();
+
+  UserProfile? _value;
+
+  @override
+  Future<UserProfile?> read() async => _value;
+
+  @override
+  Future<void> write(UserProfile profile) async {
+    _value = profile;
   }
 
   @override

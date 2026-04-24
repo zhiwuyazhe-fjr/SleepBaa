@@ -11,6 +11,7 @@ import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_live_status_scope.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_member_status_presenter.dart';
+import 'package:sleep_dorm_app/features/dorm/presentation/widgets/dorm_member_avatar.dart';
 
 class DormStatusPage extends StatelessWidget {
   const DormStatusPage({super.key});
@@ -30,6 +31,7 @@ class DormStatusPage extends StatelessWidget {
           body: SafeArea(
             child: ListenableBuilder(
               listenable: Listenable.merge(<Listenable>[
+                services.authRepository,
                 services.dormRepository,
                 services.notificationRepository,
                 services.dormLiveStatusController,
@@ -37,6 +39,9 @@ class DormStatusPage extends StatelessWidget {
               builder: (BuildContext context, Widget? child) {
                 final NightMoodPalette palette = context.nightMoodPalette;
                 final Dorm dorm = services.dormRepository.currentDorm;
+                final UserProfile currentUser =
+                    services.authRepository.currentUser;
+                final String currentUserId = currentUser.uid;
                 final List<DormEventRecord> events = buildDormEventRecords(
                   dorm: dorm,
                   notifications: services.notificationRepository.notifications,
@@ -143,37 +148,33 @@ class DormStatusPage extends StatelessWidget {
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: dormPresenceSleepColor(
+                                DormMemberAvatar(
+                                  key: ValueKey<String>(
+                                    'dorm-status-avatar-${member.uid}',
+                                  ),
+                                  size: 44,
+                                  accentColor: dormPresenceSleepColor(
+                                    member,
+                                    showPresence: shouldShowDormPresence(
+                                      dorm,
                                       member,
-                                      showPresence: shouldShowDormPresence(
-                                        dorm,
-                                        member,
-                                      ),
-                                    ).withAlpha(24),
+                                    ),
                                   ),
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    member.name.characters.first,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(
-                                          color: dormPresenceSleepColor(
-                                            member,
-                                            showPresence:
-                                                shouldShowDormPresence(
-                                                  dorm,
-                                                  member,
-                                                ),
-                                          ),
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                  ),
+                                  avatarBytes: member.uid == currentUserId
+                                      ? currentUser.avatarBytes
+                                      : null,
+                                  avatarUrl: member.uid == currentUserId
+                                      ? currentUser.avatarUrl ??
+                                            member.avatarUrl
+                                      : member.avatarUrl,
+                                  fallbackSeed:
+                                      member.uid == currentUserId &&
+                                          currentUser.avatarFallbackSeed
+                                                  ?.trim()
+                                                  .isNotEmpty ==
+                                              true
+                                      ? currentUser.avatarFallbackSeed!
+                                      : member.name,
                                 ),
                                 const SizedBox(width: AppSpacing.md),
                                 Expanded(

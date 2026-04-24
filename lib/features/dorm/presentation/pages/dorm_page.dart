@@ -17,6 +17,7 @@ import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_invite_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_member_status_presenter.dart';
+import 'package:sleep_dorm_app/features/dorm/presentation/widgets/dorm_member_avatar.dart';
 
 const List<String> _gentleReminderPresets = <String>[
   '如果方便的话，今晚一起把宿舍的环境再放轻一点',
@@ -685,8 +686,9 @@ class _DormMemberCard extends StatelessWidget {
       showPresence: showPresence,
     );
     final Color accentColor = _memberColor(member.status);
-    final String? resolvedBadgeId =
-        currentUserProfile?.displayBadgeId ?? member.displayBadgeId;
+    final String? resolvedBadgeId = isCurrentUser
+        ? currentUserProfile?.displayBadgeId ?? member.displayBadgeId
+        : member.displayBadgeId;
     final HonorBadge? badge = honorBadgeById(resolvedBadgeId);
     final Uint8List? avatarBytes = isCurrentUser
         ? currentUserProfile?.avatarBytes
@@ -695,7 +697,8 @@ class _DormMemberCard extends StatelessWidget {
         ? currentUserProfile?.avatarUrl ?? member.avatarUrl
         : member.avatarUrl;
     final String fallbackSeed =
-        currentUserProfile?.avatarFallbackSeed?.trim().isNotEmpty == true
+        isCurrentUser &&
+            currentUserProfile?.avatarFallbackSeed?.trim().isNotEmpty == true
         ? currentUserProfile!.avatarFallbackSeed!
         : member.name;
     return AppCard(
@@ -708,9 +711,9 @@ class _DormMemberCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
-            _DormMemberAvatar(
+            DormMemberAvatar(
               key: ValueKey<String>('dorm-member-avatar-${member.uid}'),
-              radius: 22,
+              size: 44,
               accentColor: accentColor,
               avatarBytes: avatarBytes,
               avatarUrl: avatarUrl,
@@ -781,79 +784,6 @@ class _DormMemberCard extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DormMemberAvatar extends StatelessWidget {
-  const _DormMemberAvatar({
-    super.key,
-    required this.radius,
-    required this.accentColor,
-    required this.fallbackSeed,
-    this.avatarBytes,
-    this.avatarUrl,
-  });
-
-  final double radius;
-  final Color accentColor;
-  final Uint8List? avatarBytes;
-  final String? avatarUrl;
-  final String fallbackSeed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: radius * 2,
-      height: radius * 2,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: accentColor.withAlpha(42),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: _buildContent(context),
-    );
-  }
-
-  Widget _buildContent(BuildContext context) {
-    if (avatarBytes != null && avatarBytes!.isNotEmpty) {
-      return Image.memory(
-        avatarBytes!,
-        fit: BoxFit.cover,
-        width: radius * 2,
-        height: radius * 2,
-      );
-    }
-    if (avatarUrl != null && avatarUrl!.trim().isNotEmpty) {
-      return Image.network(
-        avatarUrl!,
-        fit: BoxFit.cover,
-        width: radius * 2,
-        height: radius * 2,
-        gaplessPlayback: true,
-        errorBuilder:
-            (BuildContext context, Object error, StackTrace? stackTrace) {
-              return _buildFallback(context);
-            },
-      );
-    }
-    return _buildFallback(context);
-  }
-
-  Widget _buildFallback(BuildContext context) {
-    final String fallbackText = fallbackSeed.trim().isEmpty
-        ? '?'
-        : fallbackSeed.characters.first.toUpperCase();
-    return Container(
-      color: accentColor.withAlpha(24),
-      alignment: Alignment.center,
-      child: Text(
-        fallbackText,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: accentColor,
-          fontWeight: FontWeight.w800,
         ),
       ),
     );

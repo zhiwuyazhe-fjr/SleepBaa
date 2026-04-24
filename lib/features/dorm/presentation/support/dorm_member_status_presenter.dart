@@ -12,7 +12,7 @@ int returnedDormMemberCount(List<DormMember> members) {
 }
 
 /// Max idle duration to still count as "APP 在线" (recent heartbeat).
-const Duration kDormAppOnlineMaxIdle = Duration(seconds: 90);
+const Duration kDormAppOnlineMaxIdle = Duration(seconds: 60);
 
 /// Roommates considered online: same dorm list entry with a fresh app heartbeat.
 int dormAppOnlineMemberCount(
@@ -21,14 +21,13 @@ int dormAppOnlineMemberCount(
   Duration maxIdle = kDormAppOnlineMaxIdle,
 }) {
   final DateTime clock = now ?? DateTime.now();
-  return members
-      .where(
-        (DormMember member) =>
-            member.appOnline &&
-            member.appLastSeenAt != null &&
-            clock.difference(member.appLastSeenAt!) <= maxIdle,
-      )
-      .length;
+  return members.where((DormMember member) {
+    final DateTime? lastSeenAt = member.appLastSeenAt;
+    if (!member.appOnline || lastSeenAt == null || lastSeenAt.isAfter(clock)) {
+      return false;
+    }
+    return clock.difference(lastSeenAt) <= maxIdle;
+  }).length;
 }
 
 String dormOnlineCountLabel(List<DormMember> members, {DateTime? now}) {

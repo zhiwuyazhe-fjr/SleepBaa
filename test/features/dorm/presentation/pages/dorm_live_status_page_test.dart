@@ -30,6 +30,14 @@ void main() {
 
       expect(find.byType(DormStatusPage), findsOneWidget);
       expect(services.dormLiveStatusController.isPolling, isTrue);
+      expect(
+        find.byKey(const ValueKey<String>('dorm-status-avatar-roommate-a')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('dorm-status-avatar-roommate-b')),
+        findsOneWidget,
+      );
 
       final BuildContext statusContext = tester.element(
         find.byType(DormStatusPage),
@@ -72,7 +80,7 @@ void main() {
 
       expect(_findText('在线 1 人'), findsOneWidget);
 
-      currentTime = heartbeatAt.add(const Duration(seconds: 91));
+      currentTime = heartbeatAt.add(const Duration(seconds: 61));
       await tester.pump(const Duration(seconds: 15));
       await tester.pump();
 

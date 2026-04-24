@@ -735,7 +735,7 @@ void main() {
         presenceStatus: DormPresenceStatus.returned,
         sleepModeActive: false,
         appOnline: true,
-        appLastSeenAt: now.subtract(const Duration(seconds: 91)),
+        appLastSeenAt: now.subtract(const Duration(seconds: 61)),
         lastActiveAt: now,
         note: '',
       ),
@@ -1041,7 +1041,7 @@ void main() {
   );
 
   test(
-    'cloudbase dorm repository keeps local sleep exit during stale snapshot refresh',
+    'cloudbase dorm repository keeps local sleep exit while status sync is pending',
     () async {
       final List<_PostCall> calls = <_PostCall>[];
       final Completer<Map<String, dynamic>> syncCompleter =
@@ -1099,6 +1099,166 @@ void main() {
       await pumpEventQueue();
 
       expect(snapshotStore.refreshCount, 1);
+    },
+  );
+
+  test(
+    'cloudbase dorm repository keeps local sleep exit when first successful refresh is stale',
+    () async {
+      final List<_PostCall> calls = <_PostCall>[];
+      final Completer<Map<String, dynamic>> syncCompleter =
+          Completer<Map<String, dynamic>>();
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) {
+              calls.add(_PostCall(path: path, body: body));
+              return syncCompleter.future;
+            },
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(
+          uid: 'cloud-user',
+          dormId: 'dorm-204',
+        ),
+      );
+      final CloudBaseDormRepository repository = CloudBaseDormRepository(
+        authRepository: authRepository,
+        snapshotStore: snapshotStore,
+        appApiClient: appApiClient,
+      );
+      final Map<String, dynamic> stalePayload = _dormPayload(<String, dynamic>{
+        'uid': 'cloud-user',
+        'name': 'Cloud User',
+        'status': DormMemberStatus.quiet.name,
+        'presenceStatus': DormPresenceStatus.returned.name,
+        'sleepModeActive': true,
+        'lastActiveAt': '2026-04-21T23:00:00.000Z',
+        'note': 'sleeping',
+      });
+      snapshotStore.onRefresh = () {
+        snapshotStore.pushPayload(stalePayload);
+      };
+
+      snapshotStore.pushPayload(stalePayload);
+      await repository.updateCurrentUserStatus(
+        uid: 'cloud-user',
+        sleepModeActive: false,
+        note: 'waiting for feedback',
+      );
+
+      await pumpEventQueue();
+      expect(calls.single.path, '/api/dorm/member/status');
+
+      syncCompleter.complete(<String, dynamic>{'ok': true});
+      await pumpEventQueue();
+
+      expect(snapshotStore.refreshCount, 1);
+      expect(repository.currentDorm.members.single.sleepModeActive, isFalse);
+      expect(
+        repository.currentDorm.members.single.note,
+        'waiting for feedback',
+      );
+      expect(sleepingDormMemberCount(repository.currentDorm.members), 0);
+
+      snapshotStore.pushPayload(stalePayload);
+
+      expect(repository.currentDorm.members.single.sleepModeActive, isFalse);
+      expect(
+        repository.currentDorm.members.single.note,
+        'waiting for feedback',
+      );
+      expect(sleepingDormMemberCount(repository.currentDorm.members), 0);
+    },
+  );
+
+  test(
+    'cloudbase dorm repository clears local sleep override after snapshot ack',
+    () async {
+      final Completer<Map<String, dynamic>> syncCompleter =
+          Completer<Map<String, dynamic>>();
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) {
+              return syncCompleter.future;
+            },
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(
+          uid: 'cloud-user',
+          dormId: 'dorm-204',
+        ),
+      );
+      final CloudBaseDormRepository repository = CloudBaseDormRepository(
+        authRepository: authRepository,
+        snapshotStore: snapshotStore,
+        appApiClient: appApiClient,
+      );
+      final Map<String, dynamic> stalePayload = _dormPayload(<String, dynamic>{
+        'uid': 'cloud-user',
+        'name': 'Cloud User',
+        'status': DormMemberStatus.quiet.name,
+        'presenceStatus': DormPresenceStatus.returned.name,
+        'sleepModeActive': true,
+        'lastActiveAt': '2026-04-21T23:00:00.000Z',
+        'note': 'sleeping',
+      });
+      final Map<String, dynamic> acknowledgedPayload =
+          _dormPayload(<String, dynamic>{
+            'uid': 'cloud-user',
+            'name': 'Cloud User',
+            'status': DormMemberStatus.quiet.name,
+            'presenceStatus': DormPresenceStatus.returned.name,
+            'sleepModeActive': false,
+            'lastActiveAt': '2026-04-21T23:00:00.000Z',
+            'note': 'waiting for feedback',
+          });
+      final Map<String, dynamic> postAckPayload =
+          _dormPayload(<String, dynamic>{
+            'uid': 'cloud-user',
+            'name': 'Cloud User',
+            'status': DormMemberStatus.quiet.name,
+            'presenceStatus': DormPresenceStatus.returned.name,
+            'sleepModeActive': false,
+            'lastActiveAt': '2026-04-21T23:00:00.000Z',
+            'note': 'synced remotely',
+          });
+      snapshotStore.onRefresh = () {
+        snapshotStore.pushPayload(stalePayload);
+      };
+
+      snapshotStore.pushPayload(stalePayload);
+      await repository.updateCurrentUserStatus(
+        uid: 'cloud-user',
+        sleepModeActive: false,
+        note: 'waiting for feedback',
+      );
+
+      syncCompleter.complete(<String, dynamic>{'ok': true});
+      await pumpEventQueue();
+
+      expect(repository.currentDorm.members.single.sleepModeActive, isFalse);
+      expect(
+        repository.currentDorm.members.single.note,
+        'waiting for feedback',
+      );
+
+      snapshotStore.pushPayload(acknowledgedPayload);
+      expect(repository.currentDorm.members.single.sleepModeActive, isFalse);
+      expect(
+        repository.currentDorm.members.single.note,
+        'waiting for feedback',
+      );
+
+      snapshotStore.pushPayload(postAckPayload);
+      expect(repository.currentDorm.members.single.sleepModeActive, isFalse);
+      expect(repository.currentDorm.members.single.note, 'synced remotely');
+      expect(sleepingDormMemberCount(repository.currentDorm.members), 0);
     },
   );
 
@@ -1176,6 +1336,63 @@ void main() {
       expect(
         dormRepository.currentDorm.members.single.avatarUrl,
         'https://cdn.example.com/avatar.png?sig=first',
+      );
+
+      authRepository.dispose();
+      dormRepository.dispose();
+    },
+  );
+
+  test(
+    'cloudbase dorm repository keeps displayed roommate avatar when a later snapshot omits avatarUrl',
+    () {
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) async =>
+                <String, dynamic>{'ok': true},
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(
+          uid: 'cloud-user',
+          dormId: 'dorm-204',
+        ),
+      );
+      final CloudBaseDormRepository dormRepository = CloudBaseDormRepository(
+        authRepository: authRepository,
+        snapshotStore: snapshotStore,
+        appApiClient: appApiClient,
+      );
+
+      snapshotStore.pushPayload(
+        _dormPayload(<String, dynamic>{
+          'uid': 'roommate-a',
+          'name': 'Roommate A',
+          'status': DormMemberStatus.quiet.name,
+          'presenceStatus': DormPresenceStatus.returned.name,
+          'sleepModeActive': false,
+          'lastActiveAt': '2026-04-21T23:00:00.000Z',
+          'note': '',
+          'avatarUrl': 'https://cdn.example.com/roommate-a.png?sig=first',
+        }),
+      );
+      snapshotStore.pushPayload(
+        _dormPayload(<String, dynamic>{
+          'uid': 'roommate-a',
+          'name': 'Roommate A',
+          'status': DormMemberStatus.quiet.name,
+          'presenceStatus': DormPresenceStatus.returned.name,
+          'sleepModeActive': false,
+          'lastActiveAt': '2026-04-21T23:00:00.000Z',
+          'note': '',
+        }),
+      );
+
+      expect(
+        dormRepository.currentDorm.members.single.avatarUrl,
+        'https://cdn.example.com/roommate-a.png?sig=first',
       );
 
       authRepository.dispose();

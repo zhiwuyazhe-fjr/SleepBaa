@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_app_api_client.dart';
+import 'package:sleep_dorm_app/core/backend/cloudbase_auth_profile_cache_store.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_auth_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_session_store.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_snapshot_store.dart';
@@ -145,6 +146,22 @@ T? _firstWhereOrNull<T>(Iterable<T> values, bool Function(T value) test) {
   return null;
 }
 
+UserProfile _blankCloudBaseUserProfile({
+  String uid = '',
+  String? phoneNumber,
+  DateTime? phoneLinkedAt,
+}) {
+  return UserProfile(
+    uid: uid,
+    displayName: '',
+    tagline: '',
+    role: '',
+    phoneNumber: phoneNumber,
+    phoneLinkedAt: phoneLinkedAt,
+    avatarFallbackSeed: '',
+  );
+}
+
 String _avatarResourceKey(String? url) {
   final String trimmed = url?.trim() ?? '';
   if (trimmed.isEmpty) {
@@ -200,6 +217,11 @@ Dorm _mergeStableDormAvatarUrls(Dorm currentDorm, Dorm nextDorm) {
           final DormMember? currentMember = currentByUid[nextMember.uid];
           if (currentMember == null) {
             return nextMember;
+          }
+          final String currentAvatarUrl = currentMember.avatarUrl?.trim() ?? '';
+          final String nextAvatarUrl = nextMember.avatarUrl?.trim() ?? '';
+          if (nextAvatarUrl.isEmpty && currentAvatarUrl.isNotEmpty) {
+            return nextMember.copyWith(avatarUrl: currentMember.avatarUrl);
           }
           final String? stableAvatarUrl = _stableDisplayedAvatarUrl(
             displayedUrl: currentMember.avatarUrl,
@@ -259,6 +281,22 @@ class _PendingDormMemberStatusOverride {
   final bool? sleepModeActive;
   final String? note;
 
+  bool matches(DormMember member) {
+    if (status != null && member.status != status) {
+      return false;
+    }
+    if (presenceStatus != null && member.presenceStatus != presenceStatus) {
+      return false;
+    }
+    if (sleepModeActive != null && member.sleepModeActive != sleepModeActive) {
+      return false;
+    }
+    if (note != null && member.note != note) {
+      return false;
+    }
+    return true;
+  }
+
   DormMember apply(DormMember member) {
     return member.copyWith(
       status: status,
@@ -285,6 +323,28 @@ Dorm _applyPendingDormStatusOverrides(
         })
         .toList(growable: false),
   );
+}
+
+Map<String, _PendingDormMemberStatusOverride>
+_retainUnacknowledgedDormStatusOverrides(
+  Dorm snapshotDorm,
+  Map<String, _PendingDormMemberStatusOverride> pending,
+) {
+  if (pending.isEmpty || snapshotDorm.members.isEmpty) {
+    return Map<String, _PendingDormMemberStatusOverride>.from(pending);
+  }
+  final Map<String, DormMember> snapshotByUid = <String, DormMember>{
+    for (final DormMember member in snapshotDorm.members) member.uid: member,
+  };
+  final Map<String, _PendingDormMemberStatusOverride> remaining =
+      <String, _PendingDormMemberStatusOverride>{};
+  pending.forEach((String uid, _PendingDormMemberStatusOverride override) {
+    final DormMember? snapshotMember = snapshotByUid[uid];
+    if (snapshotMember == null || !override.matches(snapshotMember)) {
+      remaining[uid] = override;
+    }
+  });
+  return remaining;
 }
 
 Map<String, Map<String, dynamic>> _cardSnapshotsFromPayload(dynamic value) {
@@ -775,15 +835,17 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     required CloudBaseSessionStore sessionStore,
     required CloudBaseSnapshotStore snapshotStore,
     VerifiedPhoneIdentityStore? verifiedPhoneStore,
+    CloudBaseAuthProfileCacheStore? authProfileCacheStore,
   }) : _environment = environment,
        _authClient = authClient,
        _appApiClient = appApiClient,
        _sessionStore = sessionStore,
        _snapshotStore = snapshotStore,
-       _verifiedPhoneStore =
-           verifiedPhoneStore ?? VerifiedPhoneIdentityStore() {
+       _verifiedPhoneStore = verifiedPhoneStore ?? VerifiedPhoneIdentityStore(),
+       _authProfileCacheStore =
+           authProfileCacheStore ?? CloudBaseAuthProfileCacheStore() {
     _snapshotStore.addListener(_syncFromSnapshot);
-    _currentUser = buildDefaultUserProfile().copyWith(uid: '', dormId: null);
+    _currentUser = _signedOutProfile();
   }
 
   final AppEnvironment _environment;
@@ -792,6 +854,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   final CloudBaseSessionStore _sessionStore;
   final CloudBaseSnapshotStore _snapshotStore;
   final VerifiedPhoneIdentityStore _verifiedPhoneStore;
+  final CloudBaseAuthProfileCacheStore _authProfileCacheStore;
 
   late UserProfile _currentUser;
   bool _isAuthenticating = false;
@@ -800,6 +863,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   String? _lastAuthError;
   DateTime? _lastSuccessfulAuthAt;
   VerifiedPhoneIdentity? _cachedVerifiedIdentity;
+  UserProfile? _cachedAuthProfile;
   static const Duration _authRevalidationInterval = Duration(minutes: 5);
 
   @override
@@ -846,23 +910,64 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     );
   }
 
-  void _hydrateUserAfterInvalidSession({required String sessionSubject}) {
-    final VerifiedPhoneIdentity? v = _cachedVerifiedIdentity;
-    if (v != null &&
-        v.subject == sessionSubject &&
-        v.phoneNumber.trim().isNotEmpty) {
-      _currentUser = buildDefaultUserProfile().copyWith(
-        uid: v.subject,
-        phoneNumber: v.phoneNumber,
-        phoneLinkedAt: v.phoneLinkedAt ?? DateTime.now(),
-        clearDormId: true,
-      );
-    } else {
-      _currentUser = buildDefaultUserProfile().copyWith(
-        uid: sessionSubject,
-        clearDormId: true,
+  Future<void> _loadCachedAuthProfile() async {
+    _cachedAuthProfile = await _authProfileCacheStore.read();
+  }
+
+  UserProfile _seedCloudBaseProfile({
+    required String uid,
+    String? phoneNumber,
+    DateTime? phoneLinkedAt,
+  }) {
+    final UserProfile? cached = _cachedAuthProfile;
+    final String? normalizedPhone = phoneNumber?.trim().isNotEmpty == true
+        ? phoneNumber
+        : null;
+    if (cached != null && cached.uid == uid) {
+      final String fallbackSeed =
+          cached.avatarFallbackSeed?.trim().isNotEmpty == true
+          ? cached.avatarFallbackSeed!
+          : cached.displayName;
+      return cached.copyWith(
+        uid: uid,
+        phoneNumber: normalizedPhone ?? cached.phoneNumber,
+        phoneLinkedAt: phoneLinkedAt ?? cached.phoneLinkedAt,
+        avatarFallbackSeed: fallbackSeed,
       );
     }
+    return _blankCloudBaseUserProfile(
+      uid: uid,
+      phoneNumber: normalizedPhone,
+      phoneLinkedAt: phoneLinkedAt,
+    );
+  }
+
+  Future<void> _persistCurrentUserToAuthProfileCache() async {
+    if (_currentUser.uid.trim().isEmpty) {
+      return;
+    }
+    final String fallbackSeed =
+        _currentUser.avatarFallbackSeed?.trim().isNotEmpty == true
+        ? _currentUser.avatarFallbackSeed!
+        : _currentUser.displayName;
+    final UserProfile profile = _currentUser.copyWith(
+      avatarFallbackSeed: fallbackSeed,
+    );
+    await _authProfileCacheStore.write(profile);
+    _cachedAuthProfile = profile;
+  }
+
+  Future<void> _clearAuthProfileCache() async {
+    _cachedAuthProfile = null;
+    await _authProfileCacheStore.clear();
+  }
+
+  Future<UserProfile> _handleInvalidSession({String? message}) {
+    return _clearSessionAndReset(
+      message: message ?? '登录状态已失效，请重新使用手机号登录。',
+      clearVerifiedPhoneIdentity: true,
+      clearCachedAuthProfile: true,
+    );
   }
 
   @override
@@ -876,19 +981,30 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   String? get lastAuthError => _lastAuthError;
 
   UserProfile _signedOutProfile() {
-    return buildDefaultUserProfile().copyWith(
-      uid: '',
+    return _blankCloudBaseUserProfile().copyWith(
       clearDormId: true,
       clearPhoneNumber: true,
       clearPhoneLinkedAt: true,
       clearAvatar: true,
+      clearEquippedBadge: true,
+      clearSelectedDormBadgeId: true,
+      earnedBadgeIds: const <String>[],
     );
   }
 
   Future<UserProfile> _clearSessionAndReset({
     String? message,
     bool clearAll = false,
+    bool clearVerifiedPhoneIdentity = false,
+    bool clearCachedAuthProfile = false,
   }) async {
+    if (clearVerifiedPhoneIdentity) {
+      await _verifiedPhoneStore.clear();
+      _cachedVerifiedIdentity = null;
+    }
+    if (clearCachedAuthProfile) {
+      await _clearAuthProfileCache();
+    }
     if (clearAll) {
       await _sessionStore.clearAll();
     } else {
@@ -996,16 +1112,16 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
         return _currentUser;
       }
       _cachedVerifiedIdentity = await _verifiedPhoneStore.read();
+      await _loadCachedAuthProfile();
       final String restoredDeviceId = await _sessionStore.ensureDeviceId();
       readSession = await _sessionStore.readSession();
       if (readSession == null) {
         if (_cachedVerifiedIdentity != null) {
           final VerifiedPhoneIdentity v = _cachedVerifiedIdentity!;
-          _currentUser = buildDefaultUserProfile().copyWith(
+          _currentUser = _seedCloudBaseProfile(
             uid: v.subject,
             phoneNumber: v.phoneNumber,
             phoneLinkedAt: v.phoneLinkedAt ?? DateTime.now(),
-            clearDormId: true,
           );
           _lastAuthError = _transientAuthWarningMessage();
           _lastSuccessfulAuthAt = DateTime.now();
@@ -1015,6 +1131,20 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       }
       CloudBaseSession restoredSession = readSession;
       bool tokenRefreshFailed = false;
+      final VerifiedPhoneIdentity? matchingVerifiedIdentity =
+          _cachedVerifiedIdentity != null &&
+              _cachedVerifiedIdentity!.subject == restoredSession.subject
+          ? _cachedVerifiedIdentity
+          : null;
+      if (_currentUser.uid != restoredSession.subject) {
+        _currentUser = _seedCloudBaseProfile(
+          uid: restoredSession.subject,
+          phoneNumber: matchingVerifiedIdentity?.phoneNumber,
+          phoneLinkedAt: matchingVerifiedIdentity?.phoneLinkedAt,
+        );
+      } else {
+        _mergePhoneFromCachedVerifiedIdentity();
+      }
       if (restoredSession.isExpired) {
         try {
           restoredSession = await _appApiClient.refreshSession(
@@ -1022,13 +1152,10 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           );
         } on CloudBaseAuthException catch (error) {
           if (_isSessionInvalidError(error)) {
-            await _sessionStore.clearSession();
-            _lastAuthError =
-                '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002';
-            _hydrateUserAfterInvalidSession(
-              sessionSubject: restoredSession.subject,
+            return _handleInvalidSession(
+              message:
+                  '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
             );
-            return _currentUser;
           }
           tokenRefreshFailed = true;
           _lastAuthError = _transientAuthWarningMessage();
@@ -1048,29 +1175,31 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
               !_phoneIdentityResolvableFromLocalProfile()
           ? await _readCurrentCloudBaseUser(restoredSession)
           : null;
-      if (_currentUser.uid.isEmpty) {
-        _currentUser = buildDefaultUserProfile().copyWith(
-          uid: restoredSession.subject,
-          displayName:
-              restoredInfo?.name ?? buildDefaultUserProfile().displayName,
-          phoneNumber: restoredInfo?.phoneNumber,
-          phoneLinkedAt: restoredInfo?.phoneNumber?.trim().isNotEmpty == true
-              ? DateTime.now()
-              : null,
-          avatarUrl: restoredInfo?.picture,
-          clearDormId: true,
-        );
-        _mergePhoneFromCachedVerifiedIdentity();
-      } else if ((_currentUser.phoneNumber?.trim().isNotEmpty != true) &&
-          restoredInfo?.phoneNumber?.trim().isNotEmpty == true) {
+      if (restoredInfo != null) {
+        final bool reusingKnownPhone =
+            restoredInfo.phoneNumber?.trim().isNotEmpty == true &&
+            _currentUser.phoneNumber?.trim() ==
+                restoredInfo.phoneNumber!.trim();
         _currentUser = _currentUser.copyWith(
-          phoneNumber: restoredInfo!.phoneNumber,
-          phoneLinkedAt: DateTime.now(),
-          avatarUrl: restoredInfo.picture ?? _currentUser.avatarUrl,
+          uid: restoredSession.subject,
+          displayName: restoredInfo.name?.trim().isNotEmpty == true
+              ? restoredInfo.name
+              : _currentUser.displayName,
+          phoneNumber: restoredInfo.phoneNumber?.trim().isNotEmpty == true
+              ? restoredInfo.phoneNumber
+              : _currentUser.phoneNumber,
+          phoneLinkedAt: restoredInfo.phoneNumber?.trim().isNotEmpty == true
+              ? (reusingKnownPhone
+                    ? _currentUser.phoneLinkedAt
+                    : DateTime.now())
+              : _currentUser.phoneLinkedAt,
+          avatarUrl: restoredInfo.picture?.trim().isNotEmpty == true
+              ? restoredInfo.picture
+              : _currentUser.avatarUrl,
         );
-      } else {
-        _mergePhoneFromCachedVerifiedIdentity();
+        unawaited(_persistCurrentUserToAuthProfileCache());
       }
+      _mergePhoneFromCachedVerifiedIdentity();
       if (tokenRefreshFailed) {
         // We hydrated the user from the stored session but the token is
         // stale.  Return now — do NOT attempt snapshot refresh with an
@@ -1114,6 +1243,8 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
         return _clearSessionAndReset(
           message:
               '\u5f53\u524d\u767b\u5f55\u72b6\u6001\u7f3a\u5c11\u5df2\u9a8c\u8bc1\u624b\u673a\u53f7\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
+          clearVerifiedPhoneIdentity: true,
+          clearCachedAuthProfile: true,
         );
       }
       if (hasVerifiedPhoneIdentity) {
@@ -1125,14 +1256,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       return _currentUser;
     } on CloudBaseAuthException catch (error) {
       if (_isSessionInvalidError(error)) {
-        if (readSession != null) {
-          await _sessionStore.clearSession();
-          _lastAuthError =
-              '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002';
-          _hydrateUserAfterInvalidSession(sessionSubject: readSession.subject);
-          return _currentUser;
-        }
-        return _clearSessionAndReset(
+        return _handleInvalidSession(
           message:
               '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
         );
@@ -1196,9 +1320,11 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
 
   @override
   Future<void> signOut() async {
-    await _verifiedPhoneStore.clear();
-    _cachedVerifiedIdentity = null;
-    await _clearSessionAndReset(clearAll: false);
+    await _clearSessionAndReset(
+      clearAll: false,
+      clearVerifiedPhoneIdentity: true,
+      clearCachedAuthProfile: true,
+    );
     notifyListeners();
   }
 
@@ -1814,11 +1940,13 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       info = null;
     }
     final bool hadCurrentUser = _currentUser.uid.isNotEmpty;
-    final UserProfile baseProfile = hadCurrentUser
+    final UserProfile baseProfile =
+        hadCurrentUser && _currentUser.uid == session.subject
         ? _currentUser
-        : buildDefaultUserProfile().copyWith(
+        : _seedCloudBaseProfile(
             uid: session.subject,
-            clearDormId: true,
+            phoneNumber: requestedPhoneNumber,
+            phoneLinkedAt: DateTime.now(),
           );
     _currentUser = baseProfile.copyWith(
       uid: session.subject,
@@ -1826,18 +1954,20 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       phoneNumber: info?.phoneNumber ?? requestedPhoneNumber,
       phoneLinkedAt: DateTime.now(),
       avatarUrl: info?.picture ?? baseProfile.avatarUrl,
-      clearDormId: !hadCurrentUser,
     );
     _lastSuccessfulAuthAt = DateTime.now();
     _hasCompletedInitialAuthBootstrap = true;
     notifyListeners();
     await _persistVerifiedPhoneIdentityIfNeeded();
+    await _persistCurrentUserToAuthProfileCache();
     await _safeRefreshSnapshot();
     _syncFromSnapshot();
     if (!hasVerifiedPhoneIdentity) {
       await _clearSessionAndReset(
         message:
             '\u624b\u673a\u53f7\u540c\u6b65\u5931\u8d25\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55\u3002',
+        clearVerifiedPhoneIdentity: true,
+        clearCachedAuthProfile: true,
       );
       notifyListeners();
       throw const AuthFlowException(
@@ -2074,6 +2204,8 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       avatarStoragePath: snapshot.user.avatarStoragePath,
       avatarFallbackSeed: snapshot.user.avatarFallbackSeed,
     );
+    _mergePhoneFromCachedVerifiedIdentity();
+    unawaited(_persistCurrentUserToAuthProfileCache());
     notifyListeners();
   }
 
@@ -2157,6 +2289,9 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
   }
 
   void _applySnapshot() {
+    if (_snapshotStore.isRefreshing || !_snapshotStore.hasPayload) {
+      return;
+    }
     final _SnapshotData snapshot = _SnapshotData.fromPayload(
       _snapshotStore.payload,
       _authRepository.currentUser.uid,
@@ -3769,13 +3904,11 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
 
   void _enqueueStatusSync(Map<String, dynamic> body) {
     final int syncId = ++_latestStatusSyncId;
-    final String uid = (body['uid'] as String?) ?? '';
     _statusSyncQueue.enqueue(() async {
       try {
         await _appApiClient.post('/api/dorm/member/status', body: body);
         if (syncId == _latestStatusSyncId) {
           await _snapshotStore.refresh();
-          _pendingStatusOverrides.remove(uid);
         }
       } catch (error) {
         debugPrint('CloudBase dorm status sync failed: $error');
@@ -4304,11 +4437,20 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
       _snapshotStore.payload,
       _authRepository.currentUser.uid,
     );
+    final Dorm mergedDorm = _mergeNewerDormHeartbeatFields(
+      _currentDorm,
+      _mergeStableDormAvatarUrls(_currentDorm, snapshot.dorm),
+    );
+    final Map<String, _PendingDormMemberStatusOverride> remainingOverrides =
+        _retainUnacknowledgedDormStatusOverrides(
+          snapshot.dorm,
+          _pendingStatusOverrides,
+        );
+    _pendingStatusOverrides
+      ..clear()
+      ..addAll(remainingOverrides);
     _currentDorm = _applyPendingDormStatusOverrides(
-      _mergeNewerDormHeartbeatFields(
-        _currentDorm,
-        _mergeStableDormAvatarUrls(_currentDorm, snapshot.dorm),
-      ),
+      mergedDorm,
       _pendingStatusOverrides,
     );
     _emitCurrentState();
