@@ -419,6 +419,23 @@ void main() {
   );
 
   testWidgets(
+    'assistant stage viewport extends beneath the composer for reply scroll',
+    (WidgetTester tester) async {
+      await _pumpGlacierApp(tester);
+      await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+      final Rect viewportRect = tester.getRect(
+        find.byKey(const ValueKey<String>('assistant-stage-viewport')),
+      );
+      final Rect composerRect = tester.getRect(
+        find.byKey(const ValueKey<String>('assistant-composer-field')),
+      );
+
+      expect(viewportRect.bottom, greaterThan(composerRect.top));
+    },
+  );
+
+  testWidgets(
     'assistant reply requires two pulls to open and one pull to exit while return hint is visible',
     (WidgetTester tester) async {
       await _pumpGlacierApp(tester);
@@ -486,7 +503,7 @@ void main() {
       );
 
       final TestGesture firstPull = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await firstPull.moveBy(const Offset(0, 54));
       await tester.pump();
@@ -496,7 +513,7 @@ void main() {
       expect(find.text('再次下拉查看对话记录'), findsOneWidget);
 
       final TestGesture secondPull = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await secondPull.moveBy(const Offset(0, 72));
       await tester.pump();
@@ -527,7 +544,7 @@ void main() {
       );
 
       final TestGesture firstPull = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await firstPull.moveBy(const Offset(0, 54));
       await tester.pump();
@@ -558,7 +575,7 @@ void main() {
       );
 
       final TestGesture firstPull = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await firstPull.moveBy(const Offset(0, 54));
       await tester.pump();
@@ -566,7 +583,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 220));
 
       final TestGesture secondPull = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await secondPull.moveBy(const Offset(0, 180));
       await tester.pump();
@@ -597,7 +614,7 @@ void main() {
       );
 
       final TestGesture revealHintGesture = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await revealHintGesture.moveBy(const Offset(0, 54));
       await tester.pump();
@@ -605,7 +622,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 220));
 
       final TestGesture expandGesture = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await expandGesture.moveBy(const Offset(0, 180));
       await tester.pump();
@@ -707,7 +724,7 @@ void main() {
       );
 
       final TestGesture firstGesture = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await firstGesture.moveBy(const Offset(0, 54));
       await tester.pump();
@@ -728,7 +745,7 @@ void main() {
       );
 
       final TestGesture secondGesture = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await secondGesture.moveBy(const Offset(0, 180));
       await tester.pump();
@@ -759,7 +776,7 @@ void main() {
       );
 
       final TestGesture firstPull = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await firstPull.moveBy(const Offset(0, 54));
       await tester.pump();
@@ -767,7 +784,7 @@ void main() {
       await _pumpAssistantFrames(tester);
 
       final TestGesture secondPull = await tester.startGesture(
-        tester.getCenter(viewport),
+        _assistantViewportTopPullStart(tester, viewport),
       );
       await secondPull.moveBy(const Offset(0, 200));
       await tester.pump();
@@ -1002,9 +1019,13 @@ Future<void> _openConversationFlow(WidgetTester tester) async {
   final Finder viewport = find.byKey(
     const ValueKey<String>('assistant-stage-viewport'),
   );
+  expect(
+    find.byKey(const ValueKey<String>('assistant-stage-pull-zone')),
+    findsOneWidget,
+  );
 
   final TestGesture revealHintGesture = await tester.startGesture(
-    tester.getCenter(viewport),
+    _assistantViewportTopPullStart(tester, viewport),
   );
   await revealHintGesture.moveBy(const Offset(0, 54));
   await tester.pump();
@@ -1017,12 +1038,27 @@ Future<void> _openConversationFlow(WidgetTester tester) async {
   await _pumpAssistantFrames(tester);
 
   final TestGesture expandGesture = await tester.startGesture(
-    tester.getCenter(viewport),
+    _assistantViewportTopPullStart(tester, viewport),
   );
   await expandGesture.moveBy(const Offset(0, 180));
   await tester.pump();
   await expandGesture.up();
   await _pumpAssistantFrames(tester);
+}
+
+Offset _assistantViewportTopPullStart(WidgetTester tester, Finder viewport) {
+  final Finder pullZone = find.byKey(
+    const ValueKey<String>('assistant-stage-pull-zone'),
+  );
+  if (pullZone.evaluate().isNotEmpty) {
+    final Rect pullZoneRect = tester.getRect(pullZone);
+    return Offset(
+      pullZoneRect.center.dx,
+      pullZoneRect.top + (pullZoneRect.height * 0.5),
+    );
+  }
+  final Rect rect = tester.getRect(viewport);
+  return Offset(rect.center.dx, rect.top + (rect.height * 0.16));
 }
 
 Future<void> _pumpAssistantFrames(WidgetTester tester) async {
