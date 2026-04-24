@@ -274,7 +274,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
     try {
       await _sleepExperienceController.bootstrap();
       await _appNotificationService.initialize();
-      await _appNotificationService.cancelSleepModeNotification();
+      await _sleepModeNotificationController.synchronize();
       _bedtimeReminderSyncController.start();
       _cloudBaseNotificationSyncController.start();
       await _dormPresenceSyncController.restoreCachedLocationAnchor();
