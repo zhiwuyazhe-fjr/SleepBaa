@@ -56,6 +56,27 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+async function syncDormSleepMode(
+  repo: {
+    updateDormMemberStatus(uid: string, payload: JsonMap): Promise<JsonMap>;
+  },
+  uid: string,
+  sleepModeActive: boolean,
+): Promise<void> {
+  try {
+    await repo.updateDormMemberStatus(uid, {
+      status: "quiet",
+      sleepModeActive,
+      note: sleepModeActive ? "Sleep mode is active." : "Sleep mode is off.",
+    });
+  } catch (error) {
+    const message = errorMessageOf(error).toLowerCase();
+    if (!message.includes("dorm")) {
+      console.warn("[app-api] failed to sync dorm sleep mode:", error);
+    }
+  }
+}
+
 function isAssistantThreadTurnBusyError(
   error: unknown,
 ): error is AssistantThreadTurnBusyError {
@@ -757,6 +778,7 @@ export function createAppApiServer() {
       );
       session.updatedAt = automationRequestedAt;
       await repo.saveSleepSession(session);
+      await syncDormSleepMode(repo, request.authContext!.uid, true);
       await handleSleepSessionChange(
         repo,
         provider,
@@ -815,6 +837,7 @@ export function createAppApiServer() {
       );
       session.updatedAt = automationRequestedAt;
       await repo.saveSleepSession(session);
+      await syncDormSleepMode(repo, request.authContext!.uid, false);
       await handleSleepSessionChange(
         repo,
         provider,
@@ -879,6 +902,7 @@ export function createAppApiServer() {
       );
       session.updatedAt = automationRequestedAt;
       await repo.saveSleepSession(session);
+      await syncDormSleepMode(repo, request.authContext!.uid, false);
       await handleSleepSessionChange(
         repo,
         provider,
@@ -1153,6 +1177,19 @@ export function createAppApiServer() {
       const repo = createRepositoryFromEnv();
       response.json(
         await repo.updateDormMemberStatus(
+          request.authContext!.uid,
+          asMap(request.body),
+        ),
+      );
+    }),
+  );
+
+  app.post(
+    "/api/dorm/member/heartbeat",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      response.json(
+        await repo.updateDormMemberHeartbeat(
           request.authContext!.uid,
           asMap(request.body),
         ),

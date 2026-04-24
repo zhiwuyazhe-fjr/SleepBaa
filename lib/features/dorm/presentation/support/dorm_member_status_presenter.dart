@@ -12,22 +12,26 @@ int returnedDormMemberCount(List<DormMember> members) {
 }
 
 /// Max idle duration to still count as "APP 在线" (recent heartbeat).
-const Duration kDormAppOnlineMaxIdle = Duration(minutes: 15);
+const Duration kDormAppOnlineMaxIdle = Duration(seconds: 60);
 
-/// Roommates considered online: same dorm list entry, app recently active.
+/// Roommates considered online: same dorm list entry with a fresh app heartbeat.
 int dormAppOnlineMemberCount(
   List<DormMember> members, {
   DateTime? now,
   Duration maxIdle = kDormAppOnlineMaxIdle,
 }) {
   final DateTime clock = now ?? DateTime.now();
-  return members
-      .where((DormMember m) => clock.difference(m.lastActiveAt) <= maxIdle)
-      .length;
+  return members.where((DormMember member) {
+    final DateTime? lastSeenAt = member.appLastSeenAt;
+    if (!member.appOnline || lastSeenAt == null || lastSeenAt.isAfter(clock)) {
+      return false;
+    }
+    return clock.difference(lastSeenAt) <= maxIdle;
+  }).length;
 }
 
-String dormOnlineCountLabel(List<DormMember> members) {
-  return '在线 ${dormAppOnlineMemberCount(members)} 人';
+String dormOnlineCountLabel(List<DormMember> members, {DateTime? now}) {
+  return '在线 ${dormAppOnlineMemberCount(members, now: now)} 人';
 }
 
 int sleepingDormMemberCount(List<DormMember> members) {
@@ -45,10 +49,12 @@ double averageNoiseDbForReturnedMembers({
     return dormAggregateNoiseDb.toDouble();
   }
   final List<DormMember> inRange = members
-      .where((DormMember m) => m.presenceStatus == DormPresenceStatus.returned)
+      .where((DormMember member) {
+        return member.presenceStatus == DormPresenceStatus.returned;
+      })
       .toList(growable: false);
   final List<int> levels = inRange
-      .map((DormMember m) => m.noiseDb)
+      .map((DormMember member) => member.noiseDb)
       .whereType<int>()
       .where((int db) => db >= 0)
       .toList(growable: false);

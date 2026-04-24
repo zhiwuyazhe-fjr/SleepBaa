@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,9 +9,13 @@ import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
+import 'package:sleep_dorm_app/features/assistant/presentation/widgets/assistant_surface.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/settings_page.dart';
 
 void main() {
   setUpAll(() {
@@ -19,15 +25,20 @@ void main() {
           _secureStorageChannel,
           _handleSecureStorageCall,
         );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_platformChannel, _handlePlatformCall);
   });
 
   setUp(() {
     _mockSecureStorage.clear();
+    _platformMethodCalls.clear();
   });
 
   tearDownAll(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_secureStorageChannel, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_platformChannel, null);
   });
 
   testWidgets('settings hub exposes account settings entry', (
@@ -221,6 +232,22 @@ void main() {
     }
   });
 
+  testWidgets('settings page exposes assistant reply motion entry', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
+
+    await tester.scrollUntilVisible(
+      find.text('陪伴动效'),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+
+    expect(find.text('陪伴动效'), findsOneWidget);
+    expect(find.text('回复文字浮动'), findsOneWidget);
+  });
+
   testWidgets('filled primary button uses welcome accent colors', (
     WidgetTester tester,
   ) async {
@@ -274,14 +301,768 @@ void main() {
       const Size(0, 56),
     );
   });
+
+  testWidgets('assistant glacier empty stage matches the pencil shell', (
+    WidgetTester tester,
+  ) async {
+    await _pumpGlacierApp(tester);
+
+    expect(
+      find.byKey(const ValueKey<String>('assistant-header-add')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('assistant-header-history')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('assistant-empty-stage')),
+      findsOneWidget,
+    );
+    expect(find.text('你好，我是小眠'), findsOneWidget);
+    expect(find.text('今晚想聊点什么'), findsOneWidget);
+    expect(find.text('可以和小眠聊聊睡不着的原因，也可以把脑海里还没放下的念头交给我。'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('assistant-composer-mic')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('assistant-current-assistant-message')),
+      findsNothing,
+    );
+  });
+
+  test('assistant strip glow palette gets lighter from core to tail', () {
+    for (final NightMood? mood in <NightMood?>[
+      null,
+      NightMood.happy,
+      NightMood.sad,
+      NightMood.calm,
+    ]) {
+      final AssistantSurfacePalette palette = AssistantSurfacePalette.fromMood(
+        NightMoodPalette.fromMood(mood),
+      );
+      final double coreLightness = HSLColor.fromColor(
+        palette.bottomGlowCore.withAlpha(0xFF),
+      ).lightness;
+      final double midLightness = HSLColor.fromColor(
+        palette.bottomGlowMid.withAlpha(0xFF),
+      ).lightness;
+      final double tailLightness = HSLColor.fromColor(
+        palette.bottomGlowStart.withAlpha(0xFF),
+      ).lightness;
+
+      expect(
+        coreLightness,
+        lessThan(midLightness),
+        reason: 'Glow core for $mood should stay deeper than the mid band.',
+      );
+      expect(
+        midLightness,
+        lessThan(tailLightness),
+        reason: 'Glow tail for $mood should be the lightest strip layer.',
+      );
+    }
+  });
+
+  testWidgets('assistant background glow keeps strip gradients only', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ColoredBox(
+          color: Colors.black,
+          child: AssistantBackgroundGlow(
+            palette: AssistantSurfacePalette.fromMood(
+              NightMoodPalette.fromMood(null),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final Iterable<BoxDecoration> decorations = tester
+        .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+        .map((DecoratedBox widget) => widget.decoration)
+        .whereType<BoxDecoration>();
+
+    final Iterable<Gradient> gradients = decorations
+        .map((BoxDecoration decoration) => decoration.gradient)
+        .whereType<Gradient>();
+
+    expect(
+      gradients.whereType<LinearGradient>().length,
+      greaterThanOrEqualTo(2),
+    );
+    expect(gradients.whereType<RadialGradient>(), isEmpty);
+  });
+
+  testWidgets(
+    'assistant glacier reply stage stays compact and keeps hint hidden',
+    (WidgetTester tester) async {
+      await _pumpGlacierApp(tester);
+      await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+      expect(
+        find.byKey(const ValueKey<String>('assistant-history-hint')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('assistant-current-assistant-message'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('先别急着逼自己立刻睡着'), findsOneWidget);
+      expect(find.text('闹钟已设定 23:00'), findsOneWidget);
+      expect(find.text('寝室静音模式已同步'), findsOneWidget);
+      expect(find.text('晚安提醒已开启'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'assistant reply requires two pulls to open and one pull to exit while return hint is visible',
+    (WidgetTester tester) async {
+      await _pumpGlacierApp(tester);
+      await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+      await _openConversationFlow(tester);
+
+      expect(
+        find.byKey(const ValueKey<String>('assistant-history-flow')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('assistant-history-current')),
+        findsOneWidget,
+      );
+      expect(find.text('上拉返回当前回复'), findsOneWidget);
+
+      final Finder collapseZone = find.byKey(
+        const ValueKey<String>('assistant-history-collapse-zone'),
+      );
+      await tester.drag(collapseZone, const Offset(0, -170));
+      await tester.pump();
+      await _pumpAssistantFrames(tester);
+
+      expect(
+        find.byKey(const ValueKey<String>('assistant-history-flow')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('assistant-current-assistant-message'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'assistant entering conversation flow immediately shows the bottom return hint',
+    (WidgetTester tester) async {
+      await _pumpGlacierApp(tester);
+      await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+      await _openConversationFlow(tester);
+
+      expect(find.text('上拉返回当前回复'), findsOneWidget);
+      final Rect hintRect = tester.getRect(
+        find.byKey(const ValueKey<String>('assistant-history-hint')),
+      );
+      final Rect viewportRect = tester.getRect(
+        find.byKey(const ValueKey<String>('assistant-stage-viewport')),
+      );
+      expect(hintRect.center.dy, greaterThan(viewportRect.center.dy));
+    },
+  );
+
+  testWidgets(
+    'assistant flow hint disappears as soon as the confirmed transition starts',
+    (WidgetTester tester) async {
+      await _pumpGlacierApp(tester);
+      await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+      final Finder viewport = find.byKey(
+        const ValueKey<String>('assistant-stage-viewport'),
+      );
+
+      final TestGesture firstPull = await tester.startGesture(
+        tester.getCenter(viewport),
+      );
+      await firstPull.moveBy(const Offset(0, 54));
+      await tester.pump();
+      await firstPull.up();
+      await tester.pump(const Duration(milliseconds: 220));
+
+      expect(find.text('再次下拉查看对话记录'), findsOneWidget);
+
+      final TestGesture secondPull = await tester.startGesture(
+        tester.getCenter(viewport),
+      );
+      await secondPull.moveBy(const Offset(0, 72));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey<String>('assistant-history-hint')),
+        findsNothing,
+      );
+
+      await secondPull.up();
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey<String>('assistant-history-hint')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'assistant flow hint sits above the composer in the lower stage',
+    (WidgetTester tester) async {
+      await _pumpGlacierApp(tester);
+      await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+      final Finder viewport = find.byKey(
+        const ValueKey<String>('assistant-stage-viewport'),
+      );
+
+      final TestGesture firstPull = await tester.startGesture(
+        tester.getCenter(viewport),
+      );
+      await firstPull.moveBy(const Offset(0, 54));
+      await tester.pump();
+      await firstPull.up();
+      await tester.pump(const Duration(milliseconds: 220));
+
+      final Rect hintRect = tester.getRect(
+        find.byKey(const ValueKey<String>('assistant-history-hint')),
+      );
+      final Rect composerRect = tester.getRect(
+        find.byKey(const ValueKey<String>('assistant-composer-field')),
+      );
+      final Rect viewportRect = tester.getRect(viewport);
+
+      expect(hintRect.bottom, lessThan(composerRect.top));
+      expect(hintRect.center.dy, greaterThan(viewportRect.center.dy));
+    },
+  );
+
+  testWidgets(
+    'assistant conversation flow expansion waits for release before switching layers',
+    (WidgetTester tester) async {
+      await _pumpGlacierApp(tester);
+      await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+      final Finder viewport = find.byKey(
+        const ValueKey<String>('assistant-stage-viewport'),
+      );
+
+      final TestGesture firstPull = await tester.startGesture(
+        tester.getCenter(viewport),
+      );
+      await firstPull.moveBy(const Offset(0, 54));
+      await tester.pump();
+      await firstPull.up();
+      await tester.pump(const Duration(milliseconds: 220));
+
+      final TestGesture secondPull = await tester.startGesture(
+        tester.getCenter(viewport),
+      );
+      await secondPull.moveBy(const Offset(0, 180));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey<String>('assistant-history-flow')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('assistant-current-assistant-message'),
+        ),
+        findsOneWidget,
+      );
+
+      await secondPull.up();
+    },
+  );
+
+  testWidgets(
+    'assistant conversation flow keeps one visible layer through mid-transition',
+    (WidgetTester tester) async {
+      await _pumpGlacierApp(tester);
+      await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+      final Finder viewport = find.byKey(
+        const ValueKey<String>('assistant-stage-viewport'),
+      );
+
+      final TestGesture revealHintGesture = await tester.startGesture(
+        tester.getCenter(viewport),
+      );
+      await revealHintGesture.moveBy(const Offset(0, 54));
+      await tester.pump();
+      await revealHintGesture.up();
+      await tester.pump(const Duration(milliseconds: 220));
+
+      final TestGesture expandGesture = await tester.startGesture(
+        tester.getCenter(viewport),
+      );
+      await expandGesture.moveBy(const Offset(0, 180));
+      await tester.pump();
+      await expandGesture.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1000));
+
+      final double replyOpacity = _effectiveAncestorOpacity(
+        tester,
+        find.byKey(
+          const ValueKey<String>('assistant-current-assistant-message'),
+        ),
+      );
+      final double historyOpacity = _effectiveAncestorOpacity(
+        tester,
+        find.byKey(const ValueKey<String>('assistant-history-flow')),
+      );
+
+      expect(
+        replyOpacity > 0.02 || historyOpacity > 0.02,
+        isTrue,
+        reason: 'Flow transition should never blank both layers at once.',
+      );
+    },
+  );
+
+  testWidgets(
+    'assistant collapse hint disappears as soon as the confirmed return transition starts',
+    (WidgetTester tester) async {
+      await _pumpGlacierApp(tester);
+      await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+      await _openConversationFlow(tester);
+
+      final Finder collapseZone = find.byKey(
+        const ValueKey<String>('assistant-history-collapse-zone'),
+      );
+
+      final TestGesture returnPull = await tester.startGesture(
+        tester.getCenter(collapseZone),
+      );
+      await returnPull.moveBy(const Offset(0, -112));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey<String>('assistant-history-hint')),
+        findsNothing,
+      );
+
+      await returnPull.up();
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey<String>('assistant-history-hint')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'assistant conversation flow collapse waits for release even when the return hint is pre-armed',
+    (WidgetTester tester) async {
+      await _pumpGlacierApp(tester);
+      await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+      await _openConversationFlow(tester);
+
+      final Finder collapseZone = find.byKey(
+        const ValueKey<String>('assistant-history-collapse-zone'),
+      );
+
+      final TestGesture returnPull = await tester.startGesture(
+        tester.getCenter(collapseZone),
+      );
+      await returnPull.moveBy(const Offset(0, -170));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey<String>('assistant-history-flow')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('assistant-current-assistant-message'),
+        ),
+        findsNothing,
+      );
+
+      await returnPull.up();
+    },
+  );
+
+  testWidgets(
+    'assistant archive hint resets after five seconds and needs a new first pull',
+    (WidgetTester tester) async {
+      await _pumpGlacierApp(tester);
+      await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+      final Finder viewport = find.byKey(
+        const ValueKey<String>('assistant-stage-viewport'),
+      );
+
+      final TestGesture firstGesture = await tester.startGesture(
+        tester.getCenter(viewport),
+      );
+      await firstGesture.moveBy(const Offset(0, 54));
+      await tester.pump();
+      await firstGesture.up();
+      await _pumpAssistantFrames(tester);
+
+      expect(
+        find.byKey(const ValueKey<String>('assistant-history-hint')),
+        findsOneWidget,
+      );
+
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pump(const Duration(milliseconds: 320));
+
+      expect(
+        find.byKey(const ValueKey<String>('assistant-history-hint')),
+        findsNothing,
+      );
+
+      final TestGesture secondGesture = await tester.startGesture(
+        tester.getCenter(viewport),
+      );
+      await secondGesture.moveBy(const Offset(0, 180));
+      await tester.pump();
+      await secondGesture.up();
+      await _pumpAssistantFrames(tester);
+
+      expect(
+        find.byKey(const ValueKey<String>('assistant-history-flow')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('assistant-history-hint')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'assistant archive opens at the latest message when history is expanded',
+    (WidgetTester tester) async {
+      await _pumpGlacierApp(tester);
+      for (int index = 0; index < 5; index++) {
+        await _sendPrompt(tester, '第${index + 1}条：今天脑子一直停不下来，想把这些念头先收好再睡。');
+      }
+
+      final Finder viewport = find.byKey(
+        const ValueKey<String>('assistant-stage-viewport'),
+      );
+
+      final TestGesture firstPull = await tester.startGesture(
+        tester.getCenter(viewport),
+      );
+      await firstPull.moveBy(const Offset(0, 54));
+      await tester.pump();
+      await firstPull.up();
+      await _pumpAssistantFrames(tester);
+
+      final TestGesture secondPull = await tester.startGesture(
+        tester.getCenter(viewport),
+      );
+      await secondPull.moveBy(const Offset(0, 200));
+      await tester.pump();
+      await secondPull.up();
+      await _pumpAssistantFrames(tester);
+
+      final ScrollableState scrollable = tester.state<ScrollableState>(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('assistant-history-scroll')),
+          matching: find.byType(Scrollable),
+        ),
+      );
+
+      expect(scrollable.position.maxScrollExtent, greaterThan(0));
+      expect(
+        scrollable.position.pixels,
+        closeTo(scrollable.position.maxScrollExtent, 1),
+      );
+    },
+  );
+
+  testWidgets('assistant history action opens the thread history page', (
+    WidgetTester tester,
+  ) async {
+    await _pumpGlacierApp(tester);
+    await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('assistant-header-history')),
+    );
+    await _pumpAssistantFrames(tester);
+
+    expect(
+      find.byKey(const ValueKey<String>('assistant-thread-history-list')),
+      findsOneWidget,
+    );
+    expect(find.text('历史对话'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('assistant-thread-history-add')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('assistant add action starts a new empty conversation stage', (
+    WidgetTester tester,
+  ) async {
+    await _pumpGlacierApp(tester);
+    await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('assistant-header-add')),
+    );
+    await _pumpAssistantFrames(tester);
+
+    expect(
+      find.byKey(const ValueKey<String>('assistant-empty-stage')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('assistant-current-assistant-message')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('assistant reply text has subtle floating motion', (
+    WidgetTester tester,
+  ) async {
+    await _pumpGlacierApp(tester);
+    await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+    final Finder floatingFinder = find.byKey(
+      const ValueKey<String>('assistant-current-floating-motion'),
+    );
+    expect(floatingFinder, findsOneWidget);
+
+    final Transform initialTransform = tester.widget<Transform>(floatingFinder);
+    final double initialDy = initialTransform.transform.getTranslation().y;
+
+    await tester.pump(const Duration(milliseconds: 900));
+
+    final Transform movedTransform = tester.widget<Transform>(floatingFinder);
+    final double movedDy = movedTransform.transform.getTranslation().y;
+
+    expect(movedDy, isNot(initialDy));
+  });
+
+  testWidgets('assistant empty stage floats as a single text group', (
+    WidgetTester tester,
+  ) async {
+    await _pumpGlacierApp(tester);
+
+    final Finder floatingFinder = find.byKey(
+      const ValueKey<String>('assistant-empty-floating-motion'),
+    );
+    expect(floatingFinder, findsOneWidget);
+
+    final Transform initialTransform = tester.widget<Transform>(floatingFinder);
+    final double initialDy = initialTransform.transform.getTranslation().y;
+
+    await tester.pump(const Duration(milliseconds: 900));
+
+    final Transform movedTransform = tester.widget<Transform>(floatingFinder);
+    final double movedDy = movedTransform.transform.getTranslation().y;
+
+    expect(movedDy, isNot(initialDy));
+    expect(find.text('你好，我是小眠'), findsOneWidget);
+    expect(find.text('今晚想聊点什么'), findsOneWidget);
+    expect(find.text('可以和小眠聊聊睡不着的原因，也可以把脑海里还没放下的念头交给我。'), findsOneWidget);
+  });
+
+  testWidgets('assistant reply reveal triggers gentle haptics', (
+    WidgetTester tester,
+  ) async {
+    await _pumpGlacierApp(tester);
+    await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+    final Iterable<MethodCall> hapticCalls = _platformMethodCalls.where(
+      (MethodCall call) => call.method == 'HapticFeedback.vibrate',
+    );
+    expect(hapticCalls, isNotEmpty);
+  });
+
+  testWidgets('assistant reply motion level changes floating amplitude', (
+    WidgetTester tester,
+  ) async {
+    final UserSettings baseSettings = buildDefaultUserSettings();
+    final double lowDy = await _replyFloatingDistanceForLevel(
+      tester,
+      baseSettings.copyWith(
+        assistantReplyMotionLevel: AssistantReplyMotionLevel.low,
+      ),
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    final double highDy = await _replyFloatingDistanceForLevel(
+      tester,
+      baseSettings.copyWith(
+        assistantReplyMotionLevel: AssistantReplyMotionLevel.high,
+      ),
+    );
+
+    expect(highDy.abs(), greaterThan(lowDy.abs()));
+  });
+
+  testWidgets(
+    'assistant motion setting saves from the dedicated settings row',
+    (WidgetTester tester) async {
+      await _pumpRouteApp(
+        tester,
+        AppRoutes.profileSettings,
+        initialSettings: buildDefaultUserSettings().copyWith(
+          assistantReplyMotionLevel: AssistantReplyMotionLevel.low,
+        ),
+      );
+
+      expect(find.byType(SettingsPage), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('陪伴动效'),
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+
+      expect(find.text('陪伴动效'), findsOneWidget);
+      expect(find.text('回复文字浮动'), findsOneWidget);
+      expect(find.text('低'), findsOneWidget);
+
+      await tester.tap(find.text('回复文字浮动'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 240));
+
+      await tester.tap(find.text('高').last);
+      await _pumpAssistantFrames(tester);
+
+      final AppServices services = AppScope.of(
+        tester.element(find.byType(SettingsPage)),
+      );
+      expect(
+        services.profileFacade.currentSettings.assistantReplyMotionLevel,
+        AssistantReplyMotionLevel.high,
+      );
+    },
+  );
 }
 
 Future<void> _pumpApp(
   WidgetTester tester, {
   required String initialLocation,
 }) async {
-  await tester.pumpWidget(SleepDormApp(initialLocation: initialLocation));
-  await tester.pumpAndSettle();
+  await _pumpRouteApp(tester, initialLocation);
+}
+
+Future<void> _pumpGlacierApp(
+  WidgetTester tester, {
+  UserSettings? initialSettings,
+}) async {
+  await _pumpRouteApp(
+    tester,
+    AppRoutes.assistant,
+    initialSettings: initialSettings,
+  );
+}
+
+Future<void> _pumpRouteApp(
+  WidgetTester tester,
+  String route, {
+  UserSettings? initialSettings,
+}) async {
+  await tester.pumpWidget(
+    SleepDormApp(
+      initialLocation: route,
+      clock: _dayClock,
+      initialSettings: initialSettings,
+    ),
+  );
+  await _pumpAssistantFrames(tester);
+}
+
+Future<void> _sendPrompt(WidgetTester tester, String text) async {
+  await tester.enterText(
+    find.byKey(const ValueKey<String>('assistant-composer-field')),
+    text,
+  );
+  await tester.pump();
+  await tester.tap(
+    find.byKey(const ValueKey<String>('assistant-composer-submit')),
+  );
+  await tester.pump();
+  await _pumpAssistantFrames(tester);
+}
+
+Future<void> _openConversationFlow(WidgetTester tester) async {
+  final Finder viewport = find.byKey(
+    const ValueKey<String>('assistant-stage-viewport'),
+  );
+
+  final TestGesture revealHintGesture = await tester.startGesture(
+    tester.getCenter(viewport),
+  );
+  await revealHintGesture.moveBy(const Offset(0, 54));
+  await tester.pump();
+  await revealHintGesture.up();
+  await tester.pump(const Duration(milliseconds: 220));
+  expect(
+    find.byKey(const ValueKey<String>('assistant-history-hint')),
+    findsOneWidget,
+  );
+  await _pumpAssistantFrames(tester);
+
+  final TestGesture expandGesture = await tester.startGesture(
+    tester.getCenter(viewport),
+  );
+  await expandGesture.moveBy(const Offset(0, 180));
+  await tester.pump();
+  await expandGesture.up();
+  await _pumpAssistantFrames(tester);
+}
+
+Future<void> _pumpAssistantFrames(WidgetTester tester) async {
+  await tester.pump(const Duration(milliseconds: 160));
+  await tester.pump(const Duration(milliseconds: 800));
+  await tester.pump(const Duration(milliseconds: 400));
+  await tester.pump(const Duration(milliseconds: 1000));
+}
+
+Future<double> _replyFloatingDistanceForLevel(
+  WidgetTester tester,
+  UserSettings settings,
+) async {
+  await _pumpGlacierApp(tester, initialSettings: settings);
+  await _sendPrompt(tester, '我有点累，但脑子还是停不下来。');
+
+  final Finder floatingFinder = find.byKey(
+    const ValueKey<String>('assistant-current-floating-motion'),
+  );
+  await tester.pump(const Duration(milliseconds: 900));
+
+  final Transform movedTransform = tester.widget<Transform>(floatingFinder);
+  return movedTransform.transform.getTranslation().y;
+}
+
+double _effectiveAncestorOpacity(WidgetTester tester, Finder finder) {
+  final List<Opacity> opacities = tester
+      .widgetList<Opacity>(
+        find.ancestor(of: finder, matching: find.byType(Opacity)),
+      )
+      .toList(growable: false);
+  if (opacities.isEmpty) {
+    return 1;
+  }
+  return opacities.map((Opacity opacity) => opacity.opacity).reduce(math.min);
 }
 
 Future<dynamic> _handleSecureStorageCall(MethodCall call) async {
@@ -309,8 +1090,16 @@ Future<dynamic> _handleSecureStorageCall(MethodCall call) async {
   }
 }
 
+Future<dynamic> _handlePlatformCall(MethodCall call) async {
+  _platformMethodCalls.add(call);
+  return null;
+}
+
+DateTime _dayClock() => DateTime(2026, 4, 5, 14);
+
 const MethodChannel _secureStorageChannel = MethodChannel(
   'plugins.it_nomads.com/flutter_secure_storage',
 );
-
+const MethodChannel _platformChannel = SystemChannels.platform;
 final Map<String, String> _mockSecureStorage = <String, String>{};
+final List<MethodCall> _platformMethodCalls = <MethodCall>[];

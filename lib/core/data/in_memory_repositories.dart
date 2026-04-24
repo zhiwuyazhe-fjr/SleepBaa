@@ -32,6 +32,7 @@ UserSettings buildDefaultUserSettings() {
     bedtimeReminder: TimeOfDay(hour: 23, minute: 10),
     preferredTrackTitle: '深海海浪',
     smartSuggestionsEnabled: true,
+    assistantReplyMotionLevel: AssistantReplyMotionLevel.medium,
   );
 }
 
@@ -1589,6 +1590,26 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
         ),
         ..._currentDorm.events,
       ],
+    );
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  @override
+  Future<void> updateCurrentUserOnlineStatus({
+    required String uid,
+    required bool online,
+  }) async {
+    final DateTime now = DateTime.now();
+    _currentDorm = _currentDorm.copyWith(
+      members: _currentDorm.members
+          .map((DormMember member) {
+            if (member.uid != uid) {
+              return member;
+            }
+            return member.copyWith(appOnline: online, appLastSeenAt: now);
+          })
+          .toList(growable: false),
     );
     _emitCurrentState();
     notifyListeners();

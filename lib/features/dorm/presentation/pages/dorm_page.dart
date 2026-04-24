@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -18,6 +17,7 @@ import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_invite_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_member_status_presenter.dart';
+import 'package:sleep_dorm_app/features/dorm/presentation/widgets/dorm_member_avatar.dart';
 
 const List<String> _gentleReminderPresets = <String>[
   '如果方便的话，今晚一起把宿舍的环境再放轻一点',
@@ -52,21 +52,18 @@ class DormPage extends StatefulWidget {
   State<DormPage> createState() => _DormPageState();
 }
 
-class _DormPageState extends State<DormPage> with WidgetsBindingObserver {
-  Timer? _dormPollTimer;
+class _DormPageState extends State<DormPage> {
+  static const String _liveStatusPageId = 'dorm-page';
+
   AppServices? _dormNoiseRecordingServices;
+  AppServices? _dormLiveStatusServices;
   bool _ledgerAggregateFlushScheduled = false;
+  bool _liveStatusSyncScheduled = false;
+  bool? _lastLiveStatusActive;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _startDormPollTimerIfResumed();
-        unawaited(_refreshPresenceAfterEnteringDormPage());
-      }
-    });
   }
 
   @override
@@ -83,6 +80,14 @@ class _DormPageState extends State<DormPage> with WidgetsBindingObserver {
       );
       _scheduleDormAggregateRecordingAfterBuild();
     }
+    if (!identical(_dormLiveStatusServices, services)) {
+      _dormLiveStatusServices?.dormLiveStatusController.setPageActive(
+        pageId: _liveStatusPageId,
+        active: false,
+      );
+      _dormLiveStatusServices = services;
+    }
+    _scheduleDormLiveStatusSync();
   }
 
   /// [maybeRecordDormAggregate] notifies the ledger; must not run inside [build].
@@ -103,49 +108,33 @@ class _DormPageState extends State<DormPage> with WidgetsBindingObserver {
     });
   }
 
-  void _startDormPollTimerIfResumed() {
-    if (!mounted || _dormPollTimer != null) {
+  void _scheduleDormLiveStatusSync() {
+    if (!mounted || _liveStatusSyncScheduled) {
       return;
     }
-    final AppLifecycleState? life = WidgetsBinding.instance.lifecycleState;
-    if (life != null && life != AppLifecycleState.resumed) {
-      return;
-    }
-    _dormPollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _liveStatusSyncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _liveStatusSyncScheduled = false;
       if (!mounted) {
         return;
       }
-      unawaited(context.appServices.dormRepository.refreshDormSnapshot());
+      final AppServices services = context.appServices;
+      final bool shouldPoll = _isDormPageVisible(context);
+      if (_lastLiveStatusActive == shouldPoll) {
+        return;
+      }
+      _lastLiveStatusActive = shouldPoll;
+      services.dormLiveStatusController.setPageActive(
+        pageId: _liveStatusPageId,
+        active: shouldPoll,
+      );
     });
   }
 
-  void _stopDormPollTimer() {
-    _dormPollTimer?.cancel();
-    _dormPollTimer = null;
-  }
-
-  Future<void> _refreshPresenceAfterEnteringDormPage() async {
-    final AppServices services = context.appServices;
-    await services.dormRepository.refreshDormSnapshot();
-    if (!mounted) {
-      return;
-    }
-    await services.dormPresenceSyncController.syncPresenceFromCurrentLocation();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    switch (state) {
-      case AppLifecycleState.resumed:
-        _startDormPollTimerIfResumed();
-        break;
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.paused:
-      case AppLifecycleState.hidden:
-      case AppLifecycleState.detached:
-        _stopDormPollTimer();
-        break;
-    }
+  bool _isDormPageVisible(BuildContext context) {
+    final ModalRoute<dynamic>? route = ModalRoute.of(context);
+    return TickerMode.valuesOf(context).enabled &&
+        (route == null || route.isCurrent);
   }
 
   @override
@@ -153,20 +142,24 @@ class _DormPageState extends State<DormPage> with WidgetsBindingObserver {
     _dormNoiseRecordingServices?.dormRepository.removeListener(
       _scheduleDormAggregateRecordingAfterBuild,
     );
-    WidgetsBinding.instance.removeObserver(this);
-    _stopDormPollTimer();
+    _dormLiveStatusServices?.dormLiveStatusController.setPageActive(
+      pageId: _liveStatusPageId,
+      active: false,
+    );
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    _scheduleDormLiveStatusSync();
     return Scaffold(
       body: ListenableBuilder(
         listenable: Listenable.merge(<Listenable>[
           services.authRepository,
           services.dormRepository,
           services.notificationRepository,
+          services.dormLiveStatusController,
           services.dormNoiseSampleLedger,
           services.interferenceProbeController,
         ]),
@@ -194,6 +187,8 @@ class _DormPageState extends State<DormPage> with WidgetsBindingObserver {
           final int quietStars = computeDormQuietRating(forRating).stars;
           final UserProfile currentUser = services.authRepository.currentUser;
           final NightMoodPalette palette = context.nightMoodPalette;
+          final DateTime liveNow =
+              services.dormLiveStatusController.currentTime;
           final String currentUserId = currentUser.uid;
           final List<DormEventRecord> events = buildDormEventRecords(
             dorm: dorm,
@@ -315,7 +310,10 @@ class _DormPageState extends State<DormPage> with WidgetsBindingObserver {
                               _DormHeroCard(
                                 key: DormPage.heroCardKey,
                                 palette: palette,
-                                onlineLabel: dormOnlineCountLabel(dorm.members),
+                                onlineLabel: dormOnlineCountLabel(
+                                  dorm.members,
+                                  now: liveNow,
+                                ),
                                 sleepingCount: sleepingCount,
                                 quietScore: quietStars,
                               ),
@@ -688,8 +686,9 @@ class _DormMemberCard extends StatelessWidget {
       showPresence: showPresence,
     );
     final Color accentColor = _memberColor(member.status);
-    final String? resolvedBadgeId =
-        currentUserProfile?.displayBadgeId ?? member.displayBadgeId;
+    final String? resolvedBadgeId = isCurrentUser
+        ? currentUserProfile?.displayBadgeId ?? member.displayBadgeId
+        : member.displayBadgeId;
     final HonorBadge? badge = honorBadgeById(resolvedBadgeId);
     final Uint8List? avatarBytes = isCurrentUser
         ? currentUserProfile?.avatarBytes
@@ -698,7 +697,8 @@ class _DormMemberCard extends StatelessWidget {
         ? currentUserProfile?.avatarUrl ?? member.avatarUrl
         : member.avatarUrl;
     final String fallbackSeed =
-        currentUserProfile?.avatarFallbackSeed?.trim().isNotEmpty == true
+        isCurrentUser &&
+            currentUserProfile?.avatarFallbackSeed?.trim().isNotEmpty == true
         ? currentUserProfile!.avatarFallbackSeed!
         : member.name;
     return AppCard(
@@ -711,9 +711,9 @@ class _DormMemberCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
-            _DormMemberAvatar(
+            DormMemberAvatar(
               key: ValueKey<String>('dorm-member-avatar-${member.uid}'),
-              radius: 22,
+              size: 44,
               accentColor: accentColor,
               avatarBytes: avatarBytes,
               avatarUrl: avatarUrl,
@@ -784,78 +784,6 @@ class _DormMemberCard extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DormMemberAvatar extends StatelessWidget {
-  const _DormMemberAvatar({
-    super.key,
-    required this.radius,
-    required this.accentColor,
-    required this.fallbackSeed,
-    this.avatarBytes,
-    this.avatarUrl,
-  });
-
-  final double radius;
-  final Color accentColor;
-  final Uint8List? avatarBytes;
-  final String? avatarUrl;
-  final String fallbackSeed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: radius * 2,
-      height: radius * 2,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: accentColor.withAlpha(42),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: _buildContent(context),
-    );
-  }
-
-  Widget _buildContent(BuildContext context) {
-    if (avatarBytes != null && avatarBytes!.isNotEmpty) {
-      return Image.memory(
-        avatarBytes!,
-        fit: BoxFit.cover,
-        width: radius * 2,
-        height: radius * 2,
-      );
-    }
-    if (avatarUrl != null && avatarUrl!.trim().isNotEmpty) {
-      return Image.network(
-        avatarUrl!,
-        fit: BoxFit.cover,
-        width: radius * 2,
-        height: radius * 2,
-        errorBuilder:
-            (BuildContext context, Object error, StackTrace? stackTrace) {
-              return _buildFallback(context);
-            },
-      );
-    }
-    return _buildFallback(context);
-  }
-
-  Widget _buildFallback(BuildContext context) {
-    final String fallbackText = fallbackSeed.trim().isEmpty
-        ? '?'
-        : fallbackSeed.characters.first.toUpperCase();
-    return Container(
-      color: accentColor.withAlpha(24),
-      alignment: Alignment.center,
-      child: Text(
-        fallbackText,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: accentColor,
-          fontWeight: FontWeight.w800,
         ),
       ),
     );

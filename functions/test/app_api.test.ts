@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import http from "node:http";
 import test from "node:test";
-import { createAppApiServer, normalizeCloudBasePhoneNumber } from "../src/http/app_api";
+import {
+  createAppApiServer,
+  normalizeCloudBasePhoneNumber,
+} from "../src/http/app_api";
 import { createRepositoryFromEnv } from "../src/repositories/firestore_repositories";
 
 test("normalizeCloudBasePhoneNumber adds +86 for mainland China numbers", () => {
@@ -301,10 +304,7 @@ test(
 
         assert.equal(bootstrapResponse.status, 200);
         const bootstrapPayload = await bootstrapResponse.json();
-        assert.equal(
-          bootstrapPayload.data.user.phoneNumber,
-          "+86 13800138000",
-        );
+        assert.equal(bootstrapPayload.data.user.phoneNumber, "+86 13800138000");
       });
     } finally {
       await new Promise<void>((resolve, reject) => {
@@ -499,7 +499,10 @@ test(
       );
       assert.equal(showResponse.status, 200);
       const showPayload = await showResponse.json();
-      assert.equal(showPayload.pendingMemoBanner.groups[0].sessionId, `${uid}-session-2`);
+      assert.equal(
+        showPayload.pendingMemoBanner.groups[0].sessionId,
+        `${uid}-session-2`,
+      );
 
       const bootstrapWithBanner = await fetch(`${baseUrl}/api/app/bootstrap`, {
         method: "POST",
@@ -511,7 +514,8 @@ test(
       });
       const bootstrapWithBannerPayload = await bootstrapWithBanner.json();
       assert.equal(
-        bootstrapWithBannerPayload.data.userState.sleepCapture.pendingMemoBanner.groups[0].sessionId,
+        bootstrapWithBannerPayload.data.userState.sleepCapture.pendingMemoBanner
+          .groups[0].sessionId,
         `${uid}-session-2`,
       );
 
@@ -538,7 +542,8 @@ test(
       });
       const bootstrapAfterClearPayload = await bootstrapAfterClear.json();
       assert.equal(
-        bootstrapAfterClearPayload.data.userState.sleepCapture.pendingMemoBanner,
+        bootstrapAfterClearPayload.data.userState.sleepCapture
+          .pendingMemoBanner,
         null,
       );
     });
@@ -806,6 +811,111 @@ test(
 );
 
 test(
+  "sleep enter pause and exit synchronize dorm sleep mode",
+  { concurrency: false },
+  async () => {
+    await withLocalAppApiServer(async ({ baseUrl, uid }) => {
+      const headers = {
+        "content-type": "application/json",
+        "x-debug-uid": uid,
+      };
+      const createResponse = await fetch(`${baseUrl}/api/dorm/create`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ name: "Dorm" }),
+      });
+      assert.equal(createResponse.status, 200);
+
+      const currentDormMember = async (): Promise<Record<string, unknown>> => {
+        const bootstrapResponse = await fetch(`${baseUrl}/api/app/bootstrap`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({}),
+        });
+        assert.equal(bootstrapResponse.status, 200);
+        const bootstrapPayload = await bootstrapResponse.json();
+        const member = bootstrapPayload.data.dorm.members.find(
+          (item: Record<string, unknown>) => item.uid === uid,
+        );
+        assert.ok(member);
+        return member;
+      };
+
+      const memberSleepMode = async (): Promise<boolean> => {
+        const member = await currentDormMember();
+        return Boolean(member.sleepModeActive);
+      };
+
+      const firstSessionId = `${uid}-sleep-sync-pause`;
+      const enterPauseResponse = await fetch(`${baseUrl}/api/sleep/enter`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          session: {
+            id: firstSessionId,
+            startedAt: "2026-04-17T23:00:00.000Z",
+            sleepDayKey: "2026-04-18",
+            status: "active",
+            sleepModeActive: true,
+            recommendations: [],
+            selectedRecommendationIds: [],
+            segments: [],
+            trackedDurationMinutes: 0,
+            awakenings: [],
+            feedback: [],
+          },
+        }),
+      });
+      assert.equal(enterPauseResponse.status, 200);
+      assert.equal(await memberSleepMode(), true);
+      assert.equal((await currentDormMember()).status, "quiet");
+
+      const pauseResponse = await fetch(`${baseUrl}/api/sleep/pause`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ sessionId: firstSessionId }),
+      });
+      assert.equal(pauseResponse.status, 200);
+      assert.equal(await memberSleepMode(), false);
+      assert.equal((await currentDormMember()).status, "quiet");
+
+      const secondSessionId = `${uid}-sleep-sync-exit`;
+      const enterExitResponse = await fetch(`${baseUrl}/api/sleep/enter`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          session: {
+            id: secondSessionId,
+            startedAt: "2026-04-18T23:00:00.000Z",
+            sleepDayKey: "2026-04-19",
+            status: "active",
+            sleepModeActive: true,
+            recommendations: [],
+            selectedRecommendationIds: [],
+            segments: [],
+            trackedDurationMinutes: 0,
+            awakenings: [],
+            feedback: [],
+          },
+        }),
+      });
+      assert.equal(enterExitResponse.status, 200);
+      assert.equal(await memberSleepMode(), true);
+      assert.equal((await currentDormMember()).status, "quiet");
+
+      const exitResponse = await fetch(`${baseUrl}/api/sleep/exit`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ sessionId: secondSessionId }),
+      });
+      assert.equal(exitResponse.status, 200);
+      assert.equal(await memberSleepMode(), false);
+      assert.equal((await currentDormMember()).status, "quiet");
+    });
+  },
+);
+
+test(
   "assistant reply stream emits ordered SSE events",
   { concurrency: false },
   async () => {
@@ -835,10 +945,7 @@ test(
       assert.ok(events.some((item) => item.event === "message_delta"));
       assert.ok(events.some((item) => item.event === "message_completed"));
       assert.equal(events[events.length - 1]?.event, "done");
-      assert.equal(
-        events[events.length - 1]?.data.backgroundSyncPending,
-        true,
-      );
+      assert.equal(events[events.length - 1]?.data.backgroundSyncPending, true);
     });
   },
 );
@@ -867,24 +974,29 @@ test(
 
       try {
         const threadId = `${uid}-reply-delay-thread`;
-        const firstResponse = await fetch(`${baseUrl}/api/assistant/reply/stream`, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-debug-uid": uid,
+        const firstResponse = await fetch(
+          `${baseUrl}/api/assistant/reply/stream`,
+          {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-debug-uid": uid,
+            },
+            body: JSON.stringify({
+              threadId,
+              prompt: "stay with me a bit",
+              clientUserMessageId: `${uid}-delay-user-1`,
+              clientAssistantMessageId: `${uid}-delay-assistant-1`,
+            }),
           },
-          body: JSON.stringify({
-            threadId,
-            prompt: "stay with me a bit",
-            clientUserMessageId: `${uid}-delay-user-1`,
-            clientAssistantMessageId: `${uid}-delay-assistant-1`,
-          }),
-        });
+        );
 
         assert.equal(firstResponse.status, 200);
         const firstEvents = parseSseEvents(await firstResponse.text());
         assert.equal(firstEvents[0]?.event, "ack");
-        assert.ok(firstEvents.some((item) => item.event === "message_completed"));
+        assert.ok(
+          firstEvents.some((item) => item.event === "message_completed"),
+        );
         assert.ok(!firstEvents.some((item) => item.event === "surface_patch"));
         assert.ok(!firstEvents.some((item) => item.event === "memory_synced"));
         assert.equal(firstEvents[firstEvents.length - 1]?.event, "done");
@@ -1007,10 +1119,7 @@ test(
           const events = parseSseEvents(await response.text());
           assert.equal(events[0]?.event, "ack");
           const errorEvent = events.find((item) => item.event === "error");
-          assert.equal(
-            errorEvent?.data.code,
-            "ASSISTANT_REPLY_TIMEOUT",
-          );
+          assert.equal(errorEvent?.data.code, "ASSISTANT_REPLY_TIMEOUT");
           assert.equal(
             errorEvent?.data.message,
             "Assistant reply timed out before completion. Please try again.",
@@ -1056,7 +1165,9 @@ test(
       assert.ok(events.some((item) => item.event === "message_completed"));
       assert.equal(events[events.length - 1]?.event, "done");
 
-      const completed = events.find((item) => item.event === "message_completed");
+      const completed = events.find(
+        (item) => item.event === "message_completed",
+      );
       assert.notEqual(completed?.data.provider, "fast_path");
       assert.notEqual(completed?.data.model, "rules-fast-path");
       assert.equal(
@@ -1094,8 +1205,13 @@ test(
       assert.ok(events.some((item) => item.event === "message_delta"));
       assert.ok(events.some((item) => item.event === "message_completed"));
       assert.ok(events.some((item) => item.event === "surface_patch"));
-      const captureEvent = events.find((item) => item.event === "capture_record");
-      const record = (captureEvent?.data.record ?? {}) as Record<string, unknown>;
+      const captureEvent = events.find(
+        (item) => item.event === "capture_record",
+      );
+      const record = (captureEvent?.data.record ?? {}) as Record<
+        string,
+        unknown
+      >;
       assert.ok(captureEvent);
       assert.equal(record.type, "memo");
       assert.equal(record.sessionId, `${uid}-capture-stream-session`);
@@ -1333,18 +1449,21 @@ test(
         [7.5, false],
         [6.5, true],
       ] as const) {
-        const saveSettingsResponse = await fetch(`${baseUrl}/api/profile/save`, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-debug-uid": uid,
-          },
-          body: JSON.stringify({
-            settings: {
-              sleepGoalHours,
+        const saveSettingsResponse = await fetch(
+          `${baseUrl}/api/profile/save`,
+          {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-debug-uid": uid,
             },
-          }),
-        });
+            body: JSON.stringify({
+              settings: {
+                sleepGoalHours,
+              },
+            }),
+          },
+        );
         assert.equal(saveSettingsResponse.status, 200);
 
         const bootstrapResponse = await fetch(`${baseUrl}/api/app/bootstrap`, {
@@ -1392,17 +1511,20 @@ test(
       });
       assert.equal(createResponse.status, 200);
 
-      const environmentResponse = await fetch(`${baseUrl}/api/dorm/environment`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-debug-uid": uid,
+      const environmentResponse = await fetch(
+        `${baseUrl}/api/dorm/environment`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-debug-uid": uid,
+          },
+          body: JSON.stringify({
+            noiseDb: 43,
+            lightLabel: "偏亮",
+          }),
         },
-        body: JSON.stringify({
-          noiseDb: 43,
-          lightLabel: "偏亮",
-        }),
-      });
+      );
       assert.equal(environmentResponse.status, 200);
 
       const interferenceResponse = await fetch(

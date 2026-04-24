@@ -79,6 +79,8 @@ export interface ContextDormMember {
   status: string;
   presenceStatus?: string;
   sleepModeActive: boolean;
+  appOnline?: boolean;
+  appLastSeenAt?: string | null;
   lastActiveAt?: string;
   note?: string;
   avatarUrl?: string;

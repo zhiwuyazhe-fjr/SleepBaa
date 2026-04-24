@@ -586,15 +586,18 @@ void main() {
 
       final SleepSession awaiting =
           harness.sleepSessionRepository.latestAwaitingFeedbackSession!;
-      final SleepSession resumed =
-          await harness.controller.resumeSleepModeFromFeedbackReturn();
+      final SleepSession resumed = await harness.controller
+          .resumeSleepModeFromFeedbackReturn();
 
       expect(resumed.id, awaiting.id);
       expect(harness.sleepSessionRepository.activeSession?.id, awaiting.id);
       expect(resumed.status, SleepSessionStatus.active);
       expect(resumed.sleepModeActive, isTrue);
-      expect(resumed.segments.length, 2);
-      expect(harness.notificationService.shownSleepSessions.last.id, awaiting.id);
+      expect(resumed.segments.length, awaiting.segments.length + 1);
+      expect(
+        harness.notificationService.shownSleepSessions.last.id,
+        awaiting.id,
+      );
 
       harness.dispose();
     },
@@ -603,8 +606,9 @@ void main() {
   test(
     'resume sleep mode from feedback return ignores non-critical side effect failures',
     () async {
-      final _ThrowingDormRepository dormRepository =
-          _ThrowingDormRepository(currentUserId: 'anon-paul');
+      final _ThrowingDormRepository dormRepository = _ThrowingDormRepository(
+        currentUserId: 'anon-paul',
+      );
       final _FakeNotificationService notificationService =
           _FakeNotificationService();
       final _SleepControllerHarness harness = _SleepControllerHarness.create(
@@ -623,8 +627,8 @@ void main() {
 
       final SleepSession awaiting =
           harness.sleepSessionRepository.latestAwaitingFeedbackSession!;
-      final SleepSession resumed =
-          await harness.controller.resumeSleepModeFromFeedbackReturn();
+      final SleepSession resumed = await harness.controller
+          .resumeSleepModeFromFeedbackReturn();
 
       expect(resumed.id, awaiting.id);
       expect(harness.sleepSessionRepository.activeSession?.id, awaiting.id);
@@ -1031,9 +1035,7 @@ class _SleepControllerHarness {
         InMemoryNotificationRepository();
     final InMemoryDormRepository resolvedDormRepository =
         dormRepository ??
-        InMemoryDormRepository(
-          currentUserId: authRepository.currentUser.uid,
-        );
+        InMemoryDormRepository(currentUserId: authRepository.currentUser.uid);
     final _FakeNotificationService resolvedNotificationService =
         notificationService ?? _FakeNotificationService();
     final AudioPlaybackController audioPlaybackController =

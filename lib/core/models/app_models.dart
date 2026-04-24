@@ -48,6 +48,7 @@ const List<String> kAllHomeQuickActionIds = <String>[
 
 List<String> normalizeHomeQuickActionIds(Iterable<String>? rawIds) {
   final List<String> normalized = <String>[];
+
   void addIfAllowed(String id) {
     if (!kAllHomeQuickActionIds.contains(id) || normalized.contains(id)) {
       return;
@@ -61,12 +62,14 @@ List<String> normalizeHomeQuickActionIds(Iterable<String>? rawIds) {
       return List<String>.unmodifiable(normalized);
     }
   }
+
   for (final String id in kDefaultHomeQuickActionIds) {
     addIfAllowed(id);
     if (normalized.length == kHomeQuickActionSelectionCount) {
       break;
     }
   }
+
   return List<String>.unmodifiable(normalized);
 }
 
@@ -101,6 +104,8 @@ enum AssistantMessageRole { user, assistant, system }
 enum AssistantMessageStatus { pending, complete, error }
 
 enum AssistantReplySourceMode { remoteSuccess, fallbackSuccess, error }
+
+enum AssistantReplyMotionLevel { low, medium, high }
 
 enum PhoneVerificationTarget { any, existingUser, newUser }
 
@@ -421,6 +426,7 @@ class UserSettings {
     required this.preferredTrackTitle,
     required this.smartSuggestionsEnabled,
     this.homeQuickActionIds = kDefaultHomeQuickActionIds,
+    this.assistantReplyMotionLevel = AssistantReplyMotionLevel.medium,
     this.selectedNightMood,
     this.eveningEncouragementPeriodKey,
     this.eveningEncouragementLine,
@@ -435,15 +441,10 @@ class UserSettings {
   final String preferredTrackTitle;
   final bool smartSuggestionsEnabled;
   final List<String> homeQuickActionIds;
+  final AssistantReplyMotionLevel assistantReplyMotionLevel;
   final NightMood? selectedNightMood;
-
-  /// [eveningPeriodKey] for which [eveningEncouragementLine] was chosen.
   final String? eveningEncouragementPeriodKey;
-
-  /// One persisted encouragement line (quote + attribution) for [eveningEncouragementPeriodKey].
   final String? eveningEncouragementLine;
-
-  /// Mood bucket used when picking the line; `null` means the impatient/unknown quote pool.
   final NightMood? eveningEncouragementMoodSnapshot;
 
   UserSettings copyWith({
@@ -455,6 +456,7 @@ class UserSettings {
     String? preferredTrackTitle,
     bool? smartSuggestionsEnabled,
     List<String>? homeQuickActionIds,
+    AssistantReplyMotionLevel? assistantReplyMotionLevel,
     NightMood? selectedNightMood,
     bool clearSelectedNightMood = false,
     String? eveningEncouragementPeriodKey,
@@ -477,6 +479,8 @@ class UserSettings {
       homeQuickActionIds: normalizeHomeQuickActionIds(
         homeQuickActionIds ?? this.homeQuickActionIds,
       ),
+      assistantReplyMotionLevel:
+          assistantReplyMotionLevel ?? this.assistantReplyMotionLevel,
       selectedNightMood: clearSelectedNightMood
           ? null
           : selectedNightMood ?? this.selectedNightMood,
@@ -1188,6 +1192,8 @@ class DormMember {
     required this.status,
     required this.presenceStatus,
     required this.sleepModeActive,
+    this.appOnline = false,
+    this.appLastSeenAt,
     required this.lastActiveAt,
     required this.note,
     this.avatarUrl,
@@ -1200,6 +1206,8 @@ class DormMember {
   final DormMemberStatus status;
   final DormPresenceStatus presenceStatus;
   final bool sleepModeActive;
+  final bool appOnline;
+  final DateTime? appLastSeenAt;
   final DateTime lastActiveAt;
   final String note;
   final String? avatarUrl;
@@ -1214,11 +1222,15 @@ class DormMember {
     DormMemberStatus? status,
     DormPresenceStatus? presenceStatus,
     bool? sleepModeActive,
+    bool? appOnline,
+    DateTime? appLastSeenAt,
     DateTime? lastActiveAt,
     String? note,
     String? avatarUrl,
     String? displayBadgeId,
     int? noiseDb,
+    bool clearAvatarUrl = false,
+    bool clearAppLastSeenAt = false,
     bool clearNoiseDb = false,
   }) {
     return DormMember(
@@ -1227,9 +1239,13 @@ class DormMember {
       status: status ?? this.status,
       presenceStatus: presenceStatus ?? this.presenceStatus,
       sleepModeActive: sleepModeActive ?? this.sleepModeActive,
+      appOnline: appOnline ?? this.appOnline,
+      appLastSeenAt: clearAppLastSeenAt
+          ? null
+          : (appLastSeenAt ?? this.appLastSeenAt),
       lastActiveAt: lastActiveAt ?? this.lastActiveAt,
       note: note ?? this.note,
-      avatarUrl: avatarUrl ?? this.avatarUrl,
+      avatarUrl: clearAvatarUrl ? null : (avatarUrl ?? this.avatarUrl),
       displayBadgeId: displayBadgeId ?? this.displayBadgeId,
       noiseDb: clearNoiseDb ? null : (noiseDb ?? this.noiseDb),
     );

@@ -613,6 +613,10 @@ class AssistantFacade extends ChangeNotifier {
     return _assistantRepository.messagesForThread(thread.id);
   }
 
+  List<AssistantMessage> messagesForThread(String threadId) {
+    return _assistantRepository.messagesForThread(threadId);
+  }
+
   Future<AssistantThread> createThread({String? title}) {
     return _assistantRepository.createThread(title: title);
   }
@@ -627,6 +631,10 @@ class AssistantFacade extends ChangeNotifier {
 
   Future<void> selectMostRecentThread() {
     return _assistantRepository.selectMostRecentThread();
+  }
+
+  Future<void> setCurrentThread(String threadId) {
+    return _assistantRepository.setCurrentThread(threadId);
   }
 
   Future<void> updateAssistantProfileName(String assistantName) {
