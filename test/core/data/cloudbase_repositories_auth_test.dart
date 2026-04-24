@@ -340,6 +340,154 @@ void main() {
   );
 
   test(
+    'ensureAuthenticated replaces cached avatar url with first fresh snapshot url',
+    () async {
+      final _FakeSessionStore sessionStore = _FakeSessionStore();
+      final _MemoryVerifiedPhoneStore verifiedStore = _MemoryVerifiedPhoneStore(
+        VerifiedPhoneIdentity(
+          subject: 'tester',
+          phoneNumber: '+86 13800138000',
+        ),
+      );
+      final _MemoryAuthProfileCacheStore authProfileCacheStore =
+          _MemoryAuthProfileCacheStore(
+            const UserProfile(
+              uid: 'tester',
+              displayName: 'Tester',
+              tagline: 'tagline',
+              role: 'role',
+              dormId: 'dorm-204',
+              phoneNumber: '+86 13800138000',
+              avatarUrl: 'https://cdn.example.com/avatar.png?sig=old',
+              avatarStoragePath: 'avatars/tester.png',
+            ),
+          );
+      const AppEnvironment environment = AppEnvironment(
+        target: AppBackendTarget.production,
+        appIdPrefix: 'com.dormsleep.app',
+        cloudbaseEnvId: 'demo-env',
+        cloudbaseAuthBaseUrl: 'https://example.com',
+        cloudbaseAppApiBaseUrl: 'https://example.com',
+        cloudbasePublishableKey: 'publishable-key',
+        cloudbaseClientId: 'demo-env',
+      );
+      final http.Client httpClient = MockClient((http.Request request) async {
+        if (request.url.path == '/api/app/bootstrap') {
+          return http.Response(
+            jsonEncode(<String, dynamic>{
+              'data': <String, dynamic>{
+                'user': <String, dynamic>{
+                  'uid': 'tester',
+                  'displayName': 'Tester',
+                  'phoneNumber': '+86 13800138000',
+                  'phoneLinkedAt': '2026-04-18T08:00:00.000Z',
+                  'avatarUrl': 'https://cdn.example.com/avatar.png?sig=fresh',
+                  'avatarStoragePath': 'avatars/tester.png',
+                },
+              },
+            }),
+            200,
+          );
+        }
+        throw StateError('Unexpected path: ${request.url.path}');
+      });
+      final CloudBaseAuthClient authClient = CloudBaseAuthClient(
+        environment: environment,
+        httpClient: httpClient,
+      );
+      final CloudBaseAppApiClient appApiClient = CloudBaseAppApiClient(
+        environment: environment,
+        sessionStore: sessionStore,
+        authClient: authClient,
+        httpClient: httpClient,
+      );
+      final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final CloudBaseAuthRepository repository = CloudBaseAuthRepository(
+        environment: environment,
+        authClient: authClient,
+        appApiClient: appApiClient,
+        sessionStore: sessionStore,
+        snapshotStore: snapshotStore,
+        verifiedPhoneStore: verifiedStore,
+        authProfileCacheStore: authProfileCacheStore,
+      );
+
+      await repository.ensureAuthenticated();
+      await pumpEventQueue();
+
+      expect(
+        repository.currentUser.avatarUrl,
+        'https://cdn.example.com/avatar.png?sig=fresh',
+      );
+      expect(
+        (await authProfileCacheStore.read())?.avatarUrl,
+        'https://cdn.example.com/avatar.png?sig=fresh',
+      );
+
+      repository.dispose();
+    },
+  );
+
+  test(
+    'runtime snapshot refresh keeps displayed avatar url for unchanged storage path',
+    () async {
+      bool returnFreshAvatar = false;
+      final CloudBaseAuthRepository repository = _buildHarness(
+        MockClient((http.Request request) async {
+          if (request.url.path == '/auth/v1/user/me') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'sub': 'tester',
+                'name': 'Tester',
+                'phone_number': '+86 13800138000',
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/app/bootstrap') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'data': <String, dynamic>{
+                  'user': <String, dynamic>{
+                    'uid': 'tester',
+                    'displayName': 'Tester',
+                    'phoneNumber': '+86 13800138000',
+                    'phoneLinkedAt': '2026-04-18T08:00:00.000Z',
+                    'avatarUrl': returnFreshAvatar
+                        ? 'https://cdn.example.com/avatar.png?sig=fresh'
+                        : 'https://cdn.example.com/avatar.png?sig=old',
+                    'avatarStoragePath': 'avatars/tester.png',
+                  },
+                },
+              }),
+              200,
+            );
+          }
+          throw StateError('Unexpected path: ${request.url.path}');
+        }),
+      ).repository;
+
+      await repository.ensureAuthenticated();
+      expect(
+        repository.currentUser.avatarUrl,
+        'https://cdn.example.com/avatar.png?sig=old',
+      );
+
+      returnFreshAvatar = true;
+      await repository.retryAuthentication();
+
+      expect(
+        repository.currentUser.avatarUrl,
+        'https://cdn.example.com/avatar.png?sig=old',
+      );
+
+      repository.dispose();
+    },
+  );
+
+  test(
     'ensureAuthenticated keeps a neutral profile when session is missing and no auth profile cache exists',
     () async {
       final _FakeSessionStore sessionStore = _FakeSessionStore();

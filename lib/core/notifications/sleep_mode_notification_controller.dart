@@ -22,7 +22,11 @@ class SleepModeNotificationController {
     }
     _sleepSessionRepository.addListener(_sync);
     _started = true;
-    _sync();
+    unawaited(synchronize());
+  }
+
+  Future<void> synchronize() {
+    return _sync();
   }
 
   Future<void> _sync() async {

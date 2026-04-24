@@ -208,6 +208,7 @@ class _RoutedSleepDormAppState extends State<_RoutedSleepDormApp> {
     return createRouter(
       usesCloudBase: widget.usesCloudBase,
       authRepository: widget.services.authRepository,
+      sleepSessionRepository: widget.services.sleepSessionRepository,
       homeMode: widget.homeMode,
       initialLocation: widget.initialLocation,
     );
@@ -219,7 +220,9 @@ class _RoutedSleepDormAppState extends State<_RoutedSleepDormApp> {
     if (oldWidget.usesCloudBase != widget.usesCloudBase ||
         oldWidget.homeMode != widget.homeMode ||
         oldWidget.initialLocation != widget.initialLocation ||
-        oldWidget.services.authRepository != widget.services.authRepository) {
+        oldWidget.services.authRepository != widget.services.authRepository ||
+        oldWidget.services.sleepSessionRepository !=
+            widget.services.sleepSessionRepository) {
       _router.dispose();
       _router = _buildRouter();
     }

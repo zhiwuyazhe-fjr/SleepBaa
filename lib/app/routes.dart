@@ -126,26 +126,36 @@ abstract final class AppRoutes {
 GoRouter createRouter({
   required bool usesCloudBase,
   required AuthRepository authRepository,
+  required SleepSessionRepository sleepSessionRepository,
   HomeMode homeMode = HomeMode.preSleep,
   String initialLocation = AppRoutes.home,
 }) {
   return GoRouter(
     initialLocation: initialLocation,
-    refreshListenable: authRepository,
+    refreshListenable: Listenable.merge(<Listenable>[
+      authRepository,
+      sleepSessionRepository,
+    ]),
     redirect: (BuildContext context, GoRouterState state) {
-      if (!usesCloudBase) {
-        return null;
-      }
-      if (!authRepository.hasCompletedInitialAuthBootstrap ||
-          authRepository.isAuthenticating) {
-        return null;
+      if (usesCloudBase) {
+        if (!authRepository.hasCompletedInitialAuthBootstrap ||
+            authRepository.isAuthenticating) {
+          return null;
+        }
+
+        final bool isAuthRoute = state.uri.path == AppRoutes.authPhone;
+        final bool hasVerifiedPhoneIdentity =
+            authRepository.hasVerifiedPhoneIdentity == true;
+        if (!hasVerifiedPhoneIdentity && !isAuthRoute) {
+          return AppRoutes.authPhone;
+        }
       }
 
-      final bool isAuthRoute = state.uri.path == AppRoutes.authPhone;
-      final bool hasVerifiedPhoneIdentity =
-          authRepository.hasVerifiedPhoneIdentity == true;
-      if (!hasVerifiedPhoneIdentity && !isAuthRoute) {
-        return AppRoutes.authPhone;
+      if (shouldRedirectToActiveSleepMode(
+        location: state.uri.toString(),
+        activeSession: sleepSessionRepository.activeSession,
+      )) {
+        return AppRoutes.homePostSleep;
       }
       return null;
     },
@@ -370,6 +380,29 @@ GoRouter createRouter({
       ),
     ],
   );
+}
+
+bool shouldRedirectToActiveSleepMode({
+  required String location,
+  required SleepSession? activeSession,
+}) {
+  final Uri? uri = Uri.tryParse(location);
+  final String path = uri?.path.isNotEmpty == true ? uri!.path : location;
+  final bool isSleepModeEntryRoute =
+      path == AppRoutes.root ||
+      path == AppRoutes.home ||
+      path == AppRoutes.homePreSleep;
+  if (!isSleepModeEntryRoute) {
+    return false;
+  }
+  return isActiveSleepModeSession(activeSession);
+}
+
+bool isActiveSleepModeSession(SleepSession? session) {
+  return session != null &&
+      session.status == SleepSessionStatus.active &&
+      session.sleepModeActive &&
+      session.endedAt == null;
 }
 
 NoTransitionPage<void> _noTransitionPage({

@@ -229,6 +229,28 @@ String? _stableDisplayedAvatarUrl({
   return incoming;
 }
 
+String? _avatarUrlForSnapshotMerge({
+  required UserProfile currentUser,
+  required UserProfile snapshotUser,
+  required bool preferFreshSnapshotForCachedProfile,
+}) {
+  final String incoming = snapshotUser.avatarUrl?.trim() ?? '';
+  final String currentStorage = currentUser.avatarStoragePath?.trim() ?? '';
+  final String incomingStorage = snapshotUser.avatarStoragePath?.trim() ?? '';
+  if (preferFreshSnapshotForCachedProfile &&
+      incoming.isNotEmpty &&
+      currentStorage.isNotEmpty &&
+      currentStorage == incomingStorage) {
+    return snapshotUser.avatarUrl;
+  }
+  return _stableDisplayedAvatarUrl(
+    displayedUrl: currentUser.avatarUrl,
+    nextUrl: snapshotUser.avatarUrl,
+    displayedStoragePath: currentUser.avatarStoragePath,
+    nextStoragePath: snapshotUser.avatarStoragePath,
+  );
+}
+
 Dorm _mergeStableDormAvatarUrls(Dorm currentDorm, Dorm nextDorm) {
   if (currentDorm.members.isEmpty || nextDorm.members.isEmpty) {
     return nextDorm;
@@ -889,6 +911,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   DateTime? _lastSuccessfulAuthAt;
   VerifiedPhoneIdentity? _cachedVerifiedIdentity;
   UserProfile? _cachedAuthProfile;
+  bool _currentUserRestoredFromAuthProfileCache = false;
   static const Duration _authRevalidationInterval = Duration(minutes: 5);
 
   @override
@@ -953,6 +976,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           cached.avatarFallbackSeed?.trim().isNotEmpty == true
           ? cached.avatarFallbackSeed!
           : cached.displayName;
+      _currentUserRestoredFromAuthProfileCache = true;
       return cached.copyWith(
         uid: uid,
         phoneNumber: normalizedPhone ?? cached.phoneNumber,
@@ -960,6 +984,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
         avatarFallbackSeed: fallbackSeed,
       );
     }
+    _currentUserRestoredFromAuthProfileCache = false;
     return _blankCloudBaseUserProfile(
       uid: uid,
       phoneNumber: normalizedPhone,
@@ -1037,6 +1062,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     }
     _snapshotStore.clear();
     _currentUser = _signedOutProfile();
+    _currentUserRestoredFromAuthProfileCache = false;
     _lastAuthError = message;
     _lastSuccessfulAuthAt = null;
     return _currentUser;
@@ -2218,6 +2244,12 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     }
     final String? snapshotPhone = snapshot.user.phoneNumber;
     final DateTime? snapshotPhoneLinkedAt = snapshot.user.phoneLinkedAt;
+    final String? snapshotAvatarUrl = _avatarUrlForSnapshotMerge(
+      currentUser: _currentUser,
+      snapshotUser: snapshot.user,
+      preferFreshSnapshotForCachedProfile:
+          _currentUserRestoredFromAuthProfileCache,
+    );
     _currentUser = _currentUser.copyWith(
       uid: snapshot.user.uid,
       displayName: snapshot.user.displayName,
@@ -2246,16 +2278,12 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           ? snapshotPhone
           : _currentUser.phoneNumber,
       phoneLinkedAt: snapshotPhoneLinkedAt ?? _currentUser.phoneLinkedAt,
-      avatarUrl: _stableDisplayedAvatarUrl(
-        displayedUrl: _currentUser.avatarUrl,
-        nextUrl: snapshot.user.avatarUrl,
-        displayedStoragePath: _currentUser.avatarStoragePath,
-        nextStoragePath: snapshot.user.avatarStoragePath,
-      ),
+      avatarUrl: snapshotAvatarUrl,
       avatarPath: snapshot.user.avatarPath,
       avatarStoragePath: snapshot.user.avatarStoragePath,
       avatarFallbackSeed: snapshot.user.avatarFallbackSeed,
     );
+    _currentUserRestoredFromAuthProfileCache = false;
     _mergePhoneFromCachedVerifiedIdentity();
     unawaited(_persistCurrentUserToAuthProfileCache());
     notifyListeners();
