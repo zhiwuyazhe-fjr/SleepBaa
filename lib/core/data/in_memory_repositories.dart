@@ -1596,6 +1596,26 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
   }
 
   @override
+  Future<void> updateCurrentUserOnlineStatus({
+    required String uid,
+    required bool online,
+  }) async {
+    final DateTime now = DateTime.now();
+    _currentDorm = _currentDorm.copyWith(
+      members: _currentDorm.members
+          .map((DormMember member) {
+            if (member.uid != uid) {
+              return member;
+            }
+            return member.copyWith(appOnline: online, appLastSeenAt: now);
+          })
+          .toList(growable: false),
+    );
+    _emitCurrentState();
+    notifyListeners();
+  }
+
+  @override
   void hydrateCurrentDormLocationAnchor(DormLocationAnchor anchor) {
     _currentDorm = _currentDorm.copyWith(locationAnchor: anchor);
     _emitCurrentState();

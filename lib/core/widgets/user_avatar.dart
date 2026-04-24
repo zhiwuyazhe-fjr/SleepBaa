@@ -97,9 +97,11 @@ class UserAvatar extends StatelessWidget {
         fit: BoxFit.cover,
         width: size,
         height: size,
-        errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) {
-          return _buildFallback(context);
-        },
+        gaplessPlayback: true,
+        errorBuilder:
+            (BuildContext context, Object error, StackTrace? stackTrace) {
+              return _buildFallback(context);
+            },
       );
     }
 

@@ -1047,6 +1047,7 @@ export interface AssistantDataRepository {
     reason: string,
   ): Promise<{ dormId: string; rejectedAt: string; reason: string }>;
   updateDormMemberStatus(uid: string, payload: JsonMap): Promise<JsonMap>;
+  updateDormMemberHeartbeat(uid: string, payload: JsonMap): Promise<JsonMap>;
   getAudioTrackCatalog(uid: string): Promise<JsonMap>;
   saveTonightInterference(uid: string, patch: JsonMap): Promise<JsonMap>;
   saveDormLocationAnchor(uid: string, anchor: JsonMap): Promise<JsonMap>;
@@ -1225,18 +1226,38 @@ export class FirestoreRepository implements AssistantDataRepository {
         const userDoc = withoutMeta(
           (await this.store.get(Collections.users, asString(value.uid))) ?? {},
         );
+        const memberUid = asString(value.uid);
         const avatarStoragePath = asString(userDoc.avatarStoragePath);
         let fallbackAvatarUrl = asString(userDoc.avatarUrl) || null;
+        let avatarTempUrlFailed = false;
         if (!fallbackAvatarUrl && avatarStoragePath && this.fileStorage) {
           try {
             fallbackAvatarUrl =
               await this.fileStorage.getTemporaryUrl(avatarStoragePath);
           } catch {
+            avatarTempUrlFailed = true;
+            logRepo(
+              `dorm avatar temp-url failed uid=${memberUid} storagePath=${avatarStoragePath}`,
+            );
             fallbackAvatarUrl = null;
           }
         }
+        const fallbackDisplayBadgeId =
+          asString(userDoc.equippedBadgeId) ||
+          asStringArray(userDoc.earnedBadgeIds).slice(-1)[0] ||
+          null;
+        const resolvedAvatarUrl =
+          this.preferString(fallbackAvatarUrl, value.avatarUrl, null) ||
+          undefined;
+        if (!resolvedAvatarUrl) {
+          logRepo(
+            `dorm avatar missing uid=${memberUid} reason=${
+              avatarTempUrlFailed ? "temp_url_failed" : "no_avatar_data"
+            }`,
+          );
+        }
         return {
-          uid: asString(value.uid),
+          uid: memberUid,
           name:
             this.preferString(value.name, userDoc.displayName, "舍友") ||
             "舍友",
@@ -1246,17 +1267,15 @@ export class FirestoreRepository implements AssistantDataRepository {
             asString(value.status) === "away" ? "away" : "unknown",
           ),
           sleepModeActive: asBoolean(value.sleepModeActive, false),
+          appOnline: asBoolean(value.appOnline, false),
+          appLastSeenAt: asString(value.appLastSeenAt) || null,
           lastActiveAt: asString(value.lastActiveAt, nowIso()),
           note: asString(value.note),
-          avatarUrl:
-            this.preferString(value.avatarUrl, fallbackAvatarUrl, null) ||
-            undefined,
+          avatarUrl: resolvedAvatarUrl,
           displayBadgeId:
             this.preferString(
+              fallbackDisplayBadgeId,
               value.displayBadgeId,
-              asString(userDoc.equippedBadgeId) ||
-                asStringArray(userDoc.earnedBadgeIds).slice(-1)[0] ||
-                null,
               null,
             ) || undefined,
         } satisfies ContextDormMember;
@@ -1783,12 +1802,7 @@ export class FirestoreRepository implements AssistantDataRepository {
       user.equippedBadgeId ?? user.earnedBadgeIds?.slice(-1)[0] ?? null;
     const baseMember =
       existingMember ??
-      defaultDormMember(
-        uid,
-        user.displayName,
-        user.avatarUrl,
-        displayBadgeId,
-      );
+      defaultDormMember(uid, user.displayName, user.avatarUrl, displayBadgeId);
     const basePresenceStatus = normalizeDormPresenceStatus(
       baseMember.presenceStatus,
       asString(baseMember.status) === "away" ? "away" : "unknown",
@@ -1800,8 +1814,13 @@ export class FirestoreRepository implements AssistantDataRepository {
       ? normalizeDormPresenceStatus(payload.presenceStatus, basePresenceStatus)
       : basePresenceStatus;
     const nextSleepModeActive = hasOwn(payload, "sleepModeActive")
-      ? asBoolean(payload.sleepModeActive, asBoolean(baseMember.sleepModeActive))
+      ? asBoolean(
+          payload.sleepModeActive,
+          asBoolean(baseMember.sleepModeActive),
+        )
       : asBoolean(baseMember.sleepModeActive);
+    const normalizedStatus =
+      !nextSleepModeActive && nextStatus === "sleeping" ? "quiet" : nextStatus;
     const nextNote = hasOwn(payload, "note")
       ? asString(payload.note, asString(baseMember.note))
       : asString(baseMember.note);
@@ -1813,7 +1832,7 @@ export class FirestoreRepository implements AssistantDataRepository {
       name: user.displayName,
       avatarUrl: user.avatarUrl ?? null,
       displayBadgeId,
-      status: nextStatus,
+      status: normalizedStatus,
       presenceStatus: nextPresenceStatus,
       sleepModeActive: nextSleepModeActive,
       note: nextNote,
@@ -1827,6 +1846,46 @@ export class FirestoreRepository implements AssistantDataRepository {
       detail: nextNote,
       actorUid: uid,
       createdAt: updatedAt,
+    });
+    return withoutMeta(
+      (await this.store.get(Collections.dormMembers, memberId)) ?? {},
+    );
+  }
+
+  async updateDormMemberHeartbeat(
+    uid: string,
+    payload: JsonMap,
+  ): Promise<JsonMap> {
+    const user = await this.getUserProfile(uid);
+    const dormId = user.dormId ? user.dormId.trim() : "";
+    if (!dormId) {
+      throw new Error(
+        "Create or join a dorm before updating member heartbeat.",
+      );
+    }
+    const memberId = `${dormId}:${uid}`;
+    const existingMember = await this.store.get(
+      Collections.dormMembers,
+      memberId,
+    );
+    const displayBadgeId =
+      user.equippedBadgeId ?? user.earnedBadgeIds?.slice(-1)[0] ?? null;
+    const baseMember =
+      existingMember ??
+      defaultDormMember(uid, user.displayName, user.avatarUrl, displayBadgeId);
+    const updatedAt = nowIso();
+    const nextOnline = hasOwn(payload, "online")
+      ? asBoolean(payload.online, asBoolean(baseMember.appOnline))
+      : true;
+    await this.store.merge(Collections.dormMembers, memberId, {
+      dormId,
+      ...baseMember,
+      uid,
+      name: user.displayName,
+      avatarUrl: user.avatarUrl ?? null,
+      displayBadgeId,
+      appOnline: nextOnline,
+      appLastSeenAt: updatedAt,
     });
     return withoutMeta(
       (await this.store.get(Collections.dormMembers, memberId)) ?? {},

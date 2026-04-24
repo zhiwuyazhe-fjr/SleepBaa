@@ -195,6 +195,10 @@ abstract interface class DormRepository implements Listenable {
     bool? sleepModeActive,
     String? note,
   });
+  Future<void> updateCurrentUserOnlineStatus({
+    required String uid,
+    required bool online,
+  });
   void hydrateCurrentDormLocationAnchor(DormLocationAnchor anchor);
   Future<void> saveDormLocationAnchor(DormLocationAnchor anchor);
   Future<void> updateDormEnvironment({

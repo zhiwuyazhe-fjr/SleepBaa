@@ -42,11 +42,52 @@ void main() {
       expect(average, 31);
     },
   );
+
+  test('online count ignores heartbeat timestamps that are later than now', () {
+    final DateTime now = DateTime(2026, 4, 22, 20, 0, 0);
+
+    final int count = dormAppOnlineMemberCount(<DormMember>[
+      _member(
+        presenceStatus: DormPresenceStatus.returned,
+        appOnline: true,
+        appLastSeenAt: now.add(const Duration(seconds: 10)),
+      ),
+    ], now: now);
+
+    expect(count, 0);
+  });
+
+  test('online count expires once heartbeat is older than sixty seconds', () {
+    final DateTime now = DateTime(2026, 4, 22, 20, 0, 0);
+
+    expect(
+      dormAppOnlineMemberCount(<DormMember>[
+        _member(
+          presenceStatus: DormPresenceStatus.returned,
+          appOnline: true,
+          appLastSeenAt: now.subtract(const Duration(seconds: 60)),
+        ),
+      ], now: now),
+      1,
+    );
+    expect(
+      dormAppOnlineMemberCount(<DormMember>[
+        _member(
+          presenceStatus: DormPresenceStatus.returned,
+          appOnline: true,
+          appLastSeenAt: now.subtract(const Duration(seconds: 61)),
+        ),
+      ], now: now),
+      0,
+    );
+  });
 }
 
 DormMember _member({
   required DormPresenceStatus presenceStatus,
   bool sleepModeActive = false,
+  bool appOnline = false,
+  DateTime? appLastSeenAt,
   int? noiseDb,
 }) {
   return DormMember(
@@ -55,6 +96,8 @@ DormMember _member({
     status: DormMemberStatus.quiet,
     presenceStatus: presenceStatus,
     sleepModeActive: sleepModeActive,
+    appOnline: appOnline,
+    appLastSeenAt: appLastSeenAt,
     lastActiveAt: DateTime(2026, 4, 22, 20),
     note: '准备休息。',
     noiseDb: noiseDb,

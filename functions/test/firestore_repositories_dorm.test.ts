@@ -20,7 +20,8 @@ class TestDocumentStore {
   }
 
   async merge(collection: string, id: string, patch: JsonMap): Promise<void> {
-    const current = (await this.get(collection, id)) ?? ({ _id: id } as JsonMap);
+    const current =
+      (await this.get(collection, id)) ?? ({ _id: id } as JsonMap);
     await this.set(collection, id, {
       ...current,
       ...this.clone(patch),
@@ -43,8 +44,8 @@ class TestDocumentStore {
       limit?: number;
     },
   ): Promise<JsonMap[]> {
-    let docs = Array.from(this.ensureCollection(collection).values()).map((doc) =>
-      this.clone(doc),
+    let docs = Array.from(this.ensureCollection(collection).values()).map(
+      (doc) => this.clone(doc),
     );
     if (options?.filters) {
       docs = docs.filter((doc) =>
@@ -95,6 +96,12 @@ class TestFileStorage {
       fileId: `uploaded-${params.fileName}`,
       url: `https://cdn.example.com/uploaded-${params.fileName}`,
     };
+  }
+}
+
+class ThrowingTempUrlFileStorage extends TestFileStorage {
+  override async getTemporaryUrl(_fileId: string): Promise<string> {
+    throw new Error("temp url signing failed");
   }
 }
 
@@ -162,7 +169,10 @@ test("acceptDormInvite writes joined member displayBadgeId", async () => {
     equippedBadgeId: null,
   });
 
-  const accepted = await repo.acceptDormInvite("roommate-user", invite.inviteCode);
+  const accepted = await repo.acceptDormInvite(
+    "roommate-user",
+    invite.inviteCode,
+  );
   assert.equal(accepted.dormId, created.dormId);
 
   const member = await store.get(
@@ -235,7 +245,7 @@ test("getDorm backfills avatarUrl and displayBadgeId from latest user profile", 
     sleepModeActive: false,
     lastActiveAt: "2026-04-13T15:00:00.000Z",
     note: "准备休息",
-    avatarUrl: null,
+    avatarUrl: "https://old.example.com/expired-member-avatar.png",
     displayBadgeId: null,
   });
 
@@ -248,12 +258,204 @@ test("getDorm backfills avatarUrl and displayBadgeId from latest user profile", 
 
   await repo.saveUserProfile("roommate-user", {
     avatarUrl: "https://images.example.com/new-avatar.png",
+    avatarStoragePath: null,
     equippedBadgeId: "equipped-badge",
     earnedBadgeIds: ["first-week", "latest-earned", "equipped-badge"],
+  });
+  await store.merge("dorm_members", `${dormId}:roommate-user`, {
+    avatarUrl: "https://old.example.com/stale-member-avatar.png",
   });
 
   dorm = await repo.getDorm(dormId, "owner-user");
   roommate = dorm.members.find((member) => member.uid === "roommate-user");
-  assert.equal(roommate?.avatarUrl, "https://images.example.com/new-avatar.png");
+  assert.equal(
+    roommate?.avatarUrl,
+    "https://images.example.com/new-avatar.png",
+  );
   assert.equal(roommate?.displayBadgeId, "equipped-badge");
+
+  await store.merge("users", "roommate-user", {
+    avatarUrl: null,
+    avatarStoragePath: null,
+  });
+  await store.merge("dorm_members", `${dormId}:roommate-user`, {
+    avatarUrl: "https://old.example.com/member-only-avatar.png",
+  });
+
+  dorm = await repo.getDorm(dormId, "owner-user");
+  roommate = dorm.members.find((member) => member.uid === "roommate-user");
+  assert.equal(
+    roommate?.avatarUrl,
+    "https://old.example.com/member-only-avatar.png",
+  );
+});
+
+test("getDorm logs avatar diagnostics when temp-url signing fails or avatar data is missing", async () => {
+  const originalConsoleLog = console.log;
+  const logs: string[] = [];
+  console.log = (...args: unknown[]) => {
+    logs.push(args.map((value) => String(value)).join(" "));
+  };
+
+  try {
+    const store = new TestDocumentStore();
+    const repo = new FirestoreRepository(
+      store as any,
+      new ThrowingTempUrlFileStorage(),
+    );
+    const dormId = "dorm-avatar-diagnostics";
+
+    await store.set("dorms", dormId, {
+      id: dormId,
+      name: "Dorm",
+    });
+    await repo.saveUserProfile("roommate-user", {
+      displayName: "Roommate",
+      dormId,
+      avatarUrl: null,
+      avatarStoragePath: "avatar-file-1",
+    });
+    await store.set("dorm_members", `${dormId}:roommate-user`, {
+      dormId,
+      uid: "roommate-user",
+      name: "Roommate",
+      status: "quiet",
+      presenceStatus: "returned",
+      sleepModeActive: false,
+      lastActiveAt: "2026-04-13T15:00:00.000Z",
+      note: "resting",
+      avatarUrl: null,
+    });
+
+    const dorm = await repo.getDorm(dormId, "owner-user");
+    const roommate = dorm.members.find((member) => member.uid === "roommate-user");
+    assert.equal(roommate?.avatarUrl, undefined);
+    assert.ok(
+      logs.some((line) =>
+        line.includes(
+          "[repo] dorm avatar temp-url failed uid=roommate-user storagePath=avatar-file-1",
+        ),
+      ),
+    );
+    assert.ok(
+      logs.some((line) =>
+        line.includes(
+          "[repo] dorm avatar missing uid=roommate-user reason=temp_url_failed",
+        ),
+      ),
+    );
+
+    logs.length = 0;
+    await store.merge("users", "roommate-user", {
+      avatarStoragePath: null,
+      avatarUrl: null,
+    });
+
+    await repo.getDorm(dormId, "owner-user");
+    assert.ok(
+      logs.some((line) =>
+        line.includes(
+          "[repo] dorm avatar missing uid=roommate-user reason=no_avatar_data",
+        ),
+      ),
+    );
+  } finally {
+    console.log = originalConsoleLog;
+  }
+});
+
+test("updateDormMemberStatus preserves sleepModeActive when omitted", async () => {
+  const store = new TestDocumentStore();
+  const repo = new FirestoreRepository(store as any, new TestFileStorage());
+  const uid = "sleeping-user";
+  const dormId = "dorm-sleep-preserve";
+
+  await store.set("dorms", dormId, { id: dormId, name: "Dorm" });
+  await repo.saveUserProfile(uid, { displayName: "Sleeper", dormId });
+  await store.set("dorm_members", `${dormId}:${uid}`, {
+    dormId,
+    uid,
+    name: "Sleeper",
+    status: "quiet",
+    presenceStatus: "returned",
+    sleepModeActive: true,
+    lastActiveAt: "2026-04-20T23:00:00.000Z",
+    note: "asleep",
+  });
+
+  const member = await repo.updateDormMemberStatus(uid, {
+    presenceStatus: "away",
+    note: "location changed",
+  });
+
+  assert.equal(member.sleepModeActive, true);
+  assert.equal(member.presenceStatus, "away");
+});
+
+test("updateDormMemberStatus normalizes legacy sleeping status when sleep mode is off", async () => {
+  const store = new TestDocumentStore();
+  const repo = new FirestoreRepository(store as any, new TestFileStorage());
+  const uid = "sleeping-user";
+  const dormId = "dorm-sleep-normalize";
+
+  await store.set("dorms", dormId, { id: dormId, name: "Dorm" });
+  await repo.saveUserProfile(uid, { displayName: "Sleeper", dormId });
+  await store.set("dorm_members", `${dormId}:${uid}`, {
+    dormId,
+    uid,
+    name: "Sleeper",
+    status: "sleeping",
+    presenceStatus: "returned",
+    sleepModeActive: true,
+    lastActiveAt: "2026-04-20T23:00:00.000Z",
+    note: "asleep",
+  });
+
+  const member = await repo.updateDormMemberStatus(uid, {
+    sleepModeActive: false,
+    note: "awake now",
+  });
+
+  assert.equal(member.sleepModeActive, false);
+  assert.equal(member.status, "quiet");
+  assert.equal(member.note, "awake now");
+});
+
+test("updateDormMemberHeartbeat writes app online fields only", async () => {
+  const store = new TestDocumentStore();
+  const repo = new FirestoreRepository(store as any, new TestFileStorage());
+  const uid = "online-user";
+  const dormId = "dorm-heartbeat";
+  const originalLastActiveAt = "2026-04-20T23:00:00.000Z";
+
+  await store.set("dorms", dormId, { id: dormId, name: "Dorm" });
+  await repo.saveUserProfile(uid, { displayName: "Online", dormId });
+  await store.set("dorm_members", `${dormId}:${uid}`, {
+    dormId,
+    uid,
+    name: "Online",
+    status: "quiet",
+    presenceStatus: "returned",
+    sleepModeActive: true,
+    lastActiveAt: originalLastActiveAt,
+    note: "asleep",
+  });
+
+  const online = await repo.updateDormMemberHeartbeat(uid, { online: true });
+
+  assert.equal(online.appOnline, true);
+  assert.equal(typeof online.appLastSeenAt, "string");
+  assert.equal(online.sleepModeActive, true);
+  assert.equal(online.lastActiveAt, originalLastActiveAt);
+
+  const offline = await repo.updateDormMemberHeartbeat(uid, { online: false });
+  assert.equal(offline.appOnline, false);
+  assert.equal(offline.sleepModeActive, true);
+  assert.equal(offline.lastActiveAt, originalLastActiveAt);
+
+  const dorm = await repo.getDorm(dormId, uid);
+  const member = dorm.members.find((item) => item.uid === uid);
+  assert.equal(member?.appOnline, false);
+  assert.equal(typeof member?.appLastSeenAt, "string");
+  assert.equal(member?.sleepModeActive, true);
 });
