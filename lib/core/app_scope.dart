@@ -23,7 +23,9 @@ import 'package:sleep_dorm_app/core/state/audio_playback_controller.dart';
 import 'package:sleep_dorm_app/core/state/dorm_noise_sample_ledger.dart';
 import 'package:sleep_dorm_app/core/state/dorm_presence_sync_controller.dart';
 import 'package:sleep_dorm_app/core/state/interference_probe_controller.dart';
+import 'package:sleep_dorm_app/core/state/evening_welcome_local_store.dart';
 import 'package:sleep_dorm_app/core/state/night_welcome_controller.dart';
+import 'package:sleep_dorm_app/core/utils/evening_period.dart';
 import 'package:sleep_dorm_app/core/state/sleep_experience_controller.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/controllers/assistant_conversation_controller.dart';
 
@@ -36,6 +38,7 @@ class AppScope extends StatefulWidget {
     this.initialSettings,
     this.showNightWelcomeOutsideNightInDebug,
     this.appNotificationService,
+    this.initialLocalEveningWelcome,
   });
 
   final Widget child;
@@ -44,6 +47,9 @@ class AppScope extends StatefulWidget {
   final UserSettings? initialSettings;
   final bool? showNightWelcomeOutsideNightInDebug;
   final AppNotificationService? appNotificationService;
+
+  /// Pruned local welcome + encouragement; see [EveningWelcomeLocalStore].
+  final LocalEveningWelcomeBootState? initialLocalEveningWelcome;
 
   static AppServices of(BuildContext context) {
     final _AppScopeInherited? inherited = context
@@ -133,7 +139,10 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
       clock: widget.clock ?? DateTime.now,
       showInDebugOutsideNight:
           widget.showNightWelcomeOutsideNightInDebug ?? kDebugMode,
+      initialLocalHandledEveningPeriodKey:
+          widget.initialLocalEveningWelcome?.periodKey,
     );
+    _hydrateEncouragementFromLocalBootState();
     _sleepExperienceController = SleepExperienceController(
       authRepository: _authRepository,
       settingsRepository: _settingsRepository,
@@ -221,6 +230,30 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
       assistantConversationController: _assistantConversationController,
     );
     _bootstrapExperience();
+  }
+
+  /// Restores fixed encouragement from device prefs when cloud settings are empty/stale.
+  void _hydrateEncouragementFromLocalBootState() {
+    final LocalEveningWelcomeBootState? boot = widget.initialLocalEveningWelcome;
+    if (boot == null) {
+      return;
+    }
+    final String nowKey = eveningPeriodKey((widget.clock ?? DateTime.now)());
+    if (boot.periodKey != nowKey) {
+      return;
+    }
+    final String? line = boot.encouragementLine;
+    if (line == null || line.isEmpty) {
+      return;
+    }
+    final UserSettings settings = _settingsRepository.currentSettings;
+    _settingsRepository.replaceLocalSettings(
+      settings.copyWith(
+        eveningEncouragementPeriodKey: boot.periodKey,
+        eveningEncouragementLine: line,
+        eveningEncouragementMoodSnapshot: boot.moodSnapshot,
+      ),
+    );
   }
 
   Future<void> _bootstrapExperience() async {

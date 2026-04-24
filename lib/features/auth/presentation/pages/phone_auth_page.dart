@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sleep_dorm_app/app/app_brand.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
@@ -1043,17 +1044,10 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     return _PencilSplitPage(
       unit: unit,
       bodyChildren: <Widget>[
-        _PencilTopSquare(
-          icon: Icons.bedtime_rounded,
-          iconSize: 26 * unit,
-          size: 52 * unit,
-          radius: 16 * unit,
-          backgroundColor: _accentBlue,
-          iconColor: _accentBlueDeep,
-        ),
+        _PencilLogoTopSquare(size: 52 * unit),
         SizedBox(height: 20 * unit),
         Text(
-          '登录舍眠',
+          AppBrand.loginTitle,
           style: _textStyle(
             context,
             size: 32 * unit,
@@ -1822,6 +1816,30 @@ class _PencilTopSquare extends StatelessWidget {
           width: size,
           height: size,
           child: Center(child: iconWidget),
+        ),
+      ),
+    );
+  }
+}
+
+class _PencilLogoTopSquare extends StatelessWidget {
+  const _PencilLogoTopSquare({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      key: const ValueKey<String>('auth-login-logo'),
+      width: size,
+      height: size,
+      child: Center(
+        child: Image.asset(
+          AppBrand.logoAssetPath,
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          semanticLabel: AppBrand.displayName,
         ),
       ),
     );

@@ -18,7 +18,62 @@ enum NotificationCategory { reminder, session, dorm, system }
 
 enum DormMemberStatus { sleeping, quiet, away, active }
 
-enum DormPresenceStatus { returned, away }
+abstract final class HomeQuickActionIds {
+  static const String dreamJournal = 'dreamJournal';
+  static const String profileCalendar = 'profileCalendar';
+  static const String sleepEncyclopedia = 'sleepEncyclopedia';
+  static const String thoughtClean = 'thoughtClean';
+  static const String thoughtVault = 'thoughtVault';
+  static const String profileBadges = 'profileBadges';
+  static const String profileReport = 'profileReport';
+  static const String profileSettings = 'profileSettings';
+}
+
+const int kHomeQuickActionSelectionCount = 4;
+
+const List<String> kDefaultHomeQuickActionIds = <String>[
+  HomeQuickActionIds.dreamJournal,
+  HomeQuickActionIds.profileCalendar,
+  HomeQuickActionIds.sleepEncyclopedia,
+  HomeQuickActionIds.thoughtClean,
+];
+
+const List<String> kAllHomeQuickActionIds = <String>[
+  ...kDefaultHomeQuickActionIds,
+  HomeQuickActionIds.thoughtVault,
+  HomeQuickActionIds.profileBadges,
+  HomeQuickActionIds.profileReport,
+  HomeQuickActionIds.profileSettings,
+];
+
+List<String> normalizeHomeQuickActionIds(Iterable<String>? rawIds) {
+  final List<String> normalized = <String>[];
+
+  void addIfAllowed(String id) {
+    if (!kAllHomeQuickActionIds.contains(id) || normalized.contains(id)) {
+      return;
+    }
+    normalized.add(id);
+  }
+
+  for (final String id in rawIds ?? const <String>[]) {
+    addIfAllowed(id);
+    if (normalized.length == kHomeQuickActionSelectionCount) {
+      return List<String>.unmodifiable(normalized);
+    }
+  }
+
+  for (final String id in kDefaultHomeQuickActionIds) {
+    addIfAllowed(id);
+    if (normalized.length == kHomeQuickActionSelectionCount) {
+      break;
+    }
+  }
+
+  return List<String>.unmodifiable(normalized);
+}
+
+enum DormPresenceStatus { returned, away, unknown }
 
 enum DormEventType { memberStatus, ruleUpdate, notification, invite, system }
 
@@ -359,6 +414,8 @@ DormHonorBadge? dormHonorBadgeById(String? badgeId) {
   return null;
 }
 
+const Object _unsetEveningEncouragementMoodSnapshot = Object();
+
 class UserSettings {
   const UserSettings({
     required this.sleepGoalHours,
@@ -368,8 +425,12 @@ class UserSettings {
     required this.bedtimeReminder,
     required this.preferredTrackTitle,
     required this.smartSuggestionsEnabled,
+    this.homeQuickActionIds = kDefaultHomeQuickActionIds,
     this.assistantReplyMotionLevel = AssistantReplyMotionLevel.medium,
     this.selectedNightMood,
+    this.eveningEncouragementPeriodKey,
+    this.eveningEncouragementLine,
+    this.eveningEncouragementMoodSnapshot,
   });
 
   final double sleepGoalHours;
@@ -379,8 +440,12 @@ class UserSettings {
   final TimeOfDay bedtimeReminder;
   final String preferredTrackTitle;
   final bool smartSuggestionsEnabled;
+  final List<String> homeQuickActionIds;
   final AssistantReplyMotionLevel assistantReplyMotionLevel;
   final NightMood? selectedNightMood;
+  final String? eveningEncouragementPeriodKey;
+  final String? eveningEncouragementLine;
+  final NightMood? eveningEncouragementMoodSnapshot;
 
   UserSettings copyWith({
     double? sleepGoalHours,
@@ -390,9 +455,15 @@ class UserSettings {
     TimeOfDay? bedtimeReminder,
     String? preferredTrackTitle,
     bool? smartSuggestionsEnabled,
+    List<String>? homeQuickActionIds,
     AssistantReplyMotionLevel? assistantReplyMotionLevel,
     NightMood? selectedNightMood,
     bool clearSelectedNightMood = false,
+    String? eveningEncouragementPeriodKey,
+    String? eveningEncouragementLine,
+    Object? eveningEncouragementMoodSnapshot =
+        _unsetEveningEncouragementMoodSnapshot,
+    bool clearEveningEncouragement = false,
   }) {
     return UserSettings(
       sleepGoalHours: sleepGoalHours ?? this.sleepGoalHours,
@@ -405,11 +476,28 @@ class UserSettings {
       preferredTrackTitle: preferredTrackTitle ?? this.preferredTrackTitle,
       smartSuggestionsEnabled:
           smartSuggestionsEnabled ?? this.smartSuggestionsEnabled,
+      homeQuickActionIds: normalizeHomeQuickActionIds(
+        homeQuickActionIds ?? this.homeQuickActionIds,
+      ),
       assistantReplyMotionLevel:
           assistantReplyMotionLevel ?? this.assistantReplyMotionLevel,
       selectedNightMood: clearSelectedNightMood
           ? null
           : selectedNightMood ?? this.selectedNightMood,
+      eveningEncouragementPeriodKey: clearEveningEncouragement
+          ? null
+          : eveningEncouragementPeriodKey ?? this.eveningEncouragementPeriodKey,
+      eveningEncouragementLine: clearEveningEncouragement
+          ? null
+          : eveningEncouragementLine ?? this.eveningEncouragementLine,
+      eveningEncouragementMoodSnapshot: clearEveningEncouragement
+          ? null
+          : identical(
+              eveningEncouragementMoodSnapshot,
+              _unsetEveningEncouragementMoodSnapshot,
+            )
+          ? this.eveningEncouragementMoodSnapshot
+          : eveningEncouragementMoodSnapshot as NightMood?,
     );
   }
 }

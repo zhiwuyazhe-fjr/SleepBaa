@@ -16,7 +16,7 @@
         android:required="false" />
 
     <application
-        android:label="DormSleep"
+        android:label="眠羊"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

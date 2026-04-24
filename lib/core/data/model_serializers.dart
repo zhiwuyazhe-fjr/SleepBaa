@@ -54,8 +54,17 @@ abstract final class ModelSerializers {
       'bedtimeReminder': timeOfDayToMap(settings.bedtimeReminder),
       'preferredTrackTitle': settings.preferredTrackTitle,
       'smartSuggestionsEnabled': settings.smartSuggestionsEnabled,
+      'homeQuickActionIds': normalizeHomeQuickActionIds(
+        settings.homeQuickActionIds,
+      ),
       'assistantReplyMotionLevel': settings.assistantReplyMotionLevel.name,
       'selectedNightMood': settings.selectedNightMood?.name,
+      'eveningEncouragementPeriodKey': settings.eveningEncouragementPeriodKey,
+      'eveningEncouragementLine': settings.eveningEncouragementLine,
+      'eveningEncouragementMoodSnapshot':
+          settings.eveningEncouragementLine == null
+          ? null
+          : (settings.eveningEncouragementMoodSnapshot?.name ?? 'unknown'),
     };
   }
 
@@ -71,6 +80,9 @@ abstract final class ModelSerializers {
       ),
       preferredTrackTitle: map['preferredTrackTitle'] as String? ?? '深海海浪',
       smartSuggestionsEnabled: map['smartSuggestionsEnabled'] as bool? ?? true,
+      homeQuickActionIds: normalizeHomeQuickActionIds(
+        _stringListFromDynamic(map['homeQuickActionIds']),
+      ),
       assistantReplyMotionLevel: _assistantReplyMotionLevelFromName(
             map['assistantReplyMotionLevel'] as String?,
           ) ??
@@ -78,6 +90,11 @@ abstract final class ModelSerializers {
       selectedNightMood: _nightMoodFromName(
         map['selectedNightMood'] as String?,
       ),
+      eveningEncouragementPeriodKey:
+          map['eveningEncouragementPeriodKey'] as String?,
+      eveningEncouragementLine: map['eveningEncouragementLine'] as String?,
+      eveningEncouragementMoodSnapshot:
+          _eveningEncouragementMoodSnapshotFromMap(map),
     );
   }
 
@@ -789,6 +806,27 @@ abstract final class ModelSerializers {
       return parsed.isUtc ? parsed.toLocal() : parsed;
     }
     return null;
+  }
+
+  static List<String> _stringListFromDynamic(Object? value) {
+    if (value is Iterable) {
+      return value.whereType<String>().toList(growable: false);
+    }
+    return const <String>[];
+  }
+
+  static NightMood? _eveningEncouragementMoodSnapshotFromMap(
+    Map<String, dynamic> map,
+  ) {
+    final String? line = map['eveningEncouragementLine'] as String?;
+    if (line == null || line.isEmpty) {
+      return null;
+    }
+    final String? raw = map['eveningEncouragementMoodSnapshot'] as String?;
+    if (raw == null || raw.isEmpty || raw == 'unknown') {
+      return null;
+    }
+    return _nightMoodFromName(raw);
   }
 
   static NightMood? _nightMoodFromName(String? value) {

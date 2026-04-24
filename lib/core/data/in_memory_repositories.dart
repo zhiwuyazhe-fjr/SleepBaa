@@ -1522,7 +1522,9 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
           uid: _currentUserId,
           name: _currentUserId == 'anon-paul' ? 'Paul' : '我',
           status: DormMemberStatus.quiet,
-          presenceStatus: DormPresenceStatus.returned,
+          presenceStatus: locationAnchor == null
+              ? DormPresenceStatus.unknown
+              : DormPresenceStatus.returned,
           sleepModeActive: false,
           lastActiveAt: now,
           note: '已创建宿舍，等待邀请舍友加入。',
@@ -1816,7 +1818,7 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
                 uid: _currentUserId,
                 name: _currentUserId == 'anon-paul' ? 'Paul' : '新室友',
                 status: DormMemberStatus.quiet,
-                presenceStatus: DormPresenceStatus.returned,
+                presenceStatus: DormPresenceStatus.unknown,
                 sleepModeActive: false,
                 lastActiveAt: DateTime.now(),
                 note: '通过邀请码加入宿舍。',

@@ -8,7 +8,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sleep_dorm_app/app/app.dart';
+import 'package:sleep_dorm_app/app/app_brand.dart';
 import 'package:sleep_dorm_app/main.dart' as app_main;
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
@@ -40,6 +42,7 @@ import 'package:sleep_dorm_app/features/profile/presentation/pages/sleep_report_
 void main() {
   setUpAll(() {
     GoogleFonts.config.allowRuntimeFetching = false;
+    SharedPreferences.setMockInitialValues(<String, Object>{});
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           _secureStorageChannel,
@@ -118,10 +121,116 @@ void main() {
     (WidgetTester tester) async {
       await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _dayClock);
 
+      final MaterialApp app = tester.widget<MaterialApp>(
+        find.byType(MaterialApp),
+      );
+      expect(app.title, AppBrand.displayName);
       expect(find.byType(HomePreSleepPage), findsOneWidget);
       expect(find.byKey(BottomNavShell.navBarKey), findsOneWidget);
     },
   );
+
+  testWidgets('home quick actions show defaults and editor catalog', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+    );
+
+    expect(find.text('梦记一则'), findsOneWidget);
+    expect(find.text('打卡日历'), findsOneWidget);
+    expect(find.text('睡眠百科'), findsOneWidget);
+    expect(find.text('思绪清理'), findsOneWidget);
+
+    await tester.tap(find.text('编辑').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('编辑快捷功能'), findsOneWidget);
+    await _scrollToHomeQuickActionCandidate(
+      tester,
+      HomeQuickActionIds.thoughtVault,
+    );
+    expect(find.text('事记仓库'), findsOneWidget);
+    expect(find.text('我的勋章'), findsOneWidget);
+    await _scrollToHomeQuickActionCandidate(
+      tester,
+      HomeQuickActionIds.profileReport,
+    );
+    expect(find.text('实验报告'), findsOneWidget);
+    expect(find.text('设置'), findsOneWidget);
+  });
+
+  testWidgets('home quick action editor saves a selected four item set', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+    );
+
+    await tester.tap(find.text('编辑').first);
+    await tester.pumpAndSettle();
+
+    for (final String id in kDefaultHomeQuickActionIds) {
+      await tester.tap(
+        find.byKey(ValueKey<String>('home-quick-action-remove-$id')),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    const List<String> nextIds = <String>[
+      HomeQuickActionIds.thoughtVault,
+      HomeQuickActionIds.profileBadges,
+      HomeQuickActionIds.profileReport,
+      HomeQuickActionIds.profileSettings,
+    ];
+    for (final String id in nextIds) {
+      await _tapHomeQuickActionCandidate(tester, id);
+    }
+
+    await tester.tap(find.text('保存快捷功能'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('事记仓库'), findsOneWidget);
+    expect(find.text('我的勋章'), findsOneWidget);
+    expect(find.text('实验报告'), findsOneWidget);
+    expect(find.text('设置'), findsOneWidget);
+    expect(find.text('梦记一则'), findsNothing);
+  });
+
+  testWidgets('home quick action editor preserves dragged order', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+    );
+
+    await tester.tap(find.text('编辑').first);
+    await tester.pumpAndSettle();
+
+    await tester.timedDrag(
+      find.byKey(
+        ValueKey<String>(
+          'home-quick-action-drag-${HomeQuickActionIds.thoughtClean}',
+        ),
+      ),
+      const Offset(0, -220),
+      const Duration(milliseconds: 350),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('保存快捷功能'));
+    await tester.pumpAndSettle();
+
+    final double thoughtCleanX = tester.getTopLeft(find.text('思绪清理').first).dx;
+    final double dreamJournalX = tester.getTopLeft(find.text('梦记一则').first).dx;
+    expect(thoughtCleanX, lessThan(dreamJournalX));
+  });
 
   testWidgets('night entry from /home opens the welcome flow first', (
     WidgetTester tester,
@@ -559,6 +668,18 @@ void main() {
         find.byKey(const ValueKey<String>('auth-login-phone-0')),
         findsOneWidget,
       );
+      expect(find.text(AppBrand.loginTitle), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('auth-login-logo')),
+        findsOneWidget,
+      );
+      final Image loginLogo = tester.widget<Image>(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('auth-login-logo')),
+          matching: find.byType(Image),
+        ),
+      );
+      expect((loginLogo.image as AssetImage).assetName, AppBrand.logoAssetPath);
       expect(
         find.byKey(const ValueKey<String>('auth-forgot-password')),
         findsOneWidget,
@@ -1369,7 +1490,7 @@ void main() {
       clock: _dayClock,
     );
 
-    expect(find.text('每天都是成长和积极改变的新机会。'), findsOneWidget);
+    expect(find.text('完成今晚心情选择，解锁一句陪伴语'), findsOneWidget);
     expect(find.text('睡眠质量(分)'), findsOneWidget);
     expect(find.text('实验报告'), findsOneWidget);
     expect(find.text('梦记'), findsOneWidget);
@@ -2733,6 +2854,30 @@ Future<void> _pumpApp(
   if (settle) {
     await tester.pumpAndSettle();
   }
+}
+
+Future<void> _scrollToHomeQuickActionCandidate(
+  WidgetTester tester,
+  String id,
+) async {
+  await tester.scrollUntilVisible(
+    find.byKey(ValueKey<String>('home-quick-action-add-$id')),
+    160,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+}
+
+Future<void> _tapHomeQuickActionCandidate(
+  WidgetTester tester,
+  String id,
+) async {
+  await _scrollToHomeQuickActionCandidate(tester, id);
+  await tester.tap(
+    find.byKey(ValueKey<String>('home-quick-action-add-$id')),
+    warnIfMissed: false,
+  );
+  await tester.pumpAndSettle();
 }
 
 Future<void> _pumpUntilFound(

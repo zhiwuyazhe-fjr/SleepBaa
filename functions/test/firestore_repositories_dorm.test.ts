@@ -115,6 +115,31 @@ test("createDorm writes current member displayBadgeId", async () => {
 
   const member = await store.get("dorm_members", `${created.dormId}:${uid}`);
   assert.equal(member?.displayBadgeId, "sleep-master");
+  assert.equal(member?.presenceStatus, "unknown");
+});
+
+test("createDorm marks current member returned when location anchor exists", async () => {
+  const store = new TestDocumentStore();
+  const repo = new FirestoreRepository(store as any, new TestFileStorage());
+  const uid = "owner-with-location";
+
+  await repo.saveUserProfile(uid, {
+    displayName: "Owner",
+  });
+
+  const created = await repo.createDorm(uid, {
+    name: "鏅氬畨 204",
+    locationAnchor: {
+      latitude: 31.2304,
+      longitude: 121.4737,
+      radiusMeters: 100,
+      recordedAt: "2026-04-22T20:00:00.000Z",
+      recordedByUid: uid,
+    },
+  });
+
+  const member = await store.get("dorm_members", `${created.dormId}:${uid}`);
+  assert.equal(member?.presenceStatus, "returned");
 });
 
 test("acceptDormInvite writes joined member displayBadgeId", async () => {
@@ -145,6 +170,42 @@ test("acceptDormInvite writes joined member displayBadgeId", async () => {
     `${created.dormId}:roommate-user`,
   );
   assert.equal(member?.displayBadgeId, "latest-earned");
+  assert.equal(member?.presenceStatus, "unknown");
+});
+
+test("updateDormMemberStatus preserves fields omitted by presence-only updates", async () => {
+  const store = new TestDocumentStore();
+  const repo = new FirestoreRepository(store as any, new TestFileStorage());
+  const uid = "resident-user";
+  const dormId = "dorm-test-204";
+
+  await store.set("dorms", dormId, {
+    id: dormId,
+    name: "鏅氬畨 204",
+  });
+  await repo.saveUserProfile(uid, {
+    displayName: "Resident",
+    dormId,
+  });
+  await store.set("dorm_members", `${dormId}:${uid}`, {
+    dormId,
+    uid,
+    name: "Resident",
+    status: "active",
+    presenceStatus: "away",
+    sleepModeActive: true,
+    note: "Original note",
+    lastActiveAt: "2026-04-22T19:30:00.000Z",
+  });
+
+  const updated = await repo.updateDormMemberStatus(uid, {
+    presenceStatus: "returned",
+  });
+
+  assert.equal(updated.status, "active");
+  assert.equal(updated.presenceStatus, "returned");
+  assert.equal(updated.sleepModeActive, true);
+  assert.equal(updated.note, "Original note");
 });
 
 test("getDorm backfills avatarUrl and displayBadgeId from latest user profile", async () => {

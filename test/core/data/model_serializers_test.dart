@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/data/model_serializers.dart';
@@ -89,6 +90,53 @@ void main() {
       expect(session.sleepGoalMet, isTrue);
       expect(session.deriveSleepGoalMet(7.5), isTrue);
       expect(serialized.containsKey('sleepGoalMet'), isFalse);
+    },
+  );
+
+  test(
+    'user settings serialization preserves assistant motion and quick actions',
+    () {
+      const UserSettings settings = UserSettings(
+        sleepGoalHours: 8,
+        bedtimeReminderEnabled: true,
+        morningReminderEnabled: false,
+        dormAlertsEnabled: true,
+        bedtimeReminder: TimeOfDay(hour: 23, minute: 15),
+        preferredTrackTitle: '深海海浪',
+        smartSuggestionsEnabled: true,
+        homeQuickActionIds: <String>[
+          'dreamJournal',
+          'profileCalendar',
+          'sleepEncyclopedia',
+          'thoughtVault',
+        ],
+        assistantReplyMotionLevel: AssistantReplyMotionLevel.high,
+        selectedNightMood: NightMood.calm,
+      );
+
+      final Map<String, dynamic> serialized =
+          ModelSerializers.userSettingsToMap(settings);
+      final UserSettings restored =
+          ModelSerializers.userSettingsFromMap(serialized);
+
+      expect(serialized['homeQuickActionIds'], <String>[
+        'dreamJournal',
+        'profileCalendar',
+        'sleepEncyclopedia',
+        'thoughtVault',
+      ]);
+      expect(serialized['assistantReplyMotionLevel'], 'high');
+      expect(restored.homeQuickActionIds, <String>[
+        'dreamJournal',
+        'profileCalendar',
+        'sleepEncyclopedia',
+        'thoughtVault',
+      ]);
+      expect(
+        restored.assistantReplyMotionLevel,
+        AssistantReplyMotionLevel.high,
+      );
+      expect(restored.selectedNightMood, NightMood.calm);
     },
   );
 }

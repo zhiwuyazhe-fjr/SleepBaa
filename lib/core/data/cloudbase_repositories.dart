@@ -8,6 +8,7 @@ import 'package:sleep_dorm_app/core/backend/cloudbase_app_api_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_auth_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_session_store.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_snapshot_store.dart';
+import 'package:sleep_dorm_app/core/backend/verified_phone_identity_store.dart';
 import 'package:sleep_dorm_app/core/data/backend_contract.dart';
 import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
 import 'package:sleep_dorm_app/core/data/model_serializers.dart';
@@ -291,14 +292,20 @@ DormMemberStatus _activityStatusFromStorage(Map<String, dynamic> map) {
 
 DormPresenceStatus _presenceStatusFromStorage(Map<String, dynamic> map) {
   final String rawPresence = _stringOf(map['presenceStatus']);
+  if (rawPresence == DormPresenceStatus.returned.name) {
+    return DormPresenceStatus.returned;
+  }
   if (rawPresence == DormPresenceStatus.away.name) {
     return DormPresenceStatus.away;
+  }
+  if (rawPresence == DormPresenceStatus.unknown.name) {
+    return DormPresenceStatus.unknown;
   }
   final String rawStatus = _stringOf(map['status']);
   if (rawStatus == DormMemberStatus.away.name) {
     return DormPresenceStatus.away;
   }
-  return DormPresenceStatus.returned;
+  return DormPresenceStatus.unknown;
 }
 
 bool _sleepModeFromStorage(Map<String, dynamic> map) {
@@ -619,11 +626,14 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     required CloudBaseAppApiClient appApiClient,
     required CloudBaseSessionStore sessionStore,
     required CloudBaseSnapshotStore snapshotStore,
+    VerifiedPhoneIdentityStore? verifiedPhoneStore,
   }) : _environment = environment,
        _authClient = authClient,
        _appApiClient = appApiClient,
        _sessionStore = sessionStore,
-       _snapshotStore = snapshotStore {
+       _snapshotStore = snapshotStore,
+       _verifiedPhoneStore =
+           verifiedPhoneStore ?? VerifiedPhoneIdentityStore() {
     _snapshotStore.addListener(_syncFromSnapshot);
     _currentUser = buildDefaultUserProfile().copyWith(uid: '', dormId: null);
   }
@@ -633,6 +643,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   final CloudBaseAppApiClient _appApiClient;
   final CloudBaseSessionStore _sessionStore;
   final CloudBaseSnapshotStore _snapshotStore;
+  final VerifiedPhoneIdentityStore _verifiedPhoneStore;
 
   late UserProfile _currentUser;
   bool _isAuthenticating = false;
@@ -640,6 +651,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   bool _hasCompletedInitialAuthBootstrap = false;
   String? _lastAuthError;
   DateTime? _lastSuccessfulAuthAt;
+  VerifiedPhoneIdentity? _cachedVerifiedIdentity;
   static const Duration _authRevalidationInterval = Duration(minutes: 5);
 
   @override
@@ -649,9 +661,61 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   bool get isAuthenticated => _currentUser.uid.isNotEmpty;
 
   @override
-  bool get hasVerifiedPhoneIdentity =>
-      _currentUser.uid.isNotEmpty &&
-      (_currentUser.phoneNumber?.trim().isNotEmpty == true);
+  bool get hasVerifiedPhoneIdentity {
+    if (_currentUser.uid.isEmpty) {
+      return false;
+    }
+    if (_currentUser.phoneNumber?.trim().isNotEmpty == true) {
+      return true;
+    }
+    final VerifiedPhoneIdentity? cached = _cachedVerifiedIdentity;
+    return cached != null &&
+        cached.subject == _currentUser.uid &&
+        cached.phoneNumber.trim().isNotEmpty;
+  }
+
+  bool _phoneIdentityResolvableFromLocalProfile() {
+    if (_currentUser.phoneNumber?.trim().isNotEmpty == true) {
+      return true;
+    }
+    final VerifiedPhoneIdentity? cached = _cachedVerifiedIdentity;
+    return cached != null &&
+        cached.subject == _currentUser.uid &&
+        cached.phoneNumber.trim().isNotEmpty;
+  }
+
+  void _mergePhoneFromCachedVerifiedIdentity() {
+    final VerifiedPhoneIdentity? v = _cachedVerifiedIdentity;
+    if (v == null || v.subject != _currentUser.uid) {
+      return;
+    }
+    if (_currentUser.phoneNumber?.trim().isNotEmpty == true) {
+      return;
+    }
+    _currentUser = _currentUser.copyWith(
+      phoneNumber: v.phoneNumber,
+      phoneLinkedAt: v.phoneLinkedAt ?? DateTime.now(),
+    );
+  }
+
+  void _hydrateUserAfterInvalidSession({required String sessionSubject}) {
+    final VerifiedPhoneIdentity? v = _cachedVerifiedIdentity;
+    if (v != null &&
+        v.subject == sessionSubject &&
+        v.phoneNumber.trim().isNotEmpty) {
+      _currentUser = buildDefaultUserProfile().copyWith(
+        uid: v.subject,
+        phoneNumber: v.phoneNumber,
+        phoneLinkedAt: v.phoneLinkedAt ?? DateTime.now(),
+        clearDormId: true,
+      );
+    } else {
+      _currentUser = buildDefaultUserProfile().copyWith(
+        uid: sessionSubject,
+        clearDormId: true,
+      );
+    }
+  }
 
   @override
   bool get isAuthenticating => _isAuthenticating;
@@ -703,7 +767,19 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   }
 
   Future<void> _persistVerifiedPhoneIdentityIfNeeded() async {
-    if (!_appApiClient.isConfigured || !hasVerifiedPhoneIdentity) {
+    if (_currentUser.uid.isEmpty ||
+        _currentUser.phoneNumber?.trim().isEmpty == true) {
+      return;
+    }
+    final VerifiedPhoneIdentity identity = VerifiedPhoneIdentity(
+      subject: _currentUser.uid,
+      phoneNumber: _currentUser.phoneNumber!.trim(),
+      phoneLinkedAt: _currentUser.phoneLinkedAt,
+    );
+    await _verifiedPhoneStore.write(identity);
+    _cachedVerifiedIdentity = identity;
+
+    if (!_appApiClient.isConfigured) {
       return;
     }
     try {
@@ -764,15 +840,29 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     _isAuthenticating = true;
     _lastAuthError = null;
     notifyListeners();
+    CloudBaseSession? readSession;
     try {
       if (!_environment.hasCloudBaseAuthConfig) {
         _lastAuthError =
             'CloudBase \u9274\u6743\u914d\u7f6e\u4e0d\u5b8c\u6574\uff0c\u5f53\u524d\u65e0\u6cd5\u6062\u590d\u767b\u5f55\u72b6\u6001\u3002';
         return _currentUser;
       }
+      _cachedVerifiedIdentity = await _verifiedPhoneStore.read();
       final String restoredDeviceId = await _sessionStore.ensureDeviceId();
-      final CloudBaseSession? readSession = await _sessionStore.readSession();
+      readSession = await _sessionStore.readSession();
       if (readSession == null) {
+        if (_cachedVerifiedIdentity != null) {
+          final VerifiedPhoneIdentity v = _cachedVerifiedIdentity!;
+          _currentUser = buildDefaultUserProfile().copyWith(
+            uid: v.subject,
+            phoneNumber: v.phoneNumber,
+            phoneLinkedAt: v.phoneLinkedAt ?? DateTime.now(),
+            clearDormId: true,
+          );
+          _lastAuthError = _transientAuthWarningMessage();
+          _lastSuccessfulAuthAt = DateTime.now();
+          return _currentUser;
+        }
         return _clearSessionAndReset();
       }
       CloudBaseSession restoredSession = readSession;
@@ -784,10 +874,13 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           );
         } on CloudBaseAuthException catch (error) {
           if (_isSessionInvalidError(error)) {
-            return _clearSessionAndReset(
-              message:
-                  '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
+            await _sessionStore.clearSession();
+            _lastAuthError =
+                '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002';
+            _hydrateUserAfterInvalidSession(
+              sessionSubject: restoredSession.subject,
             );
+            return _currentUser;
           }
           tokenRefreshFailed = true;
           _lastAuthError = _transientAuthWarningMessage();
@@ -803,7 +896,8 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       // /user/me; if it doesn't, _readCurrentCloudBaseUser returns null and
       // we fall back to the session subject only.
       final CloudBaseUserInfo? restoredInfo =
-          !hasVerifiedPhoneIdentity || _currentUser.uid.isEmpty
+          _currentUser.uid.isEmpty ||
+              !_phoneIdentityResolvableFromLocalProfile()
           ? await _readCurrentCloudBaseUser(restoredSession)
           : null;
       if (_currentUser.uid.isEmpty) {
@@ -818,6 +912,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           avatarUrl: restoredInfo?.picture,
           clearDormId: true,
         );
+        _mergePhoneFromCachedVerifiedIdentity();
       } else if ((_currentUser.phoneNumber?.trim().isNotEmpty != true) &&
           restoredInfo?.phoneNumber?.trim().isNotEmpty == true) {
         _currentUser = _currentUser.copyWith(
@@ -825,6 +920,8 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           phoneLinkedAt: DateTime.now(),
           avatarUrl: restoredInfo.picture ?? _currentUser.avatarUrl,
         );
+      } else {
+        _mergePhoneFromCachedVerifiedIdentity();
       }
       if (tokenRefreshFailed) {
         // We hydrated the user from the stored session but the token is
@@ -859,7 +956,13 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           snapshotRefreshed &&
           restoredInfo != null &&
           (restoredInfo.phoneNumber?.trim().isNotEmpty != true);
-      if (serverConfirmedMissingPhone && !hasVerifiedPhoneIdentity) {
+      final bool persistedCoversServerGap =
+          _cachedVerifiedIdentity != null &&
+          _cachedVerifiedIdentity!.subject == restoredSession.subject &&
+          _cachedVerifiedIdentity!.phoneNumber.trim().isNotEmpty;
+      if (serverConfirmedMissingPhone &&
+          !hasVerifiedPhoneIdentity &&
+          !persistedCoversServerGap) {
         return _clearSessionAndReset(
           message:
               '\u5f53\u524d\u767b\u5f55\u72b6\u6001\u7f3a\u5c11\u5df2\u9a8c\u8bc1\u624b\u673a\u53f7\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
@@ -874,6 +977,13 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       return _currentUser;
     } on CloudBaseAuthException catch (error) {
       if (_isSessionInvalidError(error)) {
+        if (readSession != null) {
+          await _sessionStore.clearSession();
+          _lastAuthError =
+              '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002';
+          _hydrateUserAfterInvalidSession(sessionSubject: readSession.subject);
+          return _currentUser;
+        }
         return _clearSessionAndReset(
           message:
               '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
@@ -938,6 +1048,8 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
 
   @override
   Future<void> signOut() async {
+    await _verifiedPhoneStore.clear();
+    _cachedVerifiedIdentity = null;
     await _clearSessionAndReset(clearAll: false);
     notifyListeners();
   }
@@ -1838,6 +1950,7 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
 
   late UserSettings _settings;
   NightMood? _pendingMoodOverride;
+  List<String>? _pendingHomeQuickActionIds;
 
   @override
   UserSettings get currentSettings => _settings;
@@ -1851,8 +1964,14 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
   @override
   Future<void> saveSettings(UserSettings settings) async {
     final NightMood? previousMood = _settings.selectedNightMood;
+    final List<String> previousQuickActionIds = _settings.homeQuickActionIds;
     if (previousMood != settings.selectedNightMood) {
       _pendingMoodOverride = settings.selectedNightMood;
+    }
+    if (!_sameStringList(previousQuickActionIds, settings.homeQuickActionIds)) {
+      _pendingHomeQuickActionIds = normalizeHomeQuickActionIds(
+        settings.homeQuickActionIds,
+      );
     }
     replaceLocalSettings(settings);
     if (!_appApiClient.isConfigured) {
@@ -1889,7 +2008,10 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
       _snapshotStore.payload,
       _authRepository.currentUser.uid,
     );
-    final UserSettings incoming = snapshot.settings;
+    UserSettings incoming = _mergeEveningEncouragementIfServerOmitted(
+      snapshot.settings,
+    );
+    incoming = _mergePendingHomeQuickActionsIfServerOmitted(incoming);
     if (_pendingMoodOverride != null &&
         incoming.selectedNightMood != _pendingMoodOverride &&
         _settings.selectedNightMood == _pendingMoodOverride) {
@@ -1901,6 +2023,56 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
       }
     }
     notifyListeners();
+  }
+
+  /// Remote snapshot may omit `eveningEncouragement*` until the backend persists them;
+  /// keep the last local quote so the profile card does not clear after refresh.
+  UserSettings _mergeEveningEncouragementIfServerOmitted(
+    UserSettings incoming,
+  ) {
+    final String? prevLine = _settings.eveningEncouragementLine;
+    final String? prevKey = _settings.eveningEncouragementPeriodKey;
+    final NightMood? prevSnap = _settings.eveningEncouragementMoodSnapshot;
+    if (prevLine != null &&
+        prevKey != null &&
+        incoming.eveningEncouragementLine == null) {
+      return incoming.copyWith(
+        eveningEncouragementPeriodKey: prevKey,
+        eveningEncouragementLine: prevLine,
+        eveningEncouragementMoodSnapshot: prevSnap,
+      );
+    }
+    return incoming;
+  }
+
+  UserSettings _mergePendingHomeQuickActionsIfServerOmitted(
+    UserSettings incoming,
+  ) {
+    final List<String>? pending = _pendingHomeQuickActionIds;
+    if (pending == null) {
+      return incoming;
+    }
+    if (_sameStringList(incoming.homeQuickActionIds, pending)) {
+      _pendingHomeQuickActionIds = null;
+      return incoming;
+    }
+    if (_sameStringList(_settings.homeQuickActionIds, pending)) {
+      return incoming.copyWith(homeQuickActionIds: pending);
+    }
+    _pendingHomeQuickActionIds = null;
+    return incoming;
+  }
+
+  bool _sameStringList(List<String> first, List<String> second) {
+    if (first.length != second.length) {
+      return false;
+    }
+    for (var index = 0; index < first.length; index += 1) {
+      if (first[index] != second[index]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   @override
@@ -3336,7 +3508,9 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
           uid: _authRepository.currentUser.uid,
           name: _authRepository.currentUser.displayName,
           status: DormMemberStatus.quiet,
-          presenceStatus: DormPresenceStatus.returned,
+          presenceStatus: locationAnchor == null
+              ? DormPresenceStatus.unknown
+              : DormPresenceStatus.returned,
           sleepModeActive: false,
           lastActiveAt: now,
           note:
@@ -3781,7 +3955,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
                 uid: _authRepository.currentUser.uid,
                 name: _authRepository.currentUser.displayName,
                 status: DormMemberStatus.quiet,
-                presenceStatus: DormPresenceStatus.returned,
+                presenceStatus: DormPresenceStatus.unknown,
                 sleepModeActive: false,
                 lastActiveAt: DateTime.now(),
                 note:
