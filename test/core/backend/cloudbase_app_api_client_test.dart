@@ -198,6 +198,187 @@ void main() {
       expect(sessionStore.currentSession?.accessToken, 'fresh-access');
     },
   );
+
+  test(
+    'refreshSession preserves the existing refresh token when omitted',
+    () async {
+      final _SeededSessionStore sessionStore = _SeededSessionStore(
+        session: CloudBaseSession(
+          accessToken: 'stale-access',
+          refreshToken: 'refresh-token',
+          subject: 'cloud-user',
+          expiresAt: DateTime.now().subtract(const Duration(minutes: 5)),
+          deviceId: 'device-1',
+        ),
+      );
+      final http.Client httpClient = MockClient((http.Request request) async {
+        expect(request.url.path, '/auth/v1/token');
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'access_token': 'fresh-access',
+            'sub': 'cloud-user',
+            'expires_in': 7200,
+            'token_type': 'Bearer',
+          }),
+          200,
+        );
+      });
+      final CloudBaseAppApiClient client = CloudBaseAppApiClient(
+        environment: _environment,
+        sessionStore: sessionStore,
+        authClient: CloudBaseAuthClient(
+          environment: _environment,
+          httpClient: httpClient,
+        ),
+        httpClient: httpClient,
+      );
+
+      final CloudBaseSession refreshed = await client.refreshSession(
+        sessionStore.currentSession!,
+        force: true,
+      );
+
+      expect(refreshed.accessToken, 'fresh-access');
+      expect(refreshed.refreshToken, 'refresh-token');
+      expect(sessionStore.currentSession?.refreshToken, 'refresh-token');
+    },
+  );
+
+  test(
+    'post retries once after a legacy app-api auth verification 400',
+    () async {
+      int refreshCalls = 0;
+      int apiCalls = 0;
+      final _SeededSessionStore sessionStore = _SeededSessionStore(
+        session: CloudBaseSession(
+          accessToken: 'stale-access',
+          refreshToken: 'refresh-token',
+          subject: 'cloud-user',
+          expiresAt: DateTime.now().add(const Duration(hours: 1)),
+          deviceId: 'device-1',
+        ),
+      );
+      final http.Client httpClient = MockClient((http.Request request) async {
+        if (request.url.path == '/auth/v1/token') {
+          refreshCalls += 1;
+          return http.Response(
+            jsonEncode(<String, dynamic>{
+              'access_token': 'fresh-access',
+              'refresh_token': 'fresh-refresh',
+              'sub': 'cloud-user',
+              'expires_in': 7200,
+              'token_type': 'Bearer',
+            }),
+            200,
+          );
+        }
+        if (request.url.path == '/api/test') {
+          apiCalls += 1;
+          final String authorization = _authorizationHeader(request);
+          if (apiCalls == 1) {
+            expect(authorization, 'Bearer stale-access');
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'code': 'APP_API_ERROR',
+                'message': 'CloudBase auth verification failed with 401.',
+              }),
+              400,
+            );
+          }
+          expect(authorization, 'Bearer fresh-access');
+          return http.Response(jsonEncode(<String, dynamic>{'ok': true}), 200);
+        }
+        throw StateError('Unexpected path: ${request.url.path}');
+      });
+      final CloudBaseAppApiClient client = CloudBaseAppApiClient(
+        environment: _environment,
+        sessionStore: sessionStore,
+        authClient: CloudBaseAuthClient(
+          environment: _environment,
+          httpClient: httpClient,
+        ),
+        httpClient: httpClient,
+      );
+
+      final Map<String, dynamic> payload = await client.post('/api/test');
+
+      expect(payload['ok'], isTrue);
+      expect(apiCalls, 2);
+      expect(refreshCalls, 1);
+      expect(sessionStore.currentSession?.accessToken, 'fresh-access');
+    },
+  );
+
+  test(
+    'postSse refreshes and retries after an auth failure response',
+    () async {
+      int refreshCalls = 0;
+      int apiCalls = 0;
+      final _SeededSessionStore sessionStore = _SeededSessionStore(
+        session: CloudBaseSession(
+          accessToken: 'stale-access',
+          refreshToken: 'refresh-token',
+          subject: 'cloud-user',
+          expiresAt: DateTime.now().add(const Duration(hours: 1)),
+          deviceId: 'device-1',
+        ),
+      );
+      final http.Client httpClient = MockClient((http.Request request) async {
+        if (request.url.path == '/auth/v1/token') {
+          refreshCalls += 1;
+          return http.Response(
+            jsonEncode(<String, dynamic>{
+              'access_token': 'fresh-access',
+              'refresh_token': 'fresh-refresh',
+              'sub': 'cloud-user',
+              'expires_in': 7200,
+              'token_type': 'Bearer',
+            }),
+            200,
+          );
+        }
+        if (request.url.path == '/api/sse') {
+          apiCalls += 1;
+          final String authorization = _authorizationHeader(request);
+          if (apiCalls == 1) {
+            expect(authorization, 'Bearer stale-access');
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'code': 'UNAUTHENTICATED',
+                'message': 'token invalid',
+              }),
+              401,
+            );
+          }
+          expect(authorization, 'Bearer fresh-access');
+          return http.Response(
+            'event: ready\ndata: ok\n\n',
+            200,
+            headers: <String, String>{'content-type': 'text/event-stream'},
+          );
+        }
+        throw StateError('Unexpected path: ${request.url.path}');
+      });
+      final CloudBaseAppApiClient client = CloudBaseAppApiClient(
+        environment: _environment,
+        sessionStore: sessionStore,
+        authClient: CloudBaseAuthClient(
+          environment: _environment,
+          httpClient: httpClient,
+        ),
+        httpClient: httpClient,
+      );
+
+      final Stream<CloudBaseSseFrame> stream = await client.postSse('/api/sse');
+      final List<CloudBaseSseFrame> frames = await stream.toList();
+
+      expect(frames, hasLength(1));
+      expect(frames.single.event, 'ready');
+      expect(frames.single.data, 'ok');
+      expect(apiCalls, 2);
+      expect(refreshCalls, 1);
+    },
+  );
 }
 
 const AppEnvironment _environment = AppEnvironment(

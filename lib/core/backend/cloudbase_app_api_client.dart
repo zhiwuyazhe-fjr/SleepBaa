@@ -75,17 +75,19 @@ class CloudBaseAppApiClient {
       session: session,
       body: normalizedBody,
     );
+    Map<String, dynamic> payload = _decodeApiPayload(response.body);
 
-    if (response.statusCode == 401 && session.refreshToken.isNotEmpty) {
+    if (_isRefreshableAuthFailure(response.statusCode, payload) &&
+        session.refreshToken.isNotEmpty) {
       session = await _recoverUnauthorizedSession(session);
       response = await _sendJsonPost(
         path,
         session: session,
         body: normalizedBody,
       );
+      payload = _decodeApiPayload(response.body);
     }
 
-    final Map<String, dynamic> payload = _decodeApiPayload(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw CloudBaseAppApiException(
         message:
@@ -112,18 +114,34 @@ class CloudBaseAppApiClient {
       body: normalizedBody,
     );
 
-    if (response.statusCode == 401 && session.refreshToken.isNotEmpty) {
-      session = await _recoverUnauthorizedSession(session);
-      response = await _sendStreamPost(
-        path,
-        session: session,
-        body: normalizedBody,
-      );
-    }
-
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final String bodyText = await response.stream.bytesToString();
       final Map<String, dynamic> payload = _decodeApiPayload(bodyText);
+      if (_isRefreshableAuthFailure(response.statusCode, payload) &&
+          session.refreshToken.isNotEmpty) {
+        session = await _recoverUnauthorizedSession(session);
+        response = await _sendStreamPost(
+          path,
+          session: session,
+          body: normalizedBody,
+        );
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          return _parseSseFrames(response.stream);
+        }
+        final String retryBodyText = await response.stream.bytesToString();
+        final Map<String, dynamic> retryPayload = _decodeApiPayload(
+          retryBodyText,
+        );
+        throw CloudBaseAppApiException(
+          message:
+              retryPayload['message'] as String? ??
+              retryPayload['error'] as String? ??
+              'CloudBase app API SSE request failed.',
+          statusCode: response.statusCode,
+          code: retryPayload['code'] as String?,
+          body: retryPayload,
+        );
+      }
       throw CloudBaseAppApiException(
         message:
             payload['message'] as String? ??
@@ -229,10 +247,20 @@ class CloudBaseAppApiClient {
           refreshToken: existing.refreshToken,
           deviceId: existing.deviceId,
         );
+    final String refreshedAccessToken = refreshed.accessToken.trim();
+    if (refreshedAccessToken.isEmpty) {
+      throw const CloudBaseAuthException(
+        message: 'CloudBase refresh response did not include an access token.',
+      );
+    }
     final CloudBaseSession next = existing.copyWith(
-      accessToken: refreshed.accessToken,
-      refreshToken: refreshed.refreshToken,
-      subject: refreshed.subject,
+      accessToken: refreshedAccessToken,
+      refreshToken: refreshed.refreshToken.trim().isEmpty
+          ? existing.refreshToken
+          : refreshed.refreshToken,
+      subject: refreshed.subject.trim().isEmpty
+          ? existing.subject
+          : refreshed.subject,
       scope: refreshed.scope,
       tokenType: refreshed.tokenType,
       expiresAt: DateTime.now().add(Duration(seconds: refreshed.expiresIn)),
@@ -295,7 +323,12 @@ Map<String, dynamic> _decodeApiPayload(String body) {
   if (body.trim().isEmpty) {
     return <String, dynamic>{};
   }
-  final Object? decoded = jsonDecode(body);
+  late final Object? decoded;
+  try {
+    decoded = jsonDecode(body);
+  } catch (_) {
+    return <String, dynamic>{'message': body};
+  }
   if (decoded is Map<String, dynamic>) {
     return decoded;
   }
@@ -307,6 +340,30 @@ Map<String, dynamic> _decodeApiPayload(String body) {
 
 String _stripLeadingSlash(String value) {
   return value.startsWith('/') ? value.substring(1) : value;
+}
+
+bool _isRefreshableAuthFailure(int statusCode, Map<String, dynamic> payload) {
+  if (statusCode == 401 || statusCode == 403) {
+    return true;
+  }
+  if (statusCode != 400) {
+    return false;
+  }
+  final String details = <String>[
+    payload['code']?.toString() ?? '',
+    payload['message']?.toString() ?? '',
+    payload['error']?.toString() ?? '',
+    payload['error_description']?.toString() ?? '',
+  ].join(' ').toLowerCase();
+  return details.contains('cloudbase auth verification failed') ||
+      details.contains('missing authorization bearer') ||
+      details.contains('unauthenticated') ||
+      details.contains('unauthorized') ||
+      details.contains('invalid token') ||
+      details.contains('token invalid') ||
+      details.contains('token hash not match') ||
+      details.contains('auth token') ||
+      details.contains('invalid bearer');
 }
 
 Map<String, dynamic> _normalizeJsonMap(Map<String, dynamic> value) {
