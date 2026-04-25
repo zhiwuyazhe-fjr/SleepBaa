@@ -356,8 +356,9 @@ test(
           body: JSON.stringify({}),
         });
 
-        assert.equal(bootstrapResponse.status, 400);
+        assert.equal(bootstrapResponse.status, 401);
         const bootstrapPayload = await bootstrapResponse.json();
+        assert.equal(bootstrapPayload.code, "UNAUTHENTICATED");
         assert.equal(
           bootstrapPayload.message,
           "CloudBase auth verification failed with 401.",

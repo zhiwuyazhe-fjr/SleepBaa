@@ -995,6 +995,37 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     );
   }
 
+  Future<CloudBaseSession?> _recoverLatestSessionAfterInvalidRefresh(
+    CloudBaseSession failedSession, {
+    required String fallbackDeviceId,
+  }) async {
+    final CloudBaseSession? latest = await _sessionStore.readSession();
+    if (latest == null) {
+      return null;
+    }
+    final CloudBaseSession candidate = latest.copyWith(
+      deviceId: latest.deviceId.trim().isEmpty
+          ? fallbackDeviceId
+          : latest.deviceId,
+    );
+    if (candidate.accessToken != failedSession.accessToken &&
+        !candidate.isExpired) {
+      return candidate;
+    }
+    if (candidate.refreshToken == failedSession.refreshToken ||
+        candidate.refreshToken.trim().isEmpty) {
+      return null;
+    }
+    try {
+      return await _appApiClient.refreshSession(candidate, force: true);
+    } on CloudBaseAuthException catch (error) {
+      if (_isSessionInvalidError(error)) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
   @override
   bool get isAuthenticating => _isAuthenticating;
 
@@ -1177,13 +1208,23 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           );
         } on CloudBaseAuthException catch (error) {
           if (_isSessionInvalidError(error)) {
-            return _handleInvalidSession(
-              message:
-                  '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
-            );
+            final CloudBaseSession? recoveredSession =
+                await _recoverLatestSessionAfterInvalidRefresh(
+                  restoredSession.copyWith(deviceId: restoredDeviceId),
+                  fallbackDeviceId: restoredDeviceId,
+                );
+            if (recoveredSession == null) {
+              return _handleInvalidSession(
+                message:
+                    '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
+              );
+            }
+            restoredSession = recoveredSession;
           }
-          tokenRefreshFailed = true;
-          _lastAuthError = _transientAuthWarningMessage();
+          if (restoredSession.isExpired) {
+            tokenRefreshFailed = true;
+            _lastAuthError = _transientAuthWarningMessage();
+          }
         } catch (_) {
           tokenRefreshFailed = true;
           _lastAuthError = _transientAuthWarningMessage();
