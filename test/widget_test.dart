@@ -3018,7 +3018,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Activity panel session'), findsOneWidget);
-      await tester.tap(find.text('反馈状态').first);
+      await tester.tap(find.textContaining('反馈状态').first);
       await tester.pumpAndSettle();
 
       expect(find.text('选择反馈状态'), findsOneWidget);
@@ -3028,7 +3028,74 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('选择反馈状态'), findsNothing);
-      expect(find.text('有效'), findsWidgets);
+      expect(find.textContaining('反馈状态：有效'), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    'morning feedback recommendation note opens compact sheet from action row',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.feedbackMorning,
+        clock: _feedbackClock,
+      );
+
+      final AppServices services = AppScope.of(
+        tester.element(find.byType(MorningFeedbackPage)),
+      );
+      final SleepSession targetSession = _buildPendingFeedbackSession(
+        uid: services.authRepository.currentUser.uid,
+        id: 'compact-action-session',
+        startedAt: DateTime(2026, 4, 17, 23, 18),
+        recommendationTitle: 'Compact action session',
+      );
+      await services.sleepSessionRepository.saveSession(targetSession);
+
+      final BuildContext context = tester.element(
+        find.byType(MorningFeedbackPage),
+      );
+      GoRouter.of(
+        context,
+      ).go(AppRoutes.feedbackMorningLocation(sessionId: targetSession.id));
+      await tester.pumpAndSettle();
+
+      final Finder feedbackListView = find
+          .descendant(
+            of: find.byType(MorningFeedbackPage),
+            matching: find.byType(ListView),
+          )
+          .first;
+      await tester.dragUntilVisible(
+        find.text('Compact action session'),
+        feedbackListView,
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+
+      final Finder statusAction = find.textContaining('反馈状态').first;
+      final Finder noteAction = find.text('补充说明').first;
+
+      expect(find.byType(TextField), findsNothing);
+      expect(
+        (tester.getTopLeft(statusAction).dy - tester.getTopLeft(noteAction).dy)
+            .abs(),
+        lessThan(18),
+      );
+
+      await tester.tap(noteAction);
+      await tester.pumpAndSettle();
+
+      expect(find.text('保存说明'), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), '昨晚这条建议实际有帮助');
+      await tester.tap(find.text('保存说明'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('保存说明'), findsNothing);
+      expect(find.byType(TextField), findsNothing);
+      expect(find.text('已填写说明'), findsOneWidget);
     },
   );
 
@@ -3079,7 +3146,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('反馈状态'), findsOneWidget);
+    expect(find.textContaining('反馈状态：'), findsOneWidget);
     expect(find.text('提交反馈'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

@@ -43,7 +43,6 @@ class MorningFeedbackPage extends StatefulWidget {
 }
 
 class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
-  final TextEditingController _noteController = TextEditingController();
   final Map<String, RecommendationFeedbackStatus> _statuses =
       <String, RecommendationFeedbackStatus>{};
   final Map<String, TextEditingController> _feedbackNotes =
@@ -57,7 +56,6 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
 
   @override
   void dispose() {
-    _noteController.dispose();
     for (final TextEditingController controller in _feedbackNotes.values) {
       controller.dispose();
     }
@@ -148,27 +146,61 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
               ),
               children: <Widget>[
                 AppCard(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  borderRadius: AppRadius.compactCard,
+                  border: Border.all(color: AppColors.surfaceBorder),
+                  boxShadow: const <BoxShadow>[],
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(
-                        '昨晚的整体感受',
-                        style: Theme.of(context).textTheme.titleLarge,
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.xxs,
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            '睡眠摘要',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          Text(
+                            '${_formatDateLabel(startAt)} ${_formatClock(startAt)} - '
+                            '${_formatDateLabel(endAt)} ${_formatClock(endAt)}',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: AppColors.textSecondary),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: AppSpacing.md),
-                      _MetricSummary(
-                        label: '总记录时长',
-                        primaryValue: _formatDurationMinutes(
-                          totalRecordMinutes,
-                        ),
-                        detail: _formatFeedbackWindowLabel(
-                          startAt,
-                          endAt,
-                          totalRecordMinutes,
-                        ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: _MetricSummaryTile(
+                              label: '睡眠质量',
+                              value: '$_sleepQuality / 5',
+                              palette: palette,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Expanded(
+                            child: _MetricSummaryTile(
+                              label: '恢复感',
+                              value: '$_restedLevel / 5',
+                              palette: palette,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      _MetricSummaryTile(
+                        label: '实际睡眠时长',
+                        value: _formatDurationMinutes(actualSleepMinutes),
                         palette: palette,
+                        detail:
+                            '记录 ${_formatDurationMinutes(totalRecordMinutes)}，扣除预计入睡时长后自动计算',
                       ),
-                      const SizedBox(height: AppSpacing.md),
+                      const SizedBox(height: AppSpacing.sm),
                       _MetricSlider(
                         label: '预计入睡时长',
                         value: _estimatedSleepLatency.toDouble(),
@@ -182,14 +214,6 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                             () => _estimatedSleepLatency = value.round(),
                           );
                         },
-                      ),
-                      _MetricSummary(
-                        label: '实际睡眠时长',
-                        primaryValue: _formatDurationMinutes(
-                          actualSleepMinutes,
-                        ),
-                        detail: '按总记录时长减去预计入睡时长自动推算得到',
-                        palette: palette,
                       ),
                       _MetricSlider(
                         label: '睡眠质量',
@@ -215,25 +239,30 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                           setState(() => _restedLevel = value.round());
                         },
                       ),
-                      TextField(
-                        controller: _noteController,
-                        minLines: 2,
-                        maxLines: 4,
-                        decoration: const InputDecoration(
-                          labelText: '补充说明',
-                          hintText: '比如：几点入睡、是否中途被吵醒、整体精神状态如何',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                Text(
-                  '逐条反馈昨晚建议',
-                  style: Theme.of(context).textTheme.titleLarge,
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        '逐条反馈建议',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${session.recommendations.length} 条',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.sm),
                 ...session.recommendations.map((
                   NightRecommendation recommendation,
                 ) {
@@ -245,107 +274,67 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                   final RecommendationFeedbackStatus current =
                       _statuses[recommendation.id] ??
                       RecommendationFeedbackStatus.neutral;
+                  final bool hasNote = noteController.text.trim().isNotEmpty;
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                     child: AppCard(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      borderRadius: AppRadius.compactCard,
+                      border: Border.all(color: AppColors.surfaceBorder),
+                      boxShadow: const <BoxShadow>[],
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
                             recommendation.title,
-                            style: Theme.of(context).textTheme.titleLarge,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
-                          const SizedBox(height: AppSpacing.xs),
+                          const SizedBox(height: AppSpacing.xxs),
                           Text(
                             recommendation.subtitle,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: AppColors.textSecondary),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: AppColors.textSecondary,
+                                  height: 1.35,
+                                ),
                           ),
-                          const SizedBox(height: AppSpacing.md),
-                          InkWell(
-                            borderRadius: AppRadius.surfaceSecondary,
-                            onTap: () async {
-                              final RecommendationFeedbackStatus? selected =
-                                  await _showRecommendationStatusSheet(
-                                    context,
-                                    current: current,
-                                  );
-                              if (selected == null || !mounted) {
-                                return;
-                              }
-                              setState(
-                                () => _statuses[recommendation.id] = selected,
-                              );
-                            },
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.md,
-                                vertical: AppSpacing.sm,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Theme.of(
+                          const SizedBox(height: AppSpacing.sm),
+                          Wrap(
+                            spacing: AppSpacing.xs,
+                            runSpacing: AppSpacing.xs,
+                            children: <Widget>[
+                              _CompactActionPill(
+                                icon: hasNote
+                                    ? Icons.edit_note_rounded
+                                    : Icons.add_rounded,
+                                label: hasNote ? '已填写说明' : '补充说明',
+                                onTap: () => _showRecommendationNoteSheet(
                                   context,
-                                ).colorScheme.surfaceContainerHighest,
-                                borderRadius: AppRadius.surfaceSecondary,
-                                border: Border.all(
-                                  color: Theme.of(context).dividerColor,
+                                  controller: noteController,
                                 ),
                               ),
-                              child: Row(
-                                children: <Widget>[
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: <Widget>[
-                                        Text(
-                                          '反馈状态',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .labelSmall
-                                              ?.copyWith(
-                                                color: AppColors.textSecondary,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                        ),
-                                        const SizedBox(height: AppSpacing.xxs),
-                                        Text(
-                                          _feedbackLabel(current),
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: AppSpacing.sm),
-                                  Text(
-                                    '点击选择',
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(
-                                          color: AppColors.textSecondary,
-                                        ),
-                                  ),
-                                  const SizedBox(width: AppSpacing.xxs),
-                                  const Icon(
-                                    Icons.keyboard_arrow_down_rounded,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ],
+                              _CompactActionPill(
+                                label: '反馈状态：${_feedbackLabel(current)} ▾',
+                                highlight:
+                                    current ==
+                                    RecommendationFeedbackStatus.effective,
+                                onTap: () async {
+                                  final RecommendationFeedbackStatus? selected =
+                                      await _showRecommendationStatusSheet(
+                                        context,
+                                        current: current,
+                                      );
+                                  if (selected == null || !mounted) {
+                                    return;
+                                  }
+                                  setState(
+                                    () =>
+                                        _statuses[recommendation.id] = selected,
+                                  );
+                                },
                               ),
-                            ),
-                          ),
-                           const SizedBox(height: AppSpacing.sm),
-                           TextField(
-                             controller: noteController,
-                             decoration: const InputDecoration(
-                              labelText: '这条建议的补充感受',
-                              border: OutlineInputBorder(),
-                            ),
+                            ],
                           ),
                         ],
                       ),
@@ -354,6 +343,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                 }),
                 PrimaryButton(
                   label: '提交反馈',
+                  size: PrimaryButtonSize.compact,
                   onPressed: () async {
                     if (_isSubmittingFeedback) {
                       return;
@@ -382,7 +372,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                               restedLevel: _restedLevel,
                               totalSleepHours: actualSleepHours,
                               awakeningsCount: session.awakenings.length,
-                              note: _noteController.text.trim(),
+                              note: '',
                             ),
                             feedback: feedback,
                           );
@@ -424,7 +414,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
   }
 
   void _triggerReturnToSleep() {
-    if (!mounted) {
+    if (!context.mounted) {
       return;
     }
     unawaited(_handleReturnToSleep(context));
@@ -469,7 +459,6 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
       return;
     }
     _boundSessionId = session.id;
-    _noteController.clear();
     _statuses.clear();
     for (final TextEditingController controller in _feedbackNotes.values) {
       controller.dispose();
@@ -534,6 +523,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
     BuildContext context, {
     required RecommendationFeedbackStatus current,
   }) {
+    FocusScope.of(context).unfocus();
     return showModalBottomSheet<RecommendationFeedbackStatus>(
       context: context,
       useSafeArea: true,
@@ -581,6 +571,73 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
         );
       },
     );
+  }
+
+  Future<void> _showRecommendationNoteSheet(
+    BuildContext context, {
+    required TextEditingController controller,
+  }) async {
+    FocusScope.of(context).unfocus();
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (BuildContext sheetContext) {
+        final ThemeData theme = Theme.of(sheetContext);
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+          ),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.sm,
+                AppSpacing.lg,
+                AppSpacing.xl,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('补充说明', style: theme.textTheme.titleLarge),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '用于备注这一条建议的实际体验。关闭抽屉时释放焦点。',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextField(
+                    controller: controller,
+                    minLines: 3,
+                    maxLines: 5,
+                    decoration: const InputDecoration(
+                      hintText: '比如：昨晚实际执行时遇到的情况...',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  PrimaryButton(
+                    label: '保存说明',
+                    size: PrimaryButtonSize.compact,
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    if (!context.mounted) {
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() {});
   }
 
   String _feedbackLabel(RecommendationFeedbackStatus status) {
@@ -635,16 +692,6 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
     }
     final DateTime fallback = session.displayStartAt;
     return fallback.isBefore(cutoffStart) ? cutoffStart : fallback;
-  }
-
-  String _formatFeedbackWindowLabel(
-    DateTime start,
-    DateTime end,
-    int totalRecordMinutes,
-  ) {
-    return '${_formatDateLabel(start)} ${_formatClock(start)} - '
-        '${_formatDateLabel(end)} ${_formatClock(end)} '
-        '累计${_formatDurationMinutes(totalRecordMinutes)}';
   }
 
   String _formatDateLabel(DateTime dateTime) {
@@ -745,7 +792,10 @@ class _MetricSlider extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Expanded(
-              child: Text(label, style: Theme.of(context).textTheme.titleMedium),
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
             ),
             const SizedBox(width: AppSpacing.sm),
             Flexible(
@@ -761,9 +811,12 @@ class _MetricSlider extends StatelessWidget {
         ),
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
-            disabledActiveTrackColor: palette.primary,
-            disabledInactiveTrackColor: AppColors.surfaceBorder,
-            disabledThumbColor: palette.primary,
+            activeTrackColor: palette.primarySoft,
+            inactiveTrackColor: AppColors.surfaceSoft,
+            overlayShape: SliderComponentShape.noOverlay,
+            thumbColor: palette.primary,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+            trackHeight: 4,
           ),
           child: Slider(
             value: value,
@@ -779,52 +832,121 @@ class _MetricSlider extends StatelessWidget {
   }
 }
 
-class _MetricSummary extends StatelessWidget {
-  const _MetricSummary({
+class _MetricSummaryTile extends StatelessWidget {
+  const _MetricSummaryTile({
     required this.label,
-    required this.primaryValue,
-    required this.detail,
+    required this.value,
     required this.palette,
+    this.detail,
   });
 
   final String label;
-  final String primaryValue;
-  final String detail;
+  final String value;
   final NightMoodPalette palette;
+  final String? detail;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: AppRadius.surfaceSecondary,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Expanded(
-                child: Text(label, style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: palette.primaryDeep,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (detail != null) ...<Widget>[
+            const SizedBox(height: AppSpacing.xxs),
+            Text(
+              detail!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+                height: 1.35,
               ),
-              const SizedBox(width: AppSpacing.sm),
-              Flexible(
-                child: Text(
-                  primaryValue,
-                  textAlign: TextAlign.end,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(color: palette.primary),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactActionPill extends StatelessWidget {
+  const _CompactActionPill({
+    required this.label,
+    required this.onTap,
+    this.icon,
+    this.highlight = false,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final IconData? icon;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final NightMoodPalette palette = context.nightMoodPalette;
+    final Color background = highlight
+        ? palette.primaryHighlight
+        : AppColors.surfaceMuted;
+    final Color foreground = highlight
+        ? palette.primaryDeep
+        : AppColors.textPrimary;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: AppRadius.surfaceSecondary,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xs,
+          ),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: AppRadius.surfaceSecondary,
+            border: Border.all(
+              color: highlight ? palette.primarySoft : AppColors.surfaceBorder,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (icon != null) ...<Widget>[
+                Icon(icon, size: 14, color: AppColors.textSecondary),
+                const SizedBox(width: AppSpacing.xxs),
+              ],
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: foreground,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            detail,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-          ),
-        ],
+        ),
       ),
     );
   }
