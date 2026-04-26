@@ -108,13 +108,21 @@ class AssistantConversationController extends ChangeNotifier {
   Future<AssistantConversationSubmitResult> submitCapturePrompt({
     required String prompt,
     required SleepCaptureType captureType,
+    String? preferredSessionId,
+    bool allowSessionRepair = false,
   }) async {
     final String normalizedPrompt = prompt.trim();
     if (normalizedPrompt.isEmpty) {
       return AssistantConversationSubmitResult.empty;
     }
 
-    final String? activeSessionId = _sleepSessionRepository.activeSession?.id;
+    final SleepSession? activeSleepModeSession = _resolveActiveSleepModeSession(
+      preferredSessionId: preferredSessionId,
+    );
+    final String? activeSessionId =
+        activeSleepModeSession?.id ??
+        _normalizedSessionId(preferredSessionId) ??
+        await _repairSleepModeSessionIdIfAllowed(allowSessionRepair);
     if (activeSessionId == null || activeSessionId.isEmpty) {
       return AssistantConversationSubmitResult.missingActiveSession;
     }
@@ -136,6 +144,62 @@ class AssistantConversationController extends ChangeNotifier {
       ),
     );
     return AssistantConversationSubmitResult.sent;
+  }
+
+  SleepSession? _resolveActiveSleepModeSession({String? preferredSessionId}) {
+    final String? normalizedPreferredSessionId = _normalizedSessionId(
+      preferredSessionId,
+    );
+    final SleepSession? activeSession = _sleepSessionRepository.activeSession;
+    if (_canCaptureIntoSleepModeSession(
+      activeSession,
+      preferredSessionId: normalizedPreferredSessionId,
+    )) {
+      return activeSession;
+    }
+
+    for (final SleepSession session
+        in _sleepSessionRepository.sessions.reversed) {
+      if (_canCaptureIntoSleepModeSession(
+        session,
+        preferredSessionId: normalizedPreferredSessionId,
+      )) {
+        return session;
+      }
+    }
+    return null;
+  }
+
+  bool _canCaptureIntoSleepModeSession(
+    SleepSession? session, {
+    String? preferredSessionId,
+  }) {
+    if (session == null) {
+      return false;
+    }
+    if (preferredSessionId != null && session.id != preferredSessionId) {
+      return false;
+    }
+    return session.status == SleepSessionStatus.active &&
+        session.sleepModeActive &&
+        session.endedAt == null;
+  }
+
+  String? _normalizedSessionId(String? sessionId) {
+    final String normalized = sessionId?.trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  Future<String?> _repairSleepModeSessionIdIfAllowed(bool allowRepair) async {
+    if (!allowRepair) {
+      return null;
+    }
+    final SleepSession repaired = await _sleepSessionRepository
+        .startOrResumeSleepSession(
+          recommendationSnapshot: const <NightRecommendation>[],
+          dormId: _dormRepository.currentDorm.id,
+        );
+    return repaired.id.trim().isEmpty ? null : repaired.id;
   }
 
   Future<AssistantConversationSubmitResult> retryLatestPrompt({

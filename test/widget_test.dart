@@ -587,6 +587,29 @@ void main() {
     expect(submitButton.onPressed, isNotNull);
   });
 
+  testWidgets('sleep capture assistant switches dream and memo guidance', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: '${AppRoutes.assistant}?flow=sleep_capture&mode=dream',
+      clock: _dayClock,
+      settle: false,
+    );
+    await _pumpAssistantSurface(tester);
+
+    expect(find.text('把梦先轻轻记下来'), findsOneWidget);
+    expect(find.text('会保存到“我的 / 梦境记录”。'), findsOneWidget);
+    expect(find.text('例如：我梦见自己站在很高的桥上...'), findsOneWidget);
+
+    await tester.tap(find.text('事记'));
+    await tester.pump(const Duration(milliseconds: 240));
+
+    expect(find.text('把事也先安放下来'), findsOneWidget);
+    expect(find.textContaining('会保存到“我的 / 事记仓库”'), findsOneWidget);
+    expect(find.textContaining('例如：明早要给导师发材料'), findsOneWidget);
+  });
+
   testWidgets(
     'cloudbase auth gate renders phone auth page without overlay errors',
     (WidgetTester tester) async {
