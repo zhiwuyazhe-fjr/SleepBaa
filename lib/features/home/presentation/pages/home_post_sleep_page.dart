@@ -15,6 +15,7 @@ import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/core/widgets/status_chip.dart';
+import 'package:sleep_dorm_app/features/assistant/presentation/pages/assistant_page.dart';
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.dart';
 
 enum _SleepExitAction { back, pause, finish }
@@ -171,7 +172,11 @@ class HomePostSleepPage extends StatelessWidget {
                             subtitle: '进入 AI 助手记录梦境或临时想到的事',
                             icon: Icons.edit_note_rounded,
                             onTap: () => context.push(
-                              '${AppRoutes.assistant}?flow=sleep_capture&mode=dream',
+                              AppRoutes.assistantSleepCaptureLocation(
+                                mode: AssistantCaptureTab.dream,
+                                sessionId: session?.id,
+                                allowSessionRepair: true,
+                              ),
                             ),
                           ),
                           SupportToolCard(

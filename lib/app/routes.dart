@@ -113,6 +113,23 @@ abstract final class AppRoutes {
     ).toString();
   }
 
+  static String assistantSleepCaptureLocation({
+    required AssistantCaptureTab mode,
+    String? sessionId,
+    bool allowSessionRepair = false,
+  }) {
+    final String normalizedSessionId = sessionId?.trim() ?? '';
+    return Uri(
+      path: assistant,
+      queryParameters: <String, String>{
+        'flow': 'sleep_capture',
+        'mode': mode == AssistantCaptureTab.memo ? 'memo' : 'dream',
+        if (normalizedSessionId.isNotEmpty) 'sessionId': normalizedSessionId,
+        if (allowSessionRepair) 'repairSession': '1',
+      },
+    ).toString();
+  }
+
   static bool isFeedbackMorningRoute(String route) {
     final Uri? parsed = Uri.tryParse(route);
     return (parsed?.path ?? route) == feedbackMorning;
@@ -400,6 +417,9 @@ GoRouter createRouter({
           return AssistantPage(
             captureModeEnabled: captureModeEnabled,
             initialCaptureTab: initialTab,
+            captureSessionId: state.uri.queryParameters['sessionId'],
+            allowCaptureSessionRepair:
+                state.uri.queryParameters['repairSession'] == '1',
           );
         },
       ),
