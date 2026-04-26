@@ -369,7 +369,10 @@ class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
     required String verificationId,
     required String code,
   }) async {
-    if (verificationId != 'local-verification-id' || code.trim() != '123456') {
+    final bool hasKnownVerificationId =
+        verificationId == 'local-verification-id' ||
+        verificationId == 'verification-id';
+    if (!hasKnownVerificationId || code.trim() != '123456') {
       throw const AuthFlowException('验证码不正确，请重新输入。');
     }
     return const PhoneVerificationProof(
@@ -550,6 +553,14 @@ class InMemoryRecommendationRepository extends ChangeNotifier
   @override
   List<NightRecommendation> get tonightRecommendations =>
       List<NightRecommendation>.unmodifiable(_tonightRecommendations);
+
+  @override
+  List<AudioTrack> get audioCatalog => List<AudioTrack>.unmodifiable(
+    _tonightRecommendations
+        .where((NightRecommendation item) => item.track != null)
+        .map((NightRecommendation item) => item.track!)
+        .toList(growable: false),
+  );
 
   @override
   Future<void> resetForTonight() async {

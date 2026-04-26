@@ -150,6 +150,11 @@ class CloudBaseAuthClient {
   final AppEnvironment _environment;
   final http.Client _httpClient;
 
+  Duration get _requestTimeout =>
+      _environment.target == AppBackendTarget.emulator
+      ? const Duration(seconds: 2)
+      : const Duration(seconds: 12);
+
   Future<CloudBaseAuthTokenResponse> signInAnonymously({
     required String deviceId,
   }) async {
@@ -267,10 +272,7 @@ class CloudBaseAuthClient {
     );
     final List<Map<String, dynamic>> attempts = <Map<String, dynamic>>[
       <String, dynamic>{'username': username, 'password': password},
-      <String, dynamic>{
-        'username': legacyDigitsUsername,
-        'password': password,
-      },
+      <String, dynamic>{'username': legacyDigitsUsername, 'password': password},
       <String, dynamic>{
         'username': normalizedPhoneNumber.replaceAll(' ', ''),
         'password': password,
@@ -490,13 +492,17 @@ class CloudBaseAuthClient {
     late final http.Response response;
     switch (method) {
       case 'GET':
-        response = await _httpClient.get(uri, headers: headers);
+        response = await _httpClient
+            .get(uri, headers: headers)
+            .timeout(_requestTimeout);
       case 'POST':
-        response = await _httpClient.post(
-          uri,
-          headers: headers,
-          body: jsonEncode(body ?? const <String, dynamic>{}),
-        );
+        response = await _httpClient
+            .post(
+              uri,
+              headers: headers,
+              body: jsonEncode(body ?? const <String, dynamic>{}),
+            )
+            .timeout(_requestTimeout);
       default:
         throw CloudBaseAuthException(
           message: 'Unsupported auth method: $method',

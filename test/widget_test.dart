@@ -2243,7 +2243,12 @@ void main() {
     await services.sleepSessionRepository.saveSession(targetSession);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('${targetSession.sleepDayDate.day}').first);
+    final Finder targetDayFinder = find
+        .text('${targetSession.sleepDayDate.day}')
+        .first;
+    await tester.ensureVisible(targetDayFinder);
+    await tester.pumpAndSettle();
+    await tester.tap(targetDayFinder);
     await tester.pumpAndSettle();
 
     expect(find.byType(MorningFeedbackPage), findsOneWidget);

@@ -113,6 +113,15 @@ function createFakeRepo(context: AssistantContext) {
   }> = [];
   const threadSummaries: Array<Record<string, unknown>> = [];
   const memoryItems: Array<Record<string, unknown>> = [];
+  const renamedThreads: Array<{
+    uid: string;
+    threadId: string;
+    title: string;
+  }> = [];
+  const dreamEntries = new Map<string, Record<string, unknown>>();
+  const threadTitles = new Map<string, string>([
+    ["thread-1", "今晚睡前聊聊"],
+  ]);
   const contextBuildCalls: Array<{
     uid: string;
     threadId?: string;
@@ -143,8 +152,20 @@ function createFakeRepo(context: AssistantContext) {
       ) => {
         assistantRuns.push({ uid, runId, run });
       },
-      setDreamAnalysis: async (entryId: string, analysis: DreamAnalysis) => {
+      getDreamEntry: async (entryId: string) => dreamEntries.get(entryId) ?? null,
+      setDreamAnalysis: async (
+        entryId: string,
+        analysis: DreamAnalysis,
+        sourceBodyHash?: string,
+      ) => {
         dreamAnalyses.push({ entryId, analysis });
+        dreamEntries.set(entryId, {
+          id: entryId,
+          ai: {
+            ...analysis,
+            sourceBodyHash,
+          },
+        });
       },
       upsertNotification: async (
         uid: string,
@@ -167,6 +188,26 @@ function createFakeRepo(context: AssistantContext) {
       },
       isAssistantThreadCommittedTurn: async (params: { turnId: string }) =>
         params.turnId === committedTurnId,
+      getAssistantThread: async (uid: string, threadId: string) => ({
+        id: threadId,
+        userId: uid,
+        title: threadTitles.get(threadId) ?? "今晚睡前聊聊",
+      }),
+      renameAssistantThread: async (
+        uid: string,
+        threadId: string,
+        title: string,
+      ) => {
+        renamedThreads.push({ uid, threadId, title });
+        threadTitles.set(threadId, title);
+        return {
+          id: threadId,
+          userId: uid,
+          title,
+          createdAt: "2026-04-06T10:00:00.000Z",
+          updatedAt: "2026-04-06T10:01:00.000Z",
+        };
+      },
     },
     userStates,
     cardSnapshots,
@@ -175,6 +216,9 @@ function createFakeRepo(context: AssistantContext) {
     notifications,
     threadSummaries,
     memoryItems,
+    renamedThreads,
+    dreamEntries,
+    threadTitles,
     contextBuildCalls,
     setCommittedTurnId: (next: string) => {
       committedTurnId = next;
@@ -220,6 +264,40 @@ test("assistantReply refreshes state and records the run", async () => {
   assert.equal(fake.assistantRuns.length, 1);
   assert.equal(fake.assistantRuns[0]?.run.sourceMode, "fallbackSuccess");
   assert.equal(fake.threadSummaries.length, 1);
+});
+
+test("assistantReply auto titles default threads without emoji", async () => {
+  const context = buildContext();
+  const fake = createFakeRepo(context);
+  const provider = new DeterministicAIProvider();
+
+  await handleAssistantReply(
+    fake.repo as never,
+    provider,
+    "user-1",
+    "宿舍灯太亮，睡不着",
+    "thread-1",
+  );
+
+  assert.equal(fake.renamedThreads.length, 1);
+  assert.equal(fake.renamedThreads[0]?.title, "宿舍灯太亮");
+});
+
+test("assistantReply keeps custom thread titles", async () => {
+  const context = buildContext();
+  const fake = createFakeRepo(context);
+  fake.threadTitles.set("thread-1", "我的睡眠计划");
+  const provider = new DeterministicAIProvider();
+
+  await handleAssistantReply(
+    fake.repo as never,
+    provider,
+    "user-1",
+    "宿舍灯太亮，睡不着",
+    "thread-1",
+  );
+
+  assert.equal(fake.renamedThreads.length, 0);
 });
 
 test("assistantReply greeting still uses reply lite context and skips insight", async () => {
@@ -393,4 +471,27 @@ test("dream entry change persists ai analysis and updates cards", async () => {
   assert.equal(analysis.dominantEmotion, "不安");
   assert.equal(fake.dreamAnalyses.length, 1);
   assert.ok(fake.cardSnapshots.length >= 2);
+});
+
+test("dream entry change skips analysis when body hash is already current", async () => {
+  const context = buildContext();
+  const fake = createFakeRepo(context);
+  const provider = new DeterministicAIProvider();
+
+  await handleDreamEntryChange(
+    fake.repo as never,
+    provider,
+    "user-1",
+    "dream-2",
+    "I kept running late to an exam.",
+  );
+  await handleDreamEntryChange(
+    fake.repo as never,
+    provider,
+    "user-1",
+    "dream-2",
+    "I kept running late to an exam.",
+  );
+
+  assert.equal(fake.dreamAnalyses.length, 1);
 });

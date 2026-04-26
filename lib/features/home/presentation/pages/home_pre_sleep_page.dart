@@ -122,6 +122,9 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
               services.interferenceProbeController.currentState;
           final List<HomeQuickActionDefinition> quickActions =
               homeQuickActionDefinitionsFor(settings.homeQuickActionIds);
+          final AudioTrack? currentAudioTrack =
+              services.audioPlaybackController.currentTrack;
+          final bool hasStartedAudio = currentAudioTrack != null;
           final int unread = services.notificationRepository
               .unreadNotifications()
               .length;
@@ -371,7 +374,23 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                 ),
                                 child: HomeActionCard(
                                   recommendation: recommendation,
+                                  displayTitle:
+                                      recommendation.type ==
+                                              RecommendationType.audio &&
+                                          hasStartedAudio
+                                      ? currentAudioTrack.title
+                                      : null,
+                                  showAudioTransport:
+                                      recommendation.type ==
+                                          RecommendationType.audio &&
+                                      recommendation.executionState ==
+                                          RecommendationExecutionState.playing,
                                   onTap: () async {
+                                    if (recommendation.type ==
+                                        RecommendationType.audio) {
+                                      context.push(AppRoutes.sleepAudioCatalog);
+                                      return;
+                                    }
                                     if (recommendation.id == 'thought-clean') {
                                       context.push(
                                         '${AppRoutes.assistant}?flow=sleep_capture&mode=memo',
@@ -382,6 +401,25 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                         .handleRecommendationTap(
                                           recommendation,
                                         );
+                                  },
+                                  onPlayToggle:
+                                      recommendation.type ==
+                                          RecommendationType.audio
+                                      ? () async {
+                                          await services
+                                              .sleepExperienceController
+                                              .handleRecommendationTap(
+                                                recommendation,
+                                              );
+                                        }
+                                      : null,
+                                  onPreviousAudio: () async {
+                                    await services.sleepExperienceController
+                                        .playPreviousAudio();
+                                  },
+                                  onNextAudio: () async {
+                                    await services.sleepExperienceController
+                                        .playNextAudio();
                                   },
                                 ),
                               ),

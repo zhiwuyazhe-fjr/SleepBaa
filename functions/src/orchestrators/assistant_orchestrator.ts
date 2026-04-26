@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   AIProvider,
   AIProviderSourceMode,
@@ -30,6 +30,95 @@ import {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+type JsonMap = Record<string, unknown>;
+
+function asMap(value: unknown): JsonMap {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? ({ ...(value as JsonMap) } as JsonMap)
+    : {};
+}
+
+function asString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => String(item));
+}
+
+function sourceBodyHash(body: string): string {
+  return createHash("sha256").update(body.trim(), "utf8").digest("hex");
+}
+
+function dreamAnalysisFromAi(value: unknown): DreamAnalysis | null {
+  const ai = asMap(value);
+  const summary = asString(ai.summary).trim();
+  const dominantEmotion = asString(ai.dominantEmotion).trim();
+  const suggestedFocus = asString(ai.suggestedFocus).trim();
+  if (!summary || !dominantEmotion || !suggestedFocus) {
+    return null;
+  }
+  return {
+    summary,
+    dominantEmotion,
+    suggestedFocus,
+    sourceRefs: asStringArray(ai.sourceRefs),
+  };
+}
+
+const AUTO_TITLE_DEFAULTS = new Set<string>([
+  "新对话",
+  "新建对话",
+  "新的助眠对话",
+  "新的睡前陪伴对话",
+  "今晚睡前聊聊",
+  "梦记收纳",
+  "事记收纳",
+]);
+
+function shouldAutoTitleThread(title: string): boolean {
+  const normalized = title.trim();
+  return normalized.length === 0 || AUTO_TITLE_DEFAULTS.has(normalized);
+}
+
+async function maybeAutoTitleAssistantThread(params: {
+  repo: AssistantDataRepository;
+  provider: AIProvider;
+  uid: string;
+  threadId: string;
+  context: AssistantContext;
+  prompt: string;
+  reply: string;
+}): Promise<string | null> {
+  try {
+    const thread = await params.repo.getAssistantThread(
+      params.uid,
+      params.threadId,
+    );
+    if (!thread || !shouldAutoTitleThread(asString(thread.title))) {
+      return null;
+    }
+    const titleResult = await params.provider.generateConversationTitle(
+      params.context,
+      {
+        prompt: params.prompt,
+        reply: params.reply,
+      },
+    );
+    const title = titleResult.value.trim();
+    if (!title || title === asString(thread.title).trim()) {
+      return null;
+    }
+    await params.repo.renameAssistantThread(params.uid, params.threadId, title);
+    return title;
+  } catch {
+    return null;
+  }
 }
 
 function buildEmptyUserState(): UserStateDoc {
@@ -634,6 +723,15 @@ export async function finalizeAssistantReplyPostprocess(params: {
     params.phase.reply,
   );
   await params.repo.writeAssistantThreadSummary(params.uid, threadSummary);
+  await maybeAutoTitleAssistantThread({
+    repo: params.repo,
+    provider: params.provider,
+    uid: params.uid,
+    threadId: params.phase.threadId,
+    context: params.phase.replyContext,
+    prompt: params.phase.prompt,
+    reply: params.phase.reply,
+  });
 
   const statePatch = buildAssistantUserStatePatch({
     threadId: params.phase.threadId,
@@ -971,6 +1069,15 @@ async function buildReplyOutcome(params: {
         replyResult.value,
       ),
     );
+    await maybeAutoTitleAssistantThread({
+      repo: params.repo,
+      provider: params.provider,
+      uid: params.uid,
+      threadId: params.threadId,
+      context: replyContext,
+      prompt: params.prompt,
+      reply: replyResult.value,
+    });
     await persistRun(params.repo, params.uid, runId, {
       eventType: "assistant_reply",
       threadId: params.threadId,
@@ -1140,6 +1247,15 @@ async function buildReplyOutcome(params: {
       replyResult.value,
     ),
   );
+  await maybeAutoTitleAssistantThread({
+    repo: params.repo,
+    provider: params.provider,
+    uid: params.uid,
+    threadId: params.threadId,
+    context: insightContext,
+    prompt: params.prompt,
+    reply: replyResult.value,
+  });
 
   const memoryItems = buildMemoryItemsFromCandidates(
     params.uid,
@@ -1358,6 +1474,15 @@ export async function handleAssistantCapture(
   if (longTermMemory.length > 0) {
     await repo.upsertAssistantMemoryItems(uid, longTermMemory);
   }
+  await maybeAutoTitleAssistantThread({
+    repo,
+    provider,
+    uid,
+    threadId,
+    context,
+    prompt,
+    reply: draft.reply,
+  });
 
   return {
     runId,
@@ -1511,10 +1636,20 @@ export async function handleDreamEntryChange(
   entryId: string,
   body: string,
 ): Promise<DreamAnalysis> {
+  const bodyHash = sourceBodyHash(body);
+  const existingEntry = await repo.getDreamEntry(entryId);
+  const existingAi = asMap(existingEntry?.ai);
+  if (asString(existingAi.sourceBodyHash) === bodyHash) {
+    const existingAnalysis = dreamAnalysisFromAi(existingAi);
+    if (existingAnalysis) {
+      return existingAnalysis;
+    }
+  }
+
   const context = await repo.buildAssistantContext(uid);
   const previous = context.userState ?? buildEmptyUserState();
   const analysis = (await provider.summarizeDream(body, context)).value;
-  await repo.setDreamAnalysis(entryId, analysis);
+  await repo.setDreamAnalysis(entryId, analysis, bodyHash);
 
   const nextState: UserStateDoc = {
     ...previous,

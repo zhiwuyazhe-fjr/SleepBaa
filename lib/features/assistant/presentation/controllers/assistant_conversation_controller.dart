@@ -82,6 +82,27 @@ class AssistantConversationController extends ChangeNotifier {
     return _assistantRepository.setCurrentThread(threadId);
   }
 
+  Future<AssistantThread> startNewConversation({String? title}) async {
+    final String normalizedTitle = title?.trim() ?? '';
+    final AssistantThread? current = currentThread;
+    if (_isReusableBlankThread(current, normalizedTitle)) {
+      await _assistantRepository.setCurrentThread(current!.id);
+      return current;
+    }
+
+    for (final AssistantThread thread in _assistantRepository.threads) {
+      if (!_isReusableBlankThread(thread, normalizedTitle)) {
+        continue;
+      }
+      await _assistantRepository.setCurrentThread(thread.id);
+      return thread;
+    }
+
+    return _assistantRepository.createThread(
+      title: normalizedTitle.isEmpty ? null : normalizedTitle,
+    );
+  }
+
   Future<AssistantConversationSubmitResult> submitPrompt(String prompt) async {
     final String normalizedPrompt = prompt.trim();
     if (normalizedPrompt.isEmpty) {
@@ -232,6 +253,23 @@ class AssistantConversationController extends ChangeNotifier {
       return null;
     }
     return _PreparedThreadTurn(thread: thread, turnId: turnId);
+  }
+
+  bool _isBlankThread(AssistantThread? thread) {
+    if (thread == null) {
+      return false;
+    }
+    return _assistantRepository.messagesForThread(thread.id).isEmpty;
+  }
+
+  bool _isReusableBlankThread(
+    AssistantThread? thread,
+    String normalizedTitle,
+  ) {
+    if (!_isBlankThread(thread)) {
+      return false;
+    }
+    return normalizedTitle.isEmpty || thread!.title == normalizedTitle;
   }
 
   Future<void> _sendReplyStream({

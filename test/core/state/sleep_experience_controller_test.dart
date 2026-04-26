@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
@@ -12,6 +12,109 @@ import 'package:sleep_dorm_app/core/state/sleep_experience_controller.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('sleep audio previous and next cycle through the catalog', () async {
+    const List<AudioTrack> tracks = <AudioTrack>[
+      AudioTrack(
+        id: 'rain',
+        title: 'Rain',
+        subtitle: '',
+        duration: Duration.zero,
+        sourceUrl: 'https://example.com/rain.mp3',
+      ),
+      AudioTrack(
+        id: 'ocean',
+        title: 'Ocean',
+        subtitle: '',
+        duration: Duration.zero,
+        sourceUrl: 'https://example.com/ocean.mp3',
+      ),
+    ];
+    final _FakeAudioPlaybackEngine engine = _FakeAudioPlaybackEngine();
+    final _SleepControllerHarness harness = _SleepControllerHarness.create(
+      audioPlaybackEngine: engine,
+      initialRecommendations: _audioRecommendations(tracks),
+    );
+
+    await harness.controller.playAudioTrack(tracks.first);
+    expect(harness.audioPlaybackController.currentTrack?.id, 'rain');
+
+    await harness.controller.playNextAudio();
+    expect(harness.audioPlaybackController.currentTrack?.id, 'ocean');
+
+    await harness.controller.playNextAudio();
+    expect(harness.audioPlaybackController.currentTrack?.id, 'rain');
+
+    await harness.controller.playPreviousAudio();
+    expect(harness.audioPlaybackController.currentTrack?.id, 'ocean');
+    expect(engine.loadedSources, <String>[
+      'https://example.com/rain.mp3',
+      'https://example.com/ocean.mp3',
+      'https://example.com/rain.mp3',
+      'https://example.com/ocean.mp3',
+    ]);
+
+    harness.dispose();
+  });
+
+  test('sleep audio next safely returns when the catalog is empty', () async {
+    final _FakeAudioPlaybackEngine engine = _FakeAudioPlaybackEngine();
+    final _SleepControllerHarness harness = _SleepControllerHarness.create(
+      audioPlaybackEngine: engine,
+      initialRecommendations: const <NightRecommendation>[],
+    );
+
+    await harness.controller.playNextAudio();
+
+    expect(harness.audioPlaybackController.currentTrack, isNull);
+    expect(engine.loadedSources, isEmpty);
+
+    harness.dispose();
+  });
+
+  test(
+    'playing a catalog audio track syncs the matching recommendation state',
+    () async {
+      const List<AudioTrack> tracks = <AudioTrack>[
+        AudioTrack(
+          id: 'rain',
+          title: 'Rain',
+          subtitle: '',
+          duration: Duration.zero,
+          sourceUrl: 'https://example.com/rain.mp3',
+        ),
+        AudioTrack(
+          id: 'ocean',
+          title: 'Ocean',
+          subtitle: '',
+          duration: Duration.zero,
+          sourceUrl: 'https://example.com/ocean.mp3',
+        ),
+      ];
+      final _SleepControllerHarness harness = _SleepControllerHarness.create(
+        audioPlaybackEngine: _FakeAudioPlaybackEngine(),
+        initialRecommendations: _audioRecommendations(tracks),
+      );
+
+      await harness.controller.playAudioTrack(tracks.last);
+
+      expect(harness.audioPlaybackController.currentTrack?.id, 'ocean');
+      expect(
+        harness.recommendationRepository.tonightRecommendations
+            .firstWhere((NightRecommendation item) => item.track?.id == 'ocean')
+            .executionState,
+        RecommendationExecutionState.playing,
+      );
+      expect(
+        harness.recommendationRepository.tonightRecommendations
+            .firstWhere((NightRecommendation item) => item.track?.id == 'rain')
+            .executionState,
+        RecommendationExecutionState.idle,
+      );
+
+      harness.dispose();
+    },
+  );
 
   test(
     'exit sleep mode immediately syncs dorm sleeping count back down',
@@ -997,6 +1100,23 @@ void main() {
   );
 }
 
+List<NightRecommendation> _audioRecommendations(List<AudioTrack> tracks) {
+  return tracks
+      .map(
+        (AudioTrack track) => NightRecommendation(
+          id: 'audio-${track.id}',
+          title: track.title,
+          subtitle: '',
+          type: RecommendationType.audio,
+          icon: Icons.music_note_rounded,
+          tags: const <String>[],
+          executionState: RecommendationExecutionState.idle,
+          track: track,
+        ),
+      )
+      .toList(growable: false);
+}
+
 class _SleepControllerHarness {
   _SleepControllerHarness._({
     required this.authRepository,
@@ -1015,12 +1135,16 @@ class _SleepControllerHarness {
   factory _SleepControllerHarness.create({
     InMemoryDormRepository? dormRepository,
     _FakeNotificationService? notificationService,
+    List<NightRecommendation>? initialRecommendations,
+    AudioPlaybackEngine? audioPlaybackEngine,
   }) {
     final InMemoryAuthRepository authRepository = InMemoryAuthRepository();
     final InMemoryUserSettingsRepository settingsRepository =
         InMemoryUserSettingsRepository();
     final InMemoryRecommendationRepository recommendationRepository =
-        InMemoryRecommendationRepository();
+        InMemoryRecommendationRepository(
+          initialRecommendations: initialRecommendations,
+        );
     final InMemorySleepSessionRepository sleepSessionRepository =
         InMemorySleepSessionRepository(
           initialUid: authRepository.currentUser.uid,
@@ -1039,7 +1163,7 @@ class _SleepControllerHarness {
     final _FakeNotificationService resolvedNotificationService =
         notificationService ?? _FakeNotificationService();
     final AudioPlaybackController audioPlaybackController =
-        AudioPlaybackController();
+        AudioPlaybackController(engine: audioPlaybackEngine);
     final SleepExperienceController controller = SleepExperienceController(
       authRepository: authRepository,
       settingsRepository: settingsRepository,
@@ -1113,6 +1237,68 @@ class _FakeNotificationService extends AppNotificationService {
   @override
   Future<void> cancelSleepModeNotification() async {
     cancelSleepModeNotificationCalls += 1;
+  }
+}
+
+class _FakeAudioPlaybackEngine implements AudioPlaybackEngine {
+  final StreamController<Duration> _positionController =
+      StreamController<Duration>.broadcast();
+  final StreamController<AudioEngineState> _stateController =
+      StreamController<AudioEngineState>.broadcast();
+
+  final List<String> loadedSources = <String>[];
+
+  @override
+  Stream<Duration> get positionStream => _positionController.stream;
+
+  @override
+  Stream<AudioEngineState> get stateStream => _stateController.stream;
+
+  @override
+  Future<void> setTrack(AudioTrack track) async {
+    loadedSources.add(track.sourceUrl ?? track.assetPath ?? '');
+    _stateController.add(
+      const AudioEngineState(
+        playing: false,
+        processingState: AudioEngineProcessingState.ready,
+      ),
+    );
+  }
+
+  @override
+  Future<void> play() async {
+    _stateController.add(
+      const AudioEngineState(
+        playing: true,
+        processingState: AudioEngineProcessingState.ready,
+      ),
+    );
+  }
+
+  @override
+  Future<void> pause() async {
+    _stateController.add(
+      const AudioEngineState(
+        playing: false,
+        processingState: AudioEngineProcessingState.ready,
+      ),
+    );
+  }
+
+  @override
+  Future<void> stop() async {
+    _stateController.add(
+      const AudioEngineState(
+        playing: false,
+        processingState: AudioEngineProcessingState.idle,
+      ),
+    );
+  }
+
+  @override
+  Future<void> dispose() async {
+    await _positionController.close();
+    await _stateController.close();
   }
 }
 

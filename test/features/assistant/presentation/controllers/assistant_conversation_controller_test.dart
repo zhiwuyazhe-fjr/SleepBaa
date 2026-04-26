@@ -120,6 +120,110 @@ void main() {
     );
   });
 
+  test('startNewConversation reuses an existing blank thread', () async {
+    final InMemoryAssistantRepository assistantRepository =
+        InMemoryAssistantRepository(userId: 'assistant-user');
+    final AssistantConversationController controller =
+        AssistantConversationController(
+          assistantRepository: assistantRepository,
+          sleepCaptureRepository: InMemorySleepCaptureRepository(),
+          sleepSessionRepository: InMemorySleepSessionRepository(
+            initialUid: 'assistant-user',
+          ),
+          dormRepository: InMemoryDormRepository(
+            currentUserId: 'assistant-user',
+          ),
+          assistantReplyGateway: const StubAssistantReplyGateway(),
+        );
+
+    await controller.bootstrap();
+    final AssistantThread first = await controller.startNewConversation(
+      title: '新对话',
+    );
+    final AssistantThread second = await controller.startNewConversation(
+      title: '新对话',
+    );
+
+    expect(second.id, first.id);
+    expect(
+      assistantRepository.threads
+          .where(
+            (AssistantThread thread) =>
+                assistantRepository.messagesForThread(thread.id).isEmpty,
+          )
+          .length,
+      1,
+    );
+  });
+
+  test('startNewConversation reuses dream and memo blank threads separately', () async {
+    final InMemoryAssistantRepository assistantRepository =
+        InMemoryAssistantRepository(userId: 'assistant-user');
+    final AssistantConversationController controller =
+        AssistantConversationController(
+          assistantRepository: assistantRepository,
+          sleepCaptureRepository: InMemorySleepCaptureRepository(),
+          sleepSessionRepository: InMemorySleepSessionRepository(
+            initialUid: 'assistant-user',
+          ),
+          dormRepository: InMemoryDormRepository(
+            currentUserId: 'assistant-user',
+          ),
+          assistantReplyGateway: const StubAssistantReplyGateway(),
+        );
+
+    await controller.bootstrap();
+    final AssistantThread dreamFirst = await controller.startNewConversation(
+      title: '梦记收纳',
+    );
+    final AssistantThread dreamSecond = await controller.startNewConversation(
+      title: '梦记收纳',
+    );
+    final AssistantThread memoFirst = await controller.startNewConversation(
+      title: '事记收纳',
+    );
+    final AssistantThread memoSecond = await controller.startNewConversation(
+      title: '事记收纳',
+    );
+    final AssistantThread dreamAgain = await controller.startNewConversation(
+      title: '梦记收纳',
+    );
+
+    expect(dreamSecond.id, dreamFirst.id);
+    expect(memoSecond.id, memoFirst.id);
+    expect(memoFirst.id, isNot(dreamFirst.id));
+    expect(dreamAgain.id, dreamFirst.id);
+
+    await assistantRepository.sendUserMessage(
+      threadId: memoFirst.id,
+      content: '明早记得带伞',
+    );
+    final AssistantThread memoAfterMessage = await controller
+        .startNewConversation(title: '事记收纳');
+
+    expect(memoAfterMessage.id, isNot(memoFirst.id));
+    expect(
+      assistantRepository.threads
+          .where(
+            (AssistantThread thread) =>
+                thread.title == '梦记收纳' &&
+                assistantRepository.messagesForThread(thread.id).isEmpty,
+          )
+          .length,
+      1,
+    );
+    expect(
+      assistantRepository.threads
+          .where(
+            (AssistantThread thread) =>
+                thread.title == '事记收纳' &&
+                assistantRepository.messagesForThread(thread.id).isEmpty,
+          )
+          .length,
+      1,
+    );
+  });
+
   test(
     'submitPrompt returns busy when the active thread is already streaming',
     () async {

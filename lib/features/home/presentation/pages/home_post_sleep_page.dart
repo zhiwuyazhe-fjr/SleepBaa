@@ -144,6 +144,14 @@ class HomePostSleepPage extends StatelessWidget {
                           await services.sleepExperienceController
                               .toggleSleepAudio();
                         },
+                        onPrevious: () async {
+                          await services.sleepExperienceController
+                              .playPreviousAudio();
+                        },
+                        onNext: () async {
+                          await services.sleepExperienceController
+                              .playNextAudio();
+                        },
                       ),
                       const SizedBox(height: AppSpacing.xl),
                       GridView.count(
@@ -152,24 +160,21 @@ class HomePostSleepPage extends StatelessWidget {
                         mainAxisSpacing: AppSpacing.md,
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
-                        childAspectRatio: 1.08,
+                        childAspectRatio: 1.35,
                         children: <Widget>[
                           SupportToolCard(
                             title: '难以入睡',
-                            subtitle: '快速切到呼吸放松与音频支持',
                             icon: Icons.self_improvement_rounded,
                             onTap: () => context.push(AppRoutes.sleepCantSleep),
                           ),
                           SupportToolCard(
                             title: '记录夜醒',
-                            subtitle: '标记醒来的时间与诱因',
                             icon: Icons.bedtime_rounded,
                             onTap: () =>
                                 context.push(AppRoutes.logNightAwakening),
                           ),
                           SupportToolCard(
                             title: '灵感记事',
-                            subtitle: '进入 AI 助手记录梦境或临时想到的事',
                             icon: Icons.edit_note_rounded,
                             onTap: () => context.push(
                               AppRoutes.assistantSleepCaptureLocation(
@@ -181,7 +186,6 @@ class HomePostSleepPage extends StatelessWidget {
                           ),
                           SupportToolCard(
                             title: '晨间反馈',
-                            subtitle: '醒来后逐条反馈昨晚建议',
                             icon: Icons.wb_sunny_rounded,
                             onTap: () async {
                               await _finishSleepModeAndOpenFeedback(
@@ -345,42 +349,62 @@ Future<_SleepExitAction?> _showSleepExitDialog(BuildContext context) {
                               ),
                         ),
                         const SizedBox(height: AppSpacing.xl),
-                        Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: PrimaryButton(
-                                label: '返回',
-                                variant: PrimaryButtonVariant.ghost,
-                                foregroundColor: AppColors.onDark,
-                                borderColor: AppColors.darkBorder,
-                                onPressed: () => Navigator.of(
-                                  context,
-                                ).pop(_SleepExitAction.back),
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Expanded(
-                              child: PrimaryButton(
-                                label: '退出',
-                                variant: PrimaryButtonVariant.ghost,
-                                foregroundColor: AppColors.onDark,
-                                borderColor: AppColors.darkBorder,
-                                onPressed: () => Navigator.of(
-                                  context,
-                                ).pop(_SleepExitAction.pause),
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Expanded(
-                              child: PrimaryButton(
-                                label: '结束并去晨间反馈',
-                                foregroundColor: Colors.white,
-                                onPressed: () => Navigator.of(
-                                  context,
-                                ).pop(_SleepExitAction.finish),
-                              ),
-                            ),
-                          ],
+                        LayoutBuilder(
+                          builder:
+                              (
+                                BuildContext context,
+                                BoxConstraints constraints,
+                              ) {
+                                final double buttonWidth =
+                                    (constraints.maxWidth - AppSpacing.sm) / 2;
+                                return Column(
+                                  children: <Widget>[
+                                    Row(
+                                      children: <Widget>[
+                                        SizedBox(
+                                          width: buttonWidth,
+                                          child: PrimaryButton(
+                                            label: '返回',
+                                            variant: PrimaryButtonVariant.ghost,
+                                            foregroundColor: AppColors.onDark,
+                                            borderColor: AppColors.darkBorder,
+                                            onPressed: () => Navigator.of(
+                                              context,
+                                            ).pop(_SleepExitAction.back),
+                                          ),
+                                        ),
+                                        const SizedBox(width: AppSpacing.sm),
+                                        SizedBox(
+                                          width: buttonWidth,
+                                          child: PrimaryButton(
+                                            label: '退出',
+                                            variant: PrimaryButtonVariant.ghost,
+                                            foregroundColor: AppColors.onDark,
+                                            borderColor: AppColors.darkBorder,
+                                            onPressed: () => Navigator.of(
+                                              context,
+                                            ).pop(_SleepExitAction.pause),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: AppSpacing.sm),
+                                    Align(
+                                      alignment: Alignment.center,
+                                      child: SizedBox(
+                                        width: buttonWidth,
+                                        child: PrimaryButton(
+                                          label: '结束并去晨间反馈',
+                                          foregroundColor: Colors.white,
+                                          onPressed: () => Navigator.of(
+                                            context,
+                                          ).pop(_SleepExitAction.finish),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
                         ),
                         const SizedBox(height: AppSpacing.md),
                         Text(

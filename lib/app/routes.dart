@@ -33,6 +33,7 @@ import 'package:sleep_dorm_app/features/profile/presentation/pages/sleep_report_
 import 'package:sleep_dorm_app/features/profile/presentation/pages/thought_note_detail_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/thought_vault_page.dart';
 import 'package:sleep_dorm_app/features/sleep/presentation/pages/cant_sleep_page.dart';
+import 'package:sleep_dorm_app/features/sleep/presentation/pages/sleep_audio_catalog_page.dart';
 import 'package:sleep_dorm_app/features/sleep_encyclopedia/presentation/pages/sleep_encyclopedia_category_page.dart';
 import 'package:sleep_dorm_app/features/sleep_encyclopedia/presentation/pages/sleep_encyclopedia_page.dart';
 import 'package:sleep_dorm_app/features/sleep_encyclopedia/presentation/pages/sleep_encyclopedia_topic_page.dart';
@@ -53,6 +54,7 @@ abstract final class AppRoutes {
   static const String dreamDetail = '/dream/detail';
   static const String dreamJournal = '/dream/journal';
   static const String sleepCantSleep = '/sleep/cant_sleep';
+  static const String sleepAudioCatalog = '/sleep/audio_catalog';
   static const String sleepEncyclopedia = '/sleep/encyclopedia';
   static const String sleepEncyclopediaCategory =
       '/sleep/encyclopedia/category';
@@ -292,6 +294,11 @@ GoRouter createRouter({
         path: AppRoutes.sleepCantSleep,
         builder: (BuildContext context, GoRouterState state) =>
             const CantSleepPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.sleepAudioCatalog,
+        builder: (BuildContext context, GoRouterState state) =>
+            const SleepAudioCatalogPage(),
       ),
       GoRoute(
         path: AppRoutes.sleepEncyclopedia,

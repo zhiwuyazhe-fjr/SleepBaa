@@ -196,7 +196,7 @@ class _AssistantPageState extends State<AssistantPage>
       _lastHapticAssistantMessageId = null;
     });
     _focusNode.unfocus();
-    await services.assistantFacade.createThread(
+    await services.assistantConversationController.startNewConversation(
       title: widget.captureModeEnabled
           ? (_activeCaptureType == SleepCaptureType.dream ? '梦记收纳' : '事记收纳')
           : '新对话',

@@ -109,6 +109,7 @@ abstract interface class UserSettingsRepository implements Listenable {
 
 abstract interface class RecommendationRepository implements Listenable {
   List<NightRecommendation> get tonightRecommendations;
+  List<AudioTrack> get audioCatalog;
   Future<void> resetForTonight();
   Future<void> refreshAudioCatalog();
   Future<AudioTrack?> resolvePlayableTrack({
