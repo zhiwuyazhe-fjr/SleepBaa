@@ -24,7 +24,7 @@ class CloudBaseSession {
   final String tokenType;
 
   bool get isExpired =>
-      DateTime.now().isAfter(expiresAt.subtract(const Duration(minutes: 10)));
+      DateTime.now().isAfter(expiresAt.subtract(const Duration(seconds: 30)));
 
   CloudBaseSession copyWith({
     String? accessToken,
