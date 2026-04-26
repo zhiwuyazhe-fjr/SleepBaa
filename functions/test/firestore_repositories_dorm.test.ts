@@ -115,6 +115,44 @@ class ThrowingUploadFileStorage extends TestFileStorage {
   }
 }
 
+class CatalogFileStorage extends TestFileStorage {
+  async listAudioFiles(prefix: string): Promise<JsonMap[]> {
+    return [
+      {
+        id: `${prefix}01-ocean`,
+        title: "Ocean",
+        subtitle: "",
+        durationSeconds: 0,
+        sourceUrl: "https://cdn.example.com/audio/ocean.mp3",
+        storageFileId: `${prefix}01-ocean.mp3`,
+        sortOrder: 0,
+      },
+      {
+        id: `${prefix}02-rain`,
+        title: "Rain",
+        subtitle: "",
+        durationSeconds: 0,
+        sourceUrl: "https://cdn.example.com/audio/rain.mp3",
+        storageFileId: `${prefix}02-rain.mp3`,
+        sortOrder: 1,
+      },
+    ];
+  }
+}
+
+test("audio catalog prefers storage directory files with unknown duration", async () => {
+  const store = new TestDocumentStore();
+  const repo = new FirestoreRepository(store as any, new CatalogFileStorage());
+
+  const payload = await repo.getAudioTrackCatalog("user-1");
+  const tracks = payload.tracks as JsonMap[];
+
+  assert.equal(tracks.length, 2);
+  assert.equal(tracks[0]?.title, "Ocean");
+  assert.equal(tracks[0]?.durationSeconds, 0);
+  assert.equal(tracks[1]?.sourceUrl, "https://cdn.example.com/audio/rain.mp3");
+});
+
 test("createDorm writes current member displayBadgeId", async () => {
   const store = new TestDocumentStore();
   const repo = new FirestoreRepository(store as any, new TestFileStorage());

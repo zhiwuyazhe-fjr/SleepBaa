@@ -1196,7 +1196,9 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       } else {
         _mergePhoneFromCachedVerifiedIdentity();
       }
-      if (restoredSession.isExpired) {
+      final bool canRefreshSession =
+          _environment.cloudbasePublishableKey?.isNotEmpty == true;
+      if (restoredSession.isExpired && canRefreshSession) {
         try {
           restoredSession = await _appApiClient.refreshSession(
             restoredSession.copyWith(deviceId: restoredDeviceId),
@@ -1214,16 +1216,18 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           tokenRefreshFailed = true;
           _lastAuthError = _transientAuthWarningMessage();
         }
+      } else if (restoredSession.isExpired) {
+        tokenRefreshFailed = true;
+        _lastAuthError = _transientAuthWarningMessage();
       }
-      // Even when the token refresh failed due to a transient error we must
-      // still hydrate _currentUser from the stored session so the auth gate
-      // can recognise a returning user and avoid forcing re-login on cold
-      // start.  The old (possibly expired) token may still work for reading
-      // /user/me; if it doesn't, _readCurrentCloudBaseUser returns null and
-      // we fall back to the session subject only.
+      // Hydrate _currentUser from the stored session so the auth gate can
+      // recognise a returning user and avoid forcing re-login on cold start.
+      // When refresh already failed, avoid probing /user/me with an expired
+      // token; the session subject is enough for a local fallback profile.
       final CloudBaseUserInfo? restoredInfo =
-          _currentUser.uid.isEmpty ||
-              !_phoneIdentityResolvableFromLocalProfile()
+          !tokenRefreshFailed &&
+              (_currentUser.uid.isEmpty ||
+                  !_phoneIdentityResolvableFromLocalProfile())
           ? await _readCurrentCloudBaseUser(restoredSession)
           : null;
       if (restoredInfo != null) {
@@ -2476,6 +2480,22 @@ class CloudBaseRecommendationRepository extends ChangeNotifier
   @override
   List<NightRecommendation> get tonightRecommendations =>
       List<NightRecommendation>.unmodifiable(_tonightRecommendations);
+
+  @override
+  List<AudioTrack> get audioCatalog {
+    final List<AudioTrack> remoteTracks = _remoteAudioTrackCatalog.values
+        .where(_isPlayableTrack)
+        .toList(growable: false);
+    if (remoteTracks.isNotEmpty) {
+      return List<AudioTrack>.unmodifiable(remoteTracks);
+    }
+    return List<AudioTrack>.unmodifiable(
+      _tonightRecommendations
+          .where((NightRecommendation item) => _isPlayableTrack(item.track))
+          .map((NightRecommendation item) => item.track!)
+          .toList(growable: false),
+    );
+  }
 
   @override
   Future<void> resetForTonight() async {

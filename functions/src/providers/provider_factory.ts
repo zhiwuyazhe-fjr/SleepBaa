@@ -751,6 +751,32 @@ function plainReplyText(text: string): string {
   return cleaned;
 }
 
+function sanitizeConversationTitle(input: string, fallback = "睡前对话"): string {
+  const cleaned = input
+    .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/[“”"'`*_#>~]/g, "")
+    .trim();
+  const firstPhrase = cleaned
+    .split(/[。！？!?，,；;、]/)
+    .map((item) => item.trim())
+    .find((item) => item.length > 0);
+  const title = firstPhrase || cleaned || fallback;
+  return title.length <= 12 ? title : title.slice(0, 12);
+}
+
+function normalizeConversationTitleCandidate(
+  value: unknown,
+  fallback: string,
+): string {
+  const data = asMap(value);
+  const title = sanitizeConversationTitle(asString(data.title), fallback);
+  if (!title.trim()) {
+    throw new Error("Remote conversation title was empty.");
+  }
+  return title;
+}
+
 function buildCompactRuntimeContext(context: AssistantContext): JsonMap {
   return {
     user: {
@@ -1106,6 +1132,14 @@ const STRUCTURED_REPLY_SCHEMA: JsonMap = {
   },
 };
 
+const CONVERSATION_TITLE_SCHEMA: JsonMap = {
+  type: "object",
+  required: ["title"],
+  properties: {
+    title: { type: "string" },
+  },
+};
+
 const TONIGHT_PLAN_SCHEMA: JsonMap = {
   type: "object",
   additionalProperties: false,
@@ -1316,6 +1350,10 @@ const STRUCTURED_REPLY_EXAMPLE: JsonMap = {
   updatedSurfaces: ["assistant_context"],
 };
 
+const CONVERSATION_TITLE_EXAMPLE: JsonMap = {
+  title: "宿舍噪声入睡",
+};
+
 const TONIGHT_PLAN_EXAMPLE: JsonMap = {
   dateKey: "2026-04-08",
   coachSummary: "今晚先稳住节奏，再做最小干预。",
@@ -1403,6 +1441,14 @@ abstract class BaseRemoteProvider implements AIProvider {
     intent: AssistantIntent,
     prompt: string,
   ): Promise<AIProviderResult<StructuredAssistantReply>>;
+
+  abstract generateConversationTitle(
+    context: AssistantContext,
+    params: {
+      prompt: string;
+      reply: string;
+    },
+  ): Promise<AIProviderResult<string>>;
 
   abstract streamReplyText(
     context: AssistantContext,
@@ -1532,6 +1578,40 @@ class XAIResponsesProvider extends BaseRemoteProvider {
           (await this.fallback.generateStructuredReply(context, intent, prompt))
             .value,
         );
+      },
+    });
+  }
+
+  async generateConversationTitle(
+    context: AssistantContext,
+    params: {
+      prompt: string;
+      reply: string;
+    },
+  ): Promise<AIProviderResult<string>> {
+    return this.withFallback({
+      fallback: this.fallback.generateConversationTitle(context, params),
+      modelName: this.structuredModelName(),
+      remoteCall: async () => {
+        const fallback = (
+          await this.fallback.generateConversationTitle(context, params)
+        ).value;
+        const value = await this.requestJson({
+          schemaName: "conversation_title",
+          schema: CONVERSATION_TITLE_SCHEMA,
+          systemPrompt: buildSystemPrompt(context),
+          userPrompt: buildUserPayloadPrompt(
+            "Return conversation title JSON that matches the schema. Use Chinese, no emoji, 4 to 12 Chinese characters when possible.",
+            {
+              context: buildCompactRuntimeContext(context),
+              prompt: params.prompt,
+              reply: params.reply,
+            },
+          ),
+          modelName: this.structuredModelName(),
+          timeoutMs: this.structuredTimeoutMs(),
+        });
+        return normalizeConversationTitleCandidate(value, fallback);
       },
     });
   }
@@ -2161,6 +2241,40 @@ class CloudBaseAIProvider extends BaseRemoteProvider {
         errorMessage: errorMessageOf(error),
       };
     }
+  }
+
+  async generateConversationTitle(
+    context: AssistantContext,
+    params: {
+      prompt: string;
+      reply: string;
+    },
+  ): Promise<AIProviderResult<string>> {
+    return this.withFallback({
+      fallback: this.fallback.generateConversationTitle(context, params),
+      modelName: this.structuredModelName(),
+      remoteCall: async () => {
+        const fallback = (
+          await this.fallback.generateConversationTitle(context, params)
+        ).value;
+        const value = await this.generateJson(
+          context,
+          "Return conversation title JSON that matches the schema. Use Chinese, no emoji, 4 to 12 Chinese characters when possible.",
+          {
+            context: buildCompactRuntimeContext(context),
+            prompt: params.prompt,
+            reply: params.reply,
+          },
+          "conversation_title",
+          CONVERSATION_TITLE_SCHEMA,
+          CONVERSATION_TITLE_EXAMPLE,
+          "turn_insight_extract",
+          this.structuredModelName(),
+          this.structuredTimeoutMs(),
+        );
+        return normalizeConversationTitleCandidate(value, fallback);
+      },
+    });
   }
 
   async generateTonightPlan(

@@ -78,6 +78,7 @@ function createTriggerRepo(context: AssistantContext) {
   const userStates: Array<{ uid: string; patch: Partial<UserStateDoc> }> = [];
   const cardSnapshots: Array<{ uid: string; snapshot: CardSnapshotDoc }> = [];
   const dreamAnalyses: Array<{ entryId: string; analysis: DreamAnalysis }> = [];
+  const dreamEntries = new Map<string, Record<string, unknown>>();
   const assistantRuns: Array<{ uid: string; runId: string; run: AssistantRunDoc }> = [];
   const notifications: Array<{
     uid: string;
@@ -107,8 +108,20 @@ function createTriggerRepo(context: AssistantContext) {
       ) => {
         assistantRuns.push({ uid, runId, run });
       },
-      setDreamAnalysis: async (entryId: string, analysis: DreamAnalysis) => {
+      getDreamEntry: async (entryId: string) => dreamEntries.get(entryId) ?? null,
+      setDreamAnalysis: async (
+        entryId: string,
+        analysis: DreamAnalysis,
+        sourceBodyHash?: string,
+      ) => {
         dreamAnalyses.push({ entryId, analysis });
+        dreamEntries.set(entryId, {
+          id: entryId,
+          ai: {
+            ...analysis,
+            sourceBodyHash,
+          },
+        });
       },
       upsertNotification: async (
         uid: string,
@@ -123,6 +136,7 @@ function createTriggerRepo(context: AssistantContext) {
     userStates,
     cardSnapshots,
     dreamAnalyses,
+    dreamEntries,
     assistantRuns,
     notifications,
   };

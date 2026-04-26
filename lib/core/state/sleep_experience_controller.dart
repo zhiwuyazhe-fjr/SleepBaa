@@ -172,6 +172,82 @@ class SleepExperienceController extends ChangeNotifier {
     }
   }
 
+  Future<void> playAudioTrack(AudioTrack track) async {
+    if (!_isPlayableAudioTrack(track)) {
+      return;
+    }
+    await _playResolvedTrack(track);
+    await _markAudioRecommendationPlaying(track);
+  }
+
+  Future<void> playNextAudio() async {
+    await _playAdjacentAudio(step: 1);
+  }
+
+  Future<void> playPreviousAudio() async {
+    await _playAdjacentAudio(step: -1);
+  }
+
+  Future<void> _playAdjacentAudio({required int step}) async {
+    final List<AudioTrack> tracks = await _loadPlayableAudioCatalog();
+    if (tracks.isEmpty) {
+      return;
+    }
+    final String? currentId = _audioPlaybackController.currentTrack?.id;
+    final int currentIndex = tracks.indexWhere(
+      (AudioTrack item) => item.id == currentId,
+    );
+    final int nextIndex = currentIndex < 0
+        ? 0
+        : (currentIndex + step + tracks.length) % tracks.length;
+    await playAudioTrack(tracks[nextIndex]);
+  }
+
+  Future<List<AudioTrack>> _loadPlayableAudioCatalog() async {
+    await _recommendationRepository.refreshAudioCatalog();
+    final List<AudioTrack> tracks = _recommendationRepository.audioCatalog
+        .where(_isPlayableAudioTrack)
+        .toList(growable: false);
+    if (tracks.isNotEmpty) {
+      return tracks;
+    }
+    final AudioTrack? fallback = await _recommendationRepository
+        .resolvePlayableTrack();
+    if (fallback == null || !_isPlayableAudioTrack(fallback)) {
+      return const <AudioTrack>[];
+    }
+    return <AudioTrack>[fallback];
+  }
+
+  bool _isPlayableAudioTrack(AudioTrack track) {
+    return (track.sourceUrl?.trim().isNotEmpty ?? false) ||
+        (track.assetPath?.trim().isNotEmpty ?? false);
+  }
+
+  Future<void> _markAudioRecommendationPlaying(AudioTrack track) async {
+    NightRecommendation? fallbackAudio;
+    NightRecommendation? matchedAudio;
+    for (final NightRecommendation recommendation
+        in _recommendationRepository.tonightRecommendations) {
+      if (recommendation.type != RecommendationType.audio) {
+        continue;
+      }
+      fallbackAudio ??= recommendation;
+      if (recommendation.track?.id == track.id) {
+        matchedAudio = recommendation;
+        break;
+      }
+    }
+    final NightRecommendation? target = matchedAudio ?? fallbackAudio;
+    if (target == null) {
+      return;
+    }
+    await _recommendationRepository.setRecommendationState(
+      target.id,
+      RecommendationExecutionState.playing,
+    );
+  }
+
   Future<void> _startRecommendationAudio(
     NightRecommendation recommendation,
   ) async {
@@ -295,10 +371,7 @@ class SleepExperienceController extends ChangeNotifier {
       await _clearSleepExitArtifacts(session.id);
     }
     unawaited(
-      _completeSleepModeEntrySideEffects(
-        uid: user.uid,
-        session: session,
-      ),
+      _completeSleepModeEntrySideEffects(uid: user.uid, session: session),
     );
     return session;
   }
@@ -559,9 +632,7 @@ class SleepExperienceController extends ChangeNotifier {
         uid: uid,
         status: DormMemberStatus.quiet,
         sleepModeActive: true,
-        note: session.hasSubmittedFeedback
-            ? '已进入睡眠模式，今天时长不再累计'
-            : '已进入睡眠模式',
+        note: session.hasSubmittedFeedback ? '已进入睡眠模式，今天时长不再累计' : '已进入睡眠模式',
       );
     } catch (_) {
       // Dorm sync is best-effort and should not block returning to sleep mode.

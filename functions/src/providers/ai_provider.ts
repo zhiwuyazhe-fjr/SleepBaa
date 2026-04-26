@@ -446,6 +446,14 @@ export interface AIProvider {
     prompt: string,
   ): Promise<AIProviderResult<StructuredAssistantReply>>;
 
+  generateConversationTitle(
+    context: AssistantContext,
+    params: {
+      prompt: string;
+      reply: string;
+    },
+  ): Promise<AIProviderResult<string>>;
+
   generateTonightPlan(
     context: AssistantContext,
     runId: string,
@@ -505,6 +513,20 @@ function deterministicResult<T>(value: T): AIProviderResult<T> {
     sourceMode: "fallbackSuccess",
     errorMessage: null,
   };
+}
+
+function sanitizeConversationTitle(input: string): string {
+  const cleaned = input
+    .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, "")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/[“”"'`*_#>~]/g, "")
+    .trim();
+  const firstPhrase = cleaned
+    .split(/[。！？!?，,；;、]/)
+    .map((item) => item.trim())
+    .find((item) => item.length > 0);
+  const title = firstPhrase || cleaned || "睡前对话";
+  return title.length <= 12 ? title : title.slice(0, 12);
 }
 
 export class DeterministicAIProvider implements AIProvider {
@@ -590,6 +612,18 @@ export class DeterministicAIProvider implements AIProvider {
       updateTonightPlan: intent !== "general_support",
       updatedSurfaces: ["assistant_context", "home_pre_sleep"],
     });
+  }
+
+  async generateConversationTitle(
+    _context: AssistantContext,
+    params: {
+      prompt: string;
+      reply: string;
+    },
+  ): Promise<AIProviderResult<string>> {
+    return deterministicResult<string>(
+      sanitizeConversationTitle(params.prompt || params.reply),
+    );
   }
 
   async generateTonightPlan(

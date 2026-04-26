@@ -62,11 +62,52 @@ interface DocumentStore {
 
 interface FileStorage {
   getTemporaryUrl(fileId: string, maxAgeSeconds?: number): Promise<string>;
+  listAudioFiles?(prefix: string): Promise<JsonMap[]>;
   uploadBytes(params: {
     fileName: string;
     bytes: Buffer;
     contentType?: string;
   }): Promise<{ fileId: string; url: string }>;
+}
+
+const AUDIO_FILE_EXTENSIONS = new Set([".mp3", ".m4a", ".aac", ".wav", ".ogg"]);
+
+function normalizeStoragePrefix(prefix: string): string {
+  const cleaned = prefix.trim().replace(/^\/+/, "");
+  if (!cleaned) {
+    return "audio/sleep/";
+  }
+  return cleaned.endsWith("/") ? cleaned : `${cleaned}/`;
+}
+
+function extensionOfPath(path: string): string {
+  const match = path.toLowerCase().match(/\.[^.\/]+$/);
+  return match ? match[0] : "";
+}
+
+function audioTrackIdFromPath(path: string): string {
+  return path
+    .replace(/\.[^.\/]+$/, "")
+    .replace(/[^a-zA-Z0-9\u4e00-\u9fa5]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+}
+
+function audioTitleFromPath(path: string): string {
+  const fileName = path.split("/").pop() ?? path;
+  const withoutExtension = fileName.replace(/\.[^.]+$/, "");
+  let decoded = withoutExtension;
+  try {
+    decoded = decodeURIComponent(withoutExtension);
+  } catch {
+    decoded = withoutExtension;
+  }
+  const title = decoded
+    .replace(/^\d+[-_\s.]*/, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return title || "助眠音频";
 }
 
 interface AppBootstrapPayload {
@@ -861,8 +902,9 @@ class CloudBaseNoSqlStore implements DocumentStore {
 
 class CloudBaseFileStorage implements FileStorage {
   private readonly app: any;
+  private managerStorageInstance: any | null | undefined;
 
-  constructor(envId: string) {
+  constructor(private readonly envId: string) {
     const cloudbase = require("@cloudbase/node-sdk") as any;
     const secretId = process.env.TENCENTCLOUD_SECRETID?.trim() || "";
     const secretKey = process.env.TENCENTCLOUD_SECRETKEY?.trim() || "";
@@ -879,6 +921,37 @@ class CloudBaseFileStorage implements FileStorage {
             ...(sessionToken ? { sessionToken } : {}),
           })
         : cloudbase.init({ env: envId });
+  }
+
+  private managerStorage(): any | null {
+    if (this.managerStorageInstance !== undefined) {
+      return this.managerStorageInstance;
+    }
+    const secretId = process.env.TENCENTCLOUD_SECRETID?.trim() || "";
+    const secretKey = process.env.TENCENTCLOUD_SECRETKEY?.trim() || "";
+    const sessionToken =
+      process.env.TENCENTCLOUD_SESSIONTOKEN?.trim() ||
+      process.env.TCB_SESSIONTOKEN?.trim() ||
+      "";
+    if (!secretId || !secretKey) {
+      this.managerStorageInstance = null;
+      return null;
+    }
+    try {
+      const CloudBase = require("@cloudbase/manager-node") as any;
+      const manager = new CloudBase({
+        secretId,
+        secretKey,
+        envId: this.envId,
+        ...(sessionToken ? { token: sessionToken } : {}),
+      });
+      this.managerStorageInstance = manager.storage ?? null;
+      return this.managerStorageInstance;
+    } catch (error) {
+      console.warn("[repo] CloudBase manager storage unavailable:", error);
+      this.managerStorageInstance = null;
+      return null;
+    }
   }
 
   async getTemporaryUrl(
@@ -909,6 +982,79 @@ class CloudBaseFileStorage implements FileStorage {
     const url = fileId ? await this.getTemporaryUrl(fileId) : "";
     return { fileId, url };
   }
+
+  async listAudioFiles(prefix: string): Promise<JsonMap[]> {
+    const storage = this.managerStorage();
+    if (!storage) {
+      return [];
+    }
+    const cloudPath = normalizeStoragePrefix(prefix);
+    const listed = await storage.listDirectoryFiles(cloudPath);
+    const listedMap = asMap(listed);
+    const rawFiles = Array.isArray(listed)
+      ? listed
+      : Array.isArray(listedMap.files)
+        ? listedMap.files
+        : Array.isArray(listedMap.Files)
+          ? listedMap.Files
+          : Array.isArray(listedMap.fileList)
+            ? listedMap.fileList
+            : [];
+    const files = rawFiles.map((item) => asMap(item));
+    const audioFiles = files
+      .map((file) => ({
+        key: asString(
+          file.Key,
+          asString(file.key, asString(file.cloudPath, asString(file.FileName))),
+        ),
+        updatedAt: asString(
+          file.LastModified,
+          asString(file.lastModified, asString(file.updatedAt)),
+        ),
+      }))
+      .filter((file) => file.key.length > 0)
+      .filter((file) => AUDIO_FILE_EXTENSIONS.has(extensionOfPath(file.key)));
+    const audioPaths = audioFiles
+      .map((file) => file.key)
+      .filter((key) => AUDIO_FILE_EXTENSIONS.has(extensionOfPath(key)));
+    if (audioPaths.length === 0) {
+      return [];
+    }
+    const urlPayload = await storage.getTemporaryUrl(
+      audioPaths.map((key) => ({ cloudPath: key, maxAge: 60 * 60 * 24 * 7 })),
+    );
+    const urlMap = asMap(urlPayload);
+    const rawUrls = Array.isArray(urlPayload)
+      ? urlPayload
+      : Array.isArray(urlMap.fileList)
+        ? urlMap.fileList
+        : Array.isArray(urlMap.FileList)
+          ? urlMap.FileList
+          : [];
+    const urls = rawUrls.map((item) => asMap(item));
+    return audioFiles
+      .map((key, index) => {
+        const urlItem = urls[index] ?? {};
+        const sourceUrl = asString(
+          urlItem.url,
+          asString(urlItem.tempFileURL, asString(urlItem.downloadUrl)),
+        );
+        return {
+          id: audioTrackIdFromPath(key.key) || `sleep-audio-${index + 1}`,
+          title: audioTitleFromPath(key.key),
+          subtitle: "",
+          durationSeconds: 0,
+          storageFileId: asString(
+            urlItem.fileId,
+            asString(urlItem.fileID, key.key),
+          ),
+          sourceUrl: sourceUrl || null,
+          sortOrder: index,
+          updatedAt: key.updatedAt,
+        };
+      })
+      .filter((item) => asString(item.sourceUrl).length > 0);
+  }
 }
 
 export interface AssistantDataRepository {
@@ -927,6 +1073,7 @@ export interface AssistantDataRepository {
   getSleepSession(sessionId: string): Promise<JsonMap | null>;
   patchSleepSession(sessionId: string, patch: JsonMap): Promise<void>;
   saveDreamEntry(entry: JsonMap): Promise<JsonMap>;
+  getDreamEntry(entryId: string): Promise<JsonMap | null>;
   patchDreamEntry(entryId: string, patch: JsonMap): Promise<void>;
   saveSleepCaptureRecord(uid: string, record: JsonMap): Promise<JsonMap>;
   createAssistantThread(
@@ -951,6 +1098,7 @@ export interface AssistantDataRepository {
     updatedAt: string;
   }>;
   deleteAssistantThread(uid: string, threadId: string): Promise<void>;
+  getAssistantThread(uid: string, threadId: string): Promise<JsonMap | null>;
   ensureAssistantThread(
     uid: string,
     threadId: string,
@@ -1008,7 +1156,11 @@ export interface AssistantDataRepository {
     runId: string,
     run: AssistantRunDoc,
   ): Promise<void>;
-  setDreamAnalysis(entryId: string, analysis: DreamAnalysis): Promise<void>;
+  setDreamAnalysis(
+    entryId: string,
+    analysis: DreamAnalysis,
+    sourceBodyHash?: string,
+  ): Promise<void>;
   upsertNotification(
     uid: string,
     notificationId: string,
@@ -1088,6 +1240,19 @@ export class FirestoreRepository implements AssistantDataRepository {
   }
 
   async getAudioTrackCatalog(_uid: string): Promise<JsonMap> {
+    if (this.fileStorage?.listAudioFiles) {
+      try {
+        const storageTracks = await this.fileStorage.listAudioFiles(
+          process.env.SLEEP_AUDIO_STORAGE_PREFIX ?? "audio/sleep/",
+        );
+        if (storageTracks.length > 0) {
+          return { tracks: storageTracks };
+        }
+      } catch (error) {
+        console.warn("[repo] failed to list storage audio catalog:", error);
+      }
+    }
+
     const collectionTracks = (
       await this.store.query(Collections.audioTracks, {
         limit: 50,
@@ -1976,6 +2141,11 @@ export class FirestoreRepository implements AssistantDataRepository {
     );
   }
 
+  async getDreamEntry(entryId: string): Promise<JsonMap | null> {
+    const doc = await this.store.get(Collections.dreamEntries, entryId);
+    return doc ? withoutMeta(doc) : null;
+  }
+
   async patchDreamEntry(entryId: string, patch: JsonMap): Promise<void> {
     await this.store.merge(Collections.dreamEntries, entryId, patch);
   }
@@ -2069,6 +2239,20 @@ export class FirestoreRepository implements AssistantDataRepository {
     );
     await this.store.delete(Collections.assistantThreads, threadId);
     await this.store.delete(Collections.assistantThreadSummaries, threadId);
+  }
+
+  async getAssistantThread(
+    uid: string,
+    threadId: string,
+  ): Promise<JsonMap | null> {
+    const existing = await this.store.get(
+      Collections.assistantThreads,
+      threadId,
+    );
+    if (!existing || asString(existing.userId) != uid) {
+      return null;
+    }
+    return withoutMeta(existing);
   }
 
   async ensureAssistantThread(
@@ -2586,6 +2770,7 @@ export class FirestoreRepository implements AssistantDataRepository {
   async setDreamAnalysis(
     entryId: string,
     analysis: DreamAnalysis,
+    sourceBodyHash?: string,
   ): Promise<void> {
     await this.store.merge(Collections.dreamEntries, entryId, {
       ai: {
@@ -2593,6 +2778,7 @@ export class FirestoreRepository implements AssistantDataRepository {
         dominantEmotion: analysis.dominantEmotion,
         suggestedFocus: analysis.suggestedFocus,
         sourceRefs: analysis.sourceRefs,
+        ...(sourceBodyHash ? { sourceBodyHash } : {}),
         updatedAt: nowIso(),
       },
     });
