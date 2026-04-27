@@ -341,7 +341,7 @@ void _routeAfterSleepModeFinish(
       context.go(AppRoutes.homePreSleep);
       return;
     case FinishSleepModeResult.goToFeedback:
-      context.go(
+      context.push(
         AppRoutes.feedbackMorningLocation(
           sessionId: currentSleepDaySession?.id,
           resumeToSleep: resumeToSleep,

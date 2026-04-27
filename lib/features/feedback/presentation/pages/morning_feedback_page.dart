@@ -399,6 +399,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                   const SizedBox(height: AppSpacing.md),
                   PrimaryButton(
                     label: '返回',
+                    size: PrimaryButtonSize.compact,
                     variant: PrimaryButtonVariant.ghost,
                     onPressed: _isReturningToSleep
                         ? null

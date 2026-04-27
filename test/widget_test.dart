@@ -2551,6 +2551,46 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('返回'), findsOneWidget);
+
+      final PrimaryButton returnButton = tester.widget<PrimaryButton>(
+        find.widgetWithText(PrimaryButton, '返回'),
+      );
+      expect(returnButton.size, PrimaryButtonSize.compact);
+    },
+  );
+
+  testWidgets(
+    'direct morning feedback tool from post-sleep page does not bounce to home first',
+    (WidgetTester tester) async {
+      final _FakeAppNotificationService notificationService =
+          _FakeAppNotificationService();
+      DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.homePreSleep,
+        clock: () => currentTime,
+        appNotificationService: notificationService,
+      );
+
+      await tester.tap(find.byType(StartSleepModeCard));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      currentTime = DateTime(2030, 4, 5, 15, 10);
+
+      expect(find.byType(HomePostSleepPage), findsOneWidget);
+      await tester.dragUntilVisible(
+        find.text('晨间反馈'),
+        find.byType(Scrollable).first,
+        const Offset(0, -220),
+      );
+      await tester.pump();
+      await tester.tap(find.text('晨间反馈').first);
+      await tester.pump();
+
+      await tester.pumpAndSettle();
+      expect(find.byType(MorningFeedbackPage), findsOneWidget);
+      expect(find.byType(HomePostSleepPage), findsNothing);
     },
   );
 
