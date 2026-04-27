@@ -5,6 +5,18 @@ import 'package:sleep_dorm_app/features/feedback/presentation/pages/morning_feed
 
 void main() {
   test(
+    'allows explicit morning feedback lookup for an active sleep session',
+    () {
+      expect(
+        canOpenMorningFeedbackExplicitSession(
+          _buildActiveSleepModeSession(id: 'active-session'),
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test(
     'shows loading for explicit session lookup until the repository becomes ready',
     () {
       expect(
@@ -115,6 +127,38 @@ void main() {
     expect(canSubmitMorningFeedbackForSession(session), isFalse);
     expect(resolveMorningFeedbackSessionEndAt(session), isNull);
   });
+}
+
+SleepSession _buildActiveSleepModeSession({required String id}) {
+  final DateTime startedAt = DateTime(2026, 4, 17, 23, 18);
+  return SleepSession(
+    id: id,
+    uid: 'cloud-user',
+    startedAt: startedAt,
+    endedAt: null,
+    sleepDayKey: sleepDayKeyFromDate(startedAt),
+    status: SleepSessionStatus.active,
+    sleepModeActive: true,
+    dormId: 'dorm-204',
+    recommendations: <NightRecommendation>[
+      NightRecommendation(
+        id: '$id-rec',
+        title: 'Active recommendation',
+        subtitle: 'Live session recommendation',
+        type: RecommendationType.quickAction,
+        icon: Icons.bedtime_rounded,
+        tags: const <String>['active'],
+        executionState: RecommendationExecutionState.selected,
+      ),
+    ],
+    selectedRecommendationIds: <String>['$id-rec'],
+    segments: <SleepSegment>[SleepSegment(startedAt: startedAt, endedAt: null)],
+    trackedDurationMinutes: 0,
+    awakenings: const <NightAwakeningEntry>[],
+    feedback: const <RecommendationFeedback>[],
+    summary: null,
+    updatedAt: startedAt,
+  );
 }
 
 SleepSession _buildPendingFeedbackSession({required String id}) {

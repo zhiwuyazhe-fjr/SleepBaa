@@ -10,6 +10,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/state/sleep_experience_controller.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
@@ -18,6 +19,8 @@ import 'package:sleep_dorm_app/core/widgets/status_chip.dart';
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.dart';
 
 enum _SleepExitAction { back, pause, finish }
+
+const String _feedbackAlreadySubmittedMessage = '您已经填写过晨间反馈，小眠已经收到🫡';
 
 class HomePostSleepPage extends StatelessWidget {
   const HomePostSleepPage({super.key});
@@ -73,9 +76,7 @@ class HomePostSleepPage extends StatelessWidget {
               title: '晨间反馈',
               subtitle: '醒来后逐条反馈昨晚建议',
               icon: Icons.wb_sunny_rounded,
-              onTap: () async {
-                await _finishSleepModeAndOpenFeedback(context, services);
-              },
+              onTap: () => _openMorningFeedbackFromSleepMode(context, services),
             ),
           ];
           return Stack(
@@ -94,115 +95,150 @@ class HomePostSleepPage extends StatelessWidget {
                       final double contentWidth =
                           constraints.maxWidth - (AppSpacing.md * 2);
                       final double moonSize = contentWidth.clamp(160.0, 220.0);
-                      return SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(
-                          AppSpacing.md,
-                          AppSpacing.lg,
-                          AppSpacing.md,
-                          160,
-                        ),
-                        child: Column(
-                          children: <Widget>[
-                            Text(
-                              'Companion Mode',
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(
-                                    color: palette.primarySoft.withAlpha(120),
-                                    letterSpacing: 1.6,
-                                  ),
-                            ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(
-                              '睡眠模式已开启',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(
-                                    color: AppColors.onDark,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                            ),
-                            const SizedBox(height: AppSpacing.lg),
-                            SleepModeMoon(size: moonSize),
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(
-                              '安心休息，我会继续帮你守着今晚的节奏。',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: AppColors.onDark.withAlpha(160),
-                                    height: 1.4,
-                                  ),
-                            ),
-                            const SizedBox(height: AppSpacing.md),
-                            StreamBuilder<int>(
-                              stream: Stream<int>.periodic(
-                                const Duration(seconds: 30),
-                                (int count) => count,
+                      return Column(
+                        children: <Widget>[
+                          Expanded(
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.fromLTRB(
+                                AppSpacing.md,
+                                AppSpacing.lg,
+                                AppSpacing.md,
+                                AppSpacing.lg,
                               ),
-                              initialData: 0,
-                              builder:
-                                  (BuildContext context, AsyncSnapshot<int> _) {
-                                    final String runtimeLabel;
-                                    if (session == null) {
-                                      runtimeLabel = '刚刚进入睡眠模式';
-                                    } else if (session.hasSubmittedFeedback) {
-                                      runtimeLabel = '晨间反馈已完成，本次不再累计';
-                                    } else {
-                                      runtimeLabel =
-                                          '已运行 ${session.liveTrackedDurationMinutes().clamp(1, 24 * 60)} 分钟';
-                                    }
-                                    return Wrap(
-                                      spacing: AppSpacing.xs,
-                                      runSpacing: AppSpacing.xs,
-                                      alignment: WrapAlignment.center,
-                                      children: <Widget>[
-                                        StatusChip(
-                                          label: runtimeLabel,
-                                          backgroundColor: AppColors.darkBorder,
-                                          foregroundColor: AppColors.onDark,
-                                          borderColor: AppColors.darkBorder,
-                                          showDot: true,
-                                          dotColor: palette.primarySoft,
+                              child: Column(
+                                children: <Widget>[
+                                  Text(
+                                    'Companion Mode',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          color: palette.primarySoft.withAlpha(
+                                            120,
+                                          ),
+                                          letterSpacing: 1.6,
                                         ),
-                                        StatusChip(
-                                          label: '宿舍 ${dorm.quietLabel}',
-                                          backgroundColor: AppColors.darkBorder,
-                                          foregroundColor: AppColors.onDark,
-                                          borderColor: AppColors.darkBorder,
-                                          icon: Icons.volume_off_rounded,
+                                  ),
+                                  const SizedBox(height: AppSpacing.xs),
+                                  Text(
+                                    '睡眠模式已开启',
+                                    textAlign: TextAlign.center,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineSmall
+                                        ?.copyWith(
+                                          color: AppColors.onDark,
+                                          fontWeight: FontWeight.w700,
                                         ),
-                                        const StatusChip(
-                                          label: 'AI 守护中',
-                                          backgroundColor: AppColors.darkBorder,
-                                          foregroundColor: AppColors.onDark,
-                                          borderColor: AppColors.darkBorder,
-                                          icon: Icons.security_rounded,
+                                  ),
+                                  const SizedBox(height: AppSpacing.lg),
+                                  SleepModeMoon(size: moonSize),
+                                  const SizedBox(height: AppSpacing.xs),
+                                  Text(
+                                    '安心休息，我会继续帮你守着今晚的节奏。',
+                                    textAlign: TextAlign.center,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: AppColors.onDark.withAlpha(
+                                            160,
+                                          ),
+                                          height: 1.4,
                                         ),
-                                      ],
-                                    );
-                                  },
+                                  ),
+                                  const SizedBox(height: AppSpacing.md),
+                                  StreamBuilder<int>(
+                                    stream: Stream<int>.periodic(
+                                      const Duration(seconds: 30),
+                                      (int count) => count,
+                                    ),
+                                    initialData: 0,
+                                    builder:
+                                        (
+                                          BuildContext context,
+                                          AsyncSnapshot<int> _,
+                                        ) {
+                                          final String runtimeLabel;
+                                          if (session == null) {
+                                            runtimeLabel = '刚刚进入睡眠模式';
+                                          } else if (session
+                                              .hasSubmittedFeedback) {
+                                            runtimeLabel = '晨间反馈已完成，本次不再累计';
+                                          } else {
+                                            runtimeLabel =
+                                                '已运行 ${session.liveTrackedDurationMinutes().clamp(1, 24 * 60)} 分钟';
+                                          }
+                                          return Wrap(
+                                            spacing: AppSpacing.xs,
+                                            runSpacing: AppSpacing.xs,
+                                            alignment: WrapAlignment.center,
+                                            children: <Widget>[
+                                              StatusChip(
+                                                label: runtimeLabel,
+                                                backgroundColor:
+                                                    AppColors.darkBorder,
+                                                foregroundColor:
+                                                    AppColors.onDark,
+                                                borderColor:
+                                                    AppColors.darkBorder,
+                                                showDot: true,
+                                                dotColor: palette.primarySoft,
+                                              ),
+                                              StatusChip(
+                                                label: '宿舍 ${dorm.quietLabel}',
+                                                backgroundColor:
+                                                    AppColors.darkBorder,
+                                                foregroundColor:
+                                                    AppColors.onDark,
+                                                borderColor:
+                                                    AppColors.darkBorder,
+                                                icon: Icons.volume_off_rounded,
+                                              ),
+                                              const StatusChip(
+                                                label: 'AI 守护中',
+                                                backgroundColor:
+                                                    AppColors.darkBorder,
+                                                foregroundColor:
+                                                    AppColors.onDark,
+                                                borderColor:
+                                                    AppColors.darkBorder,
+                                                icon: Icons.security_rounded,
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                  ),
+                                  const SizedBox(height: AppSpacing.lg),
+                                  SessionAudioCard(
+                                    track:
+                                        services
+                                            .audioPlaybackController
+                                            .currentTrack ??
+                                        audioRecommendation?.track,
+                                    playbackState: services
+                                        .audioPlaybackController
+                                        .playbackState,
+                                    position: services
+                                        .audioPlaybackController
+                                        .position,
+                                    onToggle: () async {
+                                      await services.sleepExperienceController
+                                          .toggleSleepAudio();
+                                    },
+                                  ),
+                                  const SizedBox(height: AppSpacing.md),
+                                  _SleepSupportToolsSection(tools: tools),
+                                ],
+                              ),
                             ),
-                            const SizedBox(height: AppSpacing.lg),
-                            SessionAudioCard(
-                              track:
-                                  services
-                                      .audioPlaybackController
-                                      .currentTrack ??
-                                  audioRecommendation?.track,
-                              playbackState: services
-                                  .audioPlaybackController
-                                  .playbackState,
-                              position:
-                                  services.audioPlaybackController.position,
-                              onToggle: () async {
-                                await services.sleepExperienceController
-                                    .toggleSleepAudio();
-                              },
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              AppSpacing.md,
+                              AppSpacing.xs,
+                              AppSpacing.md,
+                              0,
                             ),
-                            const SizedBox(height: AppSpacing.md),
-                            _SleepSupportToolsSection(tools: tools),
-                            const SizedBox(height: AppSpacing.md),
-                            PrimaryButton(
+                            child: PrimaryButton(
                               label: '结束睡眠模式',
                               size: PrimaryButtonSize.compact,
                               variant: PrimaryButtonVariant.ghost,
@@ -211,8 +247,8 @@ class HomePostSleepPage extends StatelessWidget {
                               onPressed: () =>
                                   _handleSleepPageExit(context, services),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       );
                     },
                   ),
@@ -304,56 +340,79 @@ Future<void> _handleSleepPageExit(
       }
       return;
     case _SleepExitAction.finish:
-      await _finishSleepModeAndOpenFeedback(context, services);
+      await _handleSleepPageFinishViaFeedback(context, services);
       return;
   }
 }
 
-Future<void> _finishSleepModeAndOpenFeedback(
+Future<void> _handleSleepPageFinishViaFeedback(
   BuildContext context,
   AppServices services,
 ) async {
-  final FinishSleepModeResult result = await services.sleepExperienceController
-      .finishSleepMode();
-  if (!context.mounted) {
+  final SleepSession? currentSleepDaySession = _currentSleepDaySession(
+    services,
+  );
+  if (currentSleepDaySession?.hasSubmittedFeedback ?? false) {
+    final FinishSleepModeResult result = await services
+        .sleepExperienceController
+        .finishSleepMode();
+    if (!context.mounted) {
+      return;
+    }
+    _routeAfterSleepModeFinish(
+      context,
+      result,
+      fallbackSessionId: currentSleepDaySession?.id,
+    );
     return;
   }
-  _routeAfterSleepModeFinish(
-    context,
-    services: services,
-    result: result,
-    resumeToSleep: true,
+  _openMorningFeedbackFromSleepMode(context, services);
+}
+
+void _openMorningFeedbackFromSleepMode(
+  BuildContext context,
+  AppServices services,
+) {
+  final SleepSession? currentSleepDaySession = _currentSleepDaySession(
+    services,
+  );
+  if (currentSleepDaySession?.hasSubmittedFeedback ?? false) {
+    unawaited(
+      notifyPassiveToast(context, message: _feedbackAlreadySubmittedMessage),
+    );
+    return;
+  }
+  context.push(
+    AppRoutes.feedbackMorningLocation(sessionId: currentSleepDaySession?.id),
+  );
+}
+
+SleepSession? _currentSleepDaySession(AppServices services) {
+  return services.sleepSessionRepository.sessionForSleepDayKey(
+    sleepDayKeyFromDate(services.sleepExperienceController.currentTime),
   );
 }
 
 void _routeAfterSleepModeFinish(
-  BuildContext context, {
-  required AppServices services,
-  required FinishSleepModeResult result,
-  required bool resumeToSleep,
+  BuildContext context,
+  FinishSleepModeResult result, {
+  String? fallbackSessionId,
 }) {
-  final SleepSession? currentSleepDaySession = services.sleepSessionRepository
-      .sessionForSleepDayKey(
-        sleepDayKeyFromDate(services.sleepExperienceController.currentTime),
-      );
   switch (result) {
-    case FinishSleepModeResult.noActiveSession:
-      context.go(AppRoutes.homePreSleep);
-      return;
-    case FinishSleepModeResult.goToFeedback:
-      context.push(
-        AppRoutes.feedbackMorningLocation(
-          sessionId: currentSleepDaySession?.id,
-          resumeToSleep: resumeToSleep,
-        ),
-      );
-      return;
     case FinishSleepModeResult.goHomeFeedbackAlreadySubmitted:
       context.go(
         AppRoutes.homePreSleepLocation(
           notice: AppRoutes.feedbackReceivedNotice,
         ),
       );
+      return;
+    case FinishSleepModeResult.goToFeedback:
+      context.go(
+        AppRoutes.feedbackMorningLocation(sessionId: fallbackSessionId),
+      );
+      return;
+    case FinishSleepModeResult.noActiveSession:
+      context.go(AppRoutes.homePreSleep);
       return;
   }
 }

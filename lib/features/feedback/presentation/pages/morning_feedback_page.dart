@@ -28,6 +28,20 @@ bool shouldShowMorningFeedbackLoading({
   );
 }
 
+@visibleForTesting
+bool canOpenMorningFeedbackExplicitSession(SleepSession session) {
+  return isLiveMorningFeedbackSession(session) ||
+      canSubmitMorningFeedbackForSession(session);
+}
+
+@visibleForTesting
+bool isLiveMorningFeedbackSession(SleepSession session) {
+  return session.status == SleepSessionStatus.active &&
+      session.sleepModeActive &&
+      session.openSegment != null &&
+      !session.hasSubmittedFeedback;
+}
+
 class MorningFeedbackPage extends StatefulWidget {
   const MorningFeedbackPage({
     super.key,
@@ -53,9 +67,24 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
   String? _boundSessionId;
   bool _isReturningToSleep = false;
   bool _isSubmittingFeedback = false;
+  Timer? _liveRefreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _liveRefreshTimer = Timer.periodic(const Duration(seconds: 30), (
+      Timer timer,
+    ) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {});
+    });
+  }
 
   @override
   void dispose() {
+    _liveRefreshTimer?.cancel();
     for (final TextEditingController controller in _feedbackNotes.values) {
       controller.dispose();
     }
@@ -66,352 +95,396 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     final NightMoodPalette palette = context.nightMoodPalette;
-    return PopScope<void>(
-      canPop: !widget.allowReturnToSleep,
-      onPopInvokedWithResult: (bool didPop, void result) {
-        if (didPop || !widget.allowReturnToSleep) {
-          return;
-        }
-        _triggerReturnToSleep();
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('晨间反馈'),
-          leading: widget.allowReturnToSleep
-              ? IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                  onPressed: _isReturningToSleep ? null : _triggerReturnToSleep,
-                )
-              : null,
-        ),
-        body: ListenableBuilder(
-          listenable: Listenable.merge(<Listenable>[
-            services.sleepSessionRepository,
-            services.notificationRepository,
-          ]),
-          builder: (BuildContext context, Widget? child) {
-            if (_isReturningToSleep) {
-              return _ReturningToSleepLoading(palette: palette);
+    return ListenableBuilder(
+      listenable: Listenable.merge(<Listenable>[
+        services.sleepSessionRepository,
+        services.notificationRepository,
+      ]),
+      builder: (BuildContext context, Widget? child) {
+        final SleepSessionRepository repository =
+            services.sleepSessionRepository;
+        final GoRouterState routerState = GoRouterState.of(context);
+        final String explicitSessionId =
+            widget.sessionId ??
+            routerState.uri.queryParameters['sessionId'] ??
+            '';
+        final DateTime feedbackMoment =
+            services.sleepExperienceController.currentTime;
+        final _MorningFeedbackTarget target = _resolveTargetSession(
+          repository,
+          feedbackMoment: feedbackMoment,
+          explicitSessionId: explicitSessionId,
+        );
+        final SleepSession? session = target.session;
+        final bool isLiveMode =
+            session != null && target.mode == _MorningFeedbackMode.live;
+        final bool usesReturnFlow = widget.allowReturnToSleep || isLiveMode;
+        return PopScope<void>(
+          canPop: !usesReturnFlow,
+          onPopInvokedWithResult: (bool didPop, void result) {
+            if (didPop) {
+              return;
             }
-            if (_isSubmittingFeedback) {
-              return _SubmittingMorningFeedbackLoading(palette: palette);
+            if (isLiveMode) {
+              _triggerDiscardLiveFeedback();
+              return;
             }
-            final SleepSessionRepository repository =
-                services.sleepSessionRepository;
-            final GoRouterState routerState = GoRouterState.of(context);
-            final String explicitSessionId =
-                widget.sessionId ??
-                routerState.uri.queryParameters['sessionId'] ??
-                '';
-            if (shouldShowMorningFeedbackLoading(
+            if (!widget.allowReturnToSleep) {
+              return;
+            }
+            _triggerReturnToSleep();
+          },
+          child: Scaffold(
+            appBar: AppBar(
+              title: const Text('晨间反馈'),
+              leading: usesReturnFlow
+                  ? IconButton(
+                      icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                      onPressed: _isReturningToSleep
+                          ? null
+                          : isLiveMode
+                          ? _triggerDiscardLiveFeedback
+                          : _triggerReturnToSleep,
+                    )
+                  : null,
+            ),
+            body: _buildBody(
+              context,
+              services: services,
+              palette: palette,
+              repository: repository,
               explicitSessionId: explicitSessionId,
-              isReadyForSessionLookup: repository.isReadyForSessionLookup,
-              sessions: repository.sessions,
-            )) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            final DateTime feedbackMoment =
-                services.sleepExperienceController.currentTime;
-            final _MorningFeedbackTarget target = _resolveTargetSession(
-              repository,
+              target: target,
               feedbackMoment: feedbackMoment,
-              explicitSessionId: explicitSessionId,
-            );
-            final SleepSession? session = target.session;
-            if (session == null) {
-              return Center(child: Text(target.message));
-            }
-            _bindSession(session);
-            final DateTime endAt = _resolveFeedbackDisplayEndAt(
-              session,
-              feedbackMoment,
-            );
-            final DateTime startAt = _resolveFeedbackDisplayStartAt(
-              session,
-              endAt,
-            );
-            final int totalRecordMinutes = session.liveTrackedDurationMinutes(
-              now: endAt,
-            );
-            final int actualSleepMinutes =
-                (totalRecordMinutes - _estimatedSleepLatency).clamp(0, 24 * 60);
-            final double actualSleepHours = actualSleepMinutes / 60;
+              usesReturnFlow: usesReturnFlow,
+              isLiveMode: isLiveMode,
+            ),
+          ),
+        );
+      },
+    );
+  }
 
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md,
-                AppSpacing.md,
-                AppSpacing.md,
-                AppSpacing.xl,
+  Widget _buildBody(
+    BuildContext context, {
+    required AppServices services,
+    required NightMoodPalette palette,
+    required SleepSessionRepository repository,
+    required String explicitSessionId,
+    required _MorningFeedbackTarget target,
+    required DateTime feedbackMoment,
+    required bool usesReturnFlow,
+    required bool isLiveMode,
+  }) {
+    if (_isReturningToSleep) {
+      return _ReturningToSleepLoading(palette: palette);
+    }
+    if (_isSubmittingFeedback) {
+      return _SubmittingMorningFeedbackLoading(palette: palette);
+    }
+    if (shouldShowMorningFeedbackLoading(
+      explicitSessionId: explicitSessionId,
+      isReadyForSessionLookup: repository.isReadyForSessionLookup,
+      sessions: repository.sessions,
+    )) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final SleepSession? session = target.session;
+    if (session == null) {
+      return Center(child: Text(target.message));
+    }
+    _bindSession(session);
+    final DateTime endAt = _resolveFeedbackDisplayEndAt(
+      session,
+      feedbackMoment,
+    );
+    final DateTime startAt = _resolveFeedbackDisplayStartAt(session, endAt);
+    final int totalRecordMinutes = session.liveTrackedDurationMinutes(
+      now: endAt,
+    );
+    final int actualSleepMinutes = (totalRecordMinutes - _estimatedSleepLatency)
+        .clamp(0, 24 * 60);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.xl,
+      ),
+      children: <Widget>[
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          borderRadius: AppRadius.compactCard,
+          border: Border.all(color: AppColors.surfaceBorder),
+          boxShadow: const <BoxShadow>[],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.xxs,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.start,
+                children: <Widget>[
+                  Text(
+                    '睡眠摘要',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    '${_formatDateLabel(startAt)} ${_formatClock(startAt)} - '
+                    '${_formatDateLabel(endAt)} ${_formatClock(endAt)}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
               ),
-              children: <Widget>[
-                AppCard(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  borderRadius: AppRadius.compactCard,
-                  border: Border.all(color: AppColors.surfaceBorder),
-                  boxShadow: const <BoxShadow>[],
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: _MetricSummaryTile(
+                      label: '睡眠质量',
+                      value: '$_sleepQuality / 5',
+                      palette: palette,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: _MetricSummaryTile(
+                      label: '恢复感',
+                      value: '$_restedLevel / 5',
+                      palette: palette,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              _MetricSummaryTile(
+                label: '实际睡眠时长',
+                value: _formatDurationMinutes(actualSleepMinutes),
+                palette: palette,
+                detail:
+                    '记录 ${_formatDurationMinutes(totalRecordMinutes)}，扣除预计入睡时长后自动计算',
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _MetricSlider(
+                label: '预计入睡时长',
+                value: _estimatedSleepLatency.toDouble(),
+                min: 0,
+                max: 120,
+                divisions: 24,
+                suffix: 'min',
+                palette: palette,
+                onChanged: (double value) {
+                  setState(() => _estimatedSleepLatency = value.round());
+                },
+              ),
+              _MetricSlider(
+                label: '睡眠质量',
+                value: _sleepQuality.toDouble(),
+                min: 1,
+                max: 5,
+                divisions: 4,
+                suffix: '/5',
+                palette: palette,
+                onChanged: (double value) {
+                  setState(() => _sleepQuality = value.round());
+                },
+              ),
+              _MetricSlider(
+                label: '起床恢复感',
+                value: _restedLevel.toDouble(),
+                min: 1,
+                max: 5,
+                divisions: 4,
+                suffix: '/5',
+                palette: palette,
+                onChanged: (double value) {
+                  setState(() => _restedLevel = value.round());
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                '逐条反馈建议',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            Text(
+              '${session.recommendations.length} 条',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        ...session.recommendations.map((NightRecommendation recommendation) {
+          final TextEditingController noteController = _feedbackNotes
+              .putIfAbsent(recommendation.id, TextEditingController.new);
+          final RecommendationFeedbackStatus current =
+              _statuses[recommendation.id] ??
+              RecommendationFeedbackStatus.neutral;
+          final bool hasNote = noteController.text.trim().isNotEmpty;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: AppCard(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              borderRadius: AppRadius.compactCard,
+              border: Border.all(color: AppColors.surfaceBorder),
+              boxShadow: const <BoxShadow>[],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    recommendation.title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    recommendation.subtitle,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Wrap(
+                    spacing: AppSpacing.xs,
+                    runSpacing: AppSpacing.xs,
                     children: <Widget>[
-                      Wrap(
-                        spacing: AppSpacing.sm,
-                        runSpacing: AppSpacing.xxs,
-                        alignment: WrapAlignment.spaceBetween,
-                        crossAxisAlignment: WrapCrossAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            '睡眠摘要',
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          Text(
-                            '${_formatDateLabel(startAt)} ${_formatClock(startAt)} - '
-                            '${_formatDateLabel(endAt)} ${_formatClock(endAt)}',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: AppColors.textSecondary),
-                          ),
-                        ],
+                      _CompactActionPill(
+                        icon: hasNote
+                            ? Icons.edit_note_rounded
+                            : Icons.add_rounded,
+                        label: hasNote ? '已填写说明' : '补充说明',
+                        onTap: () => _showRecommendationNoteSheet(
+                          context,
+                          controller: noteController,
+                        ),
                       ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: _MetricSummaryTile(
-                              label: '睡眠质量',
-                              value: '$_sleepQuality / 5',
-                              palette: palette,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.xs),
-                          Expanded(
-                            child: _MetricSummaryTile(
-                              label: '恢复感',
-                              value: '$_restedLevel / 5',
-                              palette: palette,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      _MetricSummaryTile(
-                        label: '实际睡眠时长',
-                        value: _formatDurationMinutes(actualSleepMinutes),
-                        palette: palette,
-                        detail:
-                            '记录 ${_formatDurationMinutes(totalRecordMinutes)}，扣除预计入睡时长后自动计算',
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      _MetricSlider(
-                        label: '预计入睡时长',
-                        value: _estimatedSleepLatency.toDouble(),
-                        min: 0,
-                        max: 120,
-                        divisions: 24,
-                        suffix: 'min',
-                        palette: palette,
-                        onChanged: (double value) {
+                      _CompactActionPill(
+                        label: '反馈状态：${_feedbackLabel(current)} ▾',
+                        highlight:
+                            current == RecommendationFeedbackStatus.effective,
+                        onTap: () async {
+                          final RecommendationFeedbackStatus? selected =
+                              await _showRecommendationStatusSheet(
+                                context,
+                                current: current,
+                              );
+                          if (selected == null || !mounted) {
+                            return;
+                          }
                           setState(
-                            () => _estimatedSleepLatency = value.round(),
+                            () => _statuses[recommendation.id] = selected,
                           );
-                        },
-                      ),
-                      _MetricSlider(
-                        label: '睡眠质量',
-                        value: _sleepQuality.toDouble(),
-                        min: 1,
-                        max: 5,
-                        divisions: 4,
-                        suffix: '/5',
-                        palette: palette,
-                        onChanged: (double value) {
-                          setState(() => _sleepQuality = value.round());
-                        },
-                      ),
-                      _MetricSlider(
-                        label: '起床恢复感',
-                        value: _restedLevel.toDouble(),
-                        min: 1,
-                        max: 5,
-                        divisions: 4,
-                        suffix: '/5',
-                        palette: palette,
-                        onChanged: (double value) {
-                          setState(() => _restedLevel = value.round());
                         },
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: Text(
-                        '逐条反馈建议',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      '${session.recommendations.length} 条',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                ...session.recommendations.map((
-                  NightRecommendation recommendation,
-                ) {
-                  final TextEditingController noteController = _feedbackNotes
-                      .putIfAbsent(
-                        recommendation.id,
-                        TextEditingController.new,
-                      );
-                  final RecommendationFeedbackStatus current =
-                      _statuses[recommendation.id] ??
-                      RecommendationFeedbackStatus.neutral;
-                  final bool hasNote = noteController.text.trim().isNotEmpty;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    child: AppCard(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      borderRadius: AppRadius.compactCard,
-                      border: Border.all(color: AppColors.surfaceBorder),
-                      boxShadow: const <BoxShadow>[],
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            recommendation.title,
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: AppSpacing.xxs),
-                          Text(
-                            recommendation.subtitle,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: AppColors.textSecondary,
-                                  height: 1.35,
-                                ),
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                          Wrap(
-                            spacing: AppSpacing.xs,
-                            runSpacing: AppSpacing.xs,
-                            children: <Widget>[
-                              _CompactActionPill(
-                                icon: hasNote
-                                    ? Icons.edit_note_rounded
-                                    : Icons.add_rounded,
-                                label: hasNote ? '已填写说明' : '补充说明',
-                                onTap: () => _showRecommendationNoteSheet(
-                                  context,
-                                  controller: noteController,
-                                ),
-                              ),
-                              _CompactActionPill(
-                                label: '反馈状态：${_feedbackLabel(current)} ▾',
-                                highlight:
-                                    current ==
-                                    RecommendationFeedbackStatus.effective,
-                                onTap: () async {
-                                  final RecommendationFeedbackStatus? selected =
-                                      await _showRecommendationStatusSheet(
-                                        context,
-                                        current: current,
-                                      );
-                                  if (selected == null || !mounted) {
-                                    return;
-                                  }
-                                  setState(
-                                    () =>
-                                        _statuses[recommendation.id] = selected,
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
-                PrimaryButton(
-                  label: '提交反馈',
-                  size: PrimaryButtonSize.compact,
-                  onPressed: () async {
-                    if (_isSubmittingFeedback) {
-                      return;
-                    }
-                    setState(() => _isSubmittingFeedback = true);
-                    final GoRouter router = GoRouter.of(context);
-                    final List<RecommendationFeedback> feedback = session
-                        .recommendations
-                        .map((NightRecommendation item) {
-                          return RecommendationFeedback(
-                            recommendationId: item.id,
-                            status:
-                                _statuses[item.id] ??
-                                RecommendationFeedbackStatus.neutral,
-                            note: _feedbackNotes[item.id]?.text.trim() ?? '',
-                            submittedAt: DateTime.now(),
-                          );
-                        })
-                        .toList(growable: false);
-                    try {
-                      await services.sleepExperienceController
-                          .submitMorningFeedback(
-                            session: session,
-                            summary: MorningSummary(
-                              sleepQuality: _sleepQuality,
-                              restedLevel: _restedLevel,
-                              totalSleepHours: actualSleepHours,
-                              awakeningsCount: session.awakenings.length,
-                              note: '',
-                            ),
-                            feedback: feedback,
-                          );
-                      if (!context.mounted) {
-                        return;
-                      }
-                      router.go(
-                        AppRoutes.homePreSleepLocation(
-                          notice: AppRoutes.feedbackSubmittedNotice,
-                        ),
-                      );
-                    } catch (_) {
-                      if (!context.mounted) {
-                        return;
-                      }
-                      setState(() => _isSubmittingFeedback = false);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('提交晨间反馈失败，请重试')),
-                      );
-                    }
-                  },
-                ),
-                if (widget.allowReturnToSleep) ...<Widget>[
-                  const SizedBox(height: AppSpacing.md),
-                  PrimaryButton(
-                    label: '返回',
-                    size: PrimaryButtonSize.compact,
-                    variant: PrimaryButtonVariant.ghost,
-                    onPressed: _isReturningToSleep
-                        ? null
-                        : _triggerReturnToSleep,
-                  ),
                 ],
-              ],
-            );
+              ),
+            ),
+          );
+        }),
+        PrimaryButton(
+          label: isLiveMode ? '提交反馈并结束本次睡眠' : '提交反馈',
+          size: PrimaryButtonSize.compact,
+          onPressed: () async {
+            if (_isSubmittingFeedback) {
+              return;
+            }
+            setState(() => _isSubmittingFeedback = true);
+            final GoRouter router = GoRouter.of(context);
+            final DateTime submittedAt =
+                services.sleepExperienceController.currentTime;
+            final int submittedRecordMinutes = session
+                .liveTrackedDurationMinutes(now: submittedAt);
+            final int submittedActualSleepMinutes =
+                (submittedRecordMinutes - _estimatedSleepLatency).clamp(
+                  0,
+                  24 * 60,
+                );
+            final List<RecommendationFeedback> feedback = session
+                .recommendations
+                .map((NightRecommendation item) {
+                  return RecommendationFeedback(
+                    recommendationId: item.id,
+                    status:
+                        _statuses[item.id] ??
+                        RecommendationFeedbackStatus.neutral,
+                    note: _feedbackNotes[item.id]?.text.trim() ?? '',
+                    submittedAt: DateTime.now(),
+                  );
+                })
+                .toList(growable: false);
+            try {
+              await services.sleepExperienceController.submitMorningFeedback(
+                session: session,
+                summary: MorningSummary(
+                  sleepQuality: _sleepQuality,
+                  restedLevel: _restedLevel,
+                  totalSleepHours: submittedActualSleepMinutes / 60,
+                  awakeningsCount: session.awakenings.length,
+                  note: '',
+                ),
+                feedback: feedback,
+              );
+              if (!context.mounted) {
+                return;
+              }
+              router.go(
+                AppRoutes.homePreSleepLocation(
+                  notice: AppRoutes.feedbackSubmittedNotice,
+                ),
+              );
+            } catch (_) {
+              if (!context.mounted) {
+                return;
+              }
+              setState(() => _isSubmittingFeedback = false);
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('提交晨间反馈失败，请重试')));
+            }
           },
         ),
-      ),
+        if (usesReturnFlow) ...<Widget>[
+          const SizedBox(height: AppSpacing.md),
+          PrimaryButton(
+            label: '返回',
+            size: PrimaryButtonSize.compact,
+            variant: PrimaryButtonVariant.ghost,
+            onPressed: _isReturningToSleep
+                ? null
+                : isLiveMode
+                ? _triggerDiscardLiveFeedback
+                : _triggerReturnToSleep,
+          ),
+        ],
+      ],
     );
+  }
+
+  void _triggerDiscardLiveFeedback() {
+    if (!context.mounted) {
+      return;
+    }
+    unawaited(_handleDiscardLiveFeedback(context));
   }
 
   void _triggerReturnToSleep() {
@@ -437,8 +510,17 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
             message: '这条睡眠记录已完成晨间反馈，可在我的页查看同步结果。',
           );
         }
+        if (isLiveMorningFeedbackSession(session)) {
+          return _MorningFeedbackTarget(
+            session: session,
+            mode: _MorningFeedbackMode.live,
+          );
+        }
         if (_canSubmitFeedbackFor(session)) {
-          return _MorningFeedbackTarget(session: session);
+          return _MorningFeedbackTarget(
+            session: session,
+            mode: _MorningFeedbackMode.historical,
+          );
         }
         return const _MorningFeedbackTarget(message: '这条睡眠记录当前不可继续补反馈。');
       }
@@ -450,7 +532,10 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
         .sessionForSleepDayKey(currentSleepDayKey);
     if (currentSleepDaySession != null &&
         _canSubmitFeedbackFor(currentSleepDaySession)) {
-      return _MorningFeedbackTarget(session: currentSleepDaySession);
+      return _MorningFeedbackTarget(
+        session: currentSleepDaySession,
+        mode: _MorningFeedbackMode.historical,
+      );
     }
     return const _MorningFeedbackTarget(message: '当前没有待补反馈的睡眠记录。');
   }
@@ -512,6 +597,37 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('确认返回'),
+            ),
+          ],
+        );
+      },
+    );
+    return confirmed ?? false;
+  }
+
+  Future<void> _handleDiscardLiveFeedback(BuildContext context) async {
+    final bool shouldDiscard = await _confirmDiscardLiveFeedback(context);
+    if (!shouldDiscard || !context.mounted) {
+      return;
+    }
+    GoRouter.of(context).go(AppRoutes.homePostSleep);
+  }
+
+  Future<bool> _confirmDiscardLiveFeedback(BuildContext context) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('放弃本次填写？'),
+          content: const Text('返回后将丢弃当前未提交的晨间反馈，并回到睡眠模式页面继续计时。'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('继续填写'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('放弃并返回'),
             ),
           ],
         );
@@ -711,11 +827,18 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
 }
 
 class _MorningFeedbackTarget {
-  const _MorningFeedbackTarget({this.session, this.message = '当前没有待补反馈的睡眠记录。'});
+  const _MorningFeedbackTarget({
+    this.session,
+    this.mode = _MorningFeedbackMode.historical,
+    this.message = '当前没有待补反馈的睡眠记录。',
+  });
 
   final SleepSession? session;
+  final _MorningFeedbackMode mode;
   final String message;
 }
+
+enum _MorningFeedbackMode { live, historical }
 
 class _SubmittingMorningFeedbackLoading extends StatelessWidget {
   const _SubmittingMorningFeedbackLoading({required this.palette});
