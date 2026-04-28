@@ -232,6 +232,61 @@ void main() {
     expect(thoughtCleanX, lessThan(dreamJournalX));
   });
 
+  testWidgets('home quick action editor uses full-width strips on mobile', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+    );
+
+    await tester.tap(find.text('编辑').first);
+    await tester.pumpAndSettle();
+
+    final Finder selectedFinder = find.byKey(
+      const ValueKey<String>(
+        'home-quick-action-selected-${HomeQuickActionIds.dreamJournal}',
+      ),
+    );
+    final Finder availableFinder = find.byKey(
+      const ValueKey<String>(
+        'home-quick-action-add-${HomeQuickActionIds.thoughtVault}',
+      ),
+    );
+
+    expect(
+      tester.getSize(availableFinder).width,
+      closeTo(tester.getSize(selectedFinder).width, 0.1),
+    );
+  });
+
+  testWidgets(
+    'home quick action editor keeps bottom cta at 16 without safe area padding',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      tester.view.padding = const FakeViewPadding(bottom: 34);
+      addTearDown(tester.view.resetPadding);
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.homePreSleep,
+        clock: _dayClock,
+      );
+
+      await tester.tap(find.text('编辑').first);
+      await tester.pumpAndSettle();
+
+      final Finder saveButton = find.widgetWithText(FilledButton, '保存快捷功能');
+      final double buttonBottom = tester.getBottomLeft(saveButton).dy;
+      expect(844 - buttonBottom, closeTo(16, 0.1));
+    },
+  );
+
   testWidgets('night entry from /home opens the welcome flow first', (
     WidgetTester tester,
   ) async {
@@ -1783,8 +1838,9 @@ void main() {
       find.byKey(const ValueKey<String>('dorm-badge-grid-no-wake-room')),
       findsOneWidget,
     );
-    expect(find.text('寝室脉搏'), findsOneWidget);
-    expect(find.text('显示当前勋章'), findsOneWidget);
+    expect(find.text('寝室脉搏显示当前勋章'), findsOneWidget);
+    expect(find.text('寝室脉搏'), findsNothing);
+    expect(find.text('显示当前勋章'), findsNothing);
     expect(
       find.byKey(const ValueKey<String>('dorm-badge-visibility-item')),
       findsOneWidget,
@@ -3228,4 +3284,3 @@ class _FakeAppNotificationService extends AppNotificationService {
     await _launchIntentController.close();
   }
 }
-

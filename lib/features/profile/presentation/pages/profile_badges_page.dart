@@ -844,13 +844,12 @@ class _DormPulseBadgeVisibilityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppSettingsGroup(
       key: const ValueKey<String>('dorm-badge-visibility-group'),
-      title: '寝室脉搏',
       children: <Widget>[
         AppSettingsItem(
           key: const ValueKey<String>('dorm-badge-visibility-item'),
           icon: Icons.graphic_eq_rounded,
           iconColor: palette.primaryDeep,
-          title: '显示当前勋章',
+          title: '寝室脉搏显示当前勋章',
           trailing: _DormBadgeVisibilityToggle(value: value, palette: palette),
           onTap: () => onChanged(!value),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
