@@ -11,6 +11,7 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 @visibleForTesting
@@ -583,24 +584,15 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
   }
 
   Future<bool> _confirmReturnToSleep(BuildContext context) async {
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('返回睡眠模式？'),
-          content: const Text('返回后将恢复睡眠模式继续计时，并丢弃当前未提交的晨间反馈。'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('继续填写'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('确认返回'),
-            ),
-          ],
-        );
-      },
+    final bool? confirmed = await showAppModal<bool>(
+      context,
+      spec: const AppConfirmationDialogSpec(
+        title: '返回睡眠模式？',
+        body: '返回后将恢复睡眠模式继续计时，并丢弃当前未提交的晨间反馈。',
+        icon: AppDialogIconSpec(icon: Icons.bedtime_rounded),
+        cancelLabel: '继续填写',
+        confirmLabel: '确认返回',
+      ),
     );
     return confirmed ?? false;
   }
@@ -614,24 +606,15 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
   }
 
   Future<bool> _confirmDiscardLiveFeedback(BuildContext context) async {
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('放弃本次填写？'),
-          content: const Text('返回后将丢弃当前未提交的晨间反馈，并回到睡眠模式页面继续计时。'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('继续填写'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('放弃并返回'),
-            ),
-          ],
-        );
-      },
+    final bool? confirmed = await showAppModal<bool>(
+      context,
+      spec: const AppDestructiveDialogSpec(
+        title: '放弃本次填写？',
+        body: '返回后将丢弃当前未提交的晨间反馈，并回到睡眠模式页面继续计时。',
+        icon: AppDialogIconSpec(icon: Icons.delete_outline_rounded),
+        cancelLabel: '继续填写',
+        confirmLabel: '放弃并返回',
+      ),
     );
     return confirmed ?? false;
   }
@@ -641,52 +624,24 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
     required RecommendationFeedbackStatus current,
   }) {
     FocusScope.of(context).unfocus();
-    return showModalBottomSheet<RecommendationFeedbackStatus>(
-      context: context,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (BuildContext sheetContext) {
-        final ThemeData theme = Theme.of(sheetContext);
-        return SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.sm,
-              AppSpacing.lg,
-              AppSpacing.xl,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text('选择反馈状态', style: theme.textTheme.titleLarge),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  '选择一个更贴近昨晚实际体验的状态。',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    height: 1.45,
+    return showAppModal<RecommendationFeedbackStatus>(
+      context,
+      spec: AppSelectionSheetSpec<RecommendationFeedbackStatus>(
+        title: '选择反馈状态',
+        description: '选择一个更贴近昨晚实际体验的状态。',
+        selectedValue: current,
+        useSafeArea: true,
+        showDragHandle: true,
+        options: RecommendationFeedbackStatus.values
+            .map(
+              (RecommendationFeedbackStatus status) =>
+                  AppSelectionOption<RecommendationFeedbackStatus>(
+                    value: status,
+                    label: _feedbackLabel(status),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                ...RecommendationFeedbackStatus.values.map((
-                  RecommendationFeedbackStatus status,
-                ) {
-                  final bool isSelected = status == current;
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(_feedbackLabel(status)),
-                    trailing: isSelected
-                        ? const Icon(Icons.check_rounded)
-                        : null,
-                    onTap: () => Navigator.of(sheetContext).pop(status),
-                  );
-                }),
-              ],
-            ),
-          ),
-        );
-      },
+            )
+            .toList(),
+      ),
     );
   }
 
@@ -695,60 +650,42 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
     required TextEditingController controller,
   }) async {
     FocusScope.of(context).unfocus();
-    await showModalBottomSheet<void>(
-      context: context,
-      useSafeArea: true,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (BuildContext sheetContext) {
-        final ThemeData theme = Theme.of(sheetContext);
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
-          ),
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.sm,
-                AppSpacing.lg,
-                AppSpacing.xl,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text('补充说明', style: theme.textTheme.titleLarge),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    '用于备注这一条建议的实际体验。关闭抽屉时释放焦点。',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      height: 1.45,
-                    ),
+    await showAppModal<void>(
+      context,
+      spec: AppEditorSheetSpec<void>(
+        useSafeArea: true,
+        showDragHandle: true,
+        isScrollControlled: true,
+        builder: (BuildContext sheetContext) {
+          return AppBottomSheetScaffold(
+            key: const ValueKey<String>('app-bottom-sheet-editor'),
+            title: '补充说明',
+            description: '用于备注这一条建议的实际体验。关闭抽屉时释放焦点。',
+            includeBottomViewInsets: true,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                TextField(
+                  controller: controller,
+                  minLines: 3,
+                  maxLines: 5,
+                  decoration: const InputDecoration(
+                    hintText: '比如：昨晚实际执行时遇到的情况...',
+                    border: OutlineInputBorder(),
                   ),
-                  const SizedBox(height: AppSpacing.md),
-                  TextField(
-                    controller: controller,
-                    minLines: 3,
-                    maxLines: 5,
-                    decoration: const InputDecoration(
-                      hintText: '比如：昨晚实际执行时遇到的情况...',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  PrimaryButton(
-                    label: '保存说明',
-                    size: PrimaryButtonSize.compact,
-                    onPressed: () => Navigator.of(sheetContext).pop(),
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                PrimaryButton(
+                  label: '保存说明',
+                  size: PrimaryButtonSize.compact,
+                  onPressed: () => Navigator.of(sheetContext).pop(),
+                ),
+              ],
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
     if (!context.mounted) {
       return;

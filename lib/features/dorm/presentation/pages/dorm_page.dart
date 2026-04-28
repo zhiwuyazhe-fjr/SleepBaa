@@ -11,8 +11,9 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
-import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/core/utils/dorm_quiet_rating.dart';
+import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
+import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_invite_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
@@ -973,23 +974,18 @@ Future<void> _showGentleReminderPicker({
   }
 
   final _GentleReminderSelection? selection =
-      await showModalBottomSheet<_GentleReminderSelection>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (BuildContext sheetContext) {
-          final double bottomGap =
-              MediaQuery.viewPaddingOf(sheetContext).bottom + 88;
-          final double maxHeight =
-              MediaQuery.sizeOf(sheetContext).height * 0.68;
-          return Padding(
-            padding: EdgeInsets.only(bottom: bottomGap),
-            child: _GentleReminderSheet(
+      await showAppModal<_GentleReminderSelection>(
+        context,
+        spec: AppRichActionSheetSpec<_GentleReminderSelection>(
+          builder: (BuildContext sheetContext) {
+            final double maxHeight =
+                MediaQuery.sizeOf(sheetContext).height * 0.68;
+            return _GentleReminderSheet(
               members: selectableMembers,
               maxHeight: maxHeight,
-            ),
-          );
-        },
+            );
+          },
+        ),
       );
 
   if (selection == null ||
@@ -1283,96 +1279,56 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.xl,
-        AppSpacing.lg,
-        AppSpacing.xl,
-        AppSpacing.lg,
-      ),
-      child: SafeArea(
-        top: false,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: widget.maxHeight),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  '委婉提醒',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  '先选内容，再选对象；两个栏目可以来回切换。',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceMuted,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(
-                    children: <Widget>[
-                      _buildTabButton(
-                        context,
-                        tab: _GentleReminderTab.content,
-                        label: '内容',
-                      ),
-                      _buildTabButton(
-                        context,
-                        tab: _GentleReminderTab.target,
-                        label: '对象',
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  child: _activeTab == _GentleReminderTab.content
-                      ? KeyedSubtree(
-                          key: const ValueKey<String>(
-                            'gentle-reminder-content',
-                          ),
-                          child: _buildContentTab(context),
-                        )
-                      : KeyedSubtree(
-                          key: const ValueKey<String>('gentle-reminder-target'),
-                          child: _buildTargetTab(context),
-                        ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                PrimaryButton(
-                  label: '发送委婉提醒',
-                  onPressed: !_canSubmit
-                      ? null
-                      : () {
-                          Navigator.of(context).pop(
-                            _GentleReminderSelection(
-                              targetUid: _selectedUid!,
-                              anonymous: _anonymous,
-                              message: _resolvedMessage,
-                            ),
-                          );
-                        },
-                ),
-              ],
-            ),
-          ),
+    return AppRichActionSheetScaffold(
+      title: '委婉提醒',
+      description: '先选内容，再选对象；两个栏目可以来回切换。',
+      maxHeight: widget.maxHeight,
+      header: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceMuted,
+          borderRadius: BorderRadius.circular(999),
         ),
+        child: Row(
+          children: <Widget>[
+            _buildTabButton(
+              context,
+              tab: _GentleReminderTab.content,
+              label: '内容',
+            ),
+            _buildTabButton(
+              context,
+              tab: _GentleReminderTab.target,
+              label: '对象',
+            ),
+          ],
+        ),
+      ),
+      footer: PrimaryButton(
+        label: '发送委婉提醒',
+        onPressed: !_canSubmit
+            ? null
+            : () {
+                Navigator.of(context).pop(
+                  _GentleReminderSelection(
+                    targetUid: _selectedUid!,
+                    anonymous: _anonymous,
+                    message: _resolvedMessage,
+                  ),
+                );
+              },
+      ),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 180),
+        child: _activeTab == _GentleReminderTab.content
+            ? KeyedSubtree(
+                key: const ValueKey<String>('gentle-reminder-content'),
+                child: _buildContentTab(context),
+              )
+            : KeyedSubtree(
+                key: const ValueKey<String>('gentle-reminder-target'),
+                child: _buildTargetTab(context),
+              ),
       ),
     );
   }

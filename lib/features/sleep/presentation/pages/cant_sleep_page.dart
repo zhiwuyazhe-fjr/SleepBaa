@@ -7,6 +7,7 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
+import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 class CantSleepPage extends StatefulWidget {
@@ -20,49 +21,29 @@ class _CantSleepPageState extends State<CantSleepPage> {
   String _selectedCause = '思绪太多';
 
   Future<void> _selectCause(BuildContext context) async {
-    final String? selected = await showModalBottomSheet<String>(
-      context: context,
-      useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: RoundedRectangleBorder(borderRadius: AppRadius.sheetTop),
-      builder: (BuildContext context) {
-        final ThemeData theme = Theme.of(context);
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.md,
-            0,
-            AppSpacing.md,
-            AppSpacing.lg,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text('选择当前困扰', style: theme.textTheme.titleLarge),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                '先选一个最贴近你现在状态的原因，页面会给出对应的放松步骤。',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              ..._causeOptions.map((String cause) {
-                final bool isSelected = cause == _selectedCause;
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(cause),
-                  trailing: isSelected
-                      ? const Icon(Icons.check_rounded)
-                      : null,
-                  onTap: () => Navigator.of(context).pop(cause),
-                );
-              }),
-            ],
-          ),
-        );
-      },
+    final String? selected = await showAppModal<String>(
+      context,
+      spec: AppSelectionSheetSpec<String>(
+        title: '选择当前困扰',
+        description: '先选一个最贴近你现在状态的原因，页面会给出对应的放松步骤。',
+        selectedValue: _selectedCause,
+        useSafeArea: true,
+        showDragHandle: true,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.sheetTop),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          0,
+          AppSpacing.md,
+          AppSpacing.lg,
+        ),
+        options: _causeOptions
+            .map(
+              (String cause) =>
+                  AppSelectionOption<String>(value: cause, label: cause),
+            )
+            .toList(),
+      ),
     );
     if (selected == null || !mounted) {
       return;
@@ -193,15 +174,12 @@ class _CantSleepPageState extends State<CantSleepPage> {
                                               .textTheme
                                               .labelSmall
                                               ?.copyWith(
-                                                color: AppColors.onDark.withAlpha(
-                                                  170,
-                                                ),
+                                                color: AppColors.onDark
+                                                    .withAlpha(170),
                                                 fontWeight: FontWeight.w600,
                                               ),
                                         ),
-                                        const SizedBox(
-                                          height: AppSpacing.xxs,
-                                        ),
+                                        const SizedBox(height: AppSpacing.xxs),
                                         Text(
                                           _selectedCause,
                                           style: Theme.of(context)
@@ -220,7 +198,9 @@ class _CantSleepPageState extends State<CantSleepPage> {
                                     '点击选择',
                                     style: Theme.of(context).textTheme.bodySmall
                                         ?.copyWith(
-                                          color: AppColors.onDark.withAlpha(170),
+                                          color: AppColors.onDark.withAlpha(
+                                            170,
+                                          ),
                                         ),
                                   ),
                                   const SizedBox(width: AppSpacing.xxs),
@@ -355,7 +335,8 @@ class _CantSleepPageState extends State<CantSleepPage> {
                             children: <Widget>[
                               Expanded(
                                 child: PrimaryButton(
-                                  label: services.audioPlaybackController.isPlaying
+                                  label:
+                                      services.audioPlaybackController.isPlaying
                                       ? '暂停音频'
                                       : '继续播放',
                                   foregroundColor: Colors.white,
@@ -375,7 +356,8 @@ class _CantSleepPageState extends State<CantSleepPage> {
                                   foregroundColor: AppColors.onDark,
                                   borderColor: AppColors.darkBorder,
                                   onPressed: () async {
-                                    await services.audioPlaybackController.stop();
+                                    await services.audioPlaybackController
+                                        .stop();
                                   },
                                 ),
                               ),
@@ -483,12 +465,7 @@ class _SleepBlockPlan {
   final String comfortNote;
 }
 
-const List<String> _causeOptions = <String>[
-  '思绪太多',
-  '环境打扰',
-  '身体不适',
-  '入睡压力',
-];
+const List<String> _causeOptions = <String>['思绪太多', '环境打扰', '身体不适', '入睡压力'];
 
 const Map<String, _SleepBlockPlan> _plans = <String, _SleepBlockPlan>{
   '思绪太多': _SleepBlockPlan(
@@ -510,8 +487,7 @@ const Map<String, _SleepBlockPlan> _plans = <String, _SleepBlockPlan>{
       '如果手边有耳塞，先戴上 10 分钟再判断效果；如果没有，就把枕头稍微转向更安静的一侧，并让被角覆盖一部分耳廓。',
       '如果光线在干扰你，立刻把视线离开亮源，闭眼后只做 12 次缓慢眨眼式放松，再让眼周和额头一起松下来。',
     ],
-    comfortNote:
-        '很多人并不是“睡不着”，而是被外部刺激一层层拉回清醒。先处理环境，比一味逼自己放松更有效。',
+    comfortNote: '很多人并不是“睡不着”，而是被外部刺激一层层拉回清醒。先处理环境，比一味逼自己放松更有效。',
   ),
   '身体不适': _SleepBlockPlan(
     title: '先让身体从警觉里退下来',
@@ -521,8 +497,7 @@ const Map<String, _SleepBlockPlan> _plans = <String, _SleepBlockPlan>{
       '如果有口干、闷热或轻微不适，先小口喝 2 到 3 口温水，或把被子打开 1 分钟再重新盖好，不要一次起身折腾太久。',
       '重新躺下后，连续 2 分钟只关注一个部位，比如肩膀或小腿，默念“这里正在慢慢变松”，不要同时扫描全身。',
     ],
-    comfortNote:
-        '很多夜里的“睡不着”其实是身体还没收到休息信号。先照顾身体，比急着催眠自己更容易见效。',
+    comfortNote: '很多夜里的“睡不着”其实是身体还没收到休息信号。先照顾身体，比急着催眠自己更容易见效。',
   ),
   '入睡压力': _SleepBlockPlan(
     title: '先把“必须快点睡着”的压力放下来',

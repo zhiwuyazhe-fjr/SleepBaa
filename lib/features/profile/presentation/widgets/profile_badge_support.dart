@@ -4,6 +4,7 @@ import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 
 class ProfileBadgeStatusData {
   const ProfileBadgeStatusData({
@@ -95,286 +96,251 @@ Future<void> showProfileBadgeDetailsSheet(
   required HonorBadge badge,
 }) {
   final AppServices services = context.appServices;
-  return showModalBottomSheet<void>(
-    context: context,
-    useRootNavigator: true,
-    useSafeArea: true,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (BuildContext sheetContext) {
-      final UserProfile profile = services.authRepository.currentUser;
-      final bool unlocked = profile.hasEarnedBadge(badge.id);
-      final bool selected = profile.displayBadgeId == badge.id;
-      final bool explicitlyEquipped = profile.equippedBadgeId == badge.id;
-      final NightMoodPalette palette = sheetContext.nightMoodPalette;
-      final String statusLabel = !unlocked
-          ? '未获得'
-          : explicitlyEquipped
-          ? '当前佩戴'
-          : selected
-          ? '当前展示'
-          : '已获得';
-      final String infoTitle = unlocked ? '佩戴方式' : '解锁提示';
-      final String infoChipLabel = !unlocked
-          ? '未解锁也可查看'
-          : explicitlyEquipped
-          ? '已手动佩戴'
-          : selected
-          ? '当前展示中'
-          : '已解锁';
-      final String infoBody = !unlocked
-          ? '现在还没有获得这枚勋章，但可以先查看说明。继续保持睡眠记录，它解锁后就能佩戴展示。'
-          : explicitlyEquipped
-          ? '你已经手动佩戴了这枚勋章；如果恢复默认，页面会自动展示最新获得的勋章。'
-          : selected
-          ? '这枚勋章正在展示中。你可以保持默认展示，也可以继续切换到别的已获得勋章。'
-          : '这枚勋章已经解锁，点击下方按钮就能把它设为当前展示勋章。';
+  return showAppModal<void>(
+    context,
+    spec: AppRichDetailSheetSpec<void>(
+      builder: (BuildContext sheetContext) {
+        final UserProfile profile = services.authRepository.currentUser;
+        final bool unlocked = profile.hasEarnedBadge(badge.id);
+        final bool selected = profile.displayBadgeId == badge.id;
+        final bool explicitlyEquipped = profile.equippedBadgeId == badge.id;
+        final NightMoodPalette palette = sheetContext.nightMoodPalette;
+        final String statusLabel = !unlocked
+            ? '未获得'
+            : explicitlyEquipped
+            ? '当前佩戴'
+            : selected
+            ? '当前展示'
+            : '已获得';
+        final String infoTitle = unlocked ? '佩戴方式' : '解锁提示';
+        final String infoChipLabel = !unlocked
+            ? '未解锁也可查看'
+            : explicitlyEquipped
+            ? '已手动佩戴'
+            : selected
+            ? '当前展示中'
+            : '已解锁';
+        final String infoBody = !unlocked
+            ? '现在还没有获得这枚勋章，但可以先查看说明。继续保持睡眠记录，它解锁后就能佩戴展示。'
+            : explicitlyEquipped
+            ? '你已经手动佩戴了这枚勋章；如果恢复默认，页面会自动展示最新获得的勋章。'
+            : selected
+            ? '这枚勋章正在展示中。你可以保持默认展示，也可以继续切换到别的已获得勋章。'
+            : '这枚勋章已经解锁，点击下方按钮就能把它设为当前展示勋章。';
 
-      return Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
-        ),
-        child: LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final double sheetPadding = constraints.maxWidth * 0.06;
-            final double blockGap = constraints.maxWidth * 0.045;
-            final double handleWidth = constraints.maxWidth * 0.12;
-            final double badgeSize = constraints.maxWidth * 0.22;
-            final double chipHorizontal = constraints.maxWidth * 0.03;
-            final double chipVertical = constraints.maxWidth * 0.02;
-            final double ctaHeight = constraints.maxWidth * 0.14;
-            final double topRadius = constraints.maxWidth * 0.1;
-            final double bottomSafeInset = MediaQuery.viewPaddingOf(
-              sheetContext,
-            ).bottom;
-            final double bottomGestureInset = MediaQuery.systemGestureInsetsOf(
-              sheetContext,
-            ).bottom;
-            final double bottomInset = bottomSafeInset > bottomGestureInset
-                ? bottomSafeInset
-                : bottomGestureInset;
-            final double bottomPadding = bottomInset > 0
-                ? bottomInset + (constraints.maxWidth * 0.02)
-                : constraints.maxWidth * 0.03;
+        return AppRichDetailSheetScaffold(
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final double sheetPadding = constraints.maxWidth * 0.06;
+              final double blockGap = constraints.maxWidth * 0.045;
+              final double badgeSize = constraints.maxWidth * 0.22;
+              final double chipHorizontal = constraints.maxWidth * 0.03;
+              final double chipVertical = constraints.maxWidth * 0.02;
+              final double ctaHeight = constraints.maxWidth * 0.14;
 
-            return Container(
-              key: ValueKey<String>('profile-badge-sheet-${badge.id}'),
-              width: double.infinity,
-              padding: EdgeInsets.fromLTRB(
-                sheetPadding,
-                blockGap * 0.4,
-                sheetPadding,
-                bottomPadding,
-              ),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(topRadius),
+              return Container(
+                key: ValueKey<String>('profile-badge-sheet-${badge.id}'),
+                width: double.infinity,
+                padding: EdgeInsets.fromLTRB(
+                  sheetPadding,
+                  blockGap,
+                  sheetPadding,
+                  constraints.maxWidth * 0.03,
                 ),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Center(
-                    child: Container(
-                      width: handleWidth,
-                      height: handleWidth * 0.1,
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceBorder,
-                        borderRadius: BorderRadius.circular(handleWidth * 0.1),
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: blockGap),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: <Widget>[
-                      _SheetBadgeVisual(
-                        badge: badge,
-                        unlocked: unlocked,
-                        palette: palette,
-                        size: badgeSize,
-                      ),
-                      SizedBox(width: blockGap * 0.8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              badge.label,
-                              style: Theme.of(sheetContext)
-                                  .textTheme
-                                  .headlineSmall
-                                  ?.copyWith(
-                                    color: AppColors.textPrimary,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                            ),
-                            SizedBox(height: blockGap * 0.35),
-                            Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: chipHorizontal,
-                                vertical: chipVertical,
-                              ),
-                              decoration: BoxDecoration(
-                                color: unlocked
-                                    ? palette.primaryHighlight
-                                    : AppColors.surfaceSoft,
-                                borderRadius: AppRadius.pill,
-                              ),
-                              child: Text(
-                                statusLabel,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: <Widget>[
+                        _SheetBadgeVisual(
+                          badge: badge,
+                          unlocked: unlocked,
+                          palette: palette,
+                          size: badgeSize,
+                        ),
+                        SizedBox(width: blockGap * 0.8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                badge.label,
                                 style: Theme.of(sheetContext)
                                     .textTheme
-                                    .labelLarge
+                                    .headlineSmall
                                     ?.copyWith(
-                                      color: unlocked
-                                          ? palette.primaryDeep
-                                          : AppColors.textSecondary,
-                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textPrimary,
+                                      fontWeight: FontWeight.w800,
                                     ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: blockGap),
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(constraints.maxWidth * 0.04),
-                    decoration: BoxDecoration(
-                      color: palette.primaryHighlight,
-                      borderRadius: AppRadius.card,
-                    ),
-                    child: Text(
-                      badge.description,
-                      style: Theme.of(sheetContext).textTheme.bodyLarge
-                          ?.copyWith(
-                            color: AppColors.textSecondary,
-                            height: 1.65,
-                          ),
-                    ),
-                  ),
-                  SizedBox(height: blockGap * 0.8),
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(constraints.maxWidth * 0.04),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceMuted,
-                      borderRadius: AppRadius.card,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          infoTitle,
-                          style: Theme.of(sheetContext).textTheme.titleMedium
-                              ?.copyWith(
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
-                        SizedBox(height: blockGap * 0.5),
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: chipHorizontal,
-                            vertical: chipVertical,
-                          ),
-                          decoration: BoxDecoration(
-                            color: unlocked
-                                ? palette.primary.withAlpha(36)
-                                : AppColors.surface,
-                            borderRadius: AppRadius.pill,
-                          ),
-                          child: Text(
-                            infoChipLabel,
-                            style: Theme.of(sheetContext).textTheme.labelMedium
-                                ?.copyWith(
-                                  color: unlocked
-                                      ? palette.primaryDeep
-                                      : AppColors.textSecondary,
-                                  fontWeight: FontWeight.w700,
+                              SizedBox(height: blockGap * 0.35),
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: chipHorizontal,
+                                  vertical: chipVertical,
                                 ),
-                          ),
-                        ),
-                        SizedBox(height: blockGap * 0.5),
-                        Text(
-                          infoBody,
-                          style: Theme.of(sheetContext).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: AppColors.textSecondary,
-                                height: 1.55,
+                                decoration: BoxDecoration(
+                                  color: unlocked
+                                      ? palette.primaryHighlight
+                                      : AppColors.surfaceSoft,
+                                  borderRadius: AppRadius.pill,
+                                ),
+                                child: Text(
+                                  statusLabel,
+                                  style: Theme.of(sheetContext)
+                                      .textTheme
+                                      .labelLarge
+                                      ?.copyWith(
+                                        color: unlocked
+                                            ? palette.primaryDeep
+                                            : AppColors.textSecondary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
                               ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  if (unlocked) ...<Widget>[
                     SizedBox(height: blockGap),
-                    SizedBox(
+                    Container(
                       width: double.infinity,
-                      child: FilledButton(
-                        onPressed: selected
-                            ? null
-                            : () async {
-                                await services.profileFacade.saveEquippedBadge(
-                                  badge.id,
-                                );
-                                if (sheetContext.mounted) {
-                                  Navigator.of(sheetContext).pop();
-                                }
-                              },
-                        style: FilledButton.styleFrom(
-                          backgroundColor: palette.welcomeAccentColor,
-                          foregroundColor: palette.welcomeTextOnAccent,
-                          disabledBackgroundColor: palette.welcomeAccentColor
-                              .withAlpha(110),
-                          disabledForegroundColor: palette.welcomeTextOnAccent
-                              .withAlpha(140),
-                          elevation: 0,
-                          shadowColor: Colors.transparent,
-                          minimumSize: Size.fromHeight(ctaHeight),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: AppRadius.pill,
-                          ),
-                          textStyle: Theme.of(sheetContext)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w800),
-                        ),
-                        child: Text(selected ? statusLabel : '佩戴此勋章'),
+                      padding: EdgeInsets.all(constraints.maxWidth * 0.04),
+                      decoration: BoxDecoration(
+                        color: palette.primaryHighlight,
+                        borderRadius: AppRadius.card,
+                      ),
+                      child: Text(
+                        badge.description,
+                        style: Theme.of(sheetContext).textTheme.bodyLarge
+                            ?.copyWith(
+                              color: AppColors.textSecondary,
+                              height: 1.65,
+                            ),
                       ),
                     ),
-                    if (profile.equippedBadgeId != null) ...<Widget>[
-                      SizedBox(height: blockGap * 0.45),
-                      Center(
-                        child: TextButton(
-                          onPressed: () async {
-                            await services.profileFacade.saveEquippedBadge(
-                              null,
-                            );
-                            if (sheetContext.mounted) {
-                              Navigator.of(sheetContext).pop();
-                            }
-                          },
-                          style: TextButton.styleFrom(
-                            foregroundColor: palette.primaryDeep,
+                    SizedBox(height: blockGap * 0.8),
+                    Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.all(constraints.maxWidth * 0.04),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceMuted,
+                        borderRadius: AppRadius.card,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            infoTitle,
+                            style: Theme.of(sheetContext).textTheme.titleMedium
+                                ?.copyWith(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w800,
+                                ),
                           ),
-                          child: const Text('恢复最新获得'),
+                          SizedBox(height: blockGap * 0.5),
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: chipHorizontal,
+                              vertical: chipVertical,
+                            ),
+                            decoration: BoxDecoration(
+                              color: unlocked
+                                  ? palette.primary.withAlpha(36)
+                                  : AppColors.surface,
+                              borderRadius: AppRadius.pill,
+                            ),
+                            child: Text(
+                              infoChipLabel,
+                              style: Theme.of(sheetContext)
+                                  .textTheme
+                                  .labelMedium
+                                  ?.copyWith(
+                                    color: unlocked
+                                        ? palette.primaryDeep
+                                        : AppColors.textSecondary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
+                          SizedBox(height: blockGap * 0.5),
+                          Text(
+                            infoBody,
+                            style: Theme.of(sheetContext).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: AppColors.textSecondary,
+                                  height: 1.55,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (unlocked) ...<Widget>[
+                      SizedBox(height: blockGap),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: selected
+                              ? null
+                              : () async {
+                                  await services.profileFacade
+                                      .saveEquippedBadge(badge.id);
+                                  if (sheetContext.mounted) {
+                                    Navigator.of(sheetContext).pop();
+                                  }
+                                },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: palette.welcomeAccentColor,
+                            foregroundColor: palette.welcomeTextOnAccent,
+                            disabledBackgroundColor: palette.welcomeAccentColor
+                                .withAlpha(110),
+                            disabledForegroundColor: palette.welcomeTextOnAccent
+                                .withAlpha(140),
+                            elevation: 0,
+                            shadowColor: Colors.transparent,
+                            minimumSize: Size.fromHeight(ctaHeight),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: AppRadius.pill,
+                            ),
+                            textStyle: Theme.of(sheetContext)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          child: Text(selected ? statusLabel : '佩戴此勋章'),
                         ),
                       ),
+                      if (profile.equippedBadgeId != null) ...<Widget>[
+                        SizedBox(height: blockGap * 0.45),
+                        Center(
+                          child: TextButton(
+                            onPressed: () async {
+                              await services.profileFacade.saveEquippedBadge(
+                                null,
+                              );
+                              if (sheetContext.mounted) {
+                                Navigator.of(sheetContext).pop();
+                              }
+                            },
+                            style: TextButton.styleFrom(
+                              foregroundColor: palette.primaryDeep,
+                            ),
+                            child: const Text('恢复最新获得'),
+                          ),
+                        ),
+                      ],
                     ],
                   ],
-                ],
-              ),
-            );
-          },
-        ),
-      );
-    },
+                ),
+              );
+            },
+          ),
+        );
+      },
+    ),
   );
 }
 

@@ -1,11 +1,9 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
-import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -14,6 +12,7 @@ import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dar
 import 'package:sleep_dorm_app/core/state/sleep_experience_controller.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
+import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/core/widgets/status_chip.dart';
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.dart';
@@ -418,180 +417,41 @@ void _routeAfterSleepModeFinish(
 }
 
 Future<_SleepExitAction?> _showSleepExitDialog(BuildContext context) {
-  return showGeneralDialog<_SleepExitAction>(
-    context: context,
-    barrierDismissible: true,
-    barrierLabel: 'sleep-exit-confirm',
-    barrierColor: Colors.black.withAlpha(70),
-    transitionDuration: const Duration(milliseconds: 220),
-    pageBuilder:
-        (
-          BuildContext context,
-          Animation<double> animation,
-          Animation<double> secondaryAnimation,
-        ) {
-          return Material(
-            color: Colors.transparent,
-            child: Stack(
-              children: <Widget>[
-                Positioned.fill(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: const SizedBox.expand(),
-                  ),
-                ),
-                Center(
-                  child: LayoutBuilder(
-                    builder:
-                        (BuildContext context, BoxConstraints constraints) {
-                          final bool useStackedActions =
-                              constraints.maxWidth < 420;
-                          return Container(
-                            constraints: const BoxConstraints(maxWidth: 440),
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.xl,
-                            ),
-                            padding: const EdgeInsets.all(AppSpacing.lg),
-                            decoration: BoxDecoration(
-                              color: AppColors.darkCard.withAlpha(248),
-                              borderRadius: AppRadius.surfacePrimary,
-                              border: Border.all(color: AppColors.darkBorder),
-                              boxShadow: AppColors.floatingShadow,
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  '结束后怎么处理这段睡眠？',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineSmall
-                                      ?.copyWith(color: AppColors.onDark),
-                                ),
-                                const SizedBox(height: AppSpacing.sm),
-                                Text(
-                                  '如果只是暂时离开睡眠模式，可以先退出；真正准备结束这一晚时，再进入晨间反馈补全记录。',
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(
-                                        color: AppColors.onDark.withAlpha(180),
-                                        height: 1.55,
-                                      ),
-                                ),
-                                const SizedBox(height: AppSpacing.lg),
-                                if (useStackedActions) ...<Widget>[
-                                  Row(
-                                    children: <Widget>[
-                                      Expanded(
-                                        child: PrimaryButton(
-                                          label: '返回',
-                                          size: PrimaryButtonSize.compact,
-                                          variant: PrimaryButtonVariant.ghost,
-                                          foregroundColor: AppColors.onDark,
-                                          borderColor: AppColors.darkBorder,
-                                          onPressed: () => Navigator.of(
-                                            context,
-                                          ).pop(_SleepExitAction.back),
-                                        ),
-                                      ),
-                                      const SizedBox(width: AppSpacing.sm),
-                                      Expanded(
-                                        child: PrimaryButton(
-                                          label: '退出',
-                                          size: PrimaryButtonSize.compact,
-                                          variant: PrimaryButtonVariant.ghost,
-                                          foregroundColor: AppColors.onDark,
-                                          borderColor: AppColors.darkBorder,
-                                          onPressed: () => Navigator.of(
-                                            context,
-                                          ).pop(_SleepExitAction.pause),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: AppSpacing.sm),
-                                  PrimaryButton(
-                                    label: '结束并去晨间反馈',
-                                    size: PrimaryButtonSize.compact,
-                                    foregroundColor: Colors.white,
-                                    onPressed: () => Navigator.of(
-                                      context,
-                                    ).pop(_SleepExitAction.finish),
-                                  ),
-                                ] else
-                                  Row(
-                                    children: <Widget>[
-                                      Expanded(
-                                        child: PrimaryButton(
-                                          label: '返回',
-                                          size: PrimaryButtonSize.compact,
-                                          variant: PrimaryButtonVariant.ghost,
-                                          foregroundColor: AppColors.onDark,
-                                          borderColor: AppColors.darkBorder,
-                                          onPressed: () => Navigator.of(
-                                            context,
-                                          ).pop(_SleepExitAction.back),
-                                        ),
-                                      ),
-                                      const SizedBox(width: AppSpacing.sm),
-                                      Expanded(
-                                        child: PrimaryButton(
-                                          label: '退出',
-                                          size: PrimaryButtonSize.compact,
-                                          variant: PrimaryButtonVariant.ghost,
-                                          foregroundColor: AppColors.onDark,
-                                          borderColor: AppColors.darkBorder,
-                                          onPressed: () => Navigator.of(
-                                            context,
-                                          ).pop(_SleepExitAction.pause),
-                                        ),
-                                      ),
-                                      const SizedBox(width: AppSpacing.sm),
-                                      Expanded(
-                                        child: PrimaryButton(
-                                          label: '结束并去晨间反馈',
-                                          size: PrimaryButtonSize.compact,
-                                          foregroundColor: Colors.white,
-                                          onPressed: () => Navigator.of(
-                                            context,
-                                          ).pop(_SleepExitAction.finish),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                const SizedBox(height: AppSpacing.md),
-                                Text(
-                                  '退出后再次进入，睡眠时长可累计，完成晨间反馈后该日时长就不再累计。',
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: AppColors.onDark.withAlpha(140),
-                                        height: 1.5,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-    transitionBuilder:
-        (
-          BuildContext context,
-          Animation<double> animation,
-          Animation<double> secondaryAnimation,
-          Widget child,
-        ) {
-          return FadeTransition(
-            opacity: animation,
-            child: ScaleTransition(
-              scale: Tween<double>(begin: 0.96, end: 1).animate(animation),
-              child: child,
-            ),
-          );
-        },
+  return showAppModal<_SleepExitAction>(
+    context,
+    spec: AppRichChoiceDialogSpec<_SleepExitAction>(
+      title: '结束后怎么处理这段睡眠？',
+      body: '如果只是暂时离开睡眠模式，可以先退出；真正准备结束这一晚时，再进入晨间反馈补全记录。',
+      note: '退出后再次进入，睡眠时长可累计，完成晨间反馈后该日时长就不再累计。',
+      barrierLabel: 'sleep-exit-confirm',
+      barrierColor: Colors.black.withAlpha(70),
+      backgroundColor: AppColors.darkSurface,
+      borderColor: AppColors.darkBorder,
+      titleColor: AppColors.onDark,
+      bodyColor: AppColors.onDark.withAlpha(180),
+      noteColor: AppColors.onDark.withAlpha(140),
+      blurBackdrop: true,
+      actions: const <AppRichChoiceDialogAction<_SleepExitAction>>[
+        AppRichChoiceDialogAction<_SleepExitAction>(
+          label: '返回',
+          result: _SleepExitAction.back,
+          variant: PrimaryButtonVariant.ghost,
+          foregroundColor: AppColors.onDark,
+          borderColor: AppColors.darkBorder,
+        ),
+        AppRichChoiceDialogAction<_SleepExitAction>(
+          label: '退出',
+          result: _SleepExitAction.pause,
+          variant: PrimaryButtonVariant.ghost,
+          foregroundColor: AppColors.onDark,
+          borderColor: AppColors.darkBorder,
+        ),
+        AppRichChoiceDialogAction<_SleepExitAction>(
+          label: '结束并去晨间反馈',
+          result: _SleepExitAction.finish,
+          foregroundColor: Colors.white,
+        ),
+      ],
+    ),
   );
 }

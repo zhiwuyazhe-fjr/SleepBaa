@@ -11,6 +11,8 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
+import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
+import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 enum _AuthView { login, register, forgotPassword, resetPassword, resetSuccess }
 
@@ -945,21 +947,23 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     if (!mounted) {
       return null;
     }
-    return showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return _CaptchaVerifyDialog(
-          initialChallenge: initialChallenge,
-          onRefresh: services.profileFacade.createCaptchaChallenge,
-          onVerify: ({required String token, required String code}) {
-            return services.profileFacade.verifyCaptchaChallenge(
-              token: token,
-              code: code,
-            );
-          },
-        );
-      },
+    return showAppModal<String>(
+      context,
+      spec: AppFormDialogSpec<String>(
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) {
+          return _CaptchaVerifyDialog(
+            initialChallenge: initialChallenge,
+            onRefresh: services.profileFacade.createCaptchaChallenge,
+            onVerify: ({required String token, required String code}) {
+              return services.profileFacade.verifyCaptchaChallenge(
+                token: token,
+                code: code,
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
@@ -2672,74 +2676,65 @@ class _CaptchaVerifyDialogState extends State<_CaptchaVerifyDialog> {
   Widget build(BuildContext context) {
     final Uint8List? imageBytes = _captchaBytes(_challenge.imageData);
 
-    return AlertDialog(
-      backgroundColor: Colors.white,
-      title: const Text('完成图片验证'),
-      content: SizedBox(
-        width: 320,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              '为了继续发送验证码或登录，请先输入图片中的字符。',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: _PhoneAuthPageState._textMuted,
-                height: 1.5,
-              ),
+    return AppFormDialogScaffold(
+      title: '完成图片验证',
+      body: '为了继续发送验证码或登录，请先输入图片中的字符。',
+      icon: const AppDialogIconSpec(icon: Icons.verified_user_outlined),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: double.infinity,
+            height: 96,
+            decoration: BoxDecoration(
+              color: _PhoneAuthPageState._surfaceMuted,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _PhoneAuthPageState._cardBorder),
             ),
-            const SizedBox(height: 16),
-            Container(
-              width: double.infinity,
-              height: 96,
-              decoration: BoxDecoration(
-                color: _PhoneAuthPageState._surfaceMuted,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: _PhoneAuthPageState._cardBorder),
-              ),
-              alignment: Alignment.center,
-              child: imageBytes == null || imageBytes.isEmpty
-                  ? const Text('图片验证码加载失败')
-                  : Image.memory(imageBytes, gaplessPlayback: true),
+            alignment: Alignment.center,
+            child: imageBytes == null || imageBytes.isEmpty
+                ? const Text('图片验证码加载失败')
+                : Image.memory(imageBytes, gaplessPlayback: true),
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _isRefreshing || _isVerifying ? null : _refresh,
+              child: Text(_isRefreshing ? '刷新中...' : '换一张'),
             ),
+          ),
+          TextField(
+            controller: _codeController,
+            keyboardType: TextInputType.visiblePassword,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _submit(),
+            decoration: const InputDecoration(
+              labelText: '图片验证码',
+              hintText: '请输入图片中的字符',
+            ),
+          ),
+          if (_error != null) ...<Widget>[
             const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: _isRefreshing || _isVerifying ? null : _refresh,
-                child: Text(_isRefreshing ? '刷新中...' : '换一张'),
-              ),
+            Text(
+              _error!,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Colors.redAccent),
             ),
-            TextField(
-              controller: _codeController,
-              keyboardType: TextInputType.visiblePassword,
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) => _submit(),
-              decoration: const InputDecoration(
-                labelText: '图片验证码',
-                hintText: '请输入图片中的字符',
-              ),
-            ),
-            if (_error != null) ...<Widget>[
-              const SizedBox(height: 12),
-              Text(
-                _error!,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: Colors.redAccent),
-              ),
-            ],
           ],
-        ),
+        ],
       ),
       actions: <Widget>[
-        TextButton(
+        AppModalAction(
+          label: '取消',
+          variant: PrimaryButtonVariant.ghost,
           onPressed: _isVerifying ? null : () => Navigator.of(context).pop(),
-          child: const Text('取消'),
         ),
-        FilledButton(
+        AppModalAction(
+          label: _isVerifying ? '验证中...' : '继续',
           onPressed: _isVerifying ? null : _submit,
-          child: Text(_isVerifying ? '验证中...' : '继续'),
         ),
       ],
     );

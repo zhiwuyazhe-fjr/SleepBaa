@@ -13,6 +13,7 @@ import 'package:sleep_dorm_app/app/app.dart';
 import 'package:sleep_dorm_app/app/app_brand.dart';
 import 'package:sleep_dorm_app/main.dart' as app_main;
 import 'package:sleep_dorm_app/app/routes.dart';
+import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -1479,6 +1480,94 @@ void main() {
     expect(find.text('安静守护者'), findsOneWidget);
   });
 
+  testWidgets('dorm gentle reminder opens the shared rich action sheet', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+
+    await tester.drag(
+      find.byKey(DormPage.drawerSheetKey),
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+
+    final Finder drawerListView = find
+        .descendant(
+          of: find.byKey(DormPage.drawerSheetKey),
+          matching: find.byType(ListView),
+        )
+        .first;
+    final Finder reminderEntry = find.descendant(
+      of: find.byKey(DormPage.drawerSheetKey),
+      matching: find.text('委婉提醒'),
+    );
+    await tester.dragUntilVisible(
+      reminderEntry,
+      drawerListView,
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(reminderEntry);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('app-bottom-sheet-rich-action')),
+      findsOneWidget,
+    );
+    expect(find.text('发送委婉提醒'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('gentle-reminder-content')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('dorm gentle reminder sheet stays above the shell tab bar', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+
+    await tester.drag(
+      find.byKey(DormPage.drawerSheetKey),
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+
+    final Finder drawerListView = find
+        .descendant(
+          of: find.byKey(DormPage.drawerSheetKey),
+          matching: find.byType(ListView),
+        )
+        .first;
+    final Finder reminderEntry = find.descendant(
+      of: find.byKey(DormPage.drawerSheetKey),
+      matching: find.text('委婉提醒'),
+    );
+    await tester.dragUntilVisible(
+      reminderEntry,
+      drawerListView,
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(reminderEntry);
+    await tester.pumpAndSettle();
+
+    final Finder sheetFinder = find.byKey(
+      const ValueKey<String>('app-bottom-sheet-rich-action'),
+    );
+    expect(find.byKey(BottomNavShell.navBarKey), findsOneWidget);
+    expect(sheetFinder, findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.home_rounded), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DormPage), findsOneWidget);
+    expect(find.byType(HomePreSleepPage), findsNothing);
+    expect(sheetFinder, findsOneWidget);
+  });
+
   testWidgets('profile page shows redesigned modules', (
     WidgetTester tester,
   ) async {
@@ -1709,6 +1798,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
+      find.byKey(const ValueKey<String>('app-bottom-sheet-rich-detail')),
+      findsOneWidget,
+    );
+    expect(
       find.byKey(const ValueKey<String>('profile-badge-sheet-early-sleeper')),
       findsOneWidget,
     );
@@ -1738,6 +1831,10 @@ void main() {
 
     final Finder sheetFinder = find.byKey(
       const ValueKey<String>('profile-badge-sheet-sleep-master'),
+    );
+    expect(
+      find.byKey(const ValueKey<String>('app-bottom-sheet-rich-detail')),
+      findsOneWidget,
     );
     expect(sheetFinder, findsOneWidget);
     expect(find.byType(ProfilePage), findsOneWidget);
@@ -2540,6 +2637,11 @@ void main() {
       await tester.tap(endSleepModeButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
+
+      expect(
+        find.byKey(const ValueKey<String>('app-center-dialog-rich-choice')),
+        findsOneWidget,
+      );
       await tester.tap(find.widgetWithText(PrimaryButton, '结束并去晨间反馈'));
       await tester.pump();
       await tester.pumpAndSettle();
@@ -2583,6 +2685,60 @@ void main() {
           )!;
       expect(active.status, SleepSessionStatus.active);
       expect(active.sleepModeActive, isTrue);
+    },
+  );
+
+  testWidgets(
+    'sleep exit dialog keeps note above actions and uses dark surface background',
+    (WidgetTester tester) async {
+      final _FakeAppNotificationService notificationService =
+          _FakeAppNotificationService();
+      DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.homePreSleep,
+        clock: () => currentTime,
+        appNotificationService: notificationService,
+      );
+
+      await tester.tap(find.byType(StartSleepModeCard));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      currentTime = DateTime(2030, 4, 5, 15, 10);
+
+      expect(find.byType(HomePostSleepPage), findsOneWidget);
+
+      final Finder endSleepModeButton = find.widgetWithText(
+        PrimaryButton,
+        '结束睡眠模式',
+      );
+      await tester.ensureVisible(endSleepModeButton);
+      await tester.tap(endSleepModeButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final Finder dialogFinder = find.byKey(
+        const ValueKey<String>('app-center-dialog-rich-choice'),
+      );
+      final Finder noteFinder = find.text('退出后再次进入，睡眠时长可累计，完成晨间反馈后该日时长就不再累计。');
+      final Finder returnButtonFinder = find.widgetWithText(
+        PrimaryButton,
+        '返回',
+      );
+
+      expect(dialogFinder, findsOneWidget);
+      expect(noteFinder, findsOneWidget);
+      expect(returnButtonFinder, findsOneWidget);
+
+      final Container dialogSurface = tester.widget<Container>(dialogFinder);
+      final BoxDecoration decoration =
+          dialogSurface.decoration! as BoxDecoration;
+      expect(decoration.color, AppColors.darkSurface);
+      expect(
+        tester.getBottomLeft(noteFinder).dy,
+        lessThan(tester.getTopLeft(returnButtonFinder).dy),
+      );
     },
   );
 
@@ -3025,11 +3181,15 @@ void main() {
       await tester.tap(find.text('返回'));
       await tester.pumpAndSettle();
 
+      expect(
+        find.byKey(const ValueKey<String>('app-center-dialog-destructive')),
+        findsOneWidget,
+      );
       expect(find.text('放弃本次填写？'), findsOneWidget);
       expect(find.byType(MorningFeedbackPage), findsOneWidget);
 
       currentTime = DateTime(2030, 4, 5, 15, 25);
-      await tester.tap(find.widgetWithText(FilledButton, '放弃并返回'));
+      await tester.tap(find.widgetWithText(PrimaryButton, '放弃并返回'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
@@ -3086,10 +3246,14 @@ void main() {
       await tester.tap(find.text('返回'));
       await tester.pumpAndSettle();
 
+      expect(
+        find.byKey(const ValueKey<String>('app-center-dialog-destructive')),
+        findsOneWidget,
+      );
       expect(find.text('放弃本次填写？'), findsOneWidget);
       expect(find.byType(MorningFeedbackPage), findsOneWidget);
 
-      await tester.tap(find.widgetWithText(TextButton, '继续填写'));
+      await tester.tap(find.widgetWithText(PrimaryButton, '继续填写'));
       await tester.pumpAndSettle();
 
       expect(find.byType(MorningFeedbackPage), findsOneWidget);
