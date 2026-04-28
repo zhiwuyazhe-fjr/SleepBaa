@@ -417,7 +417,7 @@ class SleepExperienceController extends ChangeNotifier {
           hasSubmittedFeedback: fallbackSession.hasSubmittedFeedback,
         );
         if (fallbackSession.hasSubmittedFeedback) {
-          await _clearSleepExitArtifacts(fallbackSession.id);
+          _clearSleepExitArtifactsInBackground(fallbackSession.id);
           return FinishSleepModeResult.goHomeFeedbackAlreadySubmitted;
         }
         if (fallbackSession.status == SleepSessionStatus.awaitingFeedback) {
@@ -432,7 +432,7 @@ class SleepExperienceController extends ChangeNotifier {
       hasSubmittedFeedback: finished.hasSubmittedFeedback,
     );
     if (finished.hasSubmittedFeedback) {
-      await _clearSleepExitArtifacts(finished.id);
+      _clearSleepExitArtifactsInBackground(finished.id);
       return FinishSleepModeResult.goHomeFeedbackAlreadySubmitted;
     }
     unawaited(_completeSleepExitSideEffects(finished));
@@ -484,8 +484,29 @@ class SleepExperienceController extends ChangeNotifier {
     required List<RecommendationFeedback> feedback,
   }) async {
     await _authRepository.ensureAuthenticated();
+    SleepSession resolvedSession = session;
+    if (_isLiveMorningFeedbackSession(session)) {
+      try {
+        await _appNotificationService.cancelSleepModeNotification();
+      } catch (_) {
+        // Notification cleanup is best-effort and should not block feedback submission.
+      }
+      final SleepSession? activeSession = _sleepSessionRepository.activeSession;
+      if (activeSession != null && activeSession.id == session.id) {
+        resolvedSession =
+            await _sleepSessionRepository.finishActiveSleepSession(
+              at: _clock(),
+            ) ??
+            session;
+      } else {
+        final SleepSession? existing = _sessionById(session.id);
+        if (existing != null) {
+          resolvedSession = existing;
+        }
+      }
+    }
     await _feedbackRepository.submitFeedback(
-      session: session,
+      session: resolvedSession,
       summary: summary,
       recommendationFeedback: feedback,
     );
@@ -502,14 +523,17 @@ class SleepExperienceController extends ChangeNotifier {
 
     final List<NotificationItem> notifications = _notificationRepository
         .notifications
-        .where((NotificationItem item) => item.id == 'feedback-${session.id}')
+        .where(
+          (NotificationItem item) =>
+              item.id == 'feedback-${resolvedSession.id}',
+        )
         .toList(growable: false);
     for (final NotificationItem item in notifications) {
       await _notificationRepository.markRead(item.id);
     }
     try {
       await _pushNotificationGateway.cancelFeedbackReminder(
-        sessionId: session.id,
+        sessionId: resolvedSession.id,
       );
     } catch (_) {
       // Canceling reminders is best-effort after feedback submission.
@@ -519,6 +543,22 @@ class SleepExperienceController extends ChangeNotifier {
     } catch (_) {
       // Pending banner cleanup should not block feedback submission.
     }
+  }
+
+  SleepSession? _sessionById(String sessionId) {
+    for (final SleepSession session in _sleepSessionRepository.sessions) {
+      if (session.id == sessionId) {
+        return session;
+      }
+    }
+    return null;
+  }
+
+  bool _isLiveMorningFeedbackSession(SleepSession session) {
+    return session.status == SleepSessionStatus.active &&
+        session.sleepModeActive &&
+        session.openSegment != null &&
+        !session.hasSubmittedFeedback;
   }
 
   Future<void> _syncDormStatusAfterSleepExit(
@@ -592,6 +632,17 @@ class SleepExperienceController extends ChangeNotifier {
     _sleepDayCutoffTimer = _timerFactory(nextCutoff.difference(now), () {
       unawaited(_synchronizePastCutoffSessions(rescheduleTimer: true));
     });
+  }
+
+  void _clearSleepExitArtifactsInBackground(String sessionId) {
+    unawaited(
+      _clearSleepExitArtifacts(sessionId).catchError((
+        Object error,
+        StackTrace stackTrace,
+      ) {
+        debugPrint('Sleep exit artifact cleanup failed for $sessionId: $error');
+      }),
+    );
   }
 
   Future<void> _clearSleepExitArtifacts(String sessionId) async {

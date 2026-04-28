@@ -677,6 +677,40 @@ void main() {
   });
 
   test(
+    'submitting morning feedback from an active session closes it before completion',
+    () async {
+      final _SleepControllerHarness harness = _SleepControllerHarness.create();
+
+      await harness.controller.enterSleepMode();
+      final SleepSession activeSession =
+          harness.sleepSessionRepository.activeSession!;
+
+      await harness.controller.submitMorningFeedback(
+        session: activeSession,
+        summary: const MorningSummary(
+          sleepQuality: 4,
+          restedLevel: 4,
+          totalSleepHours: 7.2,
+          awakeningsCount: 0,
+          note: '直接提交',
+        ),
+        feedback: const <RecommendationFeedback>[],
+      );
+
+      final SleepSession completed = harness.sleepSessionRepository
+          .sessionForSleepDayKey(activeSession.sleepDayKey)!;
+      expect(completed.id, activeSession.id);
+      expect(completed.status, SleepSessionStatus.completed);
+      expect(completed.sleepModeActive, isFalse);
+      expect(completed.endedAt, isNotNull);
+      expect(completed.openSegment, isNull);
+      expect(harness.notificationService.cancelSleepModeNotificationCalls, 1);
+
+      harness.dispose();
+    },
+  );
+
+  test(
     'resume sleep mode from feedback return restores the same-day session',
     () async {
       final _SleepControllerHarness harness = _SleepControllerHarness.create();
@@ -779,6 +813,56 @@ void main() {
       expect(session.sleepModeActive, isFalse);
 
       harness.dispose();
+    },
+  );
+
+  test(
+    'finish sleep mode returns the already-submitted result without waiting for exit artifact cleanup',
+    () async {
+      final _BlockingSleepCaptureRepository sleepCaptureRepository =
+          _BlockingSleepCaptureRepository();
+      final _SleepControllerHarness harness = _SleepControllerHarness.create(
+        sleepCaptureRepository: sleepCaptureRepository,
+      );
+
+      await harness.controller.enterSleepMode();
+      expect(
+        await harness.controller.finishSleepMode(),
+        FinishSleepModeResult.goToFeedback,
+      );
+
+      final SleepSession awaiting =
+          harness.sleepSessionRepository.latestAwaitingFeedbackSession!;
+      await harness.controller.submitMorningFeedback(
+        session: awaiting,
+        summary: const MorningSummary(
+          sleepQuality: 5,
+          restedLevel: 4,
+          totalSleepHours: 7.8,
+          awakeningsCount: 0,
+          note: 'Submitted already',
+        ),
+        feedback: const <RecommendationFeedback>[],
+      );
+
+      await harness.controller.enterSleepMode();
+      sleepCaptureRepository.blockClearPendingBanner = true;
+
+      FinishSleepModeResult? result;
+      final Future<FinishSleepModeResult> finishFuture =
+          harness.controller.finishSleepMode()
+            ..then((FinishSleepModeResult value) {
+              result = value;
+            });
+      addTearDown(() async {
+        sleepCaptureRepository.unblockClearPendingBanner();
+        await finishFuture;
+        harness.dispose();
+      });
+
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(result, FinishSleepModeResult.goHomeFeedbackAlreadySubmitted);
     },
   );
 
@@ -1135,6 +1219,7 @@ class _SleepControllerHarness {
   factory _SleepControllerHarness.create({
     InMemoryDormRepository? dormRepository,
     _FakeNotificationService? notificationService,
+    InMemorySleepCaptureRepository? sleepCaptureRepository,
     List<NightRecommendation>? initialRecommendations,
     AudioPlaybackEngine? audioPlaybackEngine,
   }) {
@@ -1153,8 +1238,8 @@ class _SleepControllerHarness {
         InMemoryFeedbackRepository(
           sleepSessionRepository: sleepSessionRepository,
         );
-    final InMemorySleepCaptureRepository sleepCaptureRepository =
-        InMemorySleepCaptureRepository();
+    final InMemorySleepCaptureRepository resolvedSleepCaptureRepository =
+        sleepCaptureRepository ?? InMemorySleepCaptureRepository();
     final InMemoryNotificationRepository notificationRepository =
         InMemoryNotificationRepository();
     final InMemoryDormRepository resolvedDormRepository =
@@ -1170,7 +1255,7 @@ class _SleepControllerHarness {
       recommendationRepository: recommendationRepository,
       sleepSessionRepository: sleepSessionRepository,
       feedbackRepository: feedbackRepository,
-      sleepCaptureRepository: sleepCaptureRepository,
+      sleepCaptureRepository: resolvedSleepCaptureRepository,
       notificationRepository: notificationRepository,
       dormRepository: resolvedDormRepository,
       appNotificationService: resolvedNotificationService,
@@ -1183,7 +1268,7 @@ class _SleepControllerHarness {
       recommendationRepository: recommendationRepository,
       sleepSessionRepository: sleepSessionRepository,
       feedbackRepository: feedbackRepository,
-      sleepCaptureRepository: sleepCaptureRepository,
+      sleepCaptureRepository: resolvedSleepCaptureRepository,
       notificationRepository: notificationRepository,
       dormRepository: resolvedDormRepository,
       notificationService: resolvedNotificationService,
@@ -1325,6 +1410,27 @@ class _ThrowingDormRepository extends InMemoryDormRepository {
       sleepModeActive: sleepModeActive,
       note: note,
     );
+  }
+}
+
+class _BlockingSleepCaptureRepository extends InMemorySleepCaptureRepository {
+  bool blockClearPendingBanner = false;
+  Completer<void>? _clearPendingBannerCompleter;
+
+  @override
+  Future<void> clearPendingBanner() async {
+    if (blockClearPendingBanner) {
+      _clearPendingBannerCompleter ??= Completer<void>();
+      await _clearPendingBannerCompleter!.future;
+    }
+    await super.clearPendingBanner();
+  }
+
+  void unblockClearPendingBanner() {
+    final Completer<void>? completer = _clearPendingBannerCompleter;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
   }
 }
 

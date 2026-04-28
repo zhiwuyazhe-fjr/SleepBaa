@@ -142,6 +142,22 @@ void main() {
     expect(find.text('编辑宿舍名称'), findsOneWidget);
   });
 
+  testWidgets('dorm management edit name uses the shared form dialog shell', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.profileAccountDorm);
+
+    await tester.tap(find.text('编辑宿舍名称'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('app-center-dialog-form')),
+      findsOneWidget,
+    );
+    expect(find.byType(TextFormField), findsOneWidget);
+    expect(find.text('保存'), findsOneWidget);
+  });
+
   testWidgets(
     'sleep preference action rows keep shared settings item baseline',
     (WidgetTester tester) async {
@@ -951,6 +967,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 240));
 
+      expect(
+        find.byKey(const ValueKey<String>('app-bottom-sheet-selection')),
+        findsOneWidget,
+      );
       expect(find.text('更克制，存在感最低。'), findsNothing);
       expect(find.text('默认档，柔和但能感知到呼吸感。'), findsNothing);
       expect(find.text('上浮更明显，转场戏剧性更强。'), findsNothing);

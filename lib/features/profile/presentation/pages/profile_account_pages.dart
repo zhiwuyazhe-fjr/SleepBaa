@@ -14,6 +14,7 @@ import 'package:sleep_dorm_app/core/utils/avatar_picker.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/core/widgets/app_strip_card.dart';
+import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/core/widgets/user_avatar.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/widgets/account_action_widgets.dart';
@@ -298,11 +299,13 @@ class _DormManagementPageState extends State<DormManagementPage> {
   bool _isSavingDormAnchor = false;
 
   Future<String?> _promptDormName(String initialName) {
-    return showDialog<String>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return _DormNameDialog(initialName: initialName);
-      },
+    return showAppModal<String>(
+      context,
+      spec: AppFormDialogSpec<String>(
+        builder: (BuildContext dialogContext) {
+          return _DormNameDialog(initialName: initialName);
+        },
+      ),
     );
   }
 
@@ -351,24 +354,15 @@ class _DormManagementPageState extends State<DormManagementPage> {
   }
 
   Future<void> _leaveDorm(AppServices services) async {
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('退出宿舍'),
-          content: const Text('退出后将离开当前宿舍空间。若你是最后一位成员，宿舍会自动归档。'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('确认退出'),
-            ),
-          ],
-        );
-      },
+    final bool? confirmed = await showAppModal<bool>(
+      context,
+      spec: const AppDestructiveDialogSpec(
+        title: '退出宿舍',
+        body: '退出后将离开当前宿舍空间。若你是最后一位成员，宿舍会自动归档。',
+        icon: AppDialogIconSpec(icon: Icons.logout_rounded),
+        cancelLabel: '取消',
+        confirmLabel: '确认退出',
+      ),
     );
     if (confirmed != true) {
       return;
@@ -665,8 +659,10 @@ class _DormNameDialogState extends State<_DormNameDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('编辑宿舍名称'),
+    return AppFormDialogScaffold(
+      title: '编辑宿舍名称',
+      body: '修改后会同步显示在当前宿舍空间。',
+      icon: const AppDialogIconSpec(icon: Icons.edit_outlined),
       content: TextFormField(
         initialValue: widget.initialName,
         autofocus: true,
@@ -677,13 +673,14 @@ class _DormNameDialogState extends State<_DormNameDialog> {
         },
       ),
       actions: <Widget>[
-        TextButton(
+        AppModalAction(
+          label: '取消',
+          variant: PrimaryButtonVariant.ghost,
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
         ),
-        FilledButton(
+        AppModalAction(
+          label: '保存',
           onPressed: () => Navigator.of(context).pop(_value.trim()),
-          child: const Text('保存'),
         ),
       ],
     );
