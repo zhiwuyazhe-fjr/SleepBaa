@@ -1703,7 +1703,10 @@ void main() {
     await tester.tap(find.text('我的勋章'));
     await tester.pumpAndSettle();
 
-    expect(find.text('勋章图鉴'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('badge-catalog-title-profile')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
       findsOneWidget,
@@ -1736,6 +1739,57 @@ void main() {
     );
     expect(find.text('佩戴此勋章'), findsOneWidget);
     expect(find.text('勋章详情'), findsNothing);
+  });
+
+  testWidgets('badge gallery switches between personal and dorm catalogs', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileBadges,
+      clock: _dayClock,
+    );
+
+    expect(
+      find.byKey(const ValueKey<String>('badge-catalog-title-profile')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('profile-badge-summary-card')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('badge-catalog-mode-dorm')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('badge-catalog-mode-dorm')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('badge-catalog-title-dorm')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('dorm-badge-summary-card')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('dorm-badge-grid-no-wake-room')),
+      findsOneWidget,
+    );
+    expect(find.text('寝室脉搏'), findsOneWidget);
+    expect(find.text('显示当前勋章'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('dorm-badge-visibility-item')),
+      findsOneWidget,
+    );
+    expect(find.text('寝室脉搏勋章显示'), findsNothing);
   });
 
   testWidgets('profile badge preview sheet stays above the shell tab bar', (
@@ -3174,3 +3228,4 @@ class _FakeAppNotificationService extends AppNotificationService {
     await _launchIntentController.close();
   }
 }
+
