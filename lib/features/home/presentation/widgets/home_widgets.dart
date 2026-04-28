@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -195,10 +196,20 @@ class HomeActionCard extends StatelessWidget {
     super.key,
     required this.recommendation,
     required this.onTap,
+    this.onPlayToggle,
+    this.onPreviousAudio,
+    this.onNextAudio,
+    this.displayTitle,
+    this.showAudioTransport = false,
   });
 
   final NightRecommendation recommendation;
   final VoidCallback onTap;
+  final VoidCallback? onPlayToggle;
+  final VoidCallback? onPreviousAudio;
+  final VoidCallback? onNextAudio;
+  final String? displayTitle;
+  final bool showAudioTransport;
 
   bool get _isAudio => recommendation.type == RecommendationType.audio;
 
@@ -223,108 +234,140 @@ class HomeActionCard extends StatelessWidget {
     final Color chipForeground = highlight
         ? palette.welcomeTextOnAccent
         : AppColors.textSecondary;
+    final String title = displayTitle?.trim().isNotEmpty ?? false
+        ? displayTitle!.trim()
+        : recommendation.title;
+    final bool showTransportControls =
+        _isAudio &&
+        showAudioTransport &&
+        recommendation.executionState == RecommendationExecutionState.playing;
 
     return AppCard(
       padding: EdgeInsets.zero,
       borderRadius: AppRadius.stripCard,
       color: cardColor,
       border: _isAudio ? null : Border.all(color: borderColor),
+      onTap: _isAudio ? null : onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: highlight
-                    ? Colors.white.withAlpha(208)
-                    : AppColors.background,
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                recommendation.icon,
-                size: 20,
-                color: highlight
-                    ? palette.welcomeTextOnAccent
-                    : palette.primary,
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _isAudio ? onTap : null,
+                child: Row(
+                  children: <Widget>[
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: highlight
+                            ? Colors.white.withAlpha(208)
+                            : AppColors.background,
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        recommendation.icon,
+                        size: 20,
+                        color: highlight
+                            ? palette.welcomeTextOnAccent
+                            : palette.primary,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: <Widget>[
+                          Builder(
+                            builder: (BuildContext context) {
+                              final TextStyle? style = Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(
+                                    color: foreground,
+                                    fontWeight: FontWeight.w700,
+                                  );
+                              if (showTransportControls) {
+                                return _AutoScrollingText(
+                                  text: title,
+                                  style: style,
+                                );
+                              }
+                              return Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: style,
+                              );
+                            },
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          _buildTags(
+                            context,
+                            chipBackground,
+                            chipForeground,
+                            showTransportControls,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Text(
-                    recommendation.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: foreground,
-                      fontWeight: FontWeight.w700,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (showTransportControls)
+                  _AudioTransportIcon(
+                    icon: Icons.skip_previous_rounded,
+                    onTap: onPreviousAudio,
+                    color: highlight
+                        ? palette.welcomeTextOnAccent
+                        : palette.primary,
+                  ),
+                InkWell(
+                  onTap: onPlayToggle ?? onTap,
+                  borderRadius: BorderRadius.circular(999),
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: highlight
+                          ? Colors.white.withAlpha(220)
+                          : AppColors.background,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: highlight
+                            ? palette.primary
+                            : AppColors.surfaceBorder,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      _trailingIcon(selected),
+                      size: 22,
+                      color: highlight
+                          ? palette.welcomeTextOnAccent
+                          : palette.primary,
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Wrap(
-                    spacing: AppSpacing.xs,
-                    runSpacing: AppSpacing.xs,
-                    children: recommendation.tags
-                        .take(2)
-                        .map(
-                          (String tag) => Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: chipBackground,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              tag,
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(
-                                    color: chipForeground,
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            InkWell(
-              onTap: onTap,
-              borderRadius: BorderRadius.circular(999),
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: highlight
-                      ? Colors.white.withAlpha(220)
-                      : AppColors.background,
-                  shape: BoxShape.circle,
-                  border: Border.all(
+                ),
+                if (showTransportControls)
+                  _AudioTransportIcon(
+                    icon: Icons.skip_next_rounded,
+                    onTap: onNextAudio,
                     color: highlight
-                        ? palette.primary
-                        : AppColors.surfaceBorder,
+                        ? palette.welcomeTextOnAccent
+                        : palette.primary,
                   ),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  _trailingIcon(selected),
-                  size: 22,
-                  color: highlight
-                      ? palette.welcomeTextOnAccent
-                      : palette.primary,
-                ),
-              ),
+              ],
             ),
           ],
         ),
@@ -341,15 +384,204 @@ class HomeActionCard extends StatelessWidget {
     }
     return selected ? Icons.check_rounded : Icons.east_rounded;
   }
+
+  Widget _buildTags(
+    BuildContext context,
+    Color backgroundColor,
+    Color foregroundColor,
+    bool showTransportControls,
+  ) {
+    final List<String> tags = recommendation.tags
+        .take(2)
+        .toList(growable: false);
+    if (showTransportControls) {
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            for (int index = 0; index < tags.length; index++) ...<Widget>[
+              if (index > 0) const SizedBox(width: AppSpacing.xs),
+              _RecommendationTagChip(
+                tag: tags[index],
+                backgroundColor: backgroundColor,
+                foregroundColor: foregroundColor,
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: AppSpacing.xs,
+      runSpacing: AppSpacing.xs,
+      children: tags
+          .map(
+            (String tag) => _RecommendationTagChip(
+              tag: tag,
+              backgroundColor: backgroundColor,
+              foregroundColor: foregroundColor,
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
+class _RecommendationTagChip extends StatelessWidget {
+  const _RecommendationTagChip({
+    required this.tag,
+    required this.backgroundColor,
+    required this.foregroundColor,
+  });
+
+  final String tag;
+  final Color backgroundColor;
+  final Color foregroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        tag,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: foregroundColor,
+          fontWeight: FontWeight.w400,
+        ),
+      ),
+    );
+  }
+}
+
+class _AudioTransportIcon extends StatelessWidget {
+  const _AudioTransportIcon({
+    required this.icon,
+    required this.onTap,
+    required this.color,
+  });
+
+  final IconData icon;
+  final VoidCallback? onTap;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+      padding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
+      onPressed: onTap,
+      icon: Icon(icon, size: 22, color: color),
+    );
+  }
+}
+
+class _AutoScrollingText extends StatefulWidget {
+  const _AutoScrollingText({required this.text, required this.style});
+
+  final String text;
+  final TextStyle? style;
+
+  @override
+  State<_AutoScrollingText> createState() => _AutoScrollingTextState();
+}
+
+class _AutoScrollingTextState extends State<_AutoScrollingText> {
+  final ScrollController _controller = ScrollController();
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _schedule();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AutoScrollingText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text) {
+      if (_controller.hasClients) {
+        _controller.jumpTo(0);
+      }
+      _schedule();
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _schedule() {
+    _timer?.cancel();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_controller.hasClients) {
+        return;
+      }
+      final double max = _controller.position.maxScrollExtent;
+      if (max <= 0) {
+        return;
+      }
+      _timer = Timer(const Duration(milliseconds: 900), () async {
+        if (!mounted || !_controller.hasClients) {
+          return;
+        }
+        await _controller.animateTo(
+          max,
+          duration: const Duration(milliseconds: 2400),
+          curve: Curves.easeInOutCubic,
+        );
+        if (!mounted || !_controller.hasClients) {
+          return;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 700));
+        if (!mounted || !_controller.hasClients) {
+          return;
+        }
+        await _controller.animateTo(
+          0,
+          duration: const Duration(milliseconds: 1600),
+          curve: Curves.easeInOutCubic,
+        );
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: SingleChildScrollView(
+        controller: _controller,
+        scrollDirection: Axis.horizontal,
+        physics: const NeverScrollableScrollPhysics(),
+        child: Text(
+          widget.text,
+          maxLines: 1,
+          softWrap: false,
+          style: widget.style,
+        ),
+      ),
+    );
+  }
 }
 
 class SupportToolCard extends StatelessWidget {
   const SupportToolCard({
     super.key,
     required this.title,
-    required this.subtitle,
     required this.icon,
     required this.onTap,
+    this.subtitle = '',
   });
 
   final String title;
@@ -382,16 +614,18 @@ class SupportToolCard extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            subtitle,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppColors.onDark.withAlpha(140),
-              height: 1.35,
+          if (subtitle.trim().isNotEmpty) ...<Widget>[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              subtitle,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.onDark.withAlpha(140),
+                height: 1.35,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -405,12 +639,16 @@ class SessionAudioCard extends StatelessWidget {
     required this.playbackState,
     required this.position,
     required this.onToggle,
+    required this.onPrevious,
+    required this.onNext,
   });
 
   final AudioTrack? track;
   final PlaybackState playbackState;
   final Duration position;
   final VoidCallback onToggle;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
 
   @override
   Widget build(BuildContext context) {
@@ -423,6 +661,21 @@ class SessionAudioCard extends StatelessWidget {
           subtitle: '低刺激白噪音 · 45 分钟',
           duration: Duration(minutes: 45),
         );
+    final bool hasKnownDuration = effectiveTrack.duration > Duration.zero;
+    final String progressText = hasKnownDuration
+        ? '${Formatters.formatDuration(position)} / ${Formatters.formatDuration(effectiveTrack.duration)}'
+        : Formatters.formatDuration(position);
+    final String trimmedSubtitle = effectiveTrack.subtitle.trim();
+    final bool hideCloudSubtitle =
+        effectiveTrack.sourceUrl != null &&
+        trimmedSubtitle.toLowerCase().contains('cloudbase');
+    final String? detailText = hideCloudSubtitle
+        ? (hasKnownDuration ? progressText : null)
+        : trimmedSubtitle.isEmpty
+        ? (hasKnownDuration ? progressText : null)
+        : hasKnownDuration
+        ? '$trimmedSubtitle · $progressText'
+        : trimmedSubtitle;
 
     return AppCard(
       padding: EdgeInsets.zero,
@@ -454,27 +707,52 @@ class SessionAudioCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    '${effectiveTrack.subtitle} · ${Formatters.formatDuration(position)}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.onDark.withAlpha(140),
-                      height: 1.35,
+                  if (detailText != null) ...<Widget>[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      detailText,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.onDark.withAlpha(140),
+                        height: 1.35,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
-            IconButton(
-              onPressed: onToggle,
-              icon: Icon(
-                playbackState == PlaybackState.playing
-                    ? Icons.pause_circle_filled_rounded
-                    : Icons.play_circle_fill_rounded,
-                color: palette.primarySoft,
-                size: 34,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                IconButton(
+                  tooltip: '上一首',
+                  onPressed: onPrevious,
+                  icon: Icon(
+                    Icons.skip_previous_rounded,
+                    color: palette.primarySoft,
+                  ),
+                ),
+                IconButton(
+                  tooltip: playbackState == PlaybackState.playing ? '暂停' : '播放',
+                  onPressed: onToggle,
+                  icon: Icon(
+                    playbackState == PlaybackState.playing
+                        ? Icons.pause_circle_filled_rounded
+                        : Icons.play_circle_fill_rounded,
+                    color: palette.primarySoft,
+                    size: 34,
+                  ),
+                ),
+                IconButton(
+                  tooltip: '下一首',
+                  onPressed: onNext,
+                  icon: Icon(
+                    Icons.skip_next_rounded,
+                    color: palette.primarySoft,
+                  ),
+                ),
+              ],
             ),
           ],
         ),

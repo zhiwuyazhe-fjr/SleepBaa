@@ -33,6 +33,7 @@ import 'package:sleep_dorm_app/features/profile/presentation/pages/sleep_report_
 import 'package:sleep_dorm_app/features/profile/presentation/pages/thought_note_detail_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/thought_vault_page.dart';
 import 'package:sleep_dorm_app/features/sleep/presentation/pages/cant_sleep_page.dart';
+import 'package:sleep_dorm_app/features/sleep/presentation/pages/sleep_audio_catalog_page.dart';
 import 'package:sleep_dorm_app/features/sleep_encyclopedia/presentation/pages/sleep_encyclopedia_category_page.dart';
 import 'package:sleep_dorm_app/features/sleep_encyclopedia/presentation/pages/sleep_encyclopedia_page.dart';
 import 'package:sleep_dorm_app/features/sleep_encyclopedia/presentation/pages/sleep_encyclopedia_topic_page.dart';
@@ -53,6 +54,7 @@ abstract final class AppRoutes {
   static const String dreamDetail = '/dream/detail';
   static const String dreamJournal = '/dream/journal';
   static const String sleepCantSleep = '/sleep/cant_sleep';
+  static const String sleepAudioCatalog = '/sleep/audio_catalog';
   static const String sleepEncyclopedia = '/sleep/encyclopedia';
   static const String sleepEncyclopediaCategory =
       '/sleep/encyclopedia/category';
@@ -110,6 +112,23 @@ abstract final class AppRoutes {
     return Uri(
       path: feedbackMorning,
       queryParameters: queryParameters,
+    ).toString();
+  }
+
+  static String assistantSleepCaptureLocation({
+    required AssistantCaptureTab mode,
+    String? sessionId,
+    bool allowSessionRepair = false,
+  }) {
+    final String normalizedSessionId = sessionId?.trim() ?? '';
+    return Uri(
+      path: assistant,
+      queryParameters: <String, String>{
+        'flow': 'sleep_capture',
+        'mode': mode == AssistantCaptureTab.memo ? 'memo' : 'dream',
+        if (normalizedSessionId.isNotEmpty) 'sessionId': normalizedSessionId,
+        if (allowSessionRepair) 'repairSession': '1',
+      },
     ).toString();
   }
 
@@ -277,6 +296,11 @@ GoRouter createRouter({
             const CantSleepPage(),
       ),
       GoRoute(
+        path: AppRoutes.sleepAudioCatalog,
+        builder: (BuildContext context, GoRouterState state) =>
+            const SleepAudioCatalogPage(),
+      ),
+      GoRoute(
         path: AppRoutes.sleepEncyclopedia,
         builder: (BuildContext context, GoRouterState state) =>
             const SleepEncyclopediaPage(),
@@ -400,6 +424,9 @@ GoRouter createRouter({
           return AssistantPage(
             captureModeEnabled: captureModeEnabled,
             initialCaptureTab: initialTab,
+            captureSessionId: state.uri.queryParameters['sessionId'],
+            allowCaptureSessionRepair:
+                state.uri.queryParameters['repairSession'] == '1',
           );
         },
       ),

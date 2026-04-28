@@ -304,8 +304,13 @@ String _threadPreview(List<AssistantMessage> messages) {
 }
 
 String _threadTimeLabel(DateTime updatedAt) {
-  final int hour = updatedAt.hour;
-  final int minute = updatedAt.minute;
-  final String minuteLabel = minute.toString().padLeft(2, '0');
-  return '$hour:$minuteLabel';
+  final DateTime now = DateTime.now();
+  final String month = updatedAt.month.toString().padLeft(2, '0');
+  final String day = updatedAt.day.toString().padLeft(2, '0');
+  final String hour = updatedAt.hour.toString().padLeft(2, '0');
+  final String minuteLabel = updatedAt.minute.toString().padLeft(2, '0');
+  if (updatedAt.year == now.year) {
+    return '$month月$day日 $hour:$minuteLabel';
+  }
+  return '${updatedAt.year}年$month月$day日 $hour:$minuteLabel';
 }

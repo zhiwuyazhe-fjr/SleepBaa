@@ -14,6 +14,7 @@
     "test": "npm run build && npm run build:test && node --test lib/test/*.test.js"
   },
   "dependencies": {
+    "@cloudbase/manager-node": "^5.1.1",
     "@cloudbase/node-sdk": "^3.17.0",
     "cors": "^2.8.5",
     "express": "^4.21.2"

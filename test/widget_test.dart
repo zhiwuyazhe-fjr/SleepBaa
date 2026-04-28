@@ -589,6 +589,29 @@ void main() {
     expect(submitButton.onPressed, isNotNull);
   });
 
+  testWidgets('sleep capture assistant switches dream and memo guidance', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: '${AppRoutes.assistant}?flow=sleep_capture&mode=dream',
+      clock: _dayClock,
+      settle: false,
+    );
+    await _pumpAssistantSurface(tester);
+
+    expect(find.text('把梦先轻轻记下来'), findsOneWidget);
+    expect(find.text('会保存到“我的 / 梦境记录”。'), findsOneWidget);
+    expect(find.text('例如：我梦见自己站在很高的桥上...'), findsOneWidget);
+
+    await tester.tap(find.text('事记'));
+    await tester.pump(const Duration(milliseconds: 240));
+
+    expect(find.text('把事也先安放下来'), findsOneWidget);
+    expect(find.textContaining('会保存到“我的 / 事记仓库”'), findsOneWidget);
+    expect(find.textContaining('例如：明早要给导师发材料'), findsOneWidget);
+  });
+
   testWidgets(
     'cloudbase auth gate renders phone auth page without overlay errors',
     (WidgetTester tester) async {
@@ -2303,28 +2326,30 @@ void main() {
     final AppServices services = AppScope.of(
       tester.element(find.byType(CalendarCheckinPage)),
     );
-    final DateTime calendarTargetDay = DateTime.now().add(
-      const Duration(days: 2),
+    final DateTime now = DateTime.now();
+    final int daysInMonth = DateUtils.getDaysInMonth(now.year, now.month);
+    final DateTime calendarTargetDay = DateTime(
+      now.year,
+      now.month,
+      now.day < daysInMonth ? now.day + 1 : now.day,
     );
     final SleepSession targetSession = _buildPendingFeedbackSession(
       uid: services.authRepository.currentUser.uid,
       id: 'calendar-target-session',
-      startedAt: DateTime(
-        calendarTargetDay.year,
-        calendarTargetDay.month,
-        calendarTargetDay.day,
-        23,
-        24,
-      ),
+      startedAt: calendarTargetDay.subtract(const Duration(hours: 1)),
       recommendationTitle: 'Calendar target session',
     );
     await services.sleepSessionRepository.saveSession(targetSession);
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(
-      find.text('${targetSession.sleepDayDate.day}').first,
+    final Finder targetDayFinder = find.descendant(
+      of: find.byType(GridView),
+      matching: find.text('${targetSession.sleepDayDate.day}'),
     );
-    await tester.tap(find.text('${targetSession.sleepDayDate.day}').first);
+    expect(targetDayFinder, findsOneWidget);
+    await tester.ensureVisible(targetDayFinder);
+    await tester.pumpAndSettle();
+    await tester.tap(targetDayFinder);
     await tester.pumpAndSettle();
 
     expect(find.byType(MorningFeedbackPage), findsOneWidget);
@@ -3063,23 +3088,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(MorningFeedbackPage), findsOneWidget);
-    expect(find.byType(TextField), findsWidgets);
-    return;
-
-    final Finder endSleepModeButton = find.widgetWithText(
-      PrimaryButton,
-      '缁撴潫鐫＄湢妯″紡',
+    expect(find.text('逐条反馈建议'), findsOneWidget);
+    expect(find.text('补充说明'), findsWidgets);
+    await tester.dragUntilVisible(
+      find.text('提交反馈并结束本次睡眠'),
+      find.byType(ListView).first,
+      const Offset(0, -220),
     );
-    await tester.ensureVisible(endSleepModeButton);
-    await tester.tap(endSleepModeButton);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.widgetWithText(PrimaryButton, '缁撴潫骞跺幓鏅ㄩ棿鍙嶉'));
-    await tester.pump();
     await tester.pumpAndSettle();
-
-    expect(find.byType(MorningFeedbackPage), findsOneWidget);
-    expect(find.widgetWithText(PrimaryButton, '鎻愪氦鍙嶉'), findsOneWidget);
+    expect(find.text('提交反馈并结束本次睡眠'), findsOneWidget);
   });
 
   testWidgets(

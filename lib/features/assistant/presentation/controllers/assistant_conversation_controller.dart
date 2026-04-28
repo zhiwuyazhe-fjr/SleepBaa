@@ -82,6 +82,27 @@ class AssistantConversationController extends ChangeNotifier {
     return _assistantRepository.setCurrentThread(threadId);
   }
 
+  Future<AssistantThread> startNewConversation({String? title}) async {
+    final String normalizedTitle = title?.trim() ?? '';
+    final AssistantThread? current = currentThread;
+    if (_isReusableBlankThread(current, normalizedTitle)) {
+      await _assistantRepository.setCurrentThread(current!.id);
+      return current;
+    }
+
+    for (final AssistantThread thread in _assistantRepository.threads) {
+      if (!_isReusableBlankThread(thread, normalizedTitle)) {
+        continue;
+      }
+      await _assistantRepository.setCurrentThread(thread.id);
+      return thread;
+    }
+
+    return _assistantRepository.createThread(
+      title: normalizedTitle.isEmpty ? null : normalizedTitle,
+    );
+  }
+
   Future<AssistantConversationSubmitResult> submitPrompt(String prompt) async {
     final String normalizedPrompt = prompt.trim();
     if (normalizedPrompt.isEmpty) {
@@ -108,13 +129,21 @@ class AssistantConversationController extends ChangeNotifier {
   Future<AssistantConversationSubmitResult> submitCapturePrompt({
     required String prompt,
     required SleepCaptureType captureType,
+    String? preferredSessionId,
+    bool allowSessionRepair = false,
   }) async {
     final String normalizedPrompt = prompt.trim();
     if (normalizedPrompt.isEmpty) {
       return AssistantConversationSubmitResult.empty;
     }
 
-    final String? activeSessionId = _sleepSessionRepository.activeSession?.id;
+    final SleepSession? activeSleepModeSession = _resolveActiveSleepModeSession(
+      preferredSessionId: preferredSessionId,
+    );
+    final String? activeSessionId =
+        activeSleepModeSession?.id ??
+        _normalizedSessionId(preferredSessionId) ??
+        await _repairSleepModeSessionIdIfAllowed(allowSessionRepair);
     if (activeSessionId == null || activeSessionId.isEmpty) {
       return AssistantConversationSubmitResult.missingActiveSession;
     }
@@ -136,6 +165,62 @@ class AssistantConversationController extends ChangeNotifier {
       ),
     );
     return AssistantConversationSubmitResult.sent;
+  }
+
+  SleepSession? _resolveActiveSleepModeSession({String? preferredSessionId}) {
+    final String? normalizedPreferredSessionId = _normalizedSessionId(
+      preferredSessionId,
+    );
+    final SleepSession? activeSession = _sleepSessionRepository.activeSession;
+    if (_canCaptureIntoSleepModeSession(
+      activeSession,
+      preferredSessionId: normalizedPreferredSessionId,
+    )) {
+      return activeSession;
+    }
+
+    for (final SleepSession session
+        in _sleepSessionRepository.sessions.reversed) {
+      if (_canCaptureIntoSleepModeSession(
+        session,
+        preferredSessionId: normalizedPreferredSessionId,
+      )) {
+        return session;
+      }
+    }
+    return null;
+  }
+
+  bool _canCaptureIntoSleepModeSession(
+    SleepSession? session, {
+    String? preferredSessionId,
+  }) {
+    if (session == null) {
+      return false;
+    }
+    if (preferredSessionId != null && session.id != preferredSessionId) {
+      return false;
+    }
+    return session.status == SleepSessionStatus.active &&
+        session.sleepModeActive &&
+        session.endedAt == null;
+  }
+
+  String? _normalizedSessionId(String? sessionId) {
+    final String normalized = sessionId?.trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  Future<String?> _repairSleepModeSessionIdIfAllowed(bool allowRepair) async {
+    if (!allowRepair) {
+      return null;
+    }
+    final SleepSession repaired = await _sleepSessionRepository
+        .startOrResumeSleepSession(
+          recommendationSnapshot: const <NightRecommendation>[],
+          dormId: _dormRepository.currentDorm.id,
+        );
+    return repaired.id.trim().isEmpty ? null : repaired.id;
   }
 
   Future<AssistantConversationSubmitResult> retryLatestPrompt({
@@ -168,6 +253,23 @@ class AssistantConversationController extends ChangeNotifier {
       return null;
     }
     return _PreparedThreadTurn(thread: thread, turnId: turnId);
+  }
+
+  bool _isBlankThread(AssistantThread? thread) {
+    if (thread == null) {
+      return false;
+    }
+    return _assistantRepository.messagesForThread(thread.id).isEmpty;
+  }
+
+  bool _isReusableBlankThread(
+    AssistantThread? thread,
+    String normalizedTitle,
+  ) {
+    if (!_isBlankThread(thread)) {
+      return false;
+    }
+    return normalizedTitle.isEmpty || thread!.title == normalizedTitle;
   }
 
   Future<void> _sendReplyStream({

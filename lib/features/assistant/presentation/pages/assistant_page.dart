@@ -24,10 +24,14 @@ class AssistantPage extends StatefulWidget {
     super.key,
     this.captureModeEnabled = false,
     this.initialCaptureTab = AssistantCaptureTab.dream,
+    this.captureSessionId,
+    this.allowCaptureSessionRepair = false,
   });
 
   final bool captureModeEnabled;
   final AssistantCaptureTab initialCaptureTab;
+  final String? captureSessionId;
+  final bool allowCaptureSessionRepair;
 
   @override
   State<AssistantPage> createState() => _AssistantPageState();
@@ -66,6 +70,9 @@ class _AssistantPageState extends State<AssistantPage>
       _selectedTab == AssistantCaptureTab.memo
       ? SleepCaptureType.memo
       : SleepCaptureType.dream;
+
+  _AssistantCaptureCopy get _captureCopy =>
+      _AssistantCaptureCopy.forTab(_selectedTab);
 
   bool get _archiveTransitioning =>
       _archivePhase == _AssistantArchivePhase.expanding ||
@@ -136,6 +143,8 @@ class _AssistantPageState extends State<AssistantPage>
         ? await controller.submitCapturePrompt(
             prompt: prompt,
             captureType: _activeCaptureType,
+            preferredSessionId: widget.captureSessionId,
+            allowSessionRepair: widget.allowCaptureSessionRepair,
           )
         : await controller.submitPrompt(prompt);
 
@@ -187,7 +196,7 @@ class _AssistantPageState extends State<AssistantPage>
       _lastHapticAssistantMessageId = null;
     });
     _focusNode.unfocus();
-    await services.assistantFacade.createThread(
+    await services.assistantConversationController.startNewConversation(
       title: widget.captureModeEnabled
           ? (_activeCaptureType == SleepCaptureType.dream ? '梦记收纳' : '事记收纳')
           : '新对话',
@@ -565,6 +574,13 @@ class _AssistantPageState extends State<AssistantPage>
                   statuses: latestStatuses,
                   controller: controller,
                   replyMotionLevel: replyMotionLevel,
+                  captureModeEnabled: widget.captureModeEnabled,
+                  selectedCaptureTab: _selectedTab,
+                  onCaptureTabChanged: (AssistantCaptureTab tab) {
+                    setState(() {
+                      _selectedTab = tab;
+                    });
+                  },
                   archiveController: _archiveController,
                   archivePhase: _archivePhase,
                   flowHintText: _shouldShowFlowHint() ? _flowHintText() : null,
@@ -606,7 +622,11 @@ class _AssistantPageState extends State<AssistantPage>
                   focusNode: _focusNode,
                   metrics: metrics,
                   palette: palette,
-                  hintText: isBusy ? '小眠正在整理你的心绪...' : '和小眠说说现在的心情...',
+                  hintText: isBusy
+                      ? '小眠正在整理你的心绪...'
+                      : widget.captureModeEnabled
+                      ? _captureCopy.inputHint
+                      : '和小眠说说现在的心情...',
                   isBusy: isBusy,
                   onSubmit: () => _handleSubmit(services),
                   onTapAdd: _handleComposerAddTap,
@@ -645,6 +665,9 @@ class _AssistantStageViewport extends StatelessWidget {
     required this.statuses,
     required this.controller,
     required this.replyMotionLevel,
+    required this.captureModeEnabled,
+    required this.selectedCaptureTab,
+    required this.onCaptureTabChanged,
     required this.archiveController,
     required this.archivePhase,
     required this.flowHintText,
@@ -669,6 +692,9 @@ class _AssistantStageViewport extends StatelessWidget {
   final List<AssistantToolStatus> statuses;
   final AssistantConversationController controller;
   final AssistantReplyMotionLevel replyMotionLevel;
+  final bool captureModeEnabled;
+  final AssistantCaptureTab selectedCaptureTab;
+  final ValueChanged<AssistantCaptureTab> onCaptureTabChanged;
   final AnimationController archiveController;
   final _AssistantArchivePhase archivePhase;
   final String? flowHintText;
@@ -703,6 +729,9 @@ class _AssistantStageViewport extends StatelessWidget {
             latestAssistantText: slice.latestAssistant?.content.trim() ?? '',
             statuses: statuses,
             replyMotionLevel: replyMotionLevel,
+            captureModeEnabled: captureModeEnabled,
+            selectedCaptureTab: selectedCaptureTab,
+            onCaptureTabChanged: onCaptureTabChanged,
             scrollController: primaryStageScrollController,
             bodyBottomOverlayInset: bodyBottomOverlayInset,
           ),
@@ -905,6 +934,9 @@ class _AssistantPrimaryStage extends StatelessWidget {
     required this.latestAssistantText,
     required this.statuses,
     required this.replyMotionLevel,
+    required this.captureModeEnabled,
+    required this.selectedCaptureTab,
+    required this.onCaptureTabChanged,
     required this.scrollController,
     required this.bodyBottomOverlayInset,
   });
@@ -916,6 +948,9 @@ class _AssistantPrimaryStage extends StatelessWidget {
   final String latestAssistantText;
   final List<AssistantToolStatus> statuses;
   final AssistantReplyMotionLevel replyMotionLevel;
+  final bool captureModeEnabled;
+  final AssistantCaptureTab selectedCaptureTab;
+  final ValueChanged<AssistantCaptureTab> onCaptureTabChanged;
   final ScrollController scrollController;
   final double bodyBottomOverlayInset;
 
@@ -933,6 +968,9 @@ class _AssistantPrimaryStage extends StatelessWidget {
         key: stageKey,
         metrics: metrics,
         palette: palette,
+        captureModeEnabled: captureModeEnabled,
+        selectedCaptureTab: selectedCaptureTab,
+        onCaptureTabChanged: onCaptureTabChanged,
       ),
       _AssistantStageState.waiting => _AssistantWaitingStage(
         key: stageKey,
@@ -950,7 +988,8 @@ class _AssistantPrimaryStage extends StatelessWidget {
       ),
     };
     final double stageTopInset = switch (stageState) {
-      _AssistantStageState.empty => metrics.unit(124),
+      _AssistantStageState.empty =>
+        captureModeEnabled ? metrics.unit(40) : metrics.unit(124),
       _AssistantStageState.waiting => metrics.unit(108),
       _AssistantStageState.reply => metrics.unit(92),
     };
@@ -1058,13 +1097,28 @@ class _AssistantEmptyStage extends StatelessWidget {
     super.key,
     required this.metrics,
     required this.palette,
+    required this.captureModeEnabled,
+    required this.selectedCaptureTab,
+    required this.onCaptureTabChanged,
   });
 
   final AssistantSurfaceMetrics metrics;
   final AssistantSurfacePalette palette;
+  final bool captureModeEnabled;
+  final AssistantCaptureTab selectedCaptureTab;
+  final ValueChanged<AssistantCaptureTab> onCaptureTabChanged;
 
   @override
   Widget build(BuildContext context) {
+    if (captureModeEnabled) {
+      return _AssistantCaptureEmptyStage(
+        metrics: metrics,
+        palette: palette,
+        selectedTab: selectedCaptureTab,
+        onTabChanged: onCaptureTabChanged,
+      );
+    }
+
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double contentWidth = metrics.contentWidth(constraints.maxWidth);
@@ -1110,6 +1164,357 @@ class _AssistantEmptyStage extends StatelessWidget {
       },
     );
   }
+}
+
+class _AssistantCaptureEmptyStage extends StatelessWidget {
+  const _AssistantCaptureEmptyStage({
+    required this.metrics,
+    required this.palette,
+    required this.selectedTab,
+    required this.onTabChanged,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+  final AssistantCaptureTab selectedTab;
+  final ValueChanged<AssistantCaptureTab> onTabChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final _AssistantCaptureCopy copy = _AssistantCaptureCopy.forTab(
+      selectedTab,
+    );
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double contentWidth = metrics.contentWidth(constraints.maxWidth);
+        return Center(
+          child: SizedBox(
+            width: contentWidth,
+            child: AssistantFloatingMotion(
+              transformKey: const ValueKey<String>(
+                'assistant-capture-empty-floating-motion',
+              ),
+              travelDistance: metrics.unit(5),
+              duration: const Duration(milliseconds: 3800),
+              child: Column(
+                key: const ValueKey<String>('assistant-capture-empty-stage'),
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  _AssistantCaptureOrb(metrics: metrics, palette: palette),
+                  SizedBox(height: metrics.unit(24)),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    child: Text(
+                      copy.headline,
+                      key: ValueKey<String>('capture-headline-${copy.typeKey}'),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            color: palette.headlineText,
+                            fontSize: metrics.unit(25),
+                            fontWeight: FontWeight.w800,
+                            height: 1.18,
+                          ),
+                    ),
+                  ),
+                  SizedBox(height: metrics.unit(10)),
+                  Text(
+                    copy.subtitle,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: palette.bodyText,
+                      fontSize: metrics.unit(14),
+                      fontWeight: FontWeight.w500,
+                      height: 1.55,
+                    ),
+                  ),
+                  SizedBox(height: metrics.unit(24)),
+                  _AssistantCaptureTabSwitch(
+                    metrics: metrics,
+                    palette: palette,
+                    selectedTab: selectedTab,
+                    onTabChanged: onTabChanged,
+                  ),
+                  SizedBox(height: metrics.unit(22)),
+                  _AssistantCapturePromptPanel(
+                    metrics: metrics,
+                    palette: palette,
+                    copy: copy,
+                  ),
+                  SizedBox(height: metrics.unit(12)),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      copy.saveTip,
+                      key: ValueKey<String>('capture-save-tip-${copy.typeKey}'),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: palette.mutedText,
+                        fontSize: metrics.unit(12),
+                        fontWeight: FontWeight.w600,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AssistantCaptureOrb extends StatelessWidget {
+  const _AssistantCaptureOrb({required this.metrics, required this.palette});
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: _assistantAlpha(palette.bottomGlowCore, 0.16),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: _assistantAlpha(palette.bottomGlowMid, 0.22),
+            blurRadius: metrics.unit(26),
+            spreadRadius: metrics.unit(6),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(metrics.unit(18)),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _assistantAlpha(palette.bottomGlowCore, 0.62),
+            border: Border.all(
+              color: _assistantAlpha(palette.headerIcon, 0.28),
+              width: metrics.unit(1.5),
+            ),
+          ),
+          child: SizedBox.square(
+            dimension: metrics.unit(50),
+            child: Icon(
+              Icons.nightlight_round,
+              color: _assistantAlpha(palette.headlineText, 0.82),
+              size: metrics.unit(24),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AssistantCaptureTabSwitch extends StatelessWidget {
+  const _AssistantCaptureTabSwitch({
+    required this.metrics,
+    required this.palette,
+    required this.selectedTab,
+    required this.onTabChanged,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+  final AssistantCaptureTab selectedTab;
+  final ValueChanged<AssistantCaptureTab> onTabChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _assistantAlpha(Colors.black, 0.18),
+        borderRadius: BorderRadius.circular(metrics.unit(999)),
+        border: Border.all(
+          color: _assistantAlpha(palette.composerBorder, 0.34),
+          width: metrics.unit(1),
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(metrics.unit(4)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            _AssistantCaptureTabButton(
+              metrics: metrics,
+              palette: palette,
+              label: '梦记',
+              selected: selectedTab == AssistantCaptureTab.dream,
+              onTap: () => onTabChanged(AssistantCaptureTab.dream),
+            ),
+            _AssistantCaptureTabButton(
+              metrics: metrics,
+              palette: palette,
+              label: '事记',
+              selected: selectedTab == AssistantCaptureTab.memo,
+              onTap: () => onTabChanged(AssistantCaptureTab.memo),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AssistantCaptureTabButton extends StatelessWidget {
+  const _AssistantCaptureTabButton({
+    required this.metrics,
+    required this.palette,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(metrics.unit(999)),
+        onTap: selected ? null : onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          width: metrics.unit(88),
+          padding: EdgeInsets.symmetric(vertical: metrics.unit(10)),
+          decoration: BoxDecoration(
+            color: selected
+                ? _assistantAlpha(palette.bottomGlowMid, 0.86)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(metrics.unit(999)),
+            boxShadow: selected
+                ? <BoxShadow>[
+                    BoxShadow(
+                      color: _assistantAlpha(palette.bottomGlowMid, 0.20),
+                      blurRadius: metrics.unit(12),
+                      offset: Offset(0, metrics.unit(4)),
+                    ),
+                  ]
+                : const <BoxShadow>[],
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: selected ? palette.headlineText : palette.bodyText,
+              fontSize: metrics.unit(15),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AssistantCapturePromptPanel extends StatelessWidget {
+  const _AssistantCapturePromptPanel({
+    required this.metrics,
+    required this.palette,
+    required this.copy,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+  final _AssistantCaptureCopy copy;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 180),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      child: DecoratedBox(
+        key: ValueKey<String>('capture-prompt-${copy.typeKey}'),
+        decoration: BoxDecoration(
+          color: _assistantAlpha(const Color(0xFF0A2D5C), 0.72),
+          borderRadius: BorderRadius.circular(metrics.unit(14)),
+          border: Border.all(
+            color: _assistantAlpha(palette.headerIcon, 0.08),
+            width: metrics.unit(1),
+          ),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: _assistantAlpha(Colors.black, 0.18),
+              blurRadius: metrics.unit(18),
+              offset: Offset(0, metrics.unit(8)),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: metrics.unit(18),
+            vertical: metrics.unit(18),
+          ),
+          child: Text(
+            copy.prompt,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: _assistantAlpha(Colors.white, 0.90),
+              fontSize: metrics.unit(15),
+              fontWeight: FontWeight.w700,
+              height: 1.58,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AssistantCaptureCopy {
+  const _AssistantCaptureCopy({
+    required this.typeKey,
+    required this.headline,
+    required this.subtitle,
+    required this.prompt,
+    required this.saveTip,
+    required this.inputHint,
+  });
+
+  factory _AssistantCaptureCopy.forTab(AssistantCaptureTab tab) {
+    return switch (tab) {
+      AssistantCaptureTab.dream => const _AssistantCaptureCopy(
+        typeKey: 'dream',
+        headline: '把梦先轻轻记下来',
+        subtitle: '不用一次写完整，先把还记得的画面、人物、颜色或一句话留住就好。',
+        prompt: '如果刚醒来还模糊，可以先从“我看到了什么”“我当时什么感觉”“有没有一句特别清楚的话”开始写，我会帮你把梦记轻轻收好。',
+        saveTip: '会保存到“我的 / 梦境记录”。',
+        inputHint: '例如：我梦见自己站在很高的桥上...',
+      ),
+      AssistantCaptureTab.memo => const _AssistantCaptureCopy(
+        typeKey: 'memo',
+        headline: '把事也先安放下来',
+        subtitle: '怕睡前突然想到的事明早忘掉，就先在这里交给我保管。',
+        prompt: '你可以写下明天要做的事、突然想到的人名任务，或者一句不想忘记的话。我会先帮你整理成简短提要，让你今晚不用一直惦记着它。',
+        saveTip: '会保存到“我的 / 事记仓库”，结束睡眠模式后，首页会给整理提醒。',
+        inputHint: '例如：明早要给导师发材料，还要记得问室友借充电器...',
+      ),
+    };
+  }
+
+  final String typeKey;
+  final String headline;
+  final String subtitle;
+  final String prompt;
+  final String saveTip;
+  final String inputHint;
+}
+
+Color _assistantAlpha(Color color, double opacity) {
+  return color.withAlpha((opacity * 255).round().clamp(0, 255));
 }
 
 class _AssistantEmptyHeadline extends StatelessWidget {

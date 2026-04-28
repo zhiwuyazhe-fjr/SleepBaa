@@ -6,6 +6,7 @@ import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/features/sleep_encyclopedia/data/sleep_encyclopedia_content.dart';
+import 'package:sleep_dorm_app/features/sleep_encyclopedia/presentation/sleep_encyclopedia_text.dart';
 
 class SleepEncyclopediaTopicPage extends StatelessWidget {
   const SleepEncyclopediaTopicPage({super.key, required this.topicSlug});
@@ -113,7 +114,7 @@ class SleepEncyclopediaTopicPage extends StatelessWidget {
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       Text(
-                        topic.subtitle,
+                        sleepEncyclopediaCardSubtitle(topic.subtitle),
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
                               color: AppColors.textSecondary,
@@ -214,7 +215,9 @@ class SleepEncyclopediaTopicPage extends StatelessWidget {
                                       ),
                                       const SizedBox(height: AppSpacing.xs),
                                       Text(
-                                        related.subtitle,
+                                        sleepEncyclopediaCardSubtitle(
+                                          related.subtitle,
+                                        ),
                                         style: Theme.of(context)
                                             .textTheme
                                             .bodyMedium

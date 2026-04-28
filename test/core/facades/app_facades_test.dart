@@ -15,6 +15,12 @@ class _RecordingRecommendationRepository extends ChangeNotifier
   List<NightRecommendation> get tonightRecommendations => _recommendations;
 
   @override
+  List<AudioTrack> get audioCatalog => _recommendations
+      .map((NightRecommendation recommendation) => recommendation.track)
+      .nonNulls
+      .toList(growable: false);
+
+  @override
   Future<void> resetForTonight() async {
     resetCalled = true;
   }
