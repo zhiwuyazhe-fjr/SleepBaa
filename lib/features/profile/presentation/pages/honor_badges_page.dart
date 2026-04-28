@@ -5,6 +5,7 @@ import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 
 class HonorBadgesPage extends StatefulWidget {
   const HonorBadgesPage({super.key});
@@ -19,67 +20,67 @@ class _HonorBadgesPageState extends State<HonorBadgesPage> {
   String? _pendingSelectedDormBadgeId;
 
   void _showMeaningSheet(BuildContext context, DormHonorBadge badge) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext context) {
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md,
-              AppSpacing.md,
-              AppSpacing.md,
-              AppSpacing.md,
-            ),
-            child: Container(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
+    showAppModal<void>(
+      context,
+      spec: AppDetailSheetSpec<void>(
+        backgroundColor: Colors.transparent,
+        builder: (BuildContext sheetContext) {
+          return SafeArea(
+            top: false,
+            child: AppBottomSheetScaffold(
+              key: const ValueKey<String>('app-bottom-sheet-detail'),
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: AppBottomSheetCard(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0xFFA0F2E0),
-                        ),
-                        child: Icon(badge.icon, color: const Color(0xFF076B5E)),
+                      Row(
+                        children: <Widget>[
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Color(0xFFA0F2E0),
+                            ),
+                            child: Icon(
+                              badge.icon,
+                              color: const Color(0xFF076B5E),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Text(
+                              badge.label,
+                              style: Theme.of(sheetContext).textTheme.titleLarge
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    color: const Color(0xFF2E3334),
+                                  ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Text(
-                          badge.label,
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                color: const Color(0xFF2E3334),
-                              ),
-                        ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Text(
+                        badge.meaning,
+                        style: Theme.of(sheetContext).textTheme.bodyLarge
+                            ?.copyWith(
+                              color: const Color(0xFF5A6061),
+                              height: 1.6,
+                            ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: AppSpacing.lg),
-                  Text(
-                    badge.meaning,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: const Color(0xFF5A6061),
-                      height: 1.6,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 

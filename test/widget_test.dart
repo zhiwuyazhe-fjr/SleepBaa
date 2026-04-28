@@ -13,6 +13,7 @@ import 'package:sleep_dorm_app/app/app.dart';
 import 'package:sleep_dorm_app/app/app_brand.dart';
 import 'package:sleep_dorm_app/main.dart' as app_main;
 import 'package:sleep_dorm_app/app/routes.dart';
+import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -38,6 +39,7 @@ import 'package:sleep_dorm_app/features/notifications/presentation/pages/notific
 import 'package:sleep_dorm_app/features/profile/presentation/pages/calendar_checkin_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/sleep_report_page.dart';
+import 'package:sleep_dorm_app/features/sleep/presentation/pages/cant_sleep_page.dart';
 
 void main() {
   setUpAll(() {
@@ -1501,6 +1503,94 @@ void main() {
     expect(find.text('安静守护者'), findsOneWidget);
   });
 
+  testWidgets('dorm gentle reminder opens the shared rich action sheet', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+
+    await tester.drag(
+      find.byKey(DormPage.drawerSheetKey),
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+
+    final Finder drawerListView = find
+        .descendant(
+          of: find.byKey(DormPage.drawerSheetKey),
+          matching: find.byType(ListView),
+        )
+        .first;
+    final Finder reminderEntry = find.descendant(
+      of: find.byKey(DormPage.drawerSheetKey),
+      matching: find.text('委婉提醒'),
+    );
+    await tester.dragUntilVisible(
+      reminderEntry,
+      drawerListView,
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(reminderEntry);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('app-bottom-sheet-rich-action')),
+      findsOneWidget,
+    );
+    expect(find.text('发送委婉提醒'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('gentle-reminder-content')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('dorm gentle reminder sheet stays above the shell tab bar', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+
+    await tester.drag(
+      find.byKey(DormPage.drawerSheetKey),
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+
+    final Finder drawerListView = find
+        .descendant(
+          of: find.byKey(DormPage.drawerSheetKey),
+          matching: find.byType(ListView),
+        )
+        .first;
+    final Finder reminderEntry = find.descendant(
+      of: find.byKey(DormPage.drawerSheetKey),
+      matching: find.text('委婉提醒'),
+    );
+    await tester.dragUntilVisible(
+      reminderEntry,
+      drawerListView,
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(reminderEntry);
+    await tester.pumpAndSettle();
+
+    final Finder sheetFinder = find.byKey(
+      const ValueKey<String>('app-bottom-sheet-rich-action'),
+    );
+    expect(find.byKey(BottomNavShell.navBarKey), findsOneWidget);
+    expect(sheetFinder, findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.home_rounded), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DormPage), findsOneWidget);
+    expect(find.byType(HomePreSleepPage), findsNothing);
+    expect(sheetFinder, findsOneWidget);
+  });
+
   testWidgets('profile page shows redesigned modules', (
     WidgetTester tester,
   ) async {
@@ -1731,6 +1821,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
+      find.byKey(const ValueKey<String>('app-bottom-sheet-rich-detail')),
+      findsOneWidget,
+    );
+    expect(
       find.byKey(const ValueKey<String>('profile-badge-sheet-early-sleeper')),
       findsOneWidget,
     );
@@ -1760,6 +1854,10 @@ void main() {
 
     final Finder sheetFinder = find.byKey(
       const ValueKey<String>('profile-badge-sheet-sleep-master'),
+    );
+    expect(
+      find.byKey(const ValueKey<String>('app-bottom-sheet-rich-detail')),
+      findsOneWidget,
     );
     expect(sheetFinder, findsOneWidget);
     expect(find.byType(ProfilePage), findsOneWidget);
@@ -2216,6 +2314,9 @@ void main() {
   testWidgets('calendar pending day opens that session in morning feedback', (
     WidgetTester tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await _pumpApp(
       tester,
       initialLocation: AppRoutes.profileCalendar,
@@ -2225,27 +2326,27 @@ void main() {
     final AppServices services = AppScope.of(
       tester.element(find.byType(CalendarCheckinPage)),
     );
-    final DateTime calendarTargetDay = DateTime.now().add(
-      const Duration(days: 2),
+    final DateTime now = DateTime.now();
+    final int daysInMonth = DateUtils.getDaysInMonth(now.year, now.month);
+    final DateTime calendarTargetDay = DateTime(
+      now.year,
+      now.month,
+      now.day < daysInMonth ? now.day + 1 : now.day,
     );
     final SleepSession targetSession = _buildPendingFeedbackSession(
       uid: services.authRepository.currentUser.uid,
       id: 'calendar-target-session',
-      startedAt: DateTime(
-        calendarTargetDay.year,
-        calendarTargetDay.month,
-        calendarTargetDay.day,
-        23,
-        24,
-      ),
+      startedAt: calendarTargetDay.subtract(const Duration(hours: 1)),
       recommendationTitle: 'Calendar target session',
     );
     await services.sleepSessionRepository.saveSession(targetSession);
     await tester.pumpAndSettle();
 
-    final Finder targetDayFinder = find
-        .text('${targetSession.sleepDayDate.day}')
-        .first;
+    final Finder targetDayFinder = find.descendant(
+      of: find.byType(GridView),
+      matching: find.text('${targetSession.sleepDayDate.day}'),
+    );
+    expect(targetDayFinder, findsOneWidget);
     await tester.ensureVisible(targetDayFinder);
     await tester.pumpAndSettle();
     await tester.tap(targetDayFinder);
@@ -2449,7 +2550,7 @@ void main() {
   });
 
   testWidgets(
-    'post-sleep morning feedback card finishes sleep mode and opens resumable feedback',
+    'post-sleep morning feedback card keeps the live sleep session open while entering feedback',
     (WidgetTester tester) async {
       final _FakeAppNotificationService notificationService =
           _FakeAppNotificationService();
@@ -2498,8 +2599,15 @@ void main() {
         tester
             .widget<MorningFeedbackPage>(find.byType(MorningFeedbackPage))
             .allowReturnToSleep,
-        isTrue,
+        isFalse,
       );
+      await tester.dragUntilVisible(
+        find.text('提交反馈并结束本次睡眠'),
+        find.byType(ListView).first,
+        const Offset(0, -220),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('提交反馈并结束本次睡眠'), findsOneWidget);
       await tester.dragUntilVisible(
         find.text('返回'),
         find.byType(ListView).first,
@@ -2508,17 +2616,17 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('返回'), findsOneWidget);
 
-      final SleepSession awaiting = services.sleepSessionRepository
+      final SleepSession active = services.sleepSessionRepository
           .sessionForSleepDayKey(
             sleepDayKeyFromDate(DateTime(2030, 4, 5, 15, 10)),
           )!;
-      expect(awaiting.status, SleepSessionStatus.awaitingFeedback);
-      expect(awaiting.sleepModeActive, isFalse);
+      expect(active.status, SleepSessionStatus.active);
+      expect(active.sleepModeActive, isTrue);
     },
   );
 
   testWidgets(
-    'finishing sleep mode from post-sleep page goes to morning feedback',
+    'exit dialog finish option reuses the live morning feedback entry',
     (WidgetTester tester) async {
       final _FakeAppNotificationService notificationService =
           _FakeAppNotificationService();
@@ -2554,6 +2662,11 @@ void main() {
       await tester.tap(endSleepModeButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
+
+      expect(
+        find.byKey(const ValueKey<String>('app-center-dialog-rich-choice')),
+        findsOneWidget,
+      );
       await tester.tap(find.widgetWithText(PrimaryButton, '结束并去晨间反馈'));
       await tester.pump();
       await tester.pumpAndSettle();
@@ -2569,8 +2682,15 @@ void main() {
         tester
             .widget<MorningFeedbackPage>(find.byType(MorningFeedbackPage))
             .allowReturnToSleep,
-        isTrue,
+        isFalse,
       );
+      await tester.dragUntilVisible(
+        find.text('提交反馈并结束本次睡眠'),
+        find.byType(ListView).first,
+        const Offset(0, -220),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('提交反馈并结束本次睡眠'), findsOneWidget);
       await tester.dragUntilVisible(
         find.text('返回'),
         find.byType(ListView).first,
@@ -2578,8 +2698,332 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('返回'), findsOneWidget);
+
+      final PrimaryButton returnButton = tester.widget<PrimaryButton>(
+        find.widgetWithText(PrimaryButton, '返回'),
+      );
+      expect(returnButton.size, PrimaryButtonSize.compact);
+
+      final SleepSession active = services.sleepSessionRepository
+          .sessionForSleepDayKey(
+            sleepDayKeyFromDate(DateTime(2030, 4, 5, 15, 10)),
+          )!;
+      expect(active.status, SleepSessionStatus.active);
+      expect(active.sleepModeActive, isTrue);
     },
   );
+
+  testWidgets(
+    'sleep exit dialog keeps note above actions and uses dark surface background',
+    (WidgetTester tester) async {
+      final _FakeAppNotificationService notificationService =
+          _FakeAppNotificationService();
+      DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.homePreSleep,
+        clock: () => currentTime,
+        appNotificationService: notificationService,
+      );
+
+      await tester.tap(find.byType(StartSleepModeCard));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      currentTime = DateTime(2030, 4, 5, 15, 10);
+
+      expect(find.byType(HomePostSleepPage), findsOneWidget);
+
+      final Finder endSleepModeButton = find.widgetWithText(
+        PrimaryButton,
+        '结束睡眠模式',
+      );
+      await tester.ensureVisible(endSleepModeButton);
+      await tester.tap(endSleepModeButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final Finder dialogFinder = find.byKey(
+        const ValueKey<String>('app-center-dialog-rich-choice'),
+      );
+      final Finder noteFinder = find.text('退出后再次进入，睡眠时长可累计，完成晨间反馈后该日时长就不再累计。');
+      final Finder returnButtonFinder = find.widgetWithText(
+        PrimaryButton,
+        '返回',
+      );
+
+      expect(dialogFinder, findsOneWidget);
+      expect(noteFinder, findsOneWidget);
+      expect(returnButtonFinder, findsOneWidget);
+
+      final Container dialogSurface = tester.widget<Container>(dialogFinder);
+      final BoxDecoration decoration =
+          dialogSurface.decoration! as BoxDecoration;
+      expect(decoration.color, AppColors.darkSurface);
+      expect(
+        tester.getBottomLeft(noteFinder).dy,
+        lessThan(tester.getTopLeft(returnButtonFinder).dy),
+      );
+    },
+  );
+
+  testWidgets(
+    'direct morning feedback tool from post-sleep page does not bounce to home first',
+    (WidgetTester tester) async {
+      final _FakeAppNotificationService notificationService =
+          _FakeAppNotificationService();
+      DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.homePreSleep,
+        clock: () => currentTime,
+        appNotificationService: notificationService,
+      );
+
+      await tester.tap(find.byType(StartSleepModeCard));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      currentTime = DateTime(2030, 4, 5, 15, 10);
+
+      expect(find.byType(HomePostSleepPage), findsOneWidget);
+      await tester.dragUntilVisible(
+        find.text('晨间反馈'),
+        find.byType(Scrollable).first,
+        const Offset(0, -220),
+      );
+      await tester.pump();
+      await tester.tap(find.text('晨间反馈').first);
+      await tester.pump();
+
+      await tester.pumpAndSettle();
+      expect(find.byType(MorningFeedbackPage), findsOneWidget);
+      expect(find.byType(HomePostSleepPage), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'post-sleep morning feedback card stays on the sleep page after feedback was already submitted',
+    (WidgetTester tester) async {
+      DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.homePreSleep,
+        clock: () => currentTime,
+      );
+
+      await tester.tap(find.byType(StartSleepModeCard));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      currentTime = DateTime(2030, 4, 5, 15, 10);
+
+      expect(find.byType(HomePostSleepPage), findsOneWidget);
+      final AppServices services = AppScope.of(
+        tester.element(find.byType(HomePostSleepPage)),
+      );
+      final SleepSession activeSession =
+          services.sleepSessionRepository.activeSession!;
+      final SleepSession completedSession = activeSession.copyWith(
+        endedAt: currentTime,
+        status: SleepSessionStatus.completed,
+        sleepModeActive: false,
+        segments: <SleepSegment>[
+          for (final SleepSegment segment in activeSession.segments)
+            SleepSegment(
+              startedAt: segment.startedAt,
+              endedAt: segment.endedAt ?? currentTime,
+            ),
+        ],
+        summary: const MorningSummary(
+          sleepQuality: 4,
+          restedLevel: 4,
+          totalSleepHours: 6.5,
+          awakeningsCount: 0,
+          note: 'submitted',
+        ),
+        updatedAt: currentTime,
+      );
+      await services.sleepSessionRepository.saveSession(completedSession);
+      await tester.pump();
+
+      await tester.dragUntilVisible(
+        find.text('晨间反馈'),
+        find.byType(Scrollable).first,
+        const Offset(0, -220),
+      );
+      await tester.pump();
+      await tester.tap(find.text('晨间反馈').first);
+      await tester.pump();
+      await _pumpUntilFound(tester, find.text('您已经填写过晨间反馈，小眠已经收到🫡'));
+
+      expect(find.byType(HomePostSleepPage), findsOneWidget);
+      expect(find.byType(MorningFeedbackPage), findsNothing);
+      expect(find.text('您已经填写过晨间反馈，小眠已经收到🫡'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'post-sleep finish via feedback exits home when feedback was already submitted',
+    (WidgetTester tester) async {
+      DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.homePreSleep,
+        clock: () => currentTime,
+      );
+
+      await tester.tap(find.byType(StartSleepModeCard));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      currentTime = DateTime(2030, 4, 5, 15, 10);
+
+      expect(find.byType(HomePostSleepPage), findsOneWidget);
+      final AppServices services = AppScope.of(
+        tester.element(find.byType(HomePostSleepPage)),
+      );
+      final SleepSession activeSession =
+          services.sleepSessionRepository.activeSession!;
+      final SleepSession completedSession = activeSession.copyWith(
+        endedAt: currentTime,
+        status: SleepSessionStatus.completed,
+        sleepModeActive: false,
+        segments: <SleepSegment>[
+          for (final SleepSegment segment in activeSession.segments)
+            SleepSegment(
+              startedAt: segment.startedAt,
+              endedAt: segment.endedAt ?? currentTime,
+            ),
+        ],
+        summary: const MorningSummary(
+          sleepQuality: 4,
+          restedLevel: 4,
+          totalSleepHours: 6.5,
+          awakeningsCount: 0,
+          note: 'submitted',
+        ),
+        updatedAt: currentTime,
+      );
+      await services.sleepSessionRepository.saveSession(completedSession);
+      await tester.pump();
+
+      final Finder endSleepModeButton = find.widgetWithText(
+        PrimaryButton,
+        '结束睡眠模式',
+      );
+      await tester.ensureVisible(endSleepModeButton);
+      await tester.tap(endSleepModeButton);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.widgetWithText(PrimaryButton, '结束并去晨间反馈'));
+      await tester.pump();
+      await _pumpUntilFound(tester, find.byType(HomePreSleepPage));
+      await _pumpUntilFound(tester, find.text('您已经填写过晨间反馈，小眠已经收到🫡'));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.byType(HomePreSleepPage), findsOneWidget);
+      expect(find.byType(MorningFeedbackPage), findsNothing);
+      expect(find.text('结束后怎么处理这段睡眠？'), findsNothing);
+      expect(find.text('您已经填写过晨间反馈，小眠已经收到🫡'), findsOneWidget);
+    },
+  );
+
+  testWidgets('system back from post-sleep page opens exit dialog', (
+    WidgetTester tester,
+  ) async {
+    DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: () => currentTime,
+    );
+
+    await tester.tap(find.byType(StartSleepModeCard));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    currentTime = DateTime(2030, 4, 5, 15, 10);
+
+    expect(find.byType(HomePostSleepPage), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(HomePostSleepPage), findsOneWidget);
+    expect(find.text('结束后怎么处理这段睡眠？'), findsOneWidget);
+    expect(find.widgetWithText(PrimaryButton, '结束并去晨间反馈'), findsOneWidget);
+  });
+
+  testWidgets('post-sleep page stays overflow-free on narrow width', (
+    WidgetTester tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: () => currentTime,
+    );
+
+    await tester.tap(find.byType(StartSleepModeCard));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    currentTime = DateTime(2030, 4, 5, 15, 10);
+
+    expect(find.byType(HomePostSleepPage), findsOneWidget);
+
+    await tester.binding.setSurfaceSize(const Size(320, 780));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(tester.takeException(), isNull);
+
+    final Finder endSleepModeButton = find.widgetWithText(
+      PrimaryButton,
+      '结束睡眠模式',
+    );
+    expect(tester.getBottomRight(endSleepModeButton).dy, greaterThan(680));
+    await tester.ensureVisible(endSleepModeButton);
+    await tester.tap(endSleepModeButton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('结束后怎么处理这段睡眠？'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('post-sleep tools stay two-column on narrow width', (
+    WidgetTester tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: () => currentTime,
+    );
+
+    await tester.tap(find.byType(StartSleepModeCard));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    currentTime = DateTime(2030, 4, 5, 15, 10);
+
+    await tester.binding.setSurfaceSize(const Size(320, 780));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final Offset firstTool = tester.getTopLeft(find.text('难以入睡'));
+    final Offset secondTool = tester.getTopLeft(find.text('记录夜醒'));
+
+    expect((firstTool.dy - secondTool.dy).abs(), lessThan(24));
+    expect((firstTool.dx - secondTool.dx).abs(), greaterThan(80));
+  });
 
   testWidgets('sleep-mode morning feedback entry shows the feedback form', (
     WidgetTester tester,
@@ -2606,21 +3050,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(MorningFeedbackPage), findsOneWidget);
-    expect(find.byType(TextField), findsWidgets);
-    return;
-
     await tester.dragUntilVisible(
-      find.text('鏅ㄩ棿鍙嶉'),
-      find.byType(Scrollable).first,
+      find.text('提交反馈并结束本次睡眠'),
+      find.byType(ListView).first,
       const Offset(0, -220),
     );
-    await tester.pump();
-    await tester.tap(find.text('鏅ㄩ棿鍙嶉').first);
-    await tester.pump();
     await tester.pumpAndSettle();
-
-    expect(find.byType(MorningFeedbackPage), findsOneWidget);
-    expect(find.widgetWithText(PrimaryButton, '鎻愪氦鍙嶉'), findsOneWidget);
+    expect(find.text('提交反馈并结束本次睡眠'), findsOneWidget);
   });
 
   testWidgets('finish-and-feedback entry shows the feedback form', (
@@ -2652,23 +3088,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(MorningFeedbackPage), findsOneWidget);
-    expect(find.byType(TextField), findsWidgets);
-    return;
-
-    final Finder endSleepModeButton = find.widgetWithText(
-      PrimaryButton,
-      '缁撴潫鐫＄湢妯″紡',
+    expect(find.text('逐条反馈建议'), findsOneWidget);
+    expect(find.text('补充说明'), findsWidgets);
+    await tester.dragUntilVisible(
+      find.text('提交反馈并结束本次睡眠'),
+      find.byType(ListView).first,
+      const Offset(0, -220),
     );
-    await tester.ensureVisible(endSleepModeButton);
-    await tester.tap(endSleepModeButton);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.widgetWithText(PrimaryButton, '缁撴潫骞跺幓鏅ㄩ棿鍙嶉'));
-    await tester.pump();
     await tester.pumpAndSettle();
-
-    expect(find.byType(MorningFeedbackPage), findsOneWidget);
-    expect(find.widgetWithText(PrimaryButton, '鎻愪氦鍙嶉'), findsOneWidget);
+    expect(find.text('提交反馈并结束本次睡眠'), findsOneWidget);
   });
 
   testWidgets(
@@ -2707,44 +3135,24 @@ void main() {
             .sessionId,
         currentSleepDaySessionId,
       );
-      expect(find.byType(TextField), findsWidgets);
+      await tester.dragUntilVisible(
+        find.text('提交反馈并结束本次睡眠'),
+        find.byType(ListView).first,
+        const Offset(0, -220),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('提交反馈并结束本次睡眠'), findsOneWidget);
 
       final SleepSession awaitingZeroMinute = services.sleepSessionRepository
           .sessionForSleepDayKey(sleepDayKeyFromDate(currentTime))!;
-      expect(awaitingZeroMinute.status, SleepSessionStatus.awaitingFeedback);
-      expect(awaitingZeroMinute.sleepModeActive, isFalse);
+      expect(awaitingZeroMinute.status, SleepSessionStatus.active);
+      expect(awaitingZeroMinute.sleepModeActive, isTrue);
       expect(awaitingZeroMinute.trackedDurationMinutes, 0);
-      return;
-
-      await tester.dragUntilVisible(
-        find.text('鏅ㄩ棿鍙嶉'),
-        find.byType(Scrollable).first,
-        const Offset(0, -220),
-      );
-      await tester.pump();
-      await tester.tap(find.text('鏅ㄩ棿鍙嶉').first);
-      await tester.pump();
-      await tester.pumpAndSettle();
-
-      expect(find.byType(MorningFeedbackPage), findsOneWidget);
-      expect(
-        tester
-            .widget<MorningFeedbackPage>(find.byType(MorningFeedbackPage))
-            .sessionId,
-        currentSleepDaySessionId,
-      );
-      expect(find.widgetWithText(PrimaryButton, '鎻愪氦鍙嶉'), findsOneWidget);
-
-      final SleepSession awaiting = services.sleepSessionRepository
-          .sessionForSleepDayKey(sleepDayKeyFromDate(currentTime))!;
-      expect(awaiting.status, SleepSessionStatus.awaitingFeedback);
-      expect(awaiting.sleepModeActive, isFalse);
-      expect(awaiting.trackedDurationMinutes, 0);
     },
   );
 
   testWidgets(
-    'morning feedback return resumes sleep mode and keeps same-day tracking',
+    'morning feedback return discards live feedback without resuming sleep mode',
     (WidgetTester tester) async {
       final _FakeAppNotificationService notificationService =
           _FakeAppNotificationService();
@@ -2787,11 +3195,19 @@ void main() {
         const Offset(0, -220),
       );
       await tester.pumpAndSettle();
-      currentTime = DateTime(2030, 4, 5, 15, 25);
       await tester.tap(find.text('返回'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('app-center-dialog-destructive')),
+        findsOneWidget,
+      );
+      expect(find.text('放弃本次填写？'), findsOneWidget);
+      expect(find.byType(MorningFeedbackPage), findsOneWidget);
+
+      currentTime = DateTime(2030, 4, 5, 15, 25);
+      await tester.tap(find.widgetWithText(PrimaryButton, '放弃并返回'));
       await tester.pump();
-      expect(find.text('这条睡眠记录当前不可继续补反馈。'), findsNothing);
-      expect(find.text('这条睡眠记录当前不可继续补反馈。'), findsNothing);
       await tester.pump(const Duration(milliseconds: 400));
 
       expect(find.byType(HomePostSleepPage), findsOneWidget);
@@ -2801,16 +3217,16 @@ void main() {
       expect(resumed.id, currentSleepDaySessionId);
       expect(resumed.status, SleepSessionStatus.active);
       expect(resumed.sleepModeActive, isTrue);
-      expect(resumed.segments.length, 2);
-      expect(resumed.trackedDurationMinutes, 70);
+      expect(resumed.segments.length, 1);
+      expect(resumed.trackedDurationMinutes, 0);
 
       currentTime = DateTime(2030, 4, 5, 15, 40);
-      expect(resumed.liveTrackedDurationMinutes(now: currentTime), 85);
+      expect(resumed.liveTrackedDurationMinutes(now: currentTime), 100);
     },
   );
 
   testWidgets(
-    'morning feedback return confirms before discarding unsaved changes',
+    'morning feedback return can continue editing from the discard confirmation',
     (WidgetTester tester) async {
       final _FakeAppNotificationService notificationService =
           _FakeAppNotificationService();
@@ -2838,7 +3254,6 @@ void main() {
       await tester.pump();
       await tester.pumpAndSettle();
 
-      await tester.enterText(find.byType(TextField).first, 'Need more rest');
       await tester.dragUntilVisible(
         find.text('返回'),
         find.byType(ListView).first,
@@ -2848,17 +3263,266 @@ void main() {
       await tester.tap(find.text('返回'));
       await tester.pumpAndSettle();
 
-      expect(find.text('返回继续计时？'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('app-center-dialog-destructive')),
+        findsOneWidget,
+      );
+      expect(find.text('放弃本次填写？'), findsOneWidget);
       expect(find.byType(MorningFeedbackPage), findsOneWidget);
 
-      currentTime = DateTime(2030, 4, 5, 15, 25);
-      await tester.tap(find.widgetWithText(FilledButton, '确认返回'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.widgetWithText(PrimaryButton, '继续填写'));
+      await tester.pumpAndSettle();
 
-      expect(find.byType(HomePostSleepPage), findsOneWidget);
+      expect(find.byType(MorningFeedbackPage), findsOneWidget);
+      expect(find.text('放弃本次填写？'), findsNothing);
     },
   );
+
+  testWidgets(
+    'morning feedback system back opens the discard confirmation for a live session',
+    (WidgetTester tester) async {
+      final _FakeAppNotificationService notificationService =
+          _FakeAppNotificationService();
+      DateTime currentTime = DateTime(2030, 4, 5, 14, 0);
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.homePreSleep,
+        clock: () => currentTime,
+        appNotificationService: notificationService,
+      );
+
+      await tester.tap(find.byType(StartSleepModeCard));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      currentTime = DateTime(2030, 4, 5, 15, 10);
+
+      await tester.dragUntilVisible(
+        find.text('晨间反馈'),
+        find.byType(Scrollable).first,
+        const Offset(0, -220),
+      );
+      await tester.pump();
+      await tester.tap(find.text('晨间反馈').first);
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MorningFeedbackPage), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MorningFeedbackPage), findsOneWidget);
+      expect(find.text('放弃本次填写？'), findsOneWidget);
+      expect(find.text('放弃并返回'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'morning feedback recommendation status opens activity panel and updates selection',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.feedbackMorning,
+        clock: _feedbackClock,
+      );
+
+      final AppServices services = AppScope.of(
+        tester.element(find.byType(MorningFeedbackPage)),
+      );
+      final SleepSession targetSession = _buildPendingFeedbackSession(
+        uid: services.authRepository.currentUser.uid,
+        id: 'activity-panel-session',
+        startedAt: DateTime(2026, 4, 17, 23, 18),
+        recommendationTitle: 'Activity panel session',
+      );
+      await services.sleepSessionRepository.saveSession(targetSession);
+
+      final BuildContext context = tester.element(
+        find.byType(MorningFeedbackPage),
+      );
+      GoRouter.of(
+        context,
+      ).go(AppRoutes.feedbackMorningLocation(sessionId: targetSession.id));
+      await tester.pumpAndSettle();
+
+      final Finder feedbackListView = find
+          .descendant(
+            of: find.byType(MorningFeedbackPage),
+            matching: find.byType(ListView),
+          )
+          .first;
+
+      expect(find.byType(MorningFeedbackPage), findsOneWidget);
+      expect(find.byType(ChoiceChip), findsNothing);
+
+      await tester.dragUntilVisible(
+        find.text('Activity panel session'),
+        feedbackListView,
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Activity panel session'), findsOneWidget);
+      await tester.tap(find.textContaining('反馈状态').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('选择反馈状态'), findsOneWidget);
+      expect(find.text('未执行'), findsOneWidget);
+
+      await tester.tap(find.text('有效').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('选择反馈状态'), findsNothing);
+      expect(find.textContaining('反馈状态：有效'), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    'morning feedback recommendation note opens compact sheet from action row',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.feedbackMorning,
+        clock: _feedbackClock,
+      );
+
+      final AppServices services = AppScope.of(
+        tester.element(find.byType(MorningFeedbackPage)),
+      );
+      final SleepSession targetSession = _buildPendingFeedbackSession(
+        uid: services.authRepository.currentUser.uid,
+        id: 'compact-action-session',
+        startedAt: DateTime(2026, 4, 17, 23, 18),
+        recommendationTitle: 'Compact action session',
+      );
+      await services.sleepSessionRepository.saveSession(targetSession);
+
+      final BuildContext context = tester.element(
+        find.byType(MorningFeedbackPage),
+      );
+      GoRouter.of(
+        context,
+      ).go(AppRoutes.feedbackMorningLocation(sessionId: targetSession.id));
+      await tester.pumpAndSettle();
+
+      final Finder feedbackListView = find
+          .descendant(
+            of: find.byType(MorningFeedbackPage),
+            matching: find.byType(ListView),
+          )
+          .first;
+      await tester.dragUntilVisible(
+        find.text('Compact action session'),
+        feedbackListView,
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+
+      final Finder statusAction = find.textContaining('反馈状态').first;
+      final Finder noteAction = find.text('补充说明').first;
+
+      expect(find.byType(TextField), findsNothing);
+      expect(
+        (tester.getTopLeft(statusAction).dy - tester.getTopLeft(noteAction).dy)
+            .abs(),
+        lessThan(18),
+      );
+
+      await tester.tap(noteAction);
+      await tester.pumpAndSettle();
+
+      expect(find.text('保存说明'), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), '昨晚这条建议实际有帮助');
+      await tester.tap(find.text('保存说明'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('保存说明'), findsNothing);
+      expect(find.byType(TextField), findsNothing);
+      expect(find.text('已填写说明'), findsOneWidget);
+    },
+  );
+
+  testWidgets('morning feedback stays overflow-free on narrow width', (
+    WidgetTester tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.binding.setSurfaceSize(const Size(280, 780));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.feedbackMorning,
+      clock: _feedbackClock,
+    );
+
+    final AppServices services = AppScope.of(
+      tester.element(find.byType(MorningFeedbackPage)),
+    );
+    final SleepSession targetSession = _buildPendingFeedbackSession(
+      uid: services.authRepository.currentUser.uid,
+      id: 'narrow-feedback-session',
+      startedAt: DateTime(2026, 4, 17, 23, 18),
+      recommendationTitle: 'Narrow feedback session',
+    );
+    await services.sleepSessionRepository.saveSession(targetSession);
+
+    final BuildContext context = tester.element(
+      find.byType(MorningFeedbackPage),
+    );
+    GoRouter.of(
+      context,
+    ).go(AppRoutes.feedbackMorningLocation(sessionId: targetSession.id));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MorningFeedbackPage), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.dragUntilVisible(
+      find.text('Narrow feedback session'),
+      find
+          .descendant(
+            of: find.byType(MorningFeedbackPage),
+            matching: find.byType(ListView),
+          )
+          .first,
+      const Offset(0, -180),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('反馈状态：'), findsOneWidget);
+    expect(find.text('提交反馈'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('cant sleep page stays compact on narrow width', (
+    WidgetTester tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.binding.setSurfaceSize(const Size(280, 780));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.sleepCantSleep,
+      clock: _nightClock,
+    );
+
+    expect(find.byType(CantSleepPage), findsOneWidget);
+    expect(find.text('难以入睡'), findsOneWidget);
+    expect(find.text('点击选择'), findsOneWidget);
+    expect(find.text('思绪太多'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('点击选择'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('选择当前困扰'), findsOneWidget);
+    expect(find.text('环境打扰'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('sleep mode notification launch returns to post-sleep page', (
     WidgetTester tester,

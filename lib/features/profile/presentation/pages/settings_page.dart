@@ -16,6 +16,7 @@ import 'package:sleep_dorm_app/core/utils/formatters.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_menu_group_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
+import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/mood_avatar.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/widgets/account_action_widgets.dart';
@@ -96,53 +97,24 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _showAssistantMotionSheet(AppServices services) async {
     final AssistantReplyMotionLevel? selected =
-        await showModalBottomSheet<AssistantReplyMotionLevel>(
-          context: context,
-          useSafeArea: true,
-          showDragHandle: true,
-          builder: (BuildContext sheetContext) {
-            final ThemeData theme = Theme.of(sheetContext);
-            return SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.sm,
-                  AppSpacing.lg,
-                  AppSpacing.xl,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text('回复动效强度', style: theme.textTheme.titleLarge),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      '调整主舞台上 AI 回复文字的漂浮感。',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                        height: 1.45,
+        await showAppModal<AssistantReplyMotionLevel>(
+          context,
+          spec: AppSelectionSheetSpec<AssistantReplyMotionLevel>(
+            title: '回复动效强度',
+            description: '调整主舞台上 AI 回复文字的漂浮感。',
+            selectedValue: _assistantReplyMotionLevel,
+            useSafeArea: true,
+            showDragHandle: true,
+            options: AssistantReplyMotionLevel.values
+                .map(
+                  (AssistantReplyMotionLevel level) =>
+                      AppSelectionOption<AssistantReplyMotionLevel>(
+                        value: level,
+                        label: _assistantReplyMotionTitle(level),
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    ...AssistantReplyMotionLevel.values.map((
-                      AssistantReplyMotionLevel level,
-                    ) {
-                      final bool isSelected =
-                          level == _assistantReplyMotionLevel;
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(_assistantReplyMotionTitle(level)),
-                        trailing: isSelected
-                            ? const Icon(Icons.check_rounded)
-                            : null,
-                        onTap: () => Navigator.of(sheetContext).pop(level),
-                      );
-                    }),
-                  ],
-                ),
-              ),
-            );
-          },
+                )
+                .toList(),
+          ),
         );
     if (selected == null || !mounted) {
       return;

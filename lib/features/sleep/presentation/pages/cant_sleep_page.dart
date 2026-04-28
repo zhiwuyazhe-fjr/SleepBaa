@@ -7,6 +7,7 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
+import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 class CantSleepPage extends StatefulWidget {
@@ -18,6 +19,37 @@ class CantSleepPage extends StatefulWidget {
 
 class _CantSleepPageState extends State<CantSleepPage> {
   String _selectedCause = '思绪太多';
+
+  Future<void> _selectCause(BuildContext context) async {
+    final String? selected = await showAppModal<String>(
+      context,
+      spec: AppSelectionSheetSpec<String>(
+        title: '选择当前困扰',
+        description: '先选一个最贴近你现在状态的原因，页面会给出对应的放松步骤。',
+        selectedValue: _selectedCause,
+        useSafeArea: true,
+        showDragHandle: true,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.sheetTop),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          0,
+          AppSpacing.md,
+          AppSpacing.lg,
+        ),
+        options: _causeOptions
+            .map(
+              (String cause) =>
+                  AppSelectionOption<String>(value: cause, label: cause),
+            )
+            .toList(),
+      ),
+    );
+    if (selected == null || !mounted) {
+      return;
+    }
+    setState(() => _selectedCause = selected);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,10 +98,10 @@ class _CantSleepPageState extends State<CantSleepPage> {
               SafeArea(
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.md,
+                    AppSpacing.md,
+                    AppSpacing.md,
                     AppSpacing.xl,
-                    AppSpacing.lg,
-                    AppSpacing.xl,
-                    AppSpacing.xxl,
                   ),
                   children: <Widget>[
                     Row(
@@ -81,10 +113,10 @@ class _CantSleepPageState extends State<CantSleepPage> {
                         const Spacer(),
                       ],
                     ),
-                    const SizedBox(height: AppSpacing.xl),
+                    const SizedBox(height: AppSpacing.lg),
                     Text(
                       '难以入睡',
-                      style: Theme.of(context).textTheme.headlineMedium
+                      style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(color: AppColors.onDark),
                     ),
                     const SizedBox(height: AppSpacing.sm),
@@ -95,41 +127,95 @@ class _CantSleepPageState extends State<CantSleepPage> {
                         height: 1.55,
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.xl),
+                    const SizedBox(height: AppSpacing.lg),
                     _DarkPanel(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
                             '今晚更像是哪一种在打断你入睡？',
-                            style: Theme.of(context).textTheme.titleLarge
+                            style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(color: AppColors.onDark),
                           ),
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            '先选当前最明显的一类困扰，再顺着这一条做放松。',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: AppColors.onDark.withAlpha(170),
+                                  height: 1.45,
+                                ),
+                          ),
                           const SizedBox(height: AppSpacing.md),
-                          Wrap(
-                            spacing: AppSpacing.sm,
-                            runSpacing: AppSpacing.sm,
-                            children:
-                                <String>[
-                                  '思绪太多',
-                                  '环境打扰',
-                                  '身体不适',
-                                  '入睡压力',
-                                ].map((String cause) {
-                                  final bool selected = _selectedCause == cause;
-                                  return _CauseChip(
-                                    label: cause,
-                                    selected: selected,
-                                    palette: palette,
-                                    onTap: () =>
-                                        setState(() => _selectedCause = cause),
-                                  );
-                                }).toList(),
+                          InkWell(
+                            borderRadius: AppRadius.surfaceSecondary,
+                            onTap: () => _selectCause(context),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.md,
+                                vertical: AppSpacing.sm,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withAlpha(8),
+                                borderRadius: AppRadius.surfaceSecondary,
+                                border: Border.all(color: AppColors.darkBorder),
+                              ),
+                              child: Row(
+                                children: <Widget>[
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Text(
+                                          '当前困扰',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelSmall
+                                              ?.copyWith(
+                                                color: AppColors.onDark
+                                                    .withAlpha(170),
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                        ),
+                                        const SizedBox(height: AppSpacing.xxs),
+                                        Text(
+                                          _selectedCause,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                color: AppColors.onDark,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  Text(
+                                    '点击选择',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: AppColors.onDark.withAlpha(
+                                            170,
+                                          ),
+                                        ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.xxs),
+                                  Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    color: AppColors.onDark.withAlpha(170),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.xl),
+                    const SizedBox(height: AppSpacing.lg),
                     _DarkPanel(
                       tint: palette.primary.withAlpha(18),
                       child: Column(
@@ -220,7 +306,7 @@ class _CantSleepPageState extends State<CantSleepPage> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.xl),
+                    const SizedBox(height: AppSpacing.lg),
                     _DarkPanel(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -249,7 +335,8 @@ class _CantSleepPageState extends State<CantSleepPage> {
                             children: <Widget>[
                               Expanded(
                                 child: PrimaryButton(
-                                  label: services.audioPlaybackController.isPlaying
+                                  label:
+                                      services.audioPlaybackController.isPlaying
                                       ? '暂停音频'
                                       : '继续播放',
                                   foregroundColor: Colors.white,
@@ -269,7 +356,8 @@ class _CantSleepPageState extends State<CantSleepPage> {
                                   foregroundColor: AppColors.onDark,
                                   borderColor: AppColors.darkBorder,
                                   onPressed: () async {
-                                    await services.audioPlaybackController.stop();
+                                    await services.audioPlaybackController
+                                        .stop();
                                   },
                                 ),
                               ),
@@ -363,70 +451,6 @@ class _DarkGlow extends StatelessWidget {
   }
 }
 
-class _CauseChip extends StatelessWidget {
-  const _CauseChip({
-    required this.label,
-    required this.selected,
-    required this.palette,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final NightMoodPalette palette;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: AppSpacing.sm,
-          ),
-          decoration: BoxDecoration(
-            color: selected
-                ? palette.primary.withAlpha(210)
-                : AppColors.darkSurface.withAlpha(190),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected
-                  ? palette.primarySoft.withAlpha(160)
-                  : AppColors.darkBorder,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              if (selected) ...<Widget>[
-                Icon(
-                  Icons.check_rounded,
-                  size: 16,
-                  color: Colors.white.withAlpha(235),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-              ],
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: selected
-                      ? Colors.white
-                      : AppColors.onDark.withAlpha(220),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _SleepBlockPlan {
   const _SleepBlockPlan({
     required this.title,
@@ -440,6 +464,8 @@ class _SleepBlockPlan {
   final List<String> steps;
   final String comfortNote;
 }
+
+const List<String> _causeOptions = <String>['思绪太多', '环境打扰', '身体不适', '入睡压力'];
 
 const Map<String, _SleepBlockPlan> _plans = <String, _SleepBlockPlan>{
   '思绪太多': _SleepBlockPlan(
@@ -461,8 +487,7 @@ const Map<String, _SleepBlockPlan> _plans = <String, _SleepBlockPlan>{
       '如果手边有耳塞，先戴上 10 分钟再判断效果；如果没有，就把枕头稍微转向更安静的一侧，并让被角覆盖一部分耳廓。',
       '如果光线在干扰你，立刻把视线离开亮源，闭眼后只做 12 次缓慢眨眼式放松，再让眼周和额头一起松下来。',
     ],
-    comfortNote:
-        '很多人并不是“睡不着”，而是被外部刺激一层层拉回清醒。先处理环境，比一味逼自己放松更有效。',
+    comfortNote: '很多人并不是“睡不着”，而是被外部刺激一层层拉回清醒。先处理环境，比一味逼自己放松更有效。',
   ),
   '身体不适': _SleepBlockPlan(
     title: '先让身体从警觉里退下来',
@@ -472,8 +497,7 @@ const Map<String, _SleepBlockPlan> _plans = <String, _SleepBlockPlan>{
       '如果有口干、闷热或轻微不适，先小口喝 2 到 3 口温水，或把被子打开 1 分钟再重新盖好，不要一次起身折腾太久。',
       '重新躺下后，连续 2 分钟只关注一个部位，比如肩膀或小腿，默念“这里正在慢慢变松”，不要同时扫描全身。',
     ],
-    comfortNote:
-        '很多夜里的“睡不着”其实是身体还没收到休息信号。先照顾身体，比急着催眠自己更容易见效。',
+    comfortNote: '很多夜里的“睡不着”其实是身体还没收到休息信号。先照顾身体，比急着催眠自己更容易见效。',
   ),
   '入睡压力': _SleepBlockPlan(
     title: '先把“必须快点睡着”的压力放下来',

@@ -391,9 +391,9 @@ class HomeActionCard extends StatelessWidget {
     Color foregroundColor,
     bool showTransportControls,
   ) {
-    final List<String> tags = recommendation.tags.take(2).toList(
-      growable: false,
-    );
+    final List<String> tags = recommendation.tags
+        .take(2)
+        .toList(growable: false);
     if (showTransportControls) {
       return SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -581,9 +581,11 @@ class SupportToolCard extends StatelessWidget {
     required this.title,
     required this.icon,
     required this.onTap,
+    this.subtitle = '',
   });
 
   final String title;
+  final String subtitle;
   final IconData icon;
   final VoidCallback onTap;
 
@@ -591,26 +593,39 @@ class SupportToolCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.nightMoodPalette;
     return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.sm),
       color: AppColors.darkGlass,
-      borderRadius: AppRadius.surfacePrimary,
+      borderRadius: AppRadius.compactCard,
       border: Border.all(color: AppColors.darkBorder),
       boxShadow: const <BoxShadow>[],
       onTap: onTap,
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(icon, color: palette.primarySoft, size: 24),
-          const SizedBox(height: AppSpacing.sm),
+          Icon(icon, color: palette.primarySoft, size: 20),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             title,
-            textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(color: AppColors.onDark),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.onDark,
+              fontWeight: FontWeight.w700,
+            ),
           ),
+          if (subtitle.trim().isNotEmpty) ...<Widget>[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              subtitle,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.onDark.withAlpha(140),
+                height: 1.35,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -642,23 +657,34 @@ class SessionAudioCard extends StatelessWidget {
         track ??
         const AudioTrack(
           id: 'deep-ocean',
-          title: '助眠音频',
-          subtitle: '',
-          duration: Duration.zero,
+          title: '深海海浪',
+          subtitle: '低刺激白噪音 · 45 分钟',
+          duration: Duration(minutes: 45),
         );
     final bool hasKnownDuration = effectiveTrack.duration > Duration.zero;
-    final String? progressText = hasKnownDuration
+    final String progressText = hasKnownDuration
         ? '${Formatters.formatDuration(position)} / ${Formatters.formatDuration(effectiveTrack.duration)}'
-        : null;
+        : Formatters.formatDuration(position);
+    final String trimmedSubtitle = effectiveTrack.subtitle.trim();
+    final bool hideCloudSubtitle =
+        effectiveTrack.sourceUrl != null &&
+        trimmedSubtitle.toLowerCase().contains('cloudbase');
+    final String? detailText = hideCloudSubtitle
+        ? (hasKnownDuration ? progressText : null)
+        : trimmedSubtitle.isEmpty
+        ? (hasKnownDuration ? progressText : null)
+        : hasKnownDuration
+        ? '$trimmedSubtitle · $progressText'
+        : trimmedSubtitle;
 
     return AppCard(
       padding: EdgeInsets.zero,
       color: palette.primarySoft.withAlpha(10),
-      borderRadius: AppRadius.surfacePrimary,
+      borderRadius: AppRadius.compactCard,
       border: Border.all(color: palette.primarySoft.withAlpha(28)),
       boxShadow: const <BoxShadow>[],
       child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
+        padding: const EdgeInsets.all(AppSpacing.sm),
         child: Row(
           children: <Widget>[
             IconBadge(
@@ -673,18 +699,23 @@ class SessionAudioCard extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     effectiveTrack.title,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleLarge?.copyWith(color: AppColors.onDark),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppColors.onDark,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                  if (progressText != null) ...<Widget>[
+                  const SizedBox(height: AppSpacing.xs),
+                  if (detailText != null) ...<Widget>[
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      progressText,
+                      detailText,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppColors.onDark.withAlpha(140),
+                        height: 1.35,
                       ),
                     ),
                   ],
@@ -731,7 +762,9 @@ class SessionAudioCard extends StatelessWidget {
 }
 
 class SleepModeMoon extends StatefulWidget {
-  const SleepModeMoon({super.key});
+  const SleepModeMoon({super.key, this.size = 264});
+
+  final double size;
 
   @override
   State<SleepModeMoon> createState() => _SleepModeMoonState();
@@ -769,16 +802,16 @@ class _SleepModeMoonState extends State<SleepModeMoon>
         return Transform.translate(
           offset: Offset(0, offsetY),
           child: SizedBox(
-            width: 264,
-            height: 264,
+            width: widget.size,
+            height: widget.size,
             child: Stack(
               alignment: Alignment.center,
               children: <Widget>[
                 Transform.scale(
                   scale: haloScale,
                   child: Container(
-                    width: 212,
-                    height: 212,
+                    width: widget.size * (212 / 264),
+                    height: widget.size * (212 / 264),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: palette.primary.withAlpha(34),
@@ -793,8 +826,8 @@ class _SleepModeMoonState extends State<SleepModeMoon>
                   ),
                 ),
                 Container(
-                  width: 128,
-                  height: 128,
+                  width: widget.size * (128 / 264),
+                  height: widget.size * (128 / 264),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
@@ -815,10 +848,10 @@ class _SleepModeMoonState extends State<SleepModeMoon>
                   alignment: Alignment.center,
                   child: Transform.rotate(
                     angle: math.pi / 10,
-                    child: const Icon(
+                    child: Icon(
                       Icons.dark_mode_rounded,
                       color: AppColors.onDark,
-                      size: 62,
+                      size: widget.size * (62 / 264),
                     ),
                   ),
                 ),
