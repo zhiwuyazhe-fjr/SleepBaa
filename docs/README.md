@@ -1,16 +1,16 @@
 # Docs 总入口
 
-最后核验日期：2026-04-29。本目录以当前代码为唯一事实来源；旧文档和 UI 负责人补充资料只作为待核验素材，不直接作为规范引用。
+最后核验日期：2026-04-29。本目录以当前代码为唯一事实来源。
 
 ## 文档放置原则
 
-- `backend/**`：后端架构、接口、数据模型、CloudBase 联调、部署和 AI runtime。
-- `frontend/**`：Flutter 目录、路由、页面状态、数据流和通知。
-- `design/**`：设计系统、共享组件、页面 UI 指南和验收清单。
-- `templates/**`：可复用的 Markdown 模板；GitHub 实际生效表单仍以 `.github/ISSUE_TEMPLATE/**` 为准。
-- 根目录只保留总入口和确认为历史/冻结的文档，避免新文档继续散落。
-
-`CloudBase 团队联调手册` 放在 [backend/cloudbase-team-manual.md](backend/cloudbase-team-manual.md)。它面向新成员和日常协作，属于 CloudBase 后端联调与权限边界文档；更细的部署命令和脚本说明放在 [backend/cloudbase-operations.md](backend/cloudbase-operations.md)。
+| 位置 | 收纳内容 | 代表文档 |
+| --- | --- | --- |
+| `backend/**` | 后端架构、接口、数据模型、CloudBase 联调、部署和 AI runtime。 | [backend/cloudbase-team-manual.md](backend/cloudbase-team-manual.md), [backend/cloudbase-operations.md](backend/cloudbase-operations.md) |
+| `frontend/**` | Flutter 目录、路由、页面状态、数据流和通知。 | [frontend/overview.md](frontend/overview.md), [frontend/page-map.md](frontend/page-map.md) |
+| `design/**` | 设计系统、共享组件、页面 UI 指南和验收清单。 | [design/design-system.md](design/design-system.md), [design/components.md](design/components.md) |
+| `templates/**` | 可复用的 Markdown 模板。GitHub 实际生效表单仍以 `.github/ISSUE_TEMPLATE/**` 为准。 | [templates/issue_bug_template.md](templates/issue_bug_template.md), [templates/issue_feature_template.md](templates/issue_feature_template.md) |
+| `docs/` 根目录 | 总入口和确认为历史/冻结的文档。 | [README.md](README.md) |
 
 ## 建议阅读顺序
 
@@ -57,14 +57,6 @@
 - [templates/issue_feature_template.md](templates/issue_feature_template.md)
 
 GitHub 上实际生效的 issue 表单位于 `.github/ISSUE_TEMPLATE/**`；这里保留 Markdown 版，主要用于飞书、会议纪要或不走 GitHub 表单的手工复制场景。
-
-## 冻结文档
-
-以下文档按要求暂不修改，可能包含旧路径或旧流程：
-
-- [team_delivery_plan.md](team_delivery_plan.md)
-
-如冻结文档与新版文档冲突，以当前代码和本目录新文档为准。
 
 ## 维护规则
 
