@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
@@ -7,6 +8,7 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_quick_actions.dart';
 
@@ -94,106 +96,98 @@ class _HomeQuickActionsEditPageState extends State<HomeQuickActionsEditPage> {
     final TextTheme textTheme = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppBar(title: const Text('编辑快捷功能')),
-      body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            Expanded(
-              child: ListView(
-                key: const ValueKey<String>('home-quick-actions-editor-scroll'),
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.xl,
-                  AppSpacing.md,
-                  AppSpacing.xl,
-                  AppSpacing.xl,
+      body: Column(
+        children: <Widget>[
+          Expanded(
+            child: ListView(
+              key: const ValueKey<String>('home-quick-actions-editor-scroll'),
+              padding: AppPageInsets.page(bottom: AppSpacing.xl),
+              children: <Widget>[
+                _EditorSectionHeader(
+                  title: '已选择',
+                  detail:
+                      '${_selectedIds.length}/$kHomeQuickActionSelectionCount',
                 ),
-                children: <Widget>[
-                  _EditorSectionHeader(
-                    title: '已选择',
-                    detail:
-                        '${_selectedIds.length}/$kHomeQuickActionSelectionCount',
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  ReorderableListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    buildDefaultDragHandles: false,
-                    itemCount: _selectedActions.length,
-                    onReorder: _reorderSelectedActions,
-                    itemBuilder: (BuildContext context, int index) {
-                      final HomeQuickActionDefinition action =
-                          _selectedActions[index];
-                      return Padding(
-                        key: ValueKey<String>(
-                          'home-quick-action-selected-${action.id}',
-                        ),
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: _SelectedQuickActionTile(
-                          action: action,
-                          index: index,
-                          onRemove: () => _removeAction(action),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                  _EditorSectionHeader(
-                    title: '可添加',
-                    detail: _hasExactSelection ? '已满' : '继续选择',
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Wrap(
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.sm,
-                    children: _availableActions
-                        .map((HomeQuickActionDefinition action) {
-                          final bool canAdd =
-                              _selectedIds.length <
-                              kHomeQuickActionSelectionCount;
-                          return _AvailableQuickActionTile(
+                const SizedBox(height: AppSpacing.md),
+                ReorderableListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  buildDefaultDragHandles: false,
+                  itemCount: _selectedActions.length,
+                  onReorder: _reorderSelectedActions,
+                  itemBuilder: (BuildContext context, int index) {
+                    final HomeQuickActionDefinition action =
+                        _selectedActions[index];
+                    return Padding(
+                      key: ValueKey<String>(
+                        'home-quick-action-selected-${action.id}',
+                      ),
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: _SelectedQuickActionTile(
+                        action: action,
+                        index: index,
+                        onRemove: () => _removeAction(action),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                _EditorSectionHeader(
+                  title: '可添加',
+                  detail: _hasExactSelection ? '已满' : '继续选择',
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Column(
+                  children: _availableActions
+                      .map((HomeQuickActionDefinition action) {
+                        final bool canAdd =
+                            _selectedIds.length <
+                            kHomeQuickActionSelectionCount;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                          child: _AvailableQuickActionTile(
                             action: action,
                             enabled: canAdd,
                             onTap: () => _addAction(action),
-                          );
-                        })
-                        .toList(growable: false),
-                  ),
-                ],
-              ),
+                          ),
+                        );
+                      })
+                      .toList(growable: false),
+                ),
+              ],
             ),
-            Container(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl,
-                AppSpacing.md,
-                AppSpacing.xl,
-                AppSpacing.xl,
-              ),
-              decoration: const BoxDecoration(
-                color: AppColors.background,
-                border: Border(top: BorderSide(color: AppColors.divider)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  if (!_hasExactSelection) ...<Widget>[
-                    Text(
-                      '请选择 4 个快捷功能',
-                      textAlign: TextAlign.center,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: AppColors.warning,
-                      ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppPageInsets.horizontal,
+              vertical: AppSpacing.md,
+            ),
+            decoration: const BoxDecoration(
+              color: AppColors.background,
+              border: Border(top: BorderSide(color: AppColors.divider)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (!_hasExactSelection) ...<Widget>[
+                  Text(
+                    '请选择 4 个快捷功能',
+                    textAlign: TextAlign.center,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: AppColors.warning,
                     ),
-                    const SizedBox(height: AppSpacing.sm),
-                  ],
-                  PrimaryButton(
-                    label: _isSaving ? '保存中...' : '保存快捷功能',
-                    onPressed: _hasExactSelection && !_isSaving ? _save : null,
                   ),
+                  const SizedBox(height: AppSpacing.sm),
                 ],
-              ),
+                PrimaryButton(
+                  label: _isSaving ? '保存中...' : '保存快捷功能',
+                  onPressed: _hasExactSelection && !_isSaving ? _save : null,
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -241,42 +235,32 @@ class _SelectedQuickActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color iconColor = context.nightMoodPalette.primaryDeep;
-    return AppCard(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      borderRadius: AppRadius.surfacePrimary,
-      boxShadow: const <BoxShadow>[],
-      border: Border.all(color: AppColors.divider),
-      child: Row(
+    return _QuickActionStripTile(
+      action: action,
+      enabled: true,
+      iconColor: iconColor,
+      titleColor: AppColors.textPrimary,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           ReorderableDragStartListener(
             key: ValueKey<String>('home-quick-action-drag-${action.id}'),
             index: index,
-            child: const Icon(
-              Icons.drag_handle_rounded,
-              color: AppColors.textHint,
+            child: const Padding(
+              padding: EdgeInsets.all(AppSpacing.xs),
+              child: Icon(
+                Icons.drag_handle_rounded,
+                color: AppColors.textHint,
+                size: AppSpacing.lg,
+              ),
             ),
           ),
-          const SizedBox(width: AppSpacing.md),
-          _QuickActionIcon(icon: action.icon, color: iconColor),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Text(
-              action.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-          ),
-          IconButton(
+          const SizedBox(width: AppSpacing.xxs),
+          _StripActionButton(
             key: ValueKey<String>('home-quick-action-remove-${action.id}'),
             tooltip: '移除${action.label}',
-            onPressed: onRemove,
-            icon: const Icon(Icons.close_rounded),
+            icon: Icons.close_rounded,
+            onTap: onRemove,
           ),
         ],
       ),
@@ -300,60 +284,95 @@ class _AvailableQuickActionTile extends StatelessWidget {
     final Color iconColor = enabled
         ? context.nightMoodPalette.primaryDeep
         : AppColors.textHint;
-    return SizedBox(
-      width: 156,
-      child: AppCard(
-        key: ValueKey<String>('home-quick-action-add-${action.id}'),
-        padding: const EdgeInsets.all(AppSpacing.md),
-        borderRadius: AppRadius.surfacePrimary,
-        boxShadow: const <BoxShadow>[],
-        border: Border.all(color: AppColors.divider),
-        color: enabled ? AppColors.surface : AppColors.surfaceMuted,
-        onTap: enabled ? onTap : null,
-        child: Row(
-          children: <Widget>[
-            _QuickActionIcon(icon: action.icon, color: iconColor),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                action.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: enabled ? AppColors.textPrimary : AppColors.textHint,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            const Icon(
-              Icons.add_rounded,
-              size: 18,
-              color: AppColors.textSecondary,
-            ),
-          ],
-        ),
+    return _QuickActionStripTile(
+      key: ValueKey<String>('home-quick-action-add-${action.id}'),
+      action: action,
+      enabled: enabled,
+      iconColor: iconColor,
+      titleColor: enabled ? AppColors.textPrimary : AppColors.textHint,
+      onTap: enabled ? onTap : null,
+      trailing: Icon(
+        Icons.add_rounded,
+        size: AppSpacing.lg,
+        color: enabled ? AppColors.textSecondary : AppColors.textHint,
       ),
     );
   }
 }
 
-class _QuickActionIcon extends StatelessWidget {
-  const _QuickActionIcon({required this.icon, required this.color});
+class _QuickActionStripTile extends StatelessWidget {
+  const _QuickActionStripTile({
+    super.key,
+    required this.action,
+    required this.enabled,
+    required this.iconColor,
+    required this.titleColor,
+    required this.trailing,
+    this.onTap,
+  });
 
-  final IconData icon;
-  final Color color;
+  final HomeQuickActionDefinition action;
+  final bool enabled;
+  final Color iconColor;
+  final Color titleColor;
+  final Widget trailing;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
-        borderRadius: AppRadius.iconContainer,
+    return AppCard(
+      padding: EdgeInsets.zero,
+      borderRadius: AppRadius.compactCard,
+      boxShadow: const <BoxShadow>[],
+      border: Border.all(color: AppColors.divider),
+      color: enabled ? AppColors.surface : AppColors.surfaceMuted,
+      onTap: onTap,
+      child: AppSettingsItem(
+        title: action.label,
+        icon: action.icon,
+        iconColor: iconColor,
+        leadingWidth: AppSpacing.xxl,
+        titleStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
+          color: titleColor,
+          fontWeight: FontWeight.w600,
+        ),
+        trailing: trailing,
       ),
-      alignment: Alignment.center,
-      child: Icon(icon, color: color, size: 20),
+    );
+  }
+}
+
+class _StripActionButton extends StatelessWidget {
+  const _StripActionButton({
+    super.key,
+    required this.tooltip,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: AppRadius.control,
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.xs),
+            child: Icon(
+              icon,
+              color: AppColors.textPrimary,
+              size: AppSpacing.lg,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
