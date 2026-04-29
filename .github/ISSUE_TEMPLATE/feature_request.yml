@@ -1,98 +1,130 @@
-name: ✨ 功能请求
-description: 提出一个新的功能或改进建议
+name: 功能请求
+description: 提出一个新功能或体验优化
 title: "[Feature] <模块> - <简短描述>"
-labels: ["enhancement"]
+labels:
+  - enhancement
 body:
   - type: markdown
     attributes:
       value: |
-        感谢提出功能建议！请填写以下信息帮助我们理解你的需求。
-
-  - type: input
-    id: title
-    attributes:
-      label: 标题
-      description: 格式：[Feature] 模块名 - 简短描述
-      placeholder: "[Feature] 模块：睡眠 - 添加睡眠数据导出功能"
-    validations:
-      required: true
+        请先说明用户痛点，再说明期望方案和验收标准。涉及代码时，请尽量写出路由、文件、接口或模型。
 
   - type: textarea
     id: problem
     attributes:
-      label: 💡 相关痛点
-      description: 这个功能解决了什么问题？
-      placeholder: "例如：目前无法导出睡眠数据，想要分享给医生或自己分析时很不方便"
+      label: 背景和痛点
+      description: 现在用户遇到什么问题，为什么需要这个功能？
+      placeholder: 例如：用户想回看最近一周的梦记主题，但目前只能按时间浏览。
+    validations:
+      required: true
+
+  - type: textarea
+    id: target_users
+    attributes:
+      label: 目标用户和场景
+      description: 谁会使用？在什么场景下使用？
+      placeholder: 例如：睡前记录梦境的用户，在第二天查看梦境映射时使用。
     validations:
       required: true
 
   - type: textarea
     id: solution
     attributes:
-      label: ✅ 期望的解决方案
-      description: 你希望这个功能是什么样的？
-      placeholder: "希望在睡眠记录页面添加一个导出按钮，支持导出为 Excel 或 PDF 格式"
+      label: 期望方案
+      description: 你希望功能如何表现？
+      placeholder: 例如：在梦记页增加标签筛选，并支持按 AI 收录标签过滤。
     validations:
       required: true
 
   - type: textarea
-    id: alternatives
+    id: scope
     attributes:
-      label: 🔄 其他替代方案
-      description: 是否有其他可接受的实现方式？（可选）
-      placeholder: "如果无法导出文件，至少支持复制文本格式的数据"
-    validations:
-      required: false
-
-  - type: checkboxes
-    id: modules
-    attributes:
-      label: 🏷️ 模块标签
-      description: 请选择功能涉及的模块（可多选）
-      options:
-        - label: "模块：睡眠"
-        - label: "模块：梦境"
-        - label: "模块：分析"
-        - label: "模块：助手"
-        - label: "模块：宿舍"
-        - label: "模块：反馈"
-        - label: "模块：首页"
-        - label: "模块：干预"
-        - label: "模块：日志"
-        - label: "模块：情绪"
-        - label: "模块：通知"
-        - label: "模块：我的"
-        - label: "模块：UI"
-        - label: "模块：网络"
-        - label: "模块：核心"
+      label: 范围
+      description: 请说明必须包含、可以后置和明确不包含的内容。
+      placeholder: |
+        - 必须包含：
+        - 可以后置：
+        - 明确不包含：
     validations:
       required: true
 
   - type: dropdown
     id: priority
     attributes:
-      label: 🔍 优先级
-      description: 你希望这个功能的优先级是？
+      label: 优先级
       options:
-        - "高 - 急需，影响核心体验"
-        - "中 - 重要，但可以等待"
-        - "低 - 有了更好，没有也行"
+        - 高：阻塞核心流程或近期必须交付
+        - 中：重要但可排期
+        - 低：体验增强或后续优化
+    validations:
+      required: true
+
+  - type: dropdown
+    id: modules
+    attributes:
+      label: 相关模块
+      multiple: true
+      options:
+        - home
+        - sleep
+        - dream
+        - assistant
+        - dorm
+        - feedback
+        - profile
+        - notifications
+        - auth
+        - analysis
+        - intervention
+        - logs
+        - night_mood
+        - sleep_encyclopedia
+        - core
+        - functions
+        - docs
     validations:
       required: true
 
   - type: textarea
-    id: mockups
+    id: entry_points
     attributes:
-      label: 📎 补充信息
-      description: 如有设计稿、参考图、或其他说明（可选）
+      label: 入口和相关代码
+      description: 如果已知，请填写路由、页面、组件、接口、模型。
+      placeholder: |
+        - Route：
+        - Page/File：
+        - Component：
+        - API：
+        - Model：
     validations:
       required: false
 
-  - type: markdown
+  - type: textarea
+    id: acceptance
     attributes:
-      value: |
-        ---
-        **提交前检查**：
-        - [ ] 我已搜索现有 issue，确认没有重复的功能请求
-        - [ ] 我已清晰描述问题和期望方案
-        - [ ] 我已选择相关模块标签
+      label: 验收标准
+      description: 需求完成后如何判断可交付？
+      placeholder: |
+        - [ ] 验收标准 1
+        - [ ] 验收标准 2
+        - [ ] 验收标准 3
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 补充材料
+      description: 设计稿、截图、参考链接、数据或其他说明。
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 提交前检查
+      options:
+        - label: 我已搜索现有 issue，确认不是重复需求。
+          required: true
+        - label: 我已写清楚用户痛点和验收标准。
+          required: true
