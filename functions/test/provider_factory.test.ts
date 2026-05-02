@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DeterministicAIProvider } from "../src/providers/ai_provider";
 import { createAIProviderFromEnv } from "../src/providers/provider_factory";
+import { TONIGHT_ACTION_CATALOG } from "../src/services/tonight_action_plan";
 import { AssistantContext } from "../src/shared/types";
 
 function buildContext(): AssistantContext {
@@ -74,6 +75,17 @@ test("provider factory honors explicit deterministic mode even when baseUrl exis
   assert.ok(provider instanceof DeterministicAIProvider);
 });
 
+test("tonight action catalog keeps enough closed-loop variants for visible variety", () => {
+  const ids = new Set(TONIGHT_ACTION_CATALOG.map((action) => action.id));
+
+  assert.ok(TONIGHT_ACTION_CATALOG.length >= 16);
+  assert.equal(ids.size, TONIGHT_ACTION_CATALOG.length);
+  assert.ok(ids.has("audio-ocean"));
+  assert.ok(ids.has("audio-rain"));
+  assert.ok(ids.has("screen-dim"));
+  assert.ok(ids.has("safe-place"));
+});
+
 test("xAI responses provider returns remoteSuccess for valid structured JSON", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () =>
@@ -123,6 +135,96 @@ test("xAI responses provider returns remoteSuccess for valid structured JSON", a
     assert.equal(result.modelName, "grok-test");
     assert.equal(result.value.reply, "这次先从耳塞和放松音频开始。");
     assert.equal(result.errorMessage, null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("xAI responses tonight plan maps remote actions into the closed catalog", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    ({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          output_text: JSON.stringify({
+            dateKey: "2026-04-08",
+            coachSummary: "今晚根据宿舍和情绪状态安排三个小动作。",
+            riskLevel: "medium",
+            topFactors: [],
+            recommendedActions: [
+              {
+                id: "custom-yoga",
+                title: "做一套自定义睡前动作",
+                subtitle: "远端模型给出的非闭环动作。",
+                type: "quickAction",
+                priority: 1,
+                reason: "非闭环动作应该被忽略。",
+                route: "/unknown",
+                trackId: null,
+                tags: ["unknown"],
+              },
+              {
+                id: "eye-mask",
+                title: "压暗光线或戴眼罩",
+                subtitle: "先把灯光刺激降下来。",
+                type: "quickAction",
+                priority: 2,
+                reason: "灯光是关键影响因素。",
+                route: "/intervention/task",
+                trackId: null,
+                tags: ["降光"],
+              },
+              {
+                id: "audio-ocean",
+                title: "播放睡前放松音频",
+                subtitle: "用稳定背景音降低宿舍干扰。",
+                type: "audio",
+                priority: 3,
+                reason: "音频适合作为今晚兜底。",
+                route: "/intervention/task",
+                trackId: "deep-ocean",
+                tags: ["放松"],
+              },
+              {
+                id: "custom-roommate",
+                title: "和室友沟通关灯",
+                subtitle: "远端模型用自然语言给出的动作。",
+                type: "quickAction",
+                priority: 4,
+                reason: "应映射为宿舍沟通动作。",
+                route: "/unknown",
+                trackId: null,
+                tags: ["宿舍"],
+              },
+            ],
+            generatedAt: "2026-04-08T12:00:00.000Z",
+            sourceRunId: "run-remote",
+          }),
+        }),
+    }) as Response);
+
+  try {
+    const provider = createAIProviderFromEnv({
+      AI_PROVIDER_MODE: "xai_responses",
+      AI_PROVIDER_API_KEY: "test-key",
+      AI_PROVIDER_MODEL: "grok-test",
+      AI_PROVIDER_BASE_URL: "https://api.x.ai/v1/responses",
+    } as NodeJS.ProcessEnv);
+
+    const result = await provider.generateTonightPlan(
+      buildContext(),
+      "run-remote",
+    );
+    const ids = result.value.recommendedActions.map((action) => action.id);
+
+    assert.equal(result.sourceMode, "remoteSuccess");
+    assert.equal(ids.length, 3);
+    assert.ok(ids.includes("eye-mask"));
+    assert.ok(ids.includes("audio-ocean"));
+    assert.ok(ids.includes("dorm-quiet"));
+    assert.equal(ids.includes("custom-yoga"), false);
   } finally {
     globalThis.fetch = originalFetch;
   }

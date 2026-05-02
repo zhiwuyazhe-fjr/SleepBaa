@@ -2583,8 +2583,17 @@ class CloudBaseRecommendationRepository extends ChangeNotifier
     if (actions.isEmpty) {
       return;
     }
+    final Map<String, RecommendationExecutionState> previousStates =
+        <String, RecommendationExecutionState>{
+          for (final NightRecommendation item in _tonightRecommendations)
+            item.id: item.executionState,
+        };
     _tonightRecommendations = actions
         .map(_recommendationFromAction)
+        .map(
+          (NightRecommendation item) =>
+              item.copyWith(executionState: previousStates[item.id]),
+        )
         .toList(growable: false);
     if (_hasAudioRecommendations(_tonightRecommendations)) {
       unawaited(_refreshAudioCatalog(hydrateCurrentRecommendations: true));
