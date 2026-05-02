@@ -6,7 +6,6 @@ import {
   InterferenceSnapshotDoc,
   MorningReviewResult,
   ProfileSummary,
-  RecommendedAction,
   SleepCaptureDraft,
   SleepCaptureKind,
   StructuredAssistantReply,
@@ -14,53 +13,7 @@ import {
   TonightPlan,
 } from "../shared/types";
 import { rankInterferenceFactors } from "../services/rank_interference_factors";
-
-const ACTION_CATALOG: RecommendedAction[] = [
-  {
-    id: "audio-ocean",
-    title: "播放睡前放松音频",
-    subtitle: "先用一段低刺激海浪白噪音，让身体慢慢降速。",
-    type: "audio",
-    priority: 1,
-    reason: "稳定背景音能减少宿舍随机噪声带来的打断感。",
-    route: "/intervention/task",
-    trackId: "deep-ocean",
-    tags: ["15 分钟", "放松"],
-  },
-  {
-    id: "earplug",
-    title: "提前准备耳塞",
-    subtitle: "先把容易打断入睡的宿舍噪声压下来。",
-    type: "quickAction",
-    priority: 2,
-    reason: "噪声控制通常是今晚最直接的缓解手段。",
-    route: "/intervention/task",
-    trackId: null,
-    tags: ["1 分钟", "降噪"],
-  },
-  {
-    id: "phone-down",
-    title: "把手机放远一点",
-    subtitle: "减少屏幕光和临睡前消息刺激，帮助收束节奏。",
-    type: "quickAction",
-    priority: 3,
-    reason: "稳定的睡前流程更有助于判断真实干扰因素。",
-    route: "/intervention/task",
-    trackId: null,
-    tags: ["立刻执行", "作息"],
-  },
-  {
-    id: "water",
-    title: "床边准备一杯温水",
-    subtitle: "避免半夜口渴起身，打断已经形成的困意。",
-    type: "quickAction",
-    priority: 4,
-    reason: "提前移除小中断，能让整晚状态更稳定。",
-    route: "/intervention/task",
-    trackId: null,
-    tags: ["30 秒", "准备"],
-  },
-];
+import { pickRecommendedActions } from "../services/tonight_action_plan";
 
 function summarizeSleepPattern(context: AssistantContext): string {
   const completed = context.recentSessions.filter(
@@ -90,37 +43,6 @@ function summarizeDreamTrend(context: AssistantContext): string {
 function summarizeEmotionTrend(context: AssistantContext): string {
   const mood = context.settings.selectedNightMood || "未设置";
   return `今晚心情是 ${mood}，建议保持低压力、低刺激、容易完成的建议风格。`;
-}
-
-function pickRecommendedActions(
-  context: AssistantContext,
-): RecommendedAction[] {
-  const factors = rankInterferenceFactors(context);
-  const [topFactor] = factors;
-  const prioritized = [...ACTION_CATALOG];
-
-  if (topFactor?.key === "noise") {
-    prioritized.sort((a, b) => {
-      const aScore = a.id === "earplug" ? -2 : a.id === "audio-ocean" ? -1 : 0;
-      const bScore = b.id === "earplug" ? -2 : b.id === "audio-ocean" ? -1 : 0;
-      return aScore - bScore;
-    });
-  }
-
-  if (topFactor?.key === "routine") {
-    prioritized.sort((a, b) => {
-      const aScore =
-        a.id === "phone-down" ? -2 : a.id === "audio-ocean" ? -1 : 0;
-      const bScore =
-        b.id === "phone-down" ? -2 : b.id === "audio-ocean" ? -1 : 0;
-      return aScore - bScore;
-    });
-  }
-
-  return prioritized.slice(0, 4).map((action, index) => ({
-    ...action,
-    priority: index + 1,
-  }));
 }
 
 function buildProfileSummary(context: AssistantContext): ProfileSummary {
@@ -642,7 +564,7 @@ export class DeterministicAIProvider implements AIProvider {
       }，其余动作尽量保持安静、简单、可重复。`,
       riskLevel,
       topFactors,
-      recommendedActions: pickRecommendedActions(context),
+      recommendedActions: pickRecommendedActions(context, [], runId),
       generatedAt: new Date().toISOString(),
       sourceRunId: runId,
     });
@@ -677,7 +599,7 @@ export class DeterministicAIProvider implements AIProvider {
     return deterministicResult<DreamAnalysis>({
       summary: `这条梦更像是一次“${dominantEmotion}”情绪投射，建议和今晚心情、明早恢复感放在一起看。`,
       dominantEmotion,
-      suggestedFocus: context.dorm.noiseDb > 35 ? "noise" : "routine",
+      suggestedFocus: context.dorm.noiseDb > 35 ? "noise" : "phone_usage",
       sourceRefs: ["dream_entries.body", "user_settings.selectedNightMood"],
     });
   }

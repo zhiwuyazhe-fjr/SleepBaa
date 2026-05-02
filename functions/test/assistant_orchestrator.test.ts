@@ -239,6 +239,16 @@ test("prepareTonightPlan writes user_state, card snapshots, and assistant run", 
   );
 
   assert.ok(result.userState.tonightPlan);
+  assert.equal(result.userState.tonightPlan.recommendedActions.length, 3);
+  assert.ok(
+    result.userState.tonightPlan.recommendedActions.some(
+      (action) => action.id === "earplug",
+    ),
+  );
+  assert.notEqual(
+    result.userState.tonightPlan.recommendedActions[0]?.type,
+    "audio",
+  );
   assert.equal(fake.userStates.length, 1);
   assert.equal(fake.cardSnapshots.length, 2);
   assert.equal(fake.assistantRuns.length, 1);
@@ -264,6 +274,12 @@ test("assistantReply refreshes state and records the run", async () => {
   assert.equal(fake.assistantRuns.length, 1);
   assert.equal(fake.assistantRuns[0]?.run.sourceMode, "fallbackSuccess");
   assert.equal(fake.threadSummaries.length, 1);
+  assert.equal(result.userState.tonightPlan?.recommendedActions.length, 3);
+  assert.ok(
+    result.userState.tonightPlan?.recommendedActions.some(
+      (action) => action.id === "earplug",
+    ),
+  );
 });
 
 test("assistantReply auto titles default threads without emoji", async () => {
