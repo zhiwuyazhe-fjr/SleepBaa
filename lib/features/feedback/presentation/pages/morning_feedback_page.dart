@@ -336,7 +336,11 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
               .putIfAbsent(recommendation.id, TextEditingController.new);
           final RecommendationFeedbackStatus current =
               _statuses[recommendation.id] ??
-              RecommendationFeedbackStatus.neutral;
+              _defaultFeedbackStatusFor(session, recommendation);
+          final bool wasExecuted = _wasRecommendationExecuted(
+            session,
+            recommendation,
+          );
           final bool hasNote = noteController.text.trim().isNotEmpty;
           return Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -361,6 +365,20 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                       color: AppColors.textSecondary,
                       height: 1.35,
                     ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Wrap(
+                    spacing: AppSpacing.xs,
+                    runSpacing: AppSpacing.xs,
+                    children: <Widget>[
+                      _CompactStatusPill(
+                        icon: wasExecuted
+                            ? Icons.check_circle_rounded
+                            : Icons.radio_button_unchecked_rounded,
+                        label: wasExecuted ? '昨晚已执行' : '昨晚未执行',
+                        highlight: wasExecuted,
+                      ),
+                    ],
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Wrap(
@@ -427,7 +445,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                     recommendationId: item.id,
                     status:
                         _statuses[item.id] ??
-                        RecommendationFeedbackStatus.neutral,
+                        _defaultFeedbackStatusFor(session, item),
                     note: _feedbackNotes[item.id]?.text.trim() ?? '',
                     submittedAt: DateTime.now(),
                   );
@@ -554,6 +572,24 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
     _estimatedSleepLatency = 20;
     _sleepQuality = 4;
     _restedLevel = 4;
+    final Map<String, RecommendationFeedback> feedbackByRecommendation =
+        <String, RecommendationFeedback>{
+          for (final RecommendationFeedback feedback in session.feedback)
+            feedback.recommendationId: feedback,
+        };
+    for (final NightRecommendation recommendation in session.recommendations) {
+      final RecommendationFeedback? existing =
+          feedbackByRecommendation[recommendation.id];
+      _statuses[recommendation.id] =
+          existing?.status ??
+          _defaultFeedbackStatusFor(session, recommendation);
+      final String existingNote = existing?.note.trim() ?? '';
+      if (existingNote.isNotEmpty) {
+        _feedbackNotes[recommendation.id] = TextEditingController(
+          text: existingNote,
+        );
+      }
+    }
   }
 
   Future<void> _handleReturnToSleep(BuildContext context) async {
@@ -701,6 +737,23 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
       RecommendationFeedbackStatus.ineffective => '无效',
       RecommendationFeedbackStatus.skipped => '未执行',
     };
+  }
+
+  bool _wasRecommendationExecuted(
+    SleepSession session,
+    NightRecommendation recommendation,
+  ) {
+    return session.selectedRecommendationIds.contains(recommendation.id) ||
+        recommendation.executionState != RecommendationExecutionState.idle;
+  }
+
+  RecommendationFeedbackStatus _defaultFeedbackStatusFor(
+    SleepSession session,
+    NightRecommendation recommendation,
+  ) {
+    return _wasRecommendationExecuted(session, recommendation)
+        ? RecommendationFeedbackStatus.neutral
+        : RecommendationFeedbackStatus.skipped;
   }
 
   String _formatDurationMinutes(int minutes) {
@@ -1008,6 +1061,56 @@ class _CompactActionPill extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CompactStatusPill extends StatelessWidget {
+  const _CompactStatusPill({
+    required this.label,
+    required this.icon,
+    this.highlight = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final NightMoodPalette palette = context.nightMoodPalette;
+    final Color background = highlight
+        ? palette.primaryHighlight
+        : AppColors.surfaceMuted;
+    final Color foreground = highlight
+        ? palette.primaryDeep
+        : AppColors.textSecondary;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: AppRadius.surfaceSecondary,
+        border: Border.all(
+          color: highlight ? palette.primarySoft : AppColors.surfaceBorder,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 14, color: foreground),
+          const SizedBox(width: AppSpacing.xxs),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

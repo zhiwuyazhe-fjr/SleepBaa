@@ -957,7 +957,7 @@ class InMemorySleepSessionRepository extends ChangeNotifier
     final List<String> selectedRecommendationIds =
         session.selectedRecommendationIds.isNotEmpty
         ? session.selectedRecommendationIds
-        : recommendationSnapshot
+        : recommendations
               .where(
                 (NightRecommendation item) =>
                     item.executionState != RecommendationExecutionState.idle,
