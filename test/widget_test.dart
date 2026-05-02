@@ -141,15 +141,16 @@ void main() {
       clock: _dayClock,
     );
 
+    expect(find.text('音乐'), findsOneWidget);
     expect(find.text('梦记一则'), findsOneWidget);
     expect(find.text('打卡日历'), findsOneWidget);
-    expect(find.text('睡眠百科'), findsOneWidget);
     expect(find.text('思绪清理'), findsOneWidget);
 
     await tester.tap(find.text('编辑').first);
     await tester.pumpAndSettle();
 
     expect(find.text('编辑快捷功能'), findsOneWidget);
+    expect(find.text('睡眠百科'), findsOneWidget);
     await _scrollToHomeQuickActionCandidate(
       tester,
       HomeQuickActionIds.thoughtVault,
@@ -2594,7 +2595,7 @@ void main() {
     expect(find.textContaining('202'), findsWidgets);
   });
 
-  testWidgets('home recommendation section opens intervention overview', (
+  testWidgets('home recommendation section opens all recommendations page', (
     WidgetTester tester,
   ) async {
     await _pumpApp(
@@ -2608,6 +2609,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(MicroInterventionTaskPage), findsOneWidget);
+    expect(find.text('全部今晚建议'), findsOneWidget);
+    expect(find.textContaining('已采纳'), findsOneWidget);
+    expect(find.text('睡前放松音频'), findsWidgets);
+    expect(find.text('佩戴隔音耳塞'), findsOneWidget);
   });
 
   testWidgets('start sleep card keeps full title and light hint', (

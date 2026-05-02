@@ -19,6 +19,7 @@ enum NotificationCategory { reminder, session, dorm, system }
 enum DormMemberStatus { sleeping, quiet, away, active }
 
 abstract final class HomeQuickActionIds {
+  static const String sleepMusic = 'sleepMusic';
   static const String dreamJournal = 'dreamJournal';
   static const String profileCalendar = 'profileCalendar';
   static const String sleepEncyclopedia = 'sleepEncyclopedia';
@@ -31,22 +32,48 @@ abstract final class HomeQuickActionIds {
 
 const int kHomeQuickActionSelectionCount = 4;
 
-const List<String> kDefaultHomeQuickActionIds = <String>[
+const List<String> kLegacyDefaultHomeQuickActionIds = <String>[
   HomeQuickActionIds.dreamJournal,
   HomeQuickActionIds.profileCalendar,
   HomeQuickActionIds.sleepEncyclopedia,
   HomeQuickActionIds.thoughtClean,
 ];
 
+const List<String> kDefaultHomeQuickActionIds = <String>[
+  HomeQuickActionIds.sleepMusic,
+  HomeQuickActionIds.dreamJournal,
+  HomeQuickActionIds.profileCalendar,
+  HomeQuickActionIds.thoughtClean,
+];
+
 const List<String> kAllHomeQuickActionIds = <String>[
   ...kDefaultHomeQuickActionIds,
+  HomeQuickActionIds.sleepEncyclopedia,
   HomeQuickActionIds.thoughtVault,
   HomeQuickActionIds.profileBadges,
   HomeQuickActionIds.profileReport,
   HomeQuickActionIds.profileSettings,
 ];
 
+bool _sameStringList(List<String> left, List<String> right) {
+  if (left.length != right.length) {
+    return false;
+  }
+  for (int index = 0; index < left.length; index += 1) {
+    if (left[index] != right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 List<String> normalizeHomeQuickActionIds(Iterable<String>? rawIds) {
+  final List<String>? rawList = rawIds?.toList(growable: false);
+  if (rawList != null &&
+      _sameStringList(rawList, kLegacyDefaultHomeQuickActionIds)) {
+    return List<String>.unmodifiable(kDefaultHomeQuickActionIds);
+  }
+
   final List<String> normalized = <String>[];
 
   void addIfAllowed(String id) {
@@ -56,7 +83,7 @@ List<String> normalizeHomeQuickActionIds(Iterable<String>? rawIds) {
     normalized.add(id);
   }
 
-  for (final String id in rawIds ?? const <String>[]) {
+  for (final String id in rawList ?? const <String>[]) {
     addIfAllowed(id);
     if (normalized.length == kHomeQuickActionSelectionCount) {
       return List<String>.unmodifiable(normalized);
