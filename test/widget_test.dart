@@ -3494,6 +3494,90 @@ void main() {
   );
 
   testWidgets(
+    'morning feedback mirrors previous night recommendations and execution state',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.feedbackMorning,
+        clock: _feedbackClock,
+      );
+
+      final AppServices services = AppScope.of(
+        tester.element(find.byType(MorningFeedbackPage)),
+      );
+      final SleepSession targetSession = _buildMixedExecutionFeedbackSession(
+        uid: services.authRepository.currentUser.uid,
+        id: 'mixed-recommendation-session',
+        startedAt: DateTime(2026, 4, 17, 23, 18),
+      );
+      await services.sleepSessionRepository.saveSession(targetSession);
+
+      final BuildContext context = tester.element(
+        find.byType(MorningFeedbackPage),
+      );
+      GoRouter.of(
+        context,
+      ).go(AppRoutes.feedbackMorningLocation(sessionId: targetSession.id));
+      await tester.pumpAndSettle();
+
+      final Finder feedbackListView = find
+          .descendant(
+            of: find.byType(MorningFeedbackPage),
+            matching: find.byType(ListView),
+          )
+          .first;
+
+      await tester.dragUntilVisible(
+        find.text('已执行的耳塞建议'),
+        feedbackListView,
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('昨晚已执行'), findsOneWidget);
+      expect(find.textContaining('反馈状态：一般'), findsWidgets);
+
+      await tester.dragUntilVisible(
+        find.text('未执行的灯光建议'),
+        feedbackListView,
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('昨晚未执行'), findsOneWidget);
+      expect(find.textContaining('反馈状态：未执行'), findsWidgets);
+
+      await tester.dragUntilVisible(
+        find.text('提交反馈'),
+        feedbackListView,
+        const Offset(0, -300),
+      );
+      await tester.tap(find.text('提交反馈'));
+      await tester.pumpAndSettle();
+
+      final SleepSession completed = services.sleepSessionRepository.sessions
+          .firstWhere((SleepSession session) => session.id == targetSession.id);
+      expect(completed.feedback, hasLength(2));
+      expect(
+        completed.feedback
+            .firstWhere(
+              (RecommendationFeedback item) =>
+                  item.recommendationId == 'executed-earplug',
+            )
+            .status,
+        RecommendationFeedbackStatus.neutral,
+      );
+      expect(
+        completed.feedback
+            .firstWhere(
+              (RecommendationFeedback item) =>
+                  item.recommendationId == 'skipped-light',
+            )
+            .status,
+        RecommendationFeedbackStatus.skipped,
+      );
+    },
+  );
+
+  testWidgets(
     'morning feedback recommendation note opens compact sheet from action row',
     (WidgetTester tester) async {
       await _pumpApp(
@@ -3789,6 +3873,53 @@ SleepSession _buildPendingFeedbackSession({
       ),
     ],
     selectedRecommendationIds: <String>['$id-rec'],
+    segments: <SleepSegment>[
+      SleepSegment(startedAt: startedAt, endedAt: endedAt),
+    ],
+    trackedDurationMinutes: endedAt.difference(startedAt).inMinutes,
+    awakenings: const <NightAwakeningEntry>[],
+    feedback: const <RecommendationFeedback>[],
+    summary: null,
+    updatedAt: endedAt,
+  );
+}
+
+SleepSession _buildMixedExecutionFeedbackSession({
+  required String uid,
+  required String id,
+  required DateTime startedAt,
+}) {
+  final DateTime endedAt = startedAt.add(const Duration(hours: 7, minutes: 10));
+  return SleepSession(
+    id: id,
+    uid: uid,
+    startedAt: startedAt,
+    endedAt: endedAt,
+    sleepDayKey: sleepDayKeyFromDate(startedAt),
+    status: SleepSessionStatus.awaitingFeedback,
+    sleepModeActive: false,
+    dormId: 'dorm-204',
+    recommendations: <NightRecommendation>[
+      NightRecommendation(
+        id: 'executed-earplug',
+        title: '已执行的耳塞建议',
+        subtitle: '昨晚点击过，所以晨间反馈默认评估效果。',
+        type: RecommendationType.quickAction,
+        icon: Icons.hearing_rounded,
+        tags: const <String>['executed'],
+        executionState: RecommendationExecutionState.selected,
+      ),
+      NightRecommendation(
+        id: 'skipped-light',
+        title: '未执行的灯光建议',
+        subtitle: '昨晚没有点击，所以晨间反馈默认未执行。',
+        type: RecommendationType.quickAction,
+        icon: Icons.lightbulb_outline_rounded,
+        tags: const <String>['skipped'],
+        executionState: RecommendationExecutionState.idle,
+      ),
+    ],
+    selectedRecommendationIds: const <String>['executed-earplug'],
     segments: <SleepSegment>[
       SleepSegment(startedAt: startedAt, endedAt: endedAt),
     ],
