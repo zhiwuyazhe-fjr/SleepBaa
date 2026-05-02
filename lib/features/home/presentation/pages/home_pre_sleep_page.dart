@@ -15,6 +15,12 @@ import 'package:sleep_dorm_app/features/home/presentation/widgets/home_hero_pair
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_quick_actions.dart';
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.dart';
 
+List<NightRecommendation> displayedTonightRecommendations(
+  List<NightRecommendation> recommendations,
+) {
+  return recommendations.take(3).toList(growable: false);
+}
+
 class HomePreSleepPage extends StatefulWidget {
   const HomePreSleepPage({super.key, this.notice});
 
@@ -96,6 +102,23 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
     };
   }
 
+  Future<void> _handleRecommendationTap(
+    AppServices services,
+    NightRecommendation recommendation,
+  ) async {
+    if (recommendation.type == RecommendationType.audio) {
+      context.push(AppRoutes.sleepAudioCatalog);
+      return;
+    }
+    if (recommendation.id == 'thought-clean') {
+      context.push('${AppRoutes.assistant}?flow=sleep_capture&mode=memo');
+      return;
+    }
+    await services.sleepExperienceController.handleRecommendationTap(
+      recommendation,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
@@ -133,18 +156,7 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
           final bool showExpandedBanner =
               pendingBanner != null && _bannerExpanded;
           final List<NightRecommendation> displayedRecommendations =
-              <NightRecommendation>[
-                ...recommendations.take(2),
-                const NightRecommendation(
-                  id: 'thought-clean',
-                  title: '睡前思绪清理',
-                  subtitle: '记下一件今晚最想放下的事，让脑子先轻一点',
-                  type: RecommendationType.quickAction,
-                  icon: Icons.edit_note_rounded,
-                  tags: <String>['5 min', '情绪整理'],
-                  executionState: RecommendationExecutionState.idle,
-                ),
-              ];
+              displayedTonightRecommendations(recommendations);
 
           if (pendingBanner == null && _bannerExpanded) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -386,21 +398,10 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                       recommendation.executionState ==
                                           RecommendationExecutionState.playing,
                                   onTap: () async {
-                                    if (recommendation.type ==
-                                        RecommendationType.audio) {
-                                      context.push(AppRoutes.sleepAudioCatalog);
-                                      return;
-                                    }
-                                    if (recommendation.id == 'thought-clean') {
-                                      context.push(
-                                        '${AppRoutes.assistant}?flow=sleep_capture&mode=memo',
-                                      );
-                                      return;
-                                    }
-                                    await services.sleepExperienceController
-                                        .handleRecommendationTap(
-                                          recommendation,
-                                        );
+                                    await _handleRecommendationTap(
+                                      services,
+                                      recommendation,
+                                    );
                                   },
                                   onPlayToggle:
                                       recommendation.type ==

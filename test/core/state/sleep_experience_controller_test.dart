@@ -155,6 +155,41 @@ void main() {
   );
 
   test(
+    'enter sleep mode preserves recommendation execution snapshot',
+    () async {
+      final _SleepControllerHarness harness = _SleepControllerHarness.create(
+        initialSessions: const <SleepSession>[],
+        initialRecommendations: <NightRecommendation>[
+          _recommendation(
+            id: 'earplug',
+            title: '佩戴隔音耳塞',
+            state: RecommendationExecutionState.selected,
+          ),
+          _recommendation(id: 'screen-dim', title: '开启勿扰并压低亮度'),
+        ],
+      );
+
+      await harness.controller.enterSleepMode();
+
+      final SleepSession session =
+          harness.sleepSessionRepository.activeSession!;
+      expect(session.recommendations.map((item) => item.id), <String>[
+        'earplug',
+        'screen-dim',
+      ]);
+      expect(session.selectedRecommendationIds, <String>['earplug']);
+      expect(
+        session.recommendations
+            .firstWhere((NightRecommendation item) => item.id == 'screen-dim')
+            .executionState,
+        RecommendationExecutionState.idle,
+      );
+
+      harness.dispose();
+    },
+  );
+
+  test(
     'finish sleep mode still cancels notifications when there is no active session',
     () async {
       final InMemoryAuthRepository authRepository = InMemoryAuthRepository();
@@ -741,6 +776,57 @@ void main() {
   );
 
   test(
+    'resume sleep mode keeps existing recommendation snapshot selection',
+    () async {
+      final DateTime now = DateTime.now();
+      final DateTime startedAt = now.subtract(const Duration(minutes: 30));
+      final DateTime endedAt = now.subtract(const Duration(minutes: 5));
+      final SleepSession awaitingSession = SleepSession(
+        id: 'awaiting-with-idle-snapshot',
+        uid: 'anon-paul',
+        startedAt: startedAt,
+        endedAt: endedAt,
+        sleepDayKey: sleepDayKeyFromDate(startedAt),
+        status: SleepSessionStatus.awaitingFeedback,
+        sleepModeActive: false,
+        dormId: 'dorm-1',
+        recommendations: <NightRecommendation>[
+          _recommendation(id: 'earplug', title: 'Saved idle suggestion'),
+        ],
+        selectedRecommendationIds: const <String>[],
+        segments: <SleepSegment>[
+          SleepSegment(startedAt: startedAt, endedAt: endedAt),
+        ],
+        trackedDurationMinutes: endedAt.difference(startedAt).inMinutes,
+        awakenings: const <NightAwakeningEntry>[],
+        feedback: const <RecommendationFeedback>[],
+        summary: null,
+        updatedAt: endedAt,
+      );
+      final _SleepControllerHarness harness = _SleepControllerHarness.create(
+        initialSessions: <SleepSession>[awaitingSession],
+        initialRecommendations: <NightRecommendation>[
+          _recommendation(
+            id: 'screen-dim',
+            title: 'Current selected suggestion',
+            state: RecommendationExecutionState.selected,
+          ),
+        ],
+      );
+
+      final SleepSession resumed = await harness.controller
+          .resumeSleepModeFromFeedbackReturn();
+
+      expect(resumed.recommendations.map((item) => item.id), <String>[
+        'earplug',
+      ]);
+      expect(resumed.selectedRecommendationIds, isEmpty);
+
+      harness.dispose();
+    },
+  );
+
+  test(
     'resume sleep mode from feedback return ignores non-critical side effect failures',
     () async {
       final _ThrowingDormRepository dormRepository = _ThrowingDormRepository(
@@ -1201,6 +1287,22 @@ List<NightRecommendation> _audioRecommendations(List<AudioTrack> tracks) {
       .toList(growable: false);
 }
 
+NightRecommendation _recommendation({
+  required String id,
+  required String title,
+  RecommendationExecutionState state = RecommendationExecutionState.idle,
+}) {
+  return NightRecommendation(
+    id: id,
+    title: title,
+    subtitle: 'test recommendation',
+    type: RecommendationType.quickAction,
+    icon: Icons.task_alt_rounded,
+    tags: const <String>['test'],
+    executionState: state,
+  );
+}
+
 class _SleepControllerHarness {
   _SleepControllerHarness._({
     required this.authRepository,
@@ -1220,6 +1322,7 @@ class _SleepControllerHarness {
     InMemoryDormRepository? dormRepository,
     _FakeNotificationService? notificationService,
     InMemorySleepCaptureRepository? sleepCaptureRepository,
+    List<SleepSession>? initialSessions,
     List<NightRecommendation>? initialRecommendations,
     AudioPlaybackEngine? audioPlaybackEngine,
   }) {
@@ -1233,6 +1336,7 @@ class _SleepControllerHarness {
     final InMemorySleepSessionRepository sleepSessionRepository =
         InMemorySleepSessionRepository(
           initialUid: authRepository.currentUser.uid,
+          initialSessions: initialSessions,
         );
     final InMemoryFeedbackRepository feedbackRepository =
         InMemoryFeedbackRepository(

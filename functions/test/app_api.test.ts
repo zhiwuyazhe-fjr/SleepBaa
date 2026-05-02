@@ -377,7 +377,7 @@ test(
 );
 
 test(
-  "assistant identity prompt returns truthful provider and model information",
+  "assistant identity prompt does not reveal provider or model information",
   { concurrency: false },
   async () => {
     await withLocalAppApiServer(async ({ baseUrl, uid }) => {
@@ -400,8 +400,11 @@ test(
       assert.equal(replyPayload.sourceMode, "fallbackSuccess");
       assert.equal(replyPayload.provider, "deterministic");
       assert.equal(replyPayload.model, "rules-v1");
-      assert.match(replyPayload.reply, /deterministic/i);
-      assert.match(replyPayload.reply, /rules-v1/i);
+      assert.match(replyPayload.reply, /小眠/);
+      assert.doesNotMatch(
+        replyPayload.reply,
+        /deterministic|rules-v1|provider|model|模型|gpt|openai|claude|deepseek|hunyuan|混元|后台|接口/i,
+      );
     });
   },
 );

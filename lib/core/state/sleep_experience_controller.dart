@@ -303,14 +303,6 @@ class SleepExperienceController extends ChangeNotifier {
     final DateTime now = _clock();
     final List<NightRecommendation> snapshot = _recommendationRepository
         .tonightRecommendations
-        .map(
-          (NightRecommendation item) => item.copyWith(
-            executionState:
-                item.executionState == RecommendationExecutionState.idle
-                ? RecommendationExecutionState.selected
-                : item.executionState,
-          ),
-        )
         .toList(growable: false);
 
     final String sleepDayKey = sleepDayKeyFromDate(now);
@@ -346,14 +338,6 @@ class SleepExperienceController extends ChangeNotifier {
     final DateTime now = _clock();
     final List<NightRecommendation> snapshot = _recommendationRepository
         .tonightRecommendations
-        .map(
-          (NightRecommendation item) => item.copyWith(
-            executionState:
-                item.executionState == RecommendationExecutionState.idle
-                ? RecommendationExecutionState.selected
-                : item.executionState,
-          ),
-        )
         .toList(growable: false);
 
     final String sleepDayKey = sleepDayKeyFromDate(now);
