@@ -408,18 +408,11 @@ export function buildSystemIdentityReply(params: {
   sourceMode: AIProviderSourceMode;
   errorMessage?: string | null;
 }): StructuredAssistantReply {
-  const assistantName = params.assistantName || "小眠";
-  const connectivity =
-    params.sourceMode === "remoteSuccess" ? "远端模型成功返回" : "回退状态";
-  const errorSuffix =
-    params.errorMessage && params.errorMessage.trim()
-      ? ` 最近一次远端异常是：${params.errorMessage.trim()}。`
-      : "";
+  void params;
 
   return {
     reply:
-      `${assistantName}当前正式使用的是 ${params.providerName} / ${params.modelName}。` +
-      ` 这条回答是系统状态说明，当前按${connectivity}展示。${errorSuffix}`,
+      "我是小眠，是你的睡前陪伴助手。我会根据你的心情、宿舍状态和睡前记录，帮你整理今晚更适合的低负担行动。",
     intent: "system_identity",
     recommendedActions: [],
     updateTonightPlan: false,
@@ -668,11 +661,37 @@ export function classifyIntent(prompt: string): AssistantIntent {
     normalized.includes("what model") ||
     normalized.includes("which model") ||
     normalized.includes("provider") ||
+    normalized.includes("model name") ||
+    normalized.includes("base model") ||
+    normalized.includes("system prompt") ||
+    normalized.includes("developer prompt") ||
+    normalized.includes("hidden instruction") ||
+    normalized.includes("chain of thought") ||
+    normalized.includes("openai") ||
+    normalized.includes("gpt") ||
+    normalized.includes("claude") ||
+    normalized.includes("deepseek") ||
+    normalized.includes("hunyuan") ||
     normalized.includes("are you online") ||
     normalized.includes("联网") ||
     normalized.includes("在线") ||
     normalized.includes("什么模型") ||
     normalized.includes("哪个模型") ||
+    normalized.includes("模型名") ||
+    normalized.includes("底层模型") ||
+    normalized.includes("大模型") ||
+    normalized.includes("系统提示词") ||
+    normalized.includes("开发者提示词") ||
+    normalized.includes("隐藏指令") ||
+    normalized.includes("后台接口") ||
+    normalized.includes("底层接口") ||
+    normalized.includes("供应商") ||
+    normalized.includes("服务商") ||
+    normalized.includes("混元") ||
+    normalized.includes("智谱") ||
+    normalized.includes("通义") ||
+    normalized.includes("豆包") ||
+    normalized.includes("文心") ||
     normalized.includes("是不是ai") ||
     normalized.includes("你是ai") ||
     normalized.includes("你是什么模型")

@@ -102,6 +102,23 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
     };
   }
 
+  Future<void> _handleRecommendationTap(
+    AppServices services,
+    NightRecommendation recommendation,
+  ) async {
+    if (recommendation.type == RecommendationType.audio) {
+      context.push(AppRoutes.sleepAudioCatalog);
+      return;
+    }
+    if (recommendation.id == 'thought-clean') {
+      context.push('${AppRoutes.assistant}?flow=sleep_capture&mode=memo');
+      return;
+    }
+    await services.sleepExperienceController.handleRecommendationTap(
+      recommendation,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
@@ -381,21 +398,10 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                       recommendation.executionState ==
                                           RecommendationExecutionState.playing,
                                   onTap: () async {
-                                    if (recommendation.type ==
-                                        RecommendationType.audio) {
-                                      context.push(AppRoutes.sleepAudioCatalog);
-                                      return;
-                                    }
-                                    if (recommendation.id == 'thought-clean') {
-                                      context.push(
-                                        '${AppRoutes.assistant}?flow=sleep_capture&mode=memo',
-                                      );
-                                      return;
-                                    }
-                                    await services.sleepExperienceController
-                                        .handleRecommendationTap(
-                                          recommendation,
-                                        );
+                                    await _handleRecommendationTap(
+                                      services,
+                                      recommendation,
+                                    );
                                   },
                                   onPlayToggle:
                                       recommendation.type ==

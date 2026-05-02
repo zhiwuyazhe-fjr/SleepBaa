@@ -1,7 +1,7 @@
 import { AssistantContext, RecommendedAction, TonightPlan } from "../shared/types";
 import { rankInterferenceFactors } from "./rank_interference_factors";
 
-export const TONIGHT_ACTION_COUNT = 3;
+export const TONIGHT_ACTION_COUNT = 6;
 
 type ActionId =
   | "earplug"
@@ -519,8 +519,10 @@ export function pickRecommendedActions(
     };
   });
 
-  const selected = scored
-    .sort((a, b) => b.score - a.score || a.catalogIndex - b.catalogIndex)
+  const sorted = scored.sort(
+    (a, b) => b.score - a.score || a.catalogIndex - b.catalogIndex,
+  );
+  let selected = sorted
     .reduce<typeof scored>((items, item) => {
       if (items.length >= TONIGHT_ACTION_COUNT) {
         return items;
@@ -539,6 +541,13 @@ export function pickRecommendedActions(
       }
       return [...items, item];
     }, []);
+
+  if (!selected.some((item) => item.action.type === "audio")) {
+    const bestAudio = sorted.find((item) => item.action.type === "audio");
+    if (bestAudio != null) {
+      selected = [...selected.slice(0, TONIGHT_ACTION_COUNT - 1), bestAudio];
+    }
+  }
 
   return selected
     .map((item, index) => ({

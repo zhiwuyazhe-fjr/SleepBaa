@@ -116,8 +116,9 @@ void main() {
 
       final Map<String, dynamic> serialized =
           ModelSerializers.userSettingsToMap(settings);
-      final UserSettings restored =
-          ModelSerializers.userSettingsFromMap(serialized);
+      final UserSettings restored = ModelSerializers.userSettingsFromMap(
+        serialized,
+      );
 
       expect(serialized['homeQuickActionIds'], <String>[
         'dreamJournal',
@@ -139,4 +140,16 @@ void main() {
       expect(restored.selectedNightMood, NightMood.calm);
     },
   );
+
+  test('legacy default quick actions migrate to music shortcut', () {
+    expect(
+      normalizeHomeQuickActionIds(kLegacyDefaultHomeQuickActionIds),
+      <String>[
+        HomeQuickActionIds.sleepMusic,
+        HomeQuickActionIds.dreamJournal,
+        HomeQuickActionIds.profileCalendar,
+        HomeQuickActionIds.thoughtClean,
+      ],
+    );
+  });
 }

@@ -24,6 +24,12 @@ class HomeQuickActionDefinition {
 const List<HomeQuickActionDefinition> kHomeQuickActionCatalog =
     <HomeQuickActionDefinition>[
       HomeQuickActionDefinition(
+        id: HomeQuickActionIds.sleepMusic,
+        label: '音乐',
+        icon: Icons.music_note_rounded,
+        location: AppRoutes.sleepAudioCatalog,
+      ),
+      HomeQuickActionDefinition(
         id: HomeQuickActionIds.dreamJournal,
         label: '梦记一则',
         icon: Icons.auto_stories_rounded,

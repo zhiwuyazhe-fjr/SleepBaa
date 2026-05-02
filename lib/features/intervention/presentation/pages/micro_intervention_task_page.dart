@@ -12,7 +12,7 @@ class MicroInterventionTaskPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     return Scaffold(
-      appBar: AppBar(title: const Text('今晚全部建议')),
+      appBar: AppBar(title: const Text('全部今晚建议')),
       body: ListenableBuilder(
         listenable: Listenable.merge(<Listenable>[
           services.recommendationRepository,
@@ -21,6 +21,8 @@ class MicroInterventionTaskPage extends StatelessWidget {
         builder: (BuildContext context, Widget? child) {
           final List<NightRecommendation> recommendations =
               services.recommendationRepository.tonightRecommendations;
+          final AudioTrack? currentAudioTrack =
+              services.audioPlaybackController.currentTrack;
           final int selectedCount = recommendations
               .where(
                 (NightRecommendation item) =>
@@ -58,9 +60,32 @@ class MicroInterventionTaskPage extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: AppSpacing.md),
                   child: HomeActionCard(
                     recommendation: recommendation,
+                    displayTitle:
+                        recommendation.type == RecommendationType.audio &&
+                            currentAudioTrack != null
+                        ? currentAudioTrack.title
+                        : null,
+                    showAudioTransport:
+                        recommendation.type == RecommendationType.audio &&
+                        recommendation.executionState ==
+                            RecommendationExecutionState.playing,
                     onTap: () async {
                       await services.sleepExperienceController
                           .handleRecommendationTap(recommendation);
+                    },
+                    onPlayToggle:
+                        recommendation.type == RecommendationType.audio
+                        ? () async {
+                            await services.sleepExperienceController
+                                .handleRecommendationTap(recommendation);
+                          }
+                        : null,
+                    onPreviousAudio: () async {
+                      await services.sleepExperienceController
+                          .playPreviousAudio();
+                    },
+                    onNextAudio: () async {
+                      await services.sleepExperienceController.playNextAudio();
                     },
                   ),
                 ),
