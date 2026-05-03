@@ -1547,11 +1547,17 @@ void main() {
       expect(find.byType(AppSettingsGroup), findsNWidgets(4));
       expect(find.text('基础规则'), findsOneWidget);
       expect(find.text('安静时段'), findsOneWidget);
-      expect(find.text('开始'), findsOneWidget);
-      expect(find.text('结束'), findsOneWidget);
+      expect(find.text('23:00 - 07:00'), findsOneWidget);
+      expect(find.text('开始'), findsNothing);
+      expect(find.text('结束'), findsNothing);
       expect(find.text('熄灯提醒'), findsOneWidget);
+      expect(find.text('23:30'), findsOneWidget);
       expect(find.text('补充说明'), findsOneWidget);
       expect(find.text('个人照明要求'), findsOneWidget);
+      expect(find.text('60 秒'), findsOneWidget);
+      expect(find.text('26°C'), findsOneWidget);
+      expect(find.text('夜猫子'), findsNothing);
+      expect(find.byType(Slider), findsNothing);
       expect(find.text('闹钟与作息'), findsOneWidget);
       expect(find.text('温度与通风'), findsOneWidget);
       expect(find.text('保存后发送给 3 位室友确认'), findsOneWidget);
@@ -1567,7 +1573,7 @@ void main() {
       final Finder editIntro = find.byKey(
         const ValueKey<String>('dorm-rules-edit-intro'),
       );
-      expect(tester.getTopLeft(rulesGroup).dx, greaterThanOrEqualTo(24));
+      expect(tester.getTopLeft(rulesGroup.last).dx, greaterThanOrEqualTo(24));
       expect(tester.getTopLeft(editIntro).dx, greaterThanOrEqualTo(24));
 
       final BuildContext buttonContext = tester.element(

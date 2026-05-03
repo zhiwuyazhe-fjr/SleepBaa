@@ -137,9 +137,18 @@ class _DormRulesPageState extends State<DormRulesPage> {
     setState(() => _isEditing = false);
   }
 
-  Future<void> _showLightsOffEditor() async {
+  Future<void> _showTextEditor({
+    required String title,
+    required TextEditingController targetController,
+    String? description,
+    String? hintText,
+    TextInputType? keyboardType,
+    int maxLines = 1,
+    String? suffixText,
+    Key? sheetKey,
+  }) async {
     final TextEditingController controller = TextEditingController(
-      text: _lightsOffController.text,
+      text: targetController.text,
     );
     await showAppModal<void>(
       context,
@@ -149,9 +158,9 @@ class _DormRulesPageState extends State<DormRulesPage> {
         isScrollControlled: true,
         builder: (BuildContext sheetContext) {
           return AppBottomSheetScaffold(
-            key: const ValueKey<String>('dorm-rules-lights-sheet'),
-            title: '熄灯提醒',
-            description: '填写室友确认后的熄灯约定。',
+            key: sheetKey,
+            title: title,
+            description: description,
             includeBottomViewInsets: true,
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -160,7 +169,12 @@ class _DormRulesPageState extends State<DormRulesPage> {
                 TextField(
                   controller: controller,
                   autofocus: true,
-                  decoration: const InputDecoration(hintText: '例如 23:30后关闭主灯'),
+                  keyboardType: keyboardType,
+                  maxLines: maxLines,
+                  decoration: InputDecoration(
+                    hintText: hintText,
+                    suffixText: suffixText,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 Row(
@@ -180,7 +194,7 @@ class _DormRulesPageState extends State<DormRulesPage> {
                         size: PrimaryButtonSize.compact,
                         onPressed: () {
                           setState(() {
-                            _lightsOffController.text = controller.text.trim();
+                            targetController.text = controller.text.trim();
                           });
                           Navigator.of(sheetContext).pop();
                         },
@@ -195,6 +209,274 @@ class _DormRulesPageState extends State<DormRulesPage> {
       ),
     );
     controller.dispose();
+  }
+
+  Future<void> _showQuietHoursEditor() async {
+    final TextEditingController startController = TextEditingController(
+      text: _quietStartController.text,
+    );
+    final TextEditingController endController = TextEditingController(
+      text: _quietEndController.text,
+    );
+    await showAppModal<void>(
+      context,
+      spec: AppEditorSheetSpec<void>(
+        useSafeArea: true,
+        showDragHandle: true,
+        isScrollControlled: true,
+        builder: (BuildContext sheetContext) {
+          return AppBottomSheetScaffold(
+            title: '安静时段',
+            description: '设置需要保持安静的开始和结束时间。',
+            includeBottomViewInsets: true,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                _DormRulesSheetTextField(
+                  label: '开始',
+                  controller: startController,
+                  hintText: '23:00',
+                  keyboardType: TextInputType.datetime,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _DormRulesSheetTextField(
+                  label: '结束',
+                  controller: endController,
+                  hintText: '07:00',
+                  keyboardType: TextInputType.datetime,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: PrimaryButton(
+                        label: '取消',
+                        variant: PrimaryButtonVariant.ghost,
+                        size: PrimaryButtonSize.compact,
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: PrimaryButton(
+                        label: '确定',
+                        size: PrimaryButtonSize.compact,
+                        onPressed: () {
+                          setState(() {
+                            _quietStartController.text = startController.text
+                                .trim();
+                            _quietEndController.text = endController.text
+                                .trim();
+                          });
+                          Navigator.of(sheetContext).pop();
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    startController.dispose();
+    endController.dispose();
+  }
+
+  Future<void> _showLightsOffEditor() {
+    return _showTextEditor(
+      title: '熄灯提醒',
+      description: '填写室友确认后的熄灯约定。',
+      hintText: '例如 23:30 后关闭主灯',
+      targetController: _lightsOffController,
+      sheetKey: const ValueKey<String>('dorm-rules-lights-sheet'),
+    );
+  }
+
+  Future<void> _showSliderEditor({
+    required String title,
+    required double value,
+    required double min,
+    required double max,
+    required String unit,
+    required ValueChanged<double> onConfirmed,
+  }) async {
+    double draftValue = value;
+    await showAppModal<void>(
+      context,
+      spec: AppEditorSheetSpec<void>(
+        useSafeArea: true,
+        showDragHandle: true,
+        builder: (BuildContext sheetContext) {
+          return StatefulBuilder(
+            builder: (BuildContext context, StateSetter setSheetState) {
+              return AppBottomSheetScaffold(
+                title: title,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Text(
+                      '${draftValue.round()}$unit',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            color: context.nightMoodPalette.primaryDeep,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    Slider(
+                      min: min,
+                      max: max,
+                      divisions: (max - min).round(),
+                      value: draftValue.clamp(min, max),
+                      activeColor: context.nightMoodPalette.primaryDeep,
+                      inactiveColor: context.nightMoodPalette.primarySoft
+                          .withAlpha(72),
+                      onChanged: (double next) =>
+                          setSheetState(() => draftValue = next),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: PrimaryButton(
+                            label: '取消',
+                            variant: PrimaryButtonVariant.ghost,
+                            size: PrimaryButtonSize.compact,
+                            onPressed: () => Navigator.of(sheetContext).pop(),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: PrimaryButton(
+                            label: '确定',
+                            size: PrimaryButtonSize.compact,
+                            onPressed: () {
+                              setState(() => onConfirmed(draftValue));
+                              Navigator.of(sheetContext).pop();
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _showSingleChoiceEditor({
+    required String title,
+    required List<String> options,
+    required String selectedValue,
+    required ValueChanged<String> onSelected,
+  }) async {
+    final String? selected = await showAppModal<String>(
+      context,
+      spec: AppSelectionSheetSpec<String>(
+        title: title,
+        selectedValue: selectedValue,
+        options: options
+            .map(
+              (String option) =>
+                  AppSelectionOption<String>(value: option, label: option),
+            )
+            .toList(growable: false),
+      ),
+    );
+    if (selected != null) {
+      setState(() => onSelected(selected));
+    }
+  }
+
+  Future<void> _showRoutineTagsEditor() async {
+    List<String> draftTags = _routineTags;
+    await showAppModal<void>(
+      context,
+      spec: AppEditorSheetSpec<void>(
+        useSafeArea: true,
+        showDragHandle: true,
+        builder: (BuildContext sheetContext) {
+          return StatefulBuilder(
+            builder: (BuildContext context, StateSetter setSheetState) {
+              return AppBottomSheetScaffold(
+                title: '作息标签',
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Wrap(
+                      spacing: AppSpacing.xs,
+                      runSpacing: AppSpacing.xs,
+                      children: const <String>['考试周', '夜猫子', '早起党']
+                          .map((String option) {
+                            final bool selected = draftTags.contains(option);
+                            return FilterChip(
+                              selected: selected,
+                              label: Text(option),
+                              selectedColor:
+                                  context.nightMoodPalette.welcomeAccentColor,
+                              backgroundColor: AppColors.surfaceMuted,
+                              side: BorderSide(
+                                color: selected
+                                    ? context.nightMoodPalette.primaryDeep
+                                          .withAlpha(80)
+                                    : AppColors.surfaceBorder,
+                              ),
+                              onSelected: (_) {
+                                setSheetState(() {
+                                  draftTags = selected
+                                      ? draftTags
+                                            .where(
+                                              (String tag) => tag != option,
+                                            )
+                                            .toList(growable: false)
+                                      : <String>[...draftTags, option];
+                                });
+                              },
+                            );
+                          })
+                          .toList(growable: false),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: PrimaryButton(
+                            label: '取消',
+                            variant: PrimaryButtonVariant.ghost,
+                            size: PrimaryButtonSize.compact,
+                            onPressed: () => Navigator.of(sheetContext).pop(),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: PrimaryButton(
+                            label: '确定',
+                            size: PrimaryButtonSize.compact,
+                            onPressed: () {
+                              setState(() => _routineTags = draftTags);
+                              Navigator.of(sheetContext).pop();
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _handleSave() async {
@@ -320,128 +602,216 @@ class _DormRulesPageState extends State<DormRulesPage> {
                           alignment: Alignment.topCenter,
                           child: FractionallySizedBox(
                             widthFactor: widthFactor,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                showEditView
-                                    ? _DormRulesEditHeader(
-                                        onBack: () =>
-                                            _cancelEditing(dorm.rulesSettings),
-                                      )
-                                    : _DormRulesDisplayHeader(
-                                        palette: palette,
-                                        canReviewProposal: canReviewProposal,
-                                        hasPendingProposal: hasPendingProposal,
-                                        onBack: () =>
-                                            Navigator.of(context).maybePop(),
-                                        onEdit: _enterEditMode,
-                                        onReview: () {
-                                          setState(
-                                            () => _showReviewOverlay = true,
-                                          );
-                                        },
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 220),
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              transitionBuilder:
+                                  (Widget child, Animation<double> animation) {
+                                    return FadeTransition(
+                                      opacity: animation,
+                                      child: SlideTransition(
+                                        position: Tween<Offset>(
+                                          begin: const Offset(0, 0.018),
+                                          end: Offset.zero,
+                                        ).animate(animation),
+                                        child: child,
                                       ),
-                                if (showEditView) ...<Widget>[
-                                  _DormRulesEditBody(
-                                    palette: palette,
-                                    quietStartController: _quietStartController,
-                                    quietEndController: _quietEndController,
-                                    lightsOffController: _lightsOffController,
-                                    noteController: _noteController,
-                                    personalLightingController:
-                                        _personalLightingController,
-                                    alarmResponseController:
-                                        _alarmResponseController,
-                                    routineNoteController:
-                                        _routineNoteController,
-                                    examWeekMode: _examWeekMode,
-                                    blackoutCurtain: _blackoutCurtain,
-                                    vibrationFirst: _vibrationFirst,
-                                    summerTemp: _summerTemp,
-                                    winterTemp: _winterTemp,
-                                    ventilationMinutes: _ventilationMinutes,
-                                    selectedVentilationWindow:
-                                        _selectedVentilationWindow,
-                                    routineTags: _routineTags,
-                                    onEditLightsOff: _showLightsOffEditor,
-                                    onExamWeekModeChanged: (bool value) =>
-                                        setState(() => _examWeekMode = value),
-                                    onBlackoutCurtainChanged: (bool value) =>
-                                        setState(
-                                          () => _blackoutCurtain = value,
+                                    );
+                                  },
+                              child: showEditView
+                                  ? Column(
+                                      key: const ValueKey<String>(
+                                        'dorm-rules-edit-view',
+                                      ),
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        _DormRulesEditHeader(
+                                          onBack: () => _cancelEditing(
+                                            dorm.rulesSettings,
+                                          ),
                                         ),
-                                    onVibrationFirstChanged: (bool value) =>
-                                        setState(() => _vibrationFirst = value),
-                                    onSummerTempChanged: (double value) =>
-                                        setState(() => _summerTemp = value),
-                                    onWinterTempChanged: (double value) =>
-                                        setState(() => _winterTemp = value),
-                                    onVentilationMinutesChanged:
-                                        (double value) => setState(
-                                          () => _ventilationMinutes = value,
-                                        ),
-                                    onVentilationWindowChanged:
-                                        (String value) => setState(
-                                          () => _selectedVentilationWindow =
-                                              value,
-                                        ),
-                                    onRoutineTagToggled: (String value) {
-                                      setState(() {
-                                        if (_routineTags.contains(value)) {
-                                          _routineTags = _routineTags
-                                              .where(
-                                                (String item) => item != value,
-                                              )
-                                              .toList(growable: false);
-                                        } else {
-                                          _routineTags = <String>[
-                                            ..._routineTags,
-                                            value,
-                                          ];
-                                        }
-                                      });
-                                    },
-                                  ),
-                                ] else ...<Widget>[
-                                  _DormRulesDisplayBody(
-                                    dorm: dorm,
-                                    palette: palette,
-                                  ),
-                                  _DormRulesDisplayBottomBar(
-                                    palette: palette,
-                                    onPressed: hasPendingProposal
-                                        ? () {
-                                            if (canReviewProposal) {
+                                        _DormRulesEditBody(
+                                          palette: palette,
+                                          quietStartController:
+                                              _quietStartController,
+                                          quietEndController:
+                                              _quietEndController,
+                                          lightsOffController:
+                                              _lightsOffController,
+                                          noteController: _noteController,
+                                          personalLightingController:
+                                              _personalLightingController,
+                                          alarmResponseController:
+                                              _alarmResponseController,
+                                          routineNoteController:
+                                              _routineNoteController,
+                                          examWeekMode: _examWeekMode,
+                                          blackoutCurtain: _blackoutCurtain,
+                                          vibrationFirst: _vibrationFirst,
+                                          summerTemp: _summerTemp,
+                                          winterTemp: _winterTemp,
+                                          ventilationMinutes:
+                                              _ventilationMinutes,
+                                          selectedVentilationWindow:
+                                              _selectedVentilationWindow,
+                                          routineTags: _routineTags,
+                                          onEditQuietHours:
+                                              _showQuietHoursEditor,
+                                          onEditLightsOff: _showLightsOffEditor,
+                                          onEditNote: () => _showTextEditor(
+                                            title: '补充说明',
+                                            targetController: _noteController,
+                                            maxLines: 3,
+                                          ),
+                                          onEditPersonalLighting: () =>
+                                              _showTextEditor(
+                                                title: '个人照明要求',
+                                                targetController:
+                                                    _personalLightingController,
+                                                maxLines: 2,
+                                              ),
+                                          onEditAlarmResponse: () =>
+                                              _showTextEditor(
+                                                title: '闹钟响应时限',
+                                                targetController:
+                                                    _alarmResponseController,
+                                                keyboardType:
+                                                    TextInputType.number,
+                                                suffixText: '秒',
+                                              ),
+                                          onEditRoutineNote: () =>
+                                              _showTextEditor(
+                                                title: '作息习惯备注',
+                                                targetController:
+                                                    _routineNoteController,
+                                                maxLines: 2,
+                                              ),
+                                          onEditRoutineTags:
+                                              _showRoutineTagsEditor,
+                                          onEditSummerTemp: () =>
+                                              _showSliderEditor(
+                                                title: '夏季空调',
+                                                value: _summerTemp,
+                                                min: 20,
+                                                max: 30,
+                                                unit: '°C',
+                                                onConfirmed: (double value) =>
+                                                    _summerTemp = value,
+                                              ),
+                                          onEditWinterTemp: () =>
+                                              _showSliderEditor(
+                                                title: '冬季采暖',
+                                                value: _winterTemp,
+                                                min: 16,
+                                                max: 28,
+                                                unit: '°C',
+                                                onConfirmed: (double value) =>
+                                                    _winterTemp = value,
+                                              ),
+                                          onEditVentilationWindow: () =>
+                                              _showSingleChoiceEditor(
+                                                title: '通风时段',
+                                                options: const <String>[
+                                                  '早晨',
+                                                  '中午',
+                                                  '睡前',
+                                                ],
+                                                selectedValue:
+                                                    _selectedVentilationWindow,
+                                                onSelected: (String value) =>
+                                                    _selectedVentilationWindow =
+                                                        value,
+                                              ),
+                                          onEditVentilationMinutes: () =>
+                                              _showSliderEditor(
+                                                title: '通风时长',
+                                                value: _ventilationMinutes,
+                                                min: 10,
+                                                max: 60,
+                                                unit: '分钟',
+                                                onConfirmed: (double value) =>
+                                                    _ventilationMinutes = value,
+                                              ),
+                                          onExamWeekModeChanged: (bool value) =>
                                               setState(
-                                                () => _showReviewOverlay = true,
-                                              );
-                                            }
-                                          }
-                                        : () {
-                                            notifyPassiveToast(
-                                              context,
-                                              message: '已记录你的确认，一起把约定执行下去吧。',
+                                                () => _examWeekMode = value,
+                                              ),
+                                          onBlackoutCurtainChanged:
+                                              (bool value) => setState(
+                                                () => _blackoutCurtain = value,
+                                              ),
+                                          onVibrationFirstChanged:
+                                              (bool value) => setState(
+                                                () => _vibrationFirst = value,
+                                              ),
+                                        ),
+                                      ],
+                                    )
+                                  : Column(
+                                      key: const ValueKey<String>(
+                                        'dorm-rules-display-view',
+                                      ),
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        _DormRulesDisplayHeader(
+                                          palette: palette,
+                                          canReviewProposal: canReviewProposal,
+                                          hasPendingProposal:
+                                              hasPendingProposal,
+                                          onBack: () =>
+                                              Navigator.of(context).maybePop(),
+                                          onEdit: _enterEditMode,
+                                          onReview: () {
+                                            setState(
+                                              () => _showReviewOverlay = true,
                                             );
                                           },
-                                    enabled:
-                                        !hasPendingProposal ||
-                                        canReviewProposal,
-                                  ),
-                                  if (hasPendingProposal)
-                                    _DormRulesPendingSection(
-                                      proposal: dorm.pendingRuleProposal!,
-                                      currentSettings: dorm.rulesSettings,
-                                      palette: palette,
-                                      onReviewPending: canReviewProposal
-                                          ? () {
-                                              setState(
-                                                () => _showReviewOverlay = true,
-                                              );
-                                            }
-                                          : null,
+                                        ),
+                                        _DormRulesDisplayBody(
+                                          dorm: dorm,
+                                          palette: palette,
+                                        ),
+                                        _DormRulesDisplayBottomBar(
+                                          palette: palette,
+                                          onPressed: hasPendingProposal
+                                              ? () {
+                                                  if (canReviewProposal) {
+                                                    setState(
+                                                      () => _showReviewOverlay =
+                                                          true,
+                                                    );
+                                                  }
+                                                }
+                                              : () {
+                                                  notifyPassiveToast(
+                                                    context,
+                                                    message:
+                                                        '已记录你的确认，一起把约定执行下去吧。',
+                                                  );
+                                                },
+                                          enabled:
+                                              !hasPendingProposal ||
+                                              canReviewProposal,
+                                        ),
+                                        if (hasPendingProposal)
+                                          _DormRulesPendingSection(
+                                            proposal: dorm.pendingRuleProposal!,
+                                            currentSettings: dorm.rulesSettings,
+                                            palette: palette,
+                                            onReviewPending: canReviewProposal
+                                                ? () {
+                                                    setState(
+                                                      () => _showReviewOverlay =
+                                                          true,
+                                                    );
+                                                  }
+                                                : null,
+                                          ),
+                                      ],
                                     ),
-                                ],
-                              ],
                             ),
                           ),
                         ),
@@ -1028,15 +1398,20 @@ class _DormRulesEditBody extends StatelessWidget {
     required this.ventilationMinutes,
     required this.selectedVentilationWindow,
     required this.routineTags,
+    required this.onEditQuietHours,
     required this.onEditLightsOff,
+    required this.onEditNote,
+    required this.onEditPersonalLighting,
+    required this.onEditAlarmResponse,
+    required this.onEditRoutineNote,
+    required this.onEditRoutineTags,
+    required this.onEditSummerTemp,
+    required this.onEditWinterTemp,
+    required this.onEditVentilationWindow,
+    required this.onEditVentilationMinutes,
     required this.onExamWeekModeChanged,
     required this.onBlackoutCurtainChanged,
     required this.onVibrationFirstChanged,
-    required this.onSummerTempChanged,
-    required this.onWinterTempChanged,
-    required this.onVentilationMinutesChanged,
-    required this.onVentilationWindowChanged,
-    required this.onRoutineTagToggled,
   });
 
   final NightMoodPalette palette;
@@ -1055,15 +1430,20 @@ class _DormRulesEditBody extends StatelessWidget {
   final double ventilationMinutes;
   final String selectedVentilationWindow;
   final List<String> routineTags;
+  final VoidCallback onEditQuietHours;
   final VoidCallback onEditLightsOff;
+  final VoidCallback onEditNote;
+  final VoidCallback onEditPersonalLighting;
+  final VoidCallback onEditAlarmResponse;
+  final VoidCallback onEditRoutineNote;
+  final VoidCallback onEditRoutineTags;
+  final VoidCallback onEditSummerTemp;
+  final VoidCallback onEditWinterTemp;
+  final VoidCallback onEditVentilationWindow;
+  final VoidCallback onEditVentilationMinutes;
   final ValueChanged<bool> onExamWeekModeChanged;
   final ValueChanged<bool> onBlackoutCurtainChanged;
   final ValueChanged<bool> onVibrationFirstChanged;
-  final ValueChanged<double> onSummerTempChanged;
-  final ValueChanged<double> onWinterTempChanged;
-  final ValueChanged<double> onVentilationMinutesChanged;
-  final ValueChanged<String> onVentilationWindowChanged;
-  final ValueChanged<String> onRoutineTagToggled;
 
   @override
   Widget build(BuildContext context) {
@@ -1111,15 +1491,19 @@ class _DormRulesEditBody extends StatelessWidget {
                 palette: palette,
                 quietStartController: quietStartController,
                 quietEndController: quietEndController,
+                onTap: onEditQuietHours,
               ),
               _DormRulesEditableLightsCard(
                 palette: palette,
-                lightsOffCopy: lightsOffController.text.trim(),
+                lightsOffCopy: _dormRulesFirstTimeOrPreview(
+                  lightsOffController.text,
+                ),
                 onTap: onEditLightsOff,
               ),
               _DormRulesEditableNoteCard(
                 palette: palette,
                 noteController: noteController,
+                onTap: onEditNote,
               ),
             ],
           ),
@@ -1135,14 +1519,12 @@ class _DormRulesEditBody extends StatelessWidget {
                 value: examWeekMode,
                 onChanged: onExamWeekModeChanged,
               ),
-              _DormRulesTextFieldCard(
+              _DormRulesCompactValueCard(
                 palette: palette,
                 icon: Icons.light_mode_outlined,
                 title: '个人照明要求',
-                controller: personalLightingController,
-                minLines: 1,
-                maxLines: 2,
-                hintText: '例如：仅使用个人台灯，避免直射室友。',
+                value: _dormRulesPreviewText(personalLightingController.text),
+                onTap: onEditPersonalLighting,
               ),
               _DormRulesToggleCard(
                 palette: palette,
@@ -1166,32 +1548,27 @@ class _DormRulesEditBody extends StatelessWidget {
                 value: vibrationFirst,
                 onChanged: onVibrationFirstChanged,
               ),
-              _DormRulesTextFieldCard(
+              _DormRulesCompactValueCard(
                 palette: palette,
                 icon: Icons.alarm_on_rounded,
                 title: '闹钟响应时限',
-                controller: alarmResponseController,
-                keyboardType: TextInputType.number,
-                suffixText: '秒',
-                hintText: '60',
+                value: '${alarmResponseController.text.trim()} 秒',
+                onTap: onEditAlarmResponse,
               ),
-              _DormRulesTextFieldCard(
+              _DormRulesCompactValueCard(
                 palette: palette,
                 icon: Icons.bedtime_rounded,
                 title: '作息习惯备注',
-                controller: routineNoteController,
-                minLines: 1,
-                maxLines: 2,
-                hintText: '例如：平时起床时间约为 08:30。',
+                value: _dormRulesPreviewText(routineNoteController.text),
+                onTap: onEditRoutineNote,
               ),
-              _DormRulesChoiceCard(
+              _DormRulesCompactValueCard(
                 palette: palette,
                 icon: Icons.sell_outlined,
                 title: '作息标签',
-                options: const <String>['考试周', '夜猫子', '早起党'],
-                selectedOptions: routineTags,
-                multiSelect: true,
-                onSelected: onRoutineTagToggled,
+                value: _dormRulesPrimaryTag(routineTags),
+                valueChip: true,
+                onTap: onEditRoutineTags,
               ),
             ],
           ),
@@ -1199,43 +1576,33 @@ class _DormRulesEditBody extends StatelessWidget {
           AppSettingsGroup(
             title: '温度与通风',
             children: <Widget>[
-              _DormRulesSliderCard(
+              _DormRulesCompactValueCard(
                 palette: palette,
                 icon: Icons.ac_unit_rounded,
                 title: '夏季空调',
-                value: summerTemp,
-                min: 20,
-                max: 30,
-                unit: '°C',
-                onChanged: onSummerTempChanged,
+                value: '${summerTemp.round()}°C',
+                onTap: onEditSummerTemp,
               ),
-              _DormRulesSliderCard(
+              _DormRulesCompactValueCard(
                 palette: palette,
                 icon: Icons.thermostat_rounded,
                 title: '冬季采暖',
-                value: winterTemp,
-                min: 16,
-                max: 28,
-                unit: '°C',
-                onChanged: onWinterTempChanged,
+                value: '${winterTemp.round()}°C',
+                onTap: onEditWinterTemp,
               ),
-              _DormRulesChoiceCard(
+              _DormRulesCompactValueCard(
                 palette: palette,
                 icon: Icons.air_rounded,
                 title: '通风时段',
-                options: const <String>['早晨', '中午', '睡前'],
-                selectedOptions: <String>[selectedVentilationWindow],
-                onSelected: onVentilationWindowChanged,
+                value: selectedVentilationWindow,
+                onTap: onEditVentilationWindow,
               ),
-              _DormRulesSliderCard(
+              _DormRulesCompactValueCard(
                 palette: palette,
                 icon: Icons.timer_outlined,
                 title: '通风时长',
-                value: ventilationMinutes,
-                min: 10,
-                max: 60,
-                unit: '分钟',
-                onChanged: onVentilationMinutesChanged,
+                value: '${ventilationMinutes.round()}分钟',
+                onTap: onEditVentilationMinutes,
               ),
             ],
           ),
@@ -1250,87 +1617,48 @@ class _DormRulesEditableQuietHoursCard extends StatelessWidget {
     required this.palette,
     required this.quietStartController,
     required this.quietEndController,
+    required this.onTap,
   });
 
   final NightMoodPalette palette;
   final TextEditingController quietStartController;
   final TextEditingController quietEndController;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
+    return AppSettingsItem(
+      title: '安静时段',
+      icon: Icons.volume_off_rounded,
+      iconColor: palette.primaryDeep,
+      iconBackgroundColor: AppColors.surfaceMuted,
+      iconContainerKey: const ValueKey<String>(
+        'dorm-rules-edit-icon-quiet-hours',
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              _DormRulesEditIcon(
-                iconKey: const ValueKey<String>(
-                  'dorm-rules-edit-icon-quiet-hours',
-                ),
-                palette: palette,
-                icon: Icons.volume_off_rounded,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  '安静时段',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              final bool stackFields =
-                  constraints.maxWidth < AppSpacing.xxxl * 7;
-              final List<Widget> fields = <Widget>[
-                _DormRulesTimeField(
-                  label: '开始',
-                  controller: quietStartController,
-                ),
-                _DormRulesTimeField(
-                  label: '结束',
-                  controller: quietEndController,
-                ),
-              ];
-              if (stackFields) {
-                return Column(
-                  children: <Widget>[
-                    fields.first,
-                    const SizedBox(height: AppSpacing.xs),
-                    fields.last,
-                  ],
-                );
-              }
-              return Row(
-                children: <Widget>[
-                  Expanded(child: fields.first),
-                  const SizedBox(width: AppSpacing.xs),
-                  Expanded(child: fields.last),
-                ],
-              );
-            },
-          ),
-        ],
+      leadingWidth: AppSpacing.xxxl,
+      onTap: onTap,
+      trailing: _DormRulesValueTrailing(
+        value:
+            '${quietStartController.text.trim()} - ${quietEndController.text.trim()}',
+        color: palette.primaryDeep,
+        showChevron: true,
       ),
     );
   }
 }
 
-class _DormRulesTimeField extends StatelessWidget {
-  const _DormRulesTimeField({required this.label, required this.controller});
+class _DormRulesSheetTextField extends StatelessWidget {
+  const _DormRulesSheetTextField({
+    required this.label,
+    required this.controller,
+    this.hintText,
+    this.keyboardType,
+  });
 
   final String label;
   final TextEditingController controller;
+  final String? hintText;
+  final TextInputType? keyboardType;
 
   @override
   Widget build(BuildContext context) {
@@ -1356,12 +1684,13 @@ class _DormRulesTimeField extends StatelessWidget {
           const SizedBox(height: AppSpacing.xxs),
           TextField(
             controller: controller,
-            keyboardType: TextInputType.datetime,
+            keyboardType: keyboardType,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
             ),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
+              hintText: hintText,
               isDense: true,
               border: InputBorder.none,
               contentPadding: EdgeInsets.zero,
@@ -1409,81 +1738,100 @@ class _DormRulesEditableNoteCard extends StatelessWidget {
   const _DormRulesEditableNoteCard({
     required this.palette,
     required this.noteController,
+    required this.onTap,
   });
 
   final NightMoodPalette palette;
   final TextEditingController noteController;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return _DormRulesTextFieldCard(
+    return _DormRulesCompactValueCard(
       palette: palette,
       icon: Icons.notes_rounded,
       title: '补充说明',
-      controller: noteController,
-      minLines: 2,
-      maxLines: 3,
-      hintText: '例如：考试周自动提前静音时间...',
+      value: _dormRulesPreviewText(noteController.text),
+      onTap: onTap,
     );
   }
 }
 
-class _DormRulesTextFieldCard extends StatelessWidget {
-  const _DormRulesTextFieldCard({
+class _DormRulesCompactValueCard extends StatelessWidget {
+  const _DormRulesCompactValueCard({
     required this.palette,
     required this.icon,
     required this.title,
-    required this.controller,
-    this.keyboardType,
-    this.minLines = 1,
-    this.maxLines = 1,
-    this.hintText,
-    this.suffixText,
+    required this.value,
+    required this.onTap,
+    this.valueChip = false,
   });
 
   final NightMoodPalette palette;
   final IconData icon;
   final String title;
-  final TextEditingController controller;
-  final TextInputType? keyboardType;
-  final int minLines;
-  final int maxLines;
-  final String? hintText;
-  final String? suffixText;
+  final String value;
+  final VoidCallback onTap;
+  final bool valueChip;
 
   @override
   Widget build(BuildContext context) {
-    return _DormRulesSettingsControlRow(
-      palette: palette,
-      icon: icon,
+    return AppSettingsItem(
       title: title,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: AppSpacing.xs,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceMuted,
-          borderRadius: AppRadius.control,
-        ),
-        child: TextField(
-          controller: controller,
-          keyboardType: keyboardType,
-          minLines: minLines,
-          maxLines: maxLines,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppColors.textPrimary,
-            height: 1.35,
+      icon: icon,
+      iconColor: palette.primaryDeep,
+      iconBackgroundColor: AppColors.surfaceMuted,
+      leadingWidth: AppSpacing.xxxl,
+      onTap: onTap,
+      trailing: valueChip
+          ? _DormRulesValueChip(value: value, color: palette.primaryDeep)
+          : _DormRulesValueTrailing(
+              value: value,
+              color: palette.primaryDeep,
+              showChevron: true,
+            ),
+    );
+  }
+}
+
+class _DormRulesValueChip extends StatelessWidget {
+  const _DormRulesValueChip({required this.value, required this.color});
+
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xxs,
           ),
-          decoration: InputDecoration(
-            hintText: hintText,
-            suffixText: suffixText,
-            border: InputBorder.none,
-            isDense: true,
-            contentPadding: EdgeInsets.zero,
+          decoration: BoxDecoration(
+            color: AppColors.surfaceMuted,
+            borderRadius: AppRadius.pill,
+            border: Border.all(color: AppColors.surfaceBorder),
+          ),
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
-      ),
+        const SizedBox(width: AppSpacing.xxs),
+        const Icon(
+          Icons.chevron_right_rounded,
+          size: 18,
+          color: AppColors.textHint,
+        ),
+      ],
     );
   }
 }
@@ -1507,12 +1855,13 @@ class _DormRulesToggleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _DormRulesSettingsControlRow(
-      palette: palette,
-      icon: icon,
-      iconKey: ValueKey<String>('dorm-rules-edit-icon-$title'),
+    return AppSettingsItem(
       title: title,
-      description: description,
+      icon: icon,
+      iconColor: palette.primaryDeep,
+      iconBackgroundColor: AppColors.surfaceMuted,
+      iconContainerKey: ValueKey<String>('dorm-rules-edit-icon-$title'),
+      leadingWidth: AppSpacing.xxxl,
       trailing: _DormRulesThemeSwitch(
         switchKey: title == '考试周模式'
             ? const ValueKey<String>('dorm-rules-switch-exam-week')
@@ -1522,201 +1871,6 @@ class _DormRulesToggleCard extends StatelessWidget {
         onChanged: onChanged,
       ),
       onTap: () => onChanged(!value),
-    );
-  }
-}
-
-class _DormRulesChoiceCard extends StatelessWidget {
-  const _DormRulesChoiceCard({
-    required this.palette,
-    required this.icon,
-    required this.title,
-    required this.options,
-    required this.selectedOptions,
-    required this.onSelected,
-    this.multiSelect = false,
-  });
-
-  final NightMoodPalette palette;
-  final IconData icon;
-  final String title;
-  final List<String> options;
-  final List<String> selectedOptions;
-  final ValueChanged<String> onSelected;
-  final bool multiSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return _DormRulesSettingsControlRow(
-      palette: palette,
-      icon: icon,
-      title: title,
-      child: Wrap(
-        spacing: AppSpacing.xs,
-        runSpacing: AppSpacing.xs,
-        children: options
-            .map((String option) {
-              final bool selected = selectedOptions.contains(option);
-              return FilterChip(
-                selected: selected,
-                showCheckmark: multiSelect,
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                label: Text(option),
-                onSelected: (_) => onSelected(option),
-                selectedColor: palette.welcomeAccentColor,
-                backgroundColor: AppColors.surfaceMuted,
-                side: BorderSide(
-                  color: selected
-                      ? palette.primaryDeep.withAlpha(80)
-                      : Colors.transparent,
-                ),
-                labelStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: selected ? palette.primaryDeep : AppColors.textPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
-              );
-            })
-            .toList(growable: false),
-      ),
-    );
-  }
-}
-
-class _DormRulesSliderCard extends StatelessWidget {
-  const _DormRulesSliderCard({
-    required this.palette,
-    required this.icon,
-    required this.title,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.unit,
-    required this.onChanged,
-  });
-
-  final NightMoodPalette palette;
-  final IconData icon;
-  final String title;
-  final double value;
-  final double min;
-  final double max;
-  final String unit;
-  final ValueChanged<double> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final String roundedValue = value.round().toString();
-    return _DormRulesSettingsControlRow(
-      palette: palette,
-      icon: icon,
-      title: title,
-      trailing: _DormRulesValueTrailing(
-        value: '$roundedValue$unit',
-        color: palette.primaryDeep,
-      ),
-      child: SliderTheme(
-        data: SliderTheme.of(context).copyWith(
-          trackHeight: AppSpacing.xxs,
-          overlayShape: const RoundSliderOverlayShape(
-            overlayRadius: AppSpacing.md,
-          ),
-        ),
-        child: Slider(
-          min: min,
-          max: max,
-          divisions: (max - min).round(),
-          value: value.clamp(min, max),
-          activeColor: palette.primaryDeep,
-          inactiveColor: palette.primarySoft.withAlpha(72),
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-}
-
-class _DormRulesSettingsControlRow extends StatelessWidget {
-  const _DormRulesSettingsControlRow({
-    required this.palette,
-    required this.icon,
-    required this.title,
-    this.iconKey,
-    this.description,
-    this.trailing,
-    this.child,
-    this.onTap,
-  });
-
-  final NightMoodPalette palette;
-  final IconData icon;
-  final String title;
-  final Key? iconKey;
-  final String? description;
-  final Widget? trailing;
-  final Widget? child;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final Widget content = Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      child: Row(
-        crossAxisAlignment: child == null
-            ? CrossAxisAlignment.center
-            : CrossAxisAlignment.start,
-        children: <Widget>[
-          _DormRulesEditIcon(iconKey: iconKey, palette: palette, icon: icon),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (description != null) ...<Widget>[
-                  const SizedBox(height: AppSpacing.xxs),
-                  Text(
-                    description!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
-                      height: 1.25,
-                    ),
-                  ),
-                ],
-                if (child != null) ...<Widget>[
-                  const SizedBox(height: AppSpacing.xs),
-                  child!,
-                ],
-              ],
-            ),
-          ),
-          if (trailing != null) ...<Widget>[
-            const SizedBox(width: AppSpacing.sm),
-            trailing!,
-          ],
-        ],
-      ),
-    );
-
-    if (onTap == null) {
-      return content;
-    }
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: AppRadius.control,
-        onTap: onTap,
-        child: content,
-      ),
     );
   }
 }
@@ -1755,39 +1909,6 @@ class _DormRulesValueTrailing extends StatelessWidget {
           ),
         ],
       ],
-    );
-  }
-}
-
-class _DormRulesEditIcon extends StatelessWidget {
-  const _DormRulesEditIcon({
-    this.iconKey,
-    required this.palette,
-    required this.icon,
-  });
-
-  final Key? iconKey;
-  final NightMoodPalette palette;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: AppSpacing.xl,
-      child: Center(
-        child: Container(
-          key: iconKey,
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: AppColors.surfaceMuted,
-            borderRadius: AppRadius.iconContainer,
-          ),
-          child: Center(
-            child: Icon(icon, size: 20, color: palette.primaryDeep),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -2130,6 +2251,33 @@ String _quietHoursSummary(String quietHours) {
 
 String _compactRuleCopy(String value) {
   return value.replaceAll(' ', '');
+}
+
+String _dormRulesFirstTimeOrPreview(String value) {
+  final RegExpMatch? match = RegExp(r'\d{1,2}:\d{2}').firstMatch(value);
+  if (match != null) {
+    return match.group(0) ?? _dormRulesPreviewText(value);
+  }
+  return _dormRulesPreviewText(value);
+}
+
+String _dormRulesPreviewText(String value) {
+  final String compact = value.trim().replaceAll(RegExp(r'\s+'), '');
+  if (compact.isEmpty) {
+    return '未设置';
+  }
+  const int maxPreviewLength = 8;
+  if (compact.length <= maxPreviewLength) {
+    return compact;
+  }
+  return '${compact.substring(0, maxPreviewLength)}...';
+}
+
+String _dormRulesPrimaryTag(List<String> tags) {
+  if (tags.isEmpty) {
+    return '未设置';
+  }
+  return tags.first;
 }
 
 double _rulesPageWidthFactor(double maxWidth) {
