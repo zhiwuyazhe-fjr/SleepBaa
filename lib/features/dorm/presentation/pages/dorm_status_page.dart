@@ -6,6 +6,7 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_message_record_card.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_live_status_scope.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_member_status_presenter.dart';
@@ -18,6 +19,12 @@ class DormStatusPage extends StatefulWidget {
 
   static const ValueKey<String> timelineKey = ValueKey<String>(
     'dorm-status-timeline',
+  );
+  static const ValueKey<String> filterRowKey = ValueKey<String>(
+    'dorm-status-filter-row',
+  );
+  static const ValueKey<String> activeRecordKey = ValueKey<String>(
+    'dorm-status-active-record',
   );
 
   @override
@@ -57,6 +64,9 @@ class _DormStatusPageState extends State<DormStatusPage> {
                     now: services.dormLiveStatusController.currentTime,
                   ),
                 );
+                final int firstActiveIndex = events.indexWhere(
+                  _isActiveDormRecord,
+                );
 
                 return LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints constraints) {
@@ -87,6 +97,7 @@ class _DormStatusPageState extends State<DormStatusPage> {
                                   ),
                                   const SizedBox(height: AppSpacing.sm),
                                   _DormStatusFilters(
+                                    key: DormStatusPage.filterRowKey,
                                     palette: palette,
                                     value: _filter,
                                     onChanged: (_DormStatusFilter value) {
@@ -108,16 +119,32 @@ class _DormStatusPageState extends State<DormStatusPage> {
                                   Column(
                                     key: DormStatusPage.timelineKey,
                                     children: events
-                                        .map(
-                                          (DormEventRecord event) => Padding(
+                                        .asMap()
+                                        .entries
+                                        .map((
+                                          MapEntry<int, DormEventRecord> entry,
+                                        ) {
+                                          final DormEventRecord event =
+                                              entry.value;
+                                          final bool active =
+                                              _isActiveDormRecord(event);
+                                          return Padding(
                                             padding: const EdgeInsets.only(
                                               bottom: AppSpacing.xs,
                                             ),
-                                            child: _StatusEventCard(
-                                              event: event,
+                                            child: AppMessageRecordCard(
+                                              key: entry.key == firstActiveIndex
+                                                  ? DormStatusPage
+                                                        .activeRecordKey
+                                                  : null,
+                                              icon: event.icon,
+                                              title: event.title,
+                                              detail: event.detail,
+                                              timeLabel: event.timeLabel,
+                                              highlighted: active,
                                             ),
-                                          ),
-                                        )
+                                          );
+                                        })
                                         .toList(growable: false),
                                   ),
                                   const SizedBox(height: AppSpacing.xl),
@@ -231,6 +258,7 @@ class _DormStatusHeader extends StatelessWidget {
 
 class _DormStatusFilters extends StatelessWidget {
   const _DormStatusFilters({
+    super.key,
     required this.palette,
     required this.value,
     required this.onChanged,
@@ -257,9 +285,10 @@ class _DormStatusFilters extends StatelessWidget {
                   selectedColor: palette.welcomeAccentColor,
                   backgroundColor: AppColors.surfaceMuted,
                   side: BorderSide.none,
+                  shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
                   labelStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: selected
-                        ? palette.primaryDeep
+                        ? AppColors.textStrong
                         : AppColors.textSecondary,
                     fontWeight: FontWeight.w800,
                   ),
@@ -282,70 +311,6 @@ class _DormStatusFilters extends StatelessWidget {
   }
 }
 
-class _StatusEventCard extends StatelessWidget {
-  const _StatusEventCard({required this.event});
-
-  final DormEventRecord event;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      borderRadius: AppRadius.card,
-      boxShadow: const <BoxShadow>[],
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: event.color.withAlpha(20),
-              borderRadius: AppRadius.iconContainer,
-            ),
-            alignment: Alignment.center,
-            child: Icon(event.icon, color: event.color, size: 20),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  event.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xxs),
-                Text(
-                  event.detail,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            event.timeLabel,
-            style: Theme.of(
-              context,
-            ).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _DormStatusMemberTile extends StatelessWidget {
   const _DormStatusMemberTile({
     required this.member,
@@ -359,6 +324,7 @@ class _DormStatusMemberTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final NightMoodPalette palette = context.nightMoodPalette;
     final bool isCurrentUser = member.uid == currentUser.uid;
     final Color accentColor = dormPresenceSleepColor(
       member,
@@ -417,13 +383,13 @@ class _DormStatusMemberTile extends StatelessWidget {
               vertical: AppSpacing.xs,
             ),
             decoration: BoxDecoration(
-              color: accentColor.withAlpha(18),
+              color: palette.welcomeAccentColor,
               borderRadius: AppRadius.pill,
             ),
             child: Text(
               dormPresenceSleepLabel(member, showPresence: showPresence),
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: accentColor,
+                color: AppColors.textStrong,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -432,6 +398,14 @@ class _DormStatusMemberTile extends StatelessWidget {
       ),
     );
   }
+}
+
+bool _isActiveDormRecord(DormEventRecord event) {
+  return event.title.contains('入睡') ||
+      event.title.contains('睡眠') ||
+      event.title.contains('噪') ||
+      event.title.contains('公约') ||
+      event.title.contains('提醒');
 }
 
 double _statusWidthFactor(double maxWidth) {

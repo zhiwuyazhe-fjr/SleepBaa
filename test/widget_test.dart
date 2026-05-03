@@ -22,6 +22,7 @@ import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_message_record_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
@@ -30,6 +31,7 @@ import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/pages/assistant_page.dart';
 import 'package:sleep_dorm_app/features/auth/presentation/pages/phone_auth_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_page.dart';
+import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_member_detail_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_rules_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_status_page.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_journal_page.dart';
@@ -41,6 +43,7 @@ import 'package:sleep_dorm_app/features/intervention/presentation/pages/micro_in
 import 'package:sleep_dorm_app/features/notifications/presentation/pages/notifications_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/calendar_checkin_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_page.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_account_pages.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/sleep_report_page.dart';
 import 'package:sleep_dorm_app/features/sleep/presentation/pages/cant_sleep_page.dart';
 
@@ -67,6 +70,8 @@ void main() {
   test(
     'night mood palette uses new hero gradients and neutral dark surface',
     () {
+      expect(AppColors.darkCard, const Color(0xFF1A1A1A));
+
       final Map<NightMood?, List<Color>> expectedHeroGradients =
           <NightMood?, List<Color>>{
             null: const <Color>[
@@ -1961,7 +1966,52 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(DormStatusPage), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('dorm-status-filter-row')),
+      findsOneWidget,
+    );
     expect(find.byKey(DormStatusPage.timelineKey), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('dorm-status-active-record')),
+      findsWidgets,
+    );
+    expect(find.byType(AppMessageRecordCard), findsWidgets);
+  });
+
+  testWidgets('dorm primary color uses the approved CTA token', (
+    WidgetTester tester,
+  ) async {
+    expect(AppColors.primary, const Color(0xFF8EDDF2));
+  });
+
+  testWidgets('dorm member detail uses the shared status record style', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormMemberLocation('roommate-a'),
+      clock: _dayClock,
+    );
+
+    expect(find.byType(DormMemberDetailPage), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('dorm-member-private-status-pill')),
+      findsOneWidget,
+    );
+    expect(find.byType(AppMessageRecordCard), findsWidgets);
+  });
+
+  testWidgets('dorm management route remains available', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileAccountDorm,
+      clock: _dayClock,
+    );
+
+    expect(find.byType(DormManagementPage), findsOneWidget);
+    expect(find.text('寝室管理'), findsWidgets);
   });
 
   testWidgets('dorm page shows roommate avatar shells and badge chips', (

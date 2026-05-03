@@ -8,12 +8,17 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_message_record_card.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_member_status_presenter.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/widgets/dorm_member_avatar.dart';
 
 class DormMemberDetailPage extends StatelessWidget {
   const DormMemberDetailPage({super.key, required this.memberUid});
+
+  static const ValueKey<String> privateStatusPillKey = ValueKey<String>(
+    'dorm-member-private-status-pill',
+  );
 
   final String memberUid;
 
@@ -145,13 +150,20 @@ class DormMemberDetailPage extends StatelessWidget {
                                     ?.copyWith(fontWeight: FontWeight.w800),
                               ),
                               const SizedBox(height: AppSpacing.sm),
-                              ...memberEvents.map(
-                                (DormEventRecord event) => Padding(
-                                  padding: const EdgeInsets.only(
-                                    bottom: AppSpacing.xs,
-                                  ),
-                                  child: _DormMemberActivityTile(event: event),
-                                ),
+                              ...memberEvents.asMap().entries.map(
+                                (MapEntry<int, DormEventRecord> entry) =>
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: AppSpacing.xs,
+                                      ),
+                                      child: AppMessageRecordCard(
+                                        icon: entry.value.icon,
+                                        title: entry.value.title,
+                                        detail: entry.value.detail,
+                                        timeLabel: entry.value.timeLabel,
+                                        highlighted: entry.key == 0,
+                                      ),
+                                    ),
                               ),
                             ],
                           ),
@@ -220,6 +232,7 @@ class _DormMemberProfileHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final NightMoodPalette palette = context.nightMoodPalette;
     final Color accentColor = dormPresenceSleepColor(
       member,
       showPresence: showPresence,
@@ -250,20 +263,35 @@ class _DormMemberProfileHero extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.xs),
         Container(
+          key: DormMemberDetailPage.privateStatusPillKey,
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md,
             vertical: AppSpacing.xs,
           ),
           decoration: BoxDecoration(
-            color: accentColor,
+            color: palette.welcomeAccentColor,
             borderRadius: AppRadius.pill,
           ),
-          child: Text(
-            dormPresenceSleepLabel(member, showPresence: showPresence),
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: AppColors.textStrong,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                dormPresenceSleepLabel(member, showPresence: showPresence),
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: AppColors.textStrong,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -306,68 +334,6 @@ class _DormMemberStatCard extends StatelessWidget {
               color: AppColors.textSecondary,
               fontWeight: FontWeight.w600,
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DormMemberActivityTile extends StatelessWidget {
-  const _DormMemberActivityTile({required this.event});
-
-  final DormEventRecord event;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      borderRadius: AppRadius.control,
-      boxShadow: const <BoxShadow>[],
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: event.color.withAlpha(20),
-              borderRadius: AppRadius.iconContainer,
-            ),
-            alignment: Alignment.center,
-            child: Icon(event.icon, color: event.color, size: 20),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  event.title,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: AppSpacing.xxs),
-                Text(
-                  event.detail,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            event.timeLabel,
-            style: Theme.of(
-              context,
-            ).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary),
           ),
         ],
       ),

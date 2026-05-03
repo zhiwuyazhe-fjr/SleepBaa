@@ -72,7 +72,7 @@ List<DormEventRecord> buildDormEventRecords({
       DormEventRecord(
         title: '今晚默认执行寝室公约',
         detail: dorm.rules.first.title,
-        color: const Color(0xFF63D4ED),
+        color: palette.primary,
         timeLabel: '规则',
         icon: Icons.rule_rounded,
         actionRoute: AppRoutes.dormRules,
@@ -113,10 +113,10 @@ IconData _iconForDormEvent(DormEvent event) {
 
 Color _colorForDormEvent(DormEvent event, NightMoodPalette palette) {
   return switch (event.type) {
-    DormEventType.memberStatus => const Color(0xFFF1A936),
-    DormEventType.ruleUpdate => const Color(0xFF63D4ED),
+    DormEventType.memberStatus => palette.primary,
+    DormEventType.ruleUpdate => palette.primary,
     DormEventType.notification => palette.primary,
-    DormEventType.invite => const Color(0xFF5B8CFF),
+    DormEventType.invite => AppColors.calmBlue,
     DormEventType.system => AppColors.textSecondary,
   };
 }

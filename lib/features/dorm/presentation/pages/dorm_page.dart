@@ -11,6 +11,7 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_message_record_card.dart';
 import 'package:sleep_dorm_app/core/utils/dorm_quiet_rating.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
@@ -963,72 +964,49 @@ class _DormEventTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    final NightMoodPalette palette = context.nightMoodPalette;
+    final bool active = _isDormHomeActiveRecord(event);
+    return AppMessageRecordCard(
       onTap: onTap,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      borderRadius: AppRadius.card,
-      boxShadow: const <BoxShadow>[],
-      child: Row(
+      icon: event.icon,
+      title: event.title,
+      detail: event.detail,
+      highlighted: active,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: event.color.withAlpha(20),
-              borderRadius: AppRadius.iconContainer,
-            ),
-            alignment: Alignment.center,
-            child: Icon(event.icon, color: event.color, size: 20),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  event.title,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  event.detail,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
           if (onActionTap != null)
             TextButton(
               onPressed: onActionTap,
               style: TextButton.styleFrom(
-                foregroundColor: event.color,
+                foregroundColor: AppColors.textStrong,
+                backgroundColor: palette.welcomeAccentColor,
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.sm,
                   vertical: 6,
                 ),
+                shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
               ),
               child: Text(
                 event.timeLabel,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: event.color,
+                  color: AppColors.textStrong,
                   fontWeight: FontWeight.w700,
                 ),
               ),
             )
           else
-            Text(
-              event.timeLabel,
-              style: Theme.of(
-                context,
-              ).textTheme.labelSmall?.copyWith(color: AppColors.textSecondary),
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                event.timeLabel,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: active
+                      ? AppColors.textStrong
+                      : AppColors.textSecondary,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
             ),
           const SizedBox(width: AppSpacing.xs),
           const Icon(
@@ -1039,6 +1017,13 @@ class _DormEventTile extends StatelessWidget {
       ),
     );
   }
+}
+
+bool _isDormHomeActiveRecord(DormEventRecord event) {
+  return event.title.contains('入睡') ||
+      event.title.contains('睡眠') ||
+      event.title.contains('噪') ||
+      event.title.contains('公约');
 }
 
 Color _memberColor(DormMemberStatus status) {

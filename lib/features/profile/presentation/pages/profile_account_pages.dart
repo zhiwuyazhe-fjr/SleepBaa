@@ -443,19 +443,19 @@ class _DormManagementPageState extends State<DormManagementPage> {
                   children: <Widget>[
                     AppSettingsItem(
                       icon: Icons.group_add_rounded,
-                      iconColor: palette.primaryDeep,
+                      iconColor: palette.primary,
                       title: '邀请舍友',
                       onTap: () => context.push(AppRoutes.dormInvite),
                     ),
                     AppSettingsItem(
                       icon: Icons.rule_folder_outlined,
-                      iconColor: palette.primaryDeep,
+                      iconColor: palette.primary,
                       title: '查看宿舍规则',
                       onTap: () => context.push(AppRoutes.dormRules),
                     ),
                     AppSettingsItem(
                       icon: Icons.edit_rounded,
-                      iconColor: palette.primaryDeep,
+                      iconColor: palette.primary,
                       title: '编辑宿舍名称',
                       onTap: () => _renameDorm(services, dorm),
                     ),
@@ -612,7 +612,7 @@ class _MemberRow extends StatelessWidget {
               child: Text(
                 member.name.isEmpty ? '?' : member.name.characters.first,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: context.nightMoodPalette.primaryDeep,
+                  color: AppColors.textStrong,
                   fontWeight: FontWeight.w700,
                 ),
               ),
