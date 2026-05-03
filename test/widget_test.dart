@@ -1585,9 +1585,14 @@ void main() {
         tester.getTopRight(editButton).dx,
         lessThanOrEqualTo(390 - AppSpacing.md),
       );
+      final double displayHeaderTop = tester.getTopLeft(find.text('宿舍公约')).dy;
 
       await tester.tap(editButton);
       await tester.pump();
+      expect(
+        tester.getTopLeft(find.text('宿舍公约')).dy,
+        lessThanOrEqualTo(displayHeaderTop + AppSpacing.xs),
+      );
 
       final SlideTransition editSlideTransition = tester
           .widget<SlideTransition>(
@@ -1841,11 +1846,30 @@ void main() {
         ),
         findsOneWidget,
       );
+      final Finder ventilationSliderPanel = find.byKey(
+        const ValueKey<Key>(
+          ValueKey<String>('dorm-rules-ventilation-duration-slider'),
+        ),
+      );
+      expect(ventilationSliderPanel, findsOneWidget);
+      expect(
+        tester.getSize(ventilationSliderPanel).height,
+        lessThanOrEqualTo(50),
+      );
       final Slider ventilationSlider = tester.widget<Slider>(
         find.byKey(
           const ValueKey<String>('dorm-rules-ventilation-duration-slider'),
         ),
       );
+      final double sliderCenterX = tester
+          .getCenter(
+            find.byKey(
+              const ValueKey<String>('dorm-rules-ventilation-duration-slider'),
+            ),
+          )
+          .dx;
+      final double panelCenterX = tester.getCenter(ventilationSliderPanel).dx;
+      expect(sliderCenterX, closeTo(panelCenterX, AppSpacing.xs));
       expect(ventilationSlider.value, 30);
       expect(ventilationSlider.min, 10);
       expect(ventilationSlider.max, 60);

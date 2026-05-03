@@ -524,6 +524,19 @@ class _DormRulesPageState extends State<DormRulesPage> {
                               duration: const Duration(milliseconds: 260),
                               switchInCurve: Curves.easeOutCubic,
                               switchOutCurve: Curves.easeInCubic,
+                              layoutBuilder:
+                                  (
+                                    Widget? currentChild,
+                                    List<Widget> previousChildren,
+                                  ) {
+                                    return Stack(
+                                      alignment: Alignment.topCenter,
+                                      children: <Widget>[
+                                        ...previousChildren,
+                                        ?currentChild,
+                                      ],
+                                    );
+                                  },
                               transitionBuilder:
                                   (Widget child, Animation<double> animation) {
                                     final bool isEditPage =
@@ -1996,6 +2009,7 @@ class _DormRulesInlineSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final NightMoodPalette palette = context.nightMoodPalette;
     return KeyedSubtree(
       key: expanderKey,
       child: AnimatedSize(
@@ -2014,50 +2028,50 @@ class _DormRulesInlineSlider extends StatelessWidget {
                   key: ValueKey<Key>(sliderKey),
                   padding: const EdgeInsets.fromLTRB(
                     AppSpacing.md,
-                    AppSpacing.xxs,
+                    0,
                     AppSpacing.md,
-                    AppSpacing.sm,
+                    AppSpacing.xs,
                   ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: <Widget>[
-                      const SizedBox(width: AppSpacing.xxxl),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Column(
-                          children: <Widget>[
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: Text(
-                                valueLabel,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: AppColors.textSecondary,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                              ),
+                  child: SizedBox(
+                    height: AppSpacing.xxxl,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: <Widget>[
+                        SliderTheme(
+                          data: SliderTheme.of(context).copyWith(
+                            trackHeight: AppSpacing.xxs,
+                            activeTrackColor: palette.primarySoft,
+                            inactiveTrackColor: AppColors.surfaceSoft,
+                            thumbColor: palette.primary,
+                            overlayShape: SliderComponentShape.noOverlay,
+                            thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: AppSpacing.xs,
                             ),
-                            SliderTheme(
-                              data: SliderTheme.of(context).copyWith(
-                                trackHeight: AppSpacing.xxs,
-                                overlayShape: SliderComponentShape.noOverlay,
-                                thumbShape: const RoundSliderThumbShape(
-                                  enabledThumbRadius: AppSpacing.xs,
-                                ),
-                              ),
-                              child: Slider(
-                                key: sliderKey,
-                                value: value.clamp(min, max),
-                                min: min,
-                                max: max,
-                                divisions: divisions,
-                                onChanged: onChanged,
-                              ),
-                            ),
-                          ],
+                          ),
+                          child: Slider(
+                            key: sliderKey,
+                            value: value.clamp(min, max),
+                            min: min,
+                            max: max,
+                            divisions: divisions,
+                            onChanged: onChanged,
+                          ),
                         ),
-                      ),
-                    ],
+                        IgnorePointer(
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              valueLabel,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 )
               : const SizedBox.shrink(),

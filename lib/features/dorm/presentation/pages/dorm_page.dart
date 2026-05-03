@@ -410,7 +410,7 @@ class _DormPencilScaffold extends StatelessWidget {
                                     childAspectRatio:
                                         constraints.maxWidth >= 720
                                         ? 1.2
-                                        : 1.32,
+                                        : 1.38,
                                   ),
                               itemBuilder: (BuildContext context, int index) {
                                 return _DormHubCard(
@@ -890,7 +890,12 @@ class _DormHubCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppCard(
       onTap: action.onTap,
-      padding: const EdgeInsets.all(AppSpacing.xs),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xs,
+        AppSpacing.xs,
+        AppSpacing.xs,
+        AppSpacing.sm,
+      ),
       borderRadius: AppRadius.card,
       boxShadow: const <BoxShadow>[],
       child: Column(
