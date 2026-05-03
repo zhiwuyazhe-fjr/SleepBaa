@@ -11,6 +11,7 @@ class AppSettingsGroup extends StatelessWidget {
     required this.children,
     this.title,
     this.borderRadius,
+    this.titleStyle,
     this.padding = const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
     this.headerPadding = const EdgeInsets.fromLTRB(
       AppSpacing.md,
@@ -23,6 +24,7 @@ class AppSettingsGroup extends StatelessWidget {
   final String? title;
   final List<Widget> children;
   final BorderRadius? borderRadius;
+  final TextStyle? titleStyle;
   final EdgeInsetsGeometry padding;
   final EdgeInsetsGeometry headerPadding;
 
@@ -39,9 +41,11 @@ class AppSettingsGroup extends StatelessWidget {
               padding: headerPadding,
               child: Text(
                 title!,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                style:
+                    titleStyle ??
+                    Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
               ),
             ),
           ...children,
@@ -156,8 +160,10 @@ class AppSettingsItem extends StatelessWidget {
     }
     return Container(
       key: iconContainerKey,
-      width: iconContainerSize,
-      height: iconContainerSize,
+      constraints: BoxConstraints.tightFor(
+        width: iconContainerSize,
+        height: iconContainerSize,
+      ),
       decoration: BoxDecoration(
         color: iconBackgroundColor ?? Colors.transparent,
         borderRadius: AppRadius.iconContainer,

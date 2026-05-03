@@ -15,6 +15,7 @@ import 'package:sleep_dorm_app/main.dart' as app_main;
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
@@ -1536,7 +1537,10 @@ void main() {
         const ValueKey<String>('dorm-rules-edit-entry'),
       );
       expect(editButton, findsOneWidget);
-      expect(tester.getTopRight(editButton).dx, lessThanOrEqualTo(390 - 16));
+      expect(
+        tester.getTopRight(editButton).dx,
+        lessThanOrEqualTo(390 - AppSpacing.md),
+      );
 
       await tester.tap(editButton);
       await tester.pump();
@@ -1545,6 +1549,10 @@ void main() {
       expect(find.text('修改后需要室友确认'), findsOneWidget);
       expect(find.text('本页保存的是调整草案，不会立即覆盖当前正式公约。'), findsOneWidget);
       expect(find.byType(AppSettingsGroup), findsNWidgets(4));
+      expect(
+        find.byKey(const ValueKey<String>('dorm-rules-edit-intro-icon')),
+        findsOneWidget,
+      );
       expect(find.text('基础规则'), findsOneWidget);
       expect(find.text('安静时段'), findsOneWidget);
       expect(find.text('23:00 - 07:00'), findsOneWidget);
@@ -1560,8 +1568,10 @@ void main() {
       expect(find.byType(Slider), findsNothing);
       expect(find.text('闹钟与作息'), findsOneWidget);
       expect(find.text('温度与通风'), findsOneWidget);
-      expect(find.text('保存后发送给 3 位室友确认'), findsOneWidget);
+      expect(find.text('保存后发送给 3 位室友确认'), findsNothing);
       expect(find.text('发起确认'), findsOneWidget);
+      expect(find.widgetWithText(PrimaryButton, '取消'), findsOneWidget);
+      expect(find.widgetWithText(PrimaryButton, '发起确认'), findsOneWidget);
       expect(
         tester.getBottomLeft(find.text('发起确认')).dy,
         lessThanOrEqualTo(844),
@@ -1573,34 +1583,27 @@ void main() {
       final Finder editIntro = find.byKey(
         const ValueKey<String>('dorm-rules-edit-intro'),
       );
-      expect(tester.getTopLeft(rulesGroup.last).dx, greaterThanOrEqualTo(24));
-      expect(tester.getTopLeft(editIntro).dx, greaterThanOrEqualTo(24));
+      expect(
+        tester.getTopLeft(rulesGroup.last).dx,
+        greaterThanOrEqualTo(AppSpacing.lg),
+      );
+      expect(
+        tester.getTopLeft(editIntro).dx,
+        greaterThanOrEqualTo(AppSpacing.lg),
+      );
 
       final BuildContext buttonContext = tester.element(
         find.byKey(const ValueKey<String>('dorm-rules-submit-button')),
       );
-      final Ink saveButtonInk = tester.widget<Ink>(
-        find
-            .ancestor(
-              of: find.byKey(
-                const ValueKey<String>('dorm-rules-submit-button'),
-              ),
-              matching: find.byType(Ink),
-            )
-            .first,
-      );
-      final BoxDecoration decoration =
-          saveButtonInk.decoration! as BoxDecoration;
-      expect(
-        decoration.color,
-        Theme.of(
-          buttonContext,
-        ).extension<NightMoodPalette>()?.welcomeAccentColor,
+      final PrimaryButton submitButton = tester.widget<PrimaryButton>(
+        find.byKey(const ValueKey<String>('dorm-rules-submit-button')),
       );
 
       final NightMoodPalette editPalette = Theme.of(
         buttonContext,
       ).extension<NightMoodPalette>()!;
+      expect(submitButton.backgroundColor, editPalette.welcomeAccentColor);
+      expect(submitButton.foregroundColor, editPalette.primaryDeep);
       final Container quietIconContainer = tester.widget<Container>(
         find.byKey(const ValueKey<String>('dorm-rules-edit-icon-quiet-hours')),
       );
@@ -1608,6 +1611,14 @@ void main() {
           quietIconContainer.decoration! as BoxDecoration;
       expect(quietIconDecoration.color, AppColors.surfaceMuted);
       expect(quietIconDecoration.borderRadius, AppRadius.iconContainer);
+      expect(
+        tester.getSize(find.byWidget(quietIconContainer)).width,
+        AppSpacing.xxxl,
+      );
+      expect(
+        tester.getSize(find.byWidget(quietIconContainer)).height,
+        AppSpacing.xxxl,
+      );
 
       final Switch examSwitch = tester.widget<Switch>(
         find.byKey(const ValueKey<String>('dorm-rules-switch-exam-week')),

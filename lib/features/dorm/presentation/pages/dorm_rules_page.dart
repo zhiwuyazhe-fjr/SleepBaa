@@ -152,57 +152,47 @@ class _DormRulesPageState extends State<DormRulesPage> {
     );
     await showAppModal<void>(
       context,
-      spec: AppEditorSheetSpec<void>(
-        useSafeArea: true,
-        showDragHandle: true,
-        isScrollControlled: true,
+      spec: AppRichActionSheetSpec<void>(
         builder: (BuildContext sheetContext) {
-          return AppBottomSheetScaffold(
-            key: sheetKey,
+          return AppRichActionSheetScaffold(
+            surfaceKey:
+                sheetKey ?? const ValueKey<String>('dorm-rules-editor-sheet'),
             title: title,
             description: description,
-            includeBottomViewInsets: true,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            footer: Row(
               children: <Widget>[
-                TextField(
-                  controller: controller,
-                  autofocus: true,
-                  keyboardType: keyboardType,
-                  maxLines: maxLines,
-                  decoration: InputDecoration(
-                    hintText: hintText,
-                    suffixText: suffixText,
+                Expanded(
+                  child: PrimaryButton(
+                    label: '取消',
+                    variant: PrimaryButtonVariant.ghost,
+                    size: PrimaryButtonSize.compact,
+                    onPressed: () => Navigator.of(sheetContext).pop(),
                   ),
                 ),
-                const SizedBox(height: AppSpacing.md),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: PrimaryButton(
-                        label: '取消',
-                        variant: PrimaryButtonVariant.ghost,
-                        size: PrimaryButtonSize.compact,
-                        onPressed: () => Navigator.of(sheetContext).pop(),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: PrimaryButton(
-                        label: '确定',
-                        size: PrimaryButtonSize.compact,
-                        onPressed: () {
-                          setState(() {
-                            targetController.text = controller.text.trim();
-                          });
-                          Navigator.of(sheetContext).pop();
-                        },
-                      ),
-                    ),
-                  ],
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: PrimaryButton(
+                    label: '确定',
+                    size: PrimaryButtonSize.compact,
+                    onPressed: () {
+                      setState(() {
+                        targetController.text = controller.text.trim();
+                      });
+                      Navigator.of(sheetContext).pop();
+                    },
+                  ),
                 ),
               ],
+            ),
+            child: TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: keyboardType,
+              maxLines: maxLines,
+              decoration: InputDecoration(
+                hintText: hintText,
+                suffixText: suffixText,
+              ),
             ),
           );
         },
@@ -220,15 +210,38 @@ class _DormRulesPageState extends State<DormRulesPage> {
     );
     await showAppModal<void>(
       context,
-      spec: AppEditorSheetSpec<void>(
-        useSafeArea: true,
-        showDragHandle: true,
-        isScrollControlled: true,
+      spec: AppRichActionSheetSpec<void>(
         builder: (BuildContext sheetContext) {
-          return AppBottomSheetScaffold(
+          return AppRichActionSheetScaffold(
             title: '安静时段',
             description: '设置需要保持安静的开始和结束时间。',
-            includeBottomViewInsets: true,
+            footer: Row(
+              children: <Widget>[
+                Expanded(
+                  child: PrimaryButton(
+                    label: '取消',
+                    variant: PrimaryButtonVariant.ghost,
+                    size: PrimaryButtonSize.compact,
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: PrimaryButton(
+                    label: '确定',
+                    size: PrimaryButtonSize.compact,
+                    onPressed: () {
+                      setState(() {
+                        _quietStartController.text = startController.text
+                            .trim();
+                        _quietEndController.text = endController.text.trim();
+                      });
+                      Navigator.of(sheetContext).pop();
+                    },
+                  ),
+                ),
+              ],
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -245,35 +258,6 @@ class _DormRulesPageState extends State<DormRulesPage> {
                   controller: endController,
                   hintText: '07:00',
                   keyboardType: TextInputType.datetime,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: PrimaryButton(
-                        label: '取消',
-                        variant: PrimaryButtonVariant.ghost,
-                        size: PrimaryButtonSize.compact,
-                        onPressed: () => Navigator.of(sheetContext).pop(),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: PrimaryButton(
-                        label: '确定',
-                        size: PrimaryButtonSize.compact,
-                        onPressed: () {
-                          setState(() {
-                            _quietStartController.text = startController.text
-                                .trim();
-                            _quietEndController.text = endController.text
-                                .trim();
-                          });
-                          Navigator.of(sheetContext).pop();
-                        },
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -306,14 +290,35 @@ class _DormRulesPageState extends State<DormRulesPage> {
     double draftValue = value;
     await showAppModal<void>(
       context,
-      spec: AppEditorSheetSpec<void>(
-        useSafeArea: true,
-        showDragHandle: true,
+      spec: AppRichActionSheetSpec<void>(
         builder: (BuildContext sheetContext) {
           return StatefulBuilder(
             builder: (BuildContext context, StateSetter setSheetState) {
-              return AppBottomSheetScaffold(
+              return AppRichActionSheetScaffold(
                 title: title,
+                footer: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: PrimaryButton(
+                        label: '取消',
+                        variant: PrimaryButtonVariant.ghost,
+                        size: PrimaryButtonSize.compact,
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: PrimaryButton(
+                        label: '确定',
+                        size: PrimaryButtonSize.compact,
+                        onPressed: () {
+                          setState(() => onConfirmed(draftValue));
+                          Navigator.of(sheetContext).pop();
+                        },
+                      ),
+                    ),
+                  ],
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -337,30 +342,6 @@ class _DormRulesPageState extends State<DormRulesPage> {
                           .withAlpha(72),
                       onChanged: (double next) =>
                           setSheetState(() => draftValue = next),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: PrimaryButton(
-                            label: '取消',
-                            variant: PrimaryButtonVariant.ghost,
-                            size: PrimaryButtonSize.compact,
-                            onPressed: () => Navigator.of(sheetContext).pop(),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: PrimaryButton(
-                            label: '确定',
-                            size: PrimaryButtonSize.compact,
-                            onPressed: () {
-                              setState(() => onConfirmed(draftValue));
-                              Navigator.of(sheetContext).pop();
-                            },
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
@@ -400,14 +381,35 @@ class _DormRulesPageState extends State<DormRulesPage> {
     List<String> draftTags = _routineTags;
     await showAppModal<void>(
       context,
-      spec: AppEditorSheetSpec<void>(
-        useSafeArea: true,
-        showDragHandle: true,
+      spec: AppRichActionSheetSpec<void>(
         builder: (BuildContext sheetContext) {
           return StatefulBuilder(
             builder: (BuildContext context, StateSetter setSheetState) {
-              return AppBottomSheetScaffold(
+              return AppRichActionSheetScaffold(
                 title: '作息标签',
+                footer: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: PrimaryButton(
+                        label: '取消',
+                        variant: PrimaryButtonVariant.ghost,
+                        size: PrimaryButtonSize.compact,
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: PrimaryButton(
+                        label: '确定',
+                        size: PrimaryButtonSize.compact,
+                        onPressed: () {
+                          setState(() => _routineTags = draftTags);
+                          Navigator.of(sheetContext).pop();
+                        },
+                      ),
+                    ),
+                  ],
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -444,30 +446,6 @@ class _DormRulesPageState extends State<DormRulesPage> {
                             );
                           })
                           .toList(growable: false),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: PrimaryButton(
-                            label: '取消',
-                            variant: PrimaryButtonVariant.ghost,
-                            size: PrimaryButtonSize.compact,
-                            onPressed: () => Navigator.of(sheetContext).pop(),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: PrimaryButton(
-                            label: '确定',
-                            size: PrimaryButtonSize.compact,
-                            onPressed: () {
-                              setState(() => _routineTags = draftTags);
-                              Navigator.of(sheetContext).pop();
-                            },
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
@@ -596,7 +574,11 @@ class _DormRulesPageState extends State<DormRulesPage> {
                     children: <Widget>[
                       SingleChildScrollView(
                         padding: EdgeInsets.only(
-                          bottom: showEditView ? 132 : AppSpacing.sm,
+                          bottom: showEditView
+                              ? AppSpacing.xxxl +
+                                    AppSpacing.xxxl +
+                                    AppSpacing.sm
+                              : AppSpacing.sm,
                         ),
                         child: Align(
                           alignment: Alignment.topCenter,
@@ -822,17 +804,21 @@ class _DormRulesPageState extends State<DormRulesPage> {
                           child: FractionallySizedBox(
                             widthFactor: widthFactor,
                             child: Padding(
-                              padding: const EdgeInsets.only(top: 78),
+                              padding: const EdgeInsets.only(
+                                top:
+                                    AppSpacing.xxxl +
+                                    AppSpacing.xl +
+                                    AppSpacing.sm,
+                              ),
                               child: Align(
                                 alignment: Alignment.topRight,
                                 child: Padding(
                                   padding: const EdgeInsets.only(
                                     right: AppSpacing.lg,
                                   ),
-                                  child: ConstrainedBox(
-                                    constraints: const BoxConstraints(
-                                      maxWidth: 280,
-                                    ),
+                                  child: FractionallySizedBox(
+                                    widthFactor: 0.72,
+                                    alignment: Alignment.topRight,
                                     child: _DormRulesReviewOverlay(
                                       palette: palette,
                                       objectionReasonController:
@@ -851,14 +837,11 @@ class _DormRulesPageState extends State<DormRulesPage> {
                           alignment: Alignment.bottomCenter,
                           child: FractionallySizedBox(
                             widthFactor: widthFactor,
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 760),
-                              child: _DormRulesEditBottomBar(
-                                palette: palette,
-                                onCancel: () =>
-                                    _cancelEditing(dorm.rulesSettings),
-                                onConfirm: _handleSave,
-                              ),
+                            child: _DormRulesEditBottomBar(
+                              palette: palette,
+                              onCancel: () =>
+                                  _cancelEditing(dorm.rulesSettings),
+                              onConfirm: _handleSave,
                             ),
                           ),
                         ),
@@ -977,10 +960,10 @@ class _DormRulesBackButton extends StatelessWidget {
         borderRadius: AppRadius.button,
         onTap: onPressed,
         child: const SizedBox.square(
-          dimension: 40,
+          dimension: AppSpacing.xxxl,
           child: Icon(
             Icons.chevron_left_rounded,
-            size: 22,
+            size: AppSpacing.lg,
             color: AppColors.textPrimary,
           ),
         ),
@@ -1005,36 +988,14 @@ class _DormRulesHeaderPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Ink(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.xs,
-        ),
-        decoration: BoxDecoration(
-          color: palette.welcomeAccentColor,
-          borderRadius: AppRadius.button,
-        ),
-        child: InkWell(
-          borderRadius: AppRadius.button,
-          onTap: onPressed,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Icon(icon, size: 16, color: palette.primaryDeep),
-              const SizedBox(width: AppSpacing.xxs),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: palette.primaryDeep,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return PrimaryButton(
+      label: label,
+      icon: icon,
+      expand: false,
+      size: PrimaryButtonSize.compact,
+      backgroundColor: palette.welcomeAccentColor,
+      foregroundColor: palette.primaryDeep,
+      onPressed: onPressed,
     );
   }
 }
@@ -1062,7 +1023,7 @@ class _DormRulesDisplayBody extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpacing.xs),
           _DormRulesGroupCard(rules: rules, palette: palette),
         ],
       ),
@@ -1086,16 +1047,18 @@ class _DormRulesIntroCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Container(
-            width: 48,
-            height: 48,
+            constraints: const BoxConstraints.tightFor(
+              width: AppSpacing.xxxl,
+              height: AppSpacing.xxxl,
+            ),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(AppSpacing.md),
+              borderRadius: AppRadius.iconContainer,
             ),
             alignment: Alignment.center,
             child: Icon(
               Icons.shield_outlined,
-              size: 24,
+              size: AppSpacing.lg,
               color: palette.primaryDeep,
             ),
           ),
@@ -1145,7 +1108,8 @@ class _DormRulesGroupCard extends StatelessWidget {
                   ? _rulesMutedIconFill(palette)
                   : _rulesAccentIconFill(palette),
             ),
-            if (index != rules.length - 1) const SizedBox(height: 2),
+            if (index != rules.length - 1)
+              const SizedBox(height: AppSpacing.xxs),
           ],
         ],
       ),
@@ -1175,14 +1139,20 @@ class _DormRulesGroupRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
           Container(
-            width: 36,
-            height: 36,
+            constraints: const BoxConstraints.tightFor(
+              width: AppSpacing.xxxl,
+              height: AppSpacing.xxxl,
+            ),
             decoration: BoxDecoration(
               color: iconFill,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: AppRadius.iconContainer,
             ),
             alignment: Alignment.center,
-            child: Icon(data.icon, size: 18, color: palette.primaryDeep),
+            child: Icon(
+              data.icon,
+              size: AppSpacing.lg,
+              color: palette.primaryDeep,
+            ),
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
@@ -1208,16 +1178,18 @@ class _DormRulesGroupRow extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.sm),
           Container(
-            width: 24,
-            height: 24,
+            constraints: const BoxConstraints.tightFor(
+              width: AppSpacing.xl,
+              height: AppSpacing.xl,
+            ),
             decoration: BoxDecoration(
               color: AppColors.success,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppRadius.pill,
             ),
             alignment: Alignment.center,
             child: const Icon(
               Icons.check_rounded,
-              size: 14,
+              size: AppSpacing.md,
               color: Colors.white,
             ),
           ),
@@ -1259,17 +1231,19 @@ class _DormRulesPendingSection extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpacing.xs),
           AppCard(
-            borderRadius: BorderRadius.circular(20),
-            padding: const EdgeInsets.all(14),
+            borderRadius: AppRadius.compactCard,
+            padding: const EdgeInsets.all(AppSpacing.sm),
             color: Colors.white,
             boxShadow: const <BoxShadow>[],
             child: Row(
               children: <Widget>[
                 Container(
-                  width: 40,
-                  height: 40,
+                  constraints: const BoxConstraints.tightFor(
+                    width: AppSpacing.xxxl,
+                    height: AppSpacing.xxxl,
+                  ),
                   decoration: BoxDecoration(
                     color: _rulesMutedIconFill(palette),
                     borderRadius: BorderRadius.circular(AppSpacing.md),
@@ -1320,7 +1294,7 @@ class _DormRulesPendingSection extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: AppSpacing.sm,
-                            vertical: 6,
+                            vertical: AppSpacing.xs,
                           ),
                           decoration: BoxDecoration(
                             color: palette.welcomeAccentColor,
@@ -1368,13 +1342,13 @@ class _DormRulesDisplayBottomBar extends StatelessWidget {
         AppSpacing.xl,
         AppSpacing.sm,
       ),
-      child: _DormRulesActionButton(
+      child: PrimaryButton(
         label: '我同意遵守以上公约',
         icon: Icons.check_circle_outline_rounded,
-        fillColor: palette.welcomeAccentColor,
-        textColor: palette.primaryDeep,
+        size: PrimaryButtonSize.compact,
+        backgroundColor: palette.welcomeAccentColor,
+        foregroundColor: palette.primaryDeep,
         onPressed: enabled ? onPressed : null,
-        buttonHeight: 50,
       ),
     );
   }
@@ -1447,169 +1421,246 @@ class _DormRulesEditBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          AppCard(
-            key: const ValueKey<String>('dorm-rules-edit-intro'),
-            borderRadius: AppRadius.card,
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg,
-              vertical: AppSpacing.md,
-            ),
-            color: palette.primaryHighlight,
-            boxShadow: const <BoxShadow>[],
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  '修改后需要室友确认',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: palette.primaryDeep,
-                    fontWeight: FontWeight.w800,
+    final TextStyle? groupTitleStyle = Theme.of(context).textTheme.labelLarge
+        ?.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w700);
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double horizontalInset = (constraints.maxWidth * 0.06)
+            .clamp(AppSpacing.lg, AppSpacing.xl)
+            .toDouble();
+        const EdgeInsetsGeometry groupPadding = EdgeInsets.symmetric(
+          vertical: AppSpacing.xs,
+        );
+        const EdgeInsetsGeometry groupHeaderPadding = EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.sm,
+          AppSpacing.md,
+          AppSpacing.xxs,
+        );
+
+        return Padding(
+          padding: EdgeInsets.symmetric(horizontal: horizontalInset),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              AppCard(
+                key: const ValueKey<String>('dorm-rules-edit-intro'),
+                borderRadius: AppRadius.surfaceSecondary,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
+                color: palette.primaryHighlight,
+                boxShadow: const <BoxShadow>[],
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Container(
+                      key: const ValueKey<String>('dorm-rules-edit-intro-icon'),
+                      constraints: const BoxConstraints.tightFor(
+                        width: AppSpacing.xxxl,
+                        height: AppSpacing.xxxl,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceMuted,
+                        borderRadius: AppRadius.iconContainer,
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        Icons.verified_user_outlined,
+                        size: AppSpacing.lg,
+                        color: palette.primaryDeep,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            '修改后需要室友确认',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: palette.primaryDeep,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                          const SizedBox(height: AppSpacing.xxs),
+                          Text(
+                            '本页保存的是调整草案，不会立即覆盖当前正式公约。',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: palette.primaryDeep,
+                                  height: 1.45,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              AppSettingsGroup(
+                key: const ValueKey<String>('dorm-rules-basic-group'),
+                title: '基础规则',
+                borderRadius: AppRadius.surfaceSecondary,
+                padding: groupPadding,
+                headerPadding: groupHeaderPadding,
+                titleStyle: groupTitleStyle,
+                children: <Widget>[
+                  _DormRulesEditableQuietHoursCard(
+                    palette: palette,
+                    quietStartController: quietStartController,
+                    quietEndController: quietEndController,
+                    onTap: onEditQuietHours,
                   ),
-                ),
-                const SizedBox(height: AppSpacing.xxs),
-                Text(
-                  '本页保存的是调整草案，不会立即覆盖当前正式公约。',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: palette.primaryDeep,
-                    height: 1.45,
+                  _DormRulesEditableLightsCard(
+                    palette: palette,
+                    lightsOffCopy: _dormRulesFirstTimeOrPreview(
+                      lightsOffController.text,
+                    ),
+                    onTap: onEditLightsOff,
                   ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          AppSettingsGroup(
-            key: const ValueKey<String>('dorm-rules-basic-group'),
-            title: '基础规则',
-            children: <Widget>[
-              _DormRulesEditableQuietHoursCard(
-                palette: palette,
-                quietStartController: quietStartController,
-                quietEndController: quietEndController,
-                onTap: onEditQuietHours,
+                  _DormRulesEditableNoteCard(
+                    palette: palette,
+                    noteController: noteController,
+                    onTap: onEditNote,
+                  ),
+                ],
               ),
-              _DormRulesEditableLightsCard(
-                palette: palette,
-                lightsOffCopy: _dormRulesFirstTimeOrPreview(
-                  lightsOffController.text,
-                ),
-                onTap: onEditLightsOff,
+              const SizedBox(height: AppSpacing.sm),
+              AppSettingsGroup(
+                title: '灯光与安静',
+                borderRadius: AppRadius.surfaceSecondary,
+                padding: groupPadding,
+                headerPadding: groupHeaderPadding,
+                titleStyle: groupTitleStyle,
+                children: <Widget>[
+                  _DormRulesToggleCard(
+                    palette: palette,
+                    icon: Icons.menu_book_rounded,
+                    title: '考试周模式',
+                    description: '提前进入静音协作',
+                    value: examWeekMode,
+                    onChanged: onExamWeekModeChanged,
+                  ),
+                  _DormRulesCompactValueCard(
+                    palette: palette,
+                    icon: Icons.light_mode_outlined,
+                    title: '个人照明要求',
+                    value: _dormRulesPreviewText(
+                      personalLightingController.text,
+                    ),
+                    onTap: onEditPersonalLighting,
+                  ),
+                  _DormRulesToggleCard(
+                    palette: palette,
+                    icon: Icons.blinds_closed_outlined,
+                    title: '遮光帘建议',
+                    description: '减少走廊和窗边杂光',
+                    value: blackoutCurtain,
+                    onChanged: onBlackoutCurtainChanged,
+                  ),
+                ],
               ),
-              _DormRulesEditableNoteCard(
-                palette: palette,
-                noteController: noteController,
-                onTap: onEditNote,
+              const SizedBox(height: AppSpacing.sm),
+              AppSettingsGroup(
+                title: '闹钟与作息',
+                borderRadius: AppRadius.surfaceSecondary,
+                padding: groupPadding,
+                headerPadding: groupHeaderPadding,
+                titleStyle: groupTitleStyle,
+                children: <Widget>[
+                  _DormRulesToggleCard(
+                    palette: palette,
+                    icon: Icons.vibration_rounded,
+                    title: '优先震动提醒',
+                    description: '先震动，降低打扰',
+                    value: vibrationFirst,
+                    onChanged: onVibrationFirstChanged,
+                  ),
+                  _DormRulesCompactValueCard(
+                    palette: palette,
+                    icon: Icons.alarm_on_rounded,
+                    title: '闹钟响应时限',
+                    value: '${alarmResponseController.text.trim()} 秒',
+                    onTap: onEditAlarmResponse,
+                  ),
+                  _DormRulesCompactValueCard(
+                    palette: palette,
+                    icon: Icons.bedtime_rounded,
+                    title: '作息习惯备注',
+                    value: _dormRulesPreviewText(routineNoteController.text),
+                    onTap: onEditRoutineNote,
+                  ),
+                  _DormRulesCompactValueCard(
+                    palette: palette,
+                    icon: Icons.sell_outlined,
+                    title: '作息标签',
+                    value: _dormRulesPrimaryTag(routineTags),
+                    valueChip: true,
+                    onTap: onEditRoutineTags,
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          AppSettingsGroup(
-            title: '灯光与安静',
-            children: <Widget>[
-              _DormRulesToggleCard(
-                palette: palette,
-                icon: Icons.menu_book_rounded,
-                title: '考试周模式',
-                description: '提前进入静音协作',
-                value: examWeekMode,
-                onChanged: onExamWeekModeChanged,
-              ),
-              _DormRulesCompactValueCard(
-                palette: palette,
-                icon: Icons.light_mode_outlined,
-                title: '个人照明要求',
-                value: _dormRulesPreviewText(personalLightingController.text),
-                onTap: onEditPersonalLighting,
-              ),
-              _DormRulesToggleCard(
-                palette: palette,
-                icon: Icons.blinds_closed_outlined,
-                title: '遮光帘建议',
-                description: '减少走廊和窗边杂光',
-                value: blackoutCurtain,
-                onChanged: onBlackoutCurtainChanged,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          AppSettingsGroup(
-            title: '闹钟与作息',
-            children: <Widget>[
-              _DormRulesToggleCard(
-                palette: palette,
-                icon: Icons.vibration_rounded,
-                title: '优先震动提醒',
-                description: '先震动，降低打扰',
-                value: vibrationFirst,
-                onChanged: onVibrationFirstChanged,
-              ),
-              _DormRulesCompactValueCard(
-                palette: palette,
-                icon: Icons.alarm_on_rounded,
-                title: '闹钟响应时限',
-                value: '${alarmResponseController.text.trim()} 秒',
-                onTap: onEditAlarmResponse,
-              ),
-              _DormRulesCompactValueCard(
-                palette: palette,
-                icon: Icons.bedtime_rounded,
-                title: '作息习惯备注',
-                value: _dormRulesPreviewText(routineNoteController.text),
-                onTap: onEditRoutineNote,
-              ),
-              _DormRulesCompactValueCard(
-                palette: palette,
-                icon: Icons.sell_outlined,
-                title: '作息标签',
-                value: _dormRulesPrimaryTag(routineTags),
-                valueChip: true,
-                onTap: onEditRoutineTags,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          AppSettingsGroup(
-            title: '温度与通风',
-            children: <Widget>[
-              _DormRulesCompactValueCard(
-                palette: palette,
-                icon: Icons.ac_unit_rounded,
-                title: '夏季空调',
-                value: '${summerTemp.round()}°C',
-                onTap: onEditSummerTemp,
-              ),
-              _DormRulesCompactValueCard(
-                palette: palette,
-                icon: Icons.thermostat_rounded,
-                title: '冬季采暖',
-                value: '${winterTemp.round()}°C',
-                onTap: onEditWinterTemp,
-              ),
-              _DormRulesCompactValueCard(
-                palette: palette,
-                icon: Icons.air_rounded,
-                title: '通风时段',
-                value: selectedVentilationWindow,
-                onTap: onEditVentilationWindow,
-              ),
-              _DormRulesCompactValueCard(
-                palette: palette,
-                icon: Icons.timer_outlined,
-                title: '通风时长',
-                value: '${ventilationMinutes.round()}分钟',
-                onTap: onEditVentilationMinutes,
+              const SizedBox(height: AppSpacing.sm),
+              AppSettingsGroup(
+                title: '温度与通风',
+                borderRadius: AppRadius.surfaceSecondary,
+                padding: groupPadding,
+                headerPadding: groupHeaderPadding,
+                titleStyle: groupTitleStyle,
+                children: <Widget>[
+                  _DormRulesCompactValueCard(
+                    palette: palette,
+                    icon: Icons.ac_unit_rounded,
+                    title: '夏季空调',
+                    value: '${summerTemp.round()}°C',
+                    onTap: onEditSummerTemp,
+                  ),
+                  _DormRulesCompactValueCard(
+                    palette: palette,
+                    icon: Icons.thermostat_rounded,
+                    title: '冬季采暖',
+                    value: '${winterTemp.round()}°C',
+                    onTap: onEditWinterTemp,
+                  ),
+                  _DormRulesCompactValueCard(
+                    palette: palette,
+                    icon: Icons.air_rounded,
+                    title: '通风时段',
+                    value: selectedVentilationWindow,
+                    onTap: onEditVentilationWindow,
+                  ),
+                  _DormRulesCompactValueCard(
+                    palette: palette,
+                    icon: Icons.timer_outlined,
+                    title: '通风时长',
+                    value: '${ventilationMinutes.round()}分钟',
+                    onTap: onEditVentilationMinutes,
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
+}
+
+const EdgeInsetsGeometry _dormRulesEditItemPadding = EdgeInsets.symmetric(
+  horizontal: AppSpacing.md,
+  vertical: AppSpacing.xs,
+);
+
+TextStyle? _dormRulesEditItemTitleStyle(BuildContext context) {
+  return Theme.of(context).textTheme.bodyMedium?.copyWith(
+    color: AppColors.textPrimary,
+    fontWeight: FontWeight.w600,
+  );
 }
 
 class _DormRulesEditableQuietHoursCard extends StatelessWidget {
@@ -1632,15 +1683,19 @@ class _DormRulesEditableQuietHoursCard extends StatelessWidget {
       icon: Icons.volume_off_rounded,
       iconColor: palette.primaryDeep,
       iconBackgroundColor: AppColors.surfaceMuted,
+      iconContainerSize: AppSpacing.xxxl,
+      iconSize: AppSpacing.lg,
       iconContainerKey: const ValueKey<String>(
         'dorm-rules-edit-icon-quiet-hours',
       ),
       leadingWidth: AppSpacing.xxxl,
+      titleStyle: _dormRulesEditItemTitleStyle(context),
+      padding: _dormRulesEditItemPadding,
       onTap: onTap,
       trailing: _DormRulesValueTrailing(
         value:
             '${quietStartController.text.trim()} - ${quietEndController.text.trim()}',
-        color: palette.primaryDeep,
+        color: AppColors.textSecondary,
         showChevron: true,
       ),
     );
@@ -1720,14 +1775,18 @@ class _DormRulesEditableLightsCard extends StatelessWidget {
       icon: Icons.lightbulb_outline_rounded,
       iconColor: palette.primaryDeep,
       iconBackgroundColor: AppColors.surfaceMuted,
+      iconContainerSize: AppSpacing.xxxl,
+      iconSize: AppSpacing.lg,
       iconContainerKey: const ValueKey<String>(
         'dorm-rules-edit-icon-lights-off',
       ),
       leadingWidth: AppSpacing.xxxl,
+      titleStyle: _dormRulesEditItemTitleStyle(context),
+      padding: _dormRulesEditItemPadding,
       onTap: onTap,
       trailing: _DormRulesValueTrailing(
         value: lightsOffCopy,
-        color: palette.primaryDeep,
+        color: AppColors.textSecondary,
         showChevron: true,
       ),
     );
@@ -1781,13 +1840,17 @@ class _DormRulesCompactValueCard extends StatelessWidget {
       icon: icon,
       iconColor: palette.primaryDeep,
       iconBackgroundColor: AppColors.surfaceMuted,
+      iconContainerSize: AppSpacing.xxxl,
+      iconSize: AppSpacing.lg,
       leadingWidth: AppSpacing.xxxl,
+      titleStyle: _dormRulesEditItemTitleStyle(context),
+      padding: _dormRulesEditItemPadding,
       onTap: onTap,
       trailing: valueChip
           ? _DormRulesValueChip(value: value, color: palette.primaryDeep)
           : _DormRulesValueTrailing(
               value: value,
-              color: palette.primaryDeep,
+              color: AppColors.textSecondary,
               showChevron: true,
             ),
     );
@@ -1811,9 +1874,8 @@ class _DormRulesValueChip extends StatelessWidget {
             vertical: AppSpacing.xxs,
           ),
           decoration: BoxDecoration(
-            color: AppColors.surfaceMuted,
+            color: color.withAlpha(24),
             borderRadius: AppRadius.pill,
-            border: Border.all(color: AppColors.surfaceBorder),
           ),
           child: Text(
             value,
@@ -1860,8 +1922,12 @@ class _DormRulesToggleCard extends StatelessWidget {
       icon: icon,
       iconColor: palette.primaryDeep,
       iconBackgroundColor: AppColors.surfaceMuted,
+      iconContainerSize: AppSpacing.xxxl,
+      iconSize: AppSpacing.lg,
       iconContainerKey: ValueKey<String>('dorm-rules-edit-icon-$title'),
       leadingWidth: AppSpacing.xxxl,
+      titleStyle: _dormRulesEditItemTitleStyle(context),
+      padding: _dormRulesEditItemPadding,
       trailing: _DormRulesThemeSwitch(
         switchKey: title == '考试周模式'
             ? const ValueKey<String>('dorm-rules-switch-exam-week')
@@ -1895,9 +1961,9 @@ class _DormRulesValueTrailing extends StatelessWidget {
           value,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: color,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
           ),
         ),
         if (showChevron) ...<Widget>[
@@ -1971,145 +2037,46 @@ class _DormRulesEditBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.xl,
-        10,
-        AppSpacing.xl,
-        AppSpacing.lg,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: palette.primaryHighlight,
-              borderRadius: BorderRadius.circular(AppSpacing.md),
-            ),
-            child: Row(
-              children: <Widget>[
-                Icon(
-                  Icons.groups_rounded,
-                  size: 18,
-                  color: palette.primaryDeep,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '保存后发送给 3 位室友确认',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: palette.primaryDeep,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double horizontalInset = (constraints.maxWidth * 0.06)
+            .clamp(AppSpacing.lg, AppSpacing.xl)
+            .toDouble();
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            horizontalInset,
+            AppSpacing.sm,
+            horizontalInset,
+            AppSpacing.lg,
           ),
-          const SizedBox(height: 10),
-          Row(
+          child: Row(
             children: <Widget>[
               Expanded(
-                child: _DormRulesActionButton(
+                child: PrimaryButton(
                   label: '取消',
-                  fillColor: Colors.white,
-                  textColor: AppColors.textPrimary,
+                  variant: PrimaryButtonVariant.ghost,
+                  size: PrimaryButtonSize.compact,
+                  borderColor: AppColors.surfaceBorder,
                   onPressed: onCancel,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: _DormRulesActionButton(
-                  buttonKey: const ValueKey<String>('dorm-rules-submit-button'),
+                child: PrimaryButton(
+                  key: const ValueKey<String>('dorm-rules-submit-button'),
                   label: '发起确认',
                   icon: Icons.send_rounded,
-                  fillColor: palette.welcomeAccentColor,
-                  textColor: palette.primaryDeep,
+                  size: PrimaryButtonSize.compact,
+                  backgroundColor: palette.welcomeAccentColor,
+                  foregroundColor: palette.primaryDeep,
                   onPressed: onConfirm,
                 ),
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DormRulesActionButton extends StatelessWidget {
-  const _DormRulesActionButton({
-    this.buttonKey,
-    required this.label,
-    required this.fillColor,
-    required this.textColor,
-    required this.onPressed,
-    this.icon,
-    this.buttonHeight = 48,
-  });
-
-  final Key? buttonKey;
-  final String label;
-  final Color fillColor;
-  final Color textColor;
-  final VoidCallback? onPressed;
-  final IconData? icon;
-  final double buttonHeight;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color resolvedFill = onPressed == null
-        ? fillColor.withAlpha(132)
-        : fillColor;
-    final Widget content = SizedBox(
-      key: buttonKey,
-      height: buttonHeight,
-      child: Center(
-        child: AnimatedScale(
-          scale: onPressed == null ? 1 : 1,
-          duration: const Duration(milliseconds: 120),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              if (icon != null) ...<Widget>[
-                Icon(icon, size: 18, color: textColor),
-                const SizedBox(width: AppSpacing.xs),
-              ],
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: textColor,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    if (onPressed == null) {
-      return Ink(
-        decoration: BoxDecoration(
-          color: resolvedFill,
-          borderRadius: AppRadius.button,
-        ),
-        child: content,
-      );
-    }
-    return Material(
-      color: Colors.transparent,
-      child: Ink(
-        decoration: BoxDecoration(
-          color: resolvedFill,
-          borderRadius: AppRadius.button,
-        ),
-        child: InkWell(
-          borderRadius: AppRadius.button,
-          onTap: onPressed,
-          child: content,
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -2138,17 +2105,19 @@ class _DormRulesReviewOverlay extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            _DormRulesActionButton(
+            PrimaryButton(
               label: '同意',
-              fillColor: palette.welcomeAccentColor,
-              textColor: palette.primaryDeep,
+              size: PrimaryButtonSize.compact,
+              backgroundColor: palette.welcomeAccentColor,
+              foregroundColor: palette.primaryDeep,
               onPressed: onApprove,
             ),
             const SizedBox(height: AppSpacing.sm),
-            _DormRulesActionButton(
+            PrimaryButton(
               label: '不同意',
-              fillColor: AppColors.surfaceMuted,
-              textColor: AppColors.textPrimary,
+              variant: PrimaryButtonVariant.ghost,
+              size: PrimaryButtonSize.compact,
+              borderColor: AppColors.surfaceBorder,
               onPressed: onReject,
             ),
             const SizedBox(height: AppSpacing.sm),
