@@ -1519,12 +1519,49 @@ void main() {
 
       expect(find.byType(DormRulesPage), findsOneWidget);
       expect(find.text('共同维护良好宿舍环境'), findsOneWidget);
-      expect(find.text('基本规则'), findsOneWidget);
-      expect(find.text('23:00后保持安静'), findsOneWidget);
+      expect(find.text('基础规则'), findsOneWidget);
+      expect(find.text('灯光与安静'), findsOneWidget);
+      expect(find.text('闹钟与作息'), findsOneWidget);
+      expect(find.text('温度与通风'), findsOneWidget);
+      expect(find.text('23:00后保持安静'), findsNothing);
       expect(find.text('以下是大家共同制定的宿舍公约，请每位成员认真遵守。'), findsOneWidget);
+      expect(find.text('请使用耳机，避免外放声音'), findsNothing);
+      expect(find.text('请使用台灯或小夜灯'), findsNothing);
+      expect(find.text('每天至少开窗通风30分钟'), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('dorm-rules-display-group-basic')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('dorm-rules-display-group-temperature'),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('dorm-rules-display-group-basic')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('23:00后保持安静'), findsOneWidget);
       expect(find.text('请使用耳机，避免外放声音'), findsOneWidget);
-      expect(find.text('请使用台灯或小夜灯'), findsOneWidget);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('dorm-rules-display-group-basic')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('23:00后保持安静'), findsNothing);
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('dorm-rules-display-group-temperature'),
+        ),
+      );
+      await tester.pumpAndSettle();
       expect(find.text('每天至少开窗通风30分钟'), findsOneWidget);
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('dorm-rules-display-group-temperature'),
+        ),
+      );
+      await tester.pumpAndSettle();
       expect(find.text('我同意遵守以上公约'), findsOneWidget);
       expect(find.text('保存规则'), findsNothing);
 
@@ -1613,7 +1650,7 @@ void main() {
       );
       expect(summerTrailingText.style?.color, AppColors.textSecondary);
       expect(summerTrailingText.style?.fontWeight, FontWeight.w500);
-      expect(find.text('夜猫子'), findsNothing);
+      expect(find.text('考试周 · 夜猫子 · 早起党'), findsOneWidget);
       expect(find.byType(Slider), findsNothing);
       expect(find.text('闹钟与作息'), findsOneWidget);
       expect(find.text('温度与通风'), findsOneWidget);
@@ -1771,6 +1808,49 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey<String>('dorm-rules-summer-temp-slider')),
+        findsNothing,
+      );
+
+      await tester.scrollUntilVisible(
+        find.text('通风时长'),
+        320,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+      await tester.tap(find.text('通风时长'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          const ValueKey<String>('dorm-rules-ventilation-duration-slider'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('dorm-rules-ventilation-duration-expander'),
+        ),
+        findsOneWidget,
+      );
+      final Finder ventilationExpander = find.byKey(
+        const ValueKey<String>('dorm-rules-ventilation-duration-expander'),
+      );
+      expect(
+        find.descendant(
+          of: ventilationExpander,
+          matching: find.byType(AnimatedSize),
+        ),
+        findsOneWidget,
+      );
+      final Slider ventilationSlider = tester.widget<Slider>(
+        find.byKey(
+          const ValueKey<String>('dorm-rules-ventilation-duration-slider'),
+        ),
+      );
+      expect(ventilationSlider.value, 30);
+      expect(ventilationSlider.min, 10);
+      expect(ventilationSlider.max, 60);
+      expect(
+        find.byKey(const ValueKey<String>('dorm-rules-slider-sheet')),
         findsNothing,
       );
 

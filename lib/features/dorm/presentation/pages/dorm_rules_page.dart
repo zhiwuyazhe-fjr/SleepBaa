@@ -20,7 +20,9 @@ class DormRulesPage extends StatefulWidget {
   State<DormRulesPage> createState() => _DormRulesPageState();
 }
 
-enum _DormRulesTemperatureEditor { summer, winter }
+enum _DormRulesInlineEditor { summer, winter, ventilationDuration }
+
+enum _DormRulesDisplayGroup { basic, lightQuiet, routine, temperature }
 
 class _DormRulesPageState extends State<DormRulesPage> {
   final TextEditingController _quietStartController = TextEditingController();
@@ -46,7 +48,8 @@ class _DormRulesPageState extends State<DormRulesPage> {
   double _ventilationMinutes = 30;
   String _selectedVentilationWindow = '早晨';
   List<String> _routineTags = const <String>['考试周', '夜猫子', '早起党'];
-  _DormRulesTemperatureEditor? _expandedTemperatureEditor;
+  _DormRulesInlineEditor? _expandedInlineEditor;
+  _DormRulesDisplayGroup? _expandedDisplayGroup;
   String _loadedProposalId = '';
   String _loadedSettingsSignature = '';
 
@@ -139,7 +142,7 @@ class _DormRulesPageState extends State<DormRulesPage> {
     _populateFromSettings(settings);
     setState(() {
       _isEditing = false;
-      _expandedTemperatureEditor = null;
+      _expandedInlineEditor = null;
     });
   }
 
@@ -282,80 +285,6 @@ class _DormRulesPageState extends State<DormRulesPage> {
       hintText: '例如 23:30 后关闭主灯',
       targetController: _lightsOffController,
       sheetKey: const ValueKey<String>('dorm-rules-lights-sheet'),
-    );
-  }
-
-  Future<void> _showSliderEditor({
-    required String title,
-    required double value,
-    required double min,
-    required double max,
-    required String unit,
-    required ValueChanged<double> onConfirmed,
-  }) async {
-    double draftValue = value;
-    await showAppModal<void>(
-      context,
-      spec: AppRichActionSheetSpec<void>(
-        builder: (BuildContext sheetContext) {
-          return StatefulBuilder(
-            builder: (BuildContext context, StateSetter setSheetState) {
-              return AppRichActionSheetScaffold(
-                title: title,
-                footer: Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: PrimaryButton(
-                        label: '取消',
-                        variant: PrimaryButtonVariant.ghost,
-                        size: PrimaryButtonSize.compact,
-                        onPressed: () => Navigator.of(sheetContext).pop(),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: PrimaryButton(
-                        label: '确定',
-                        size: PrimaryButtonSize.compact,
-                        onPressed: () {
-                          setState(() => onConfirmed(draftValue));
-                          Navigator.of(sheetContext).pop();
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    Text(
-                      '${draftValue.round()}$unit',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(
-                            color: context.nightMoodPalette.primaryDeep,
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    Slider(
-                      min: min,
-                      max: max,
-                      divisions: (max - min).round(),
-                      value: draftValue.clamp(min, max),
-                      activeColor: context.nightMoodPalette.primaryDeep,
-                      inactiveColor: context.nightMoodPalette.primarySoft
-                          .withAlpha(72),
-                      onChanged: (double next) =>
-                          setSheetState(() => draftValue = next),
-                    ),
-                  ],
-                ),
-              );
-            },
-          );
-        },
-      ),
     );
   }
 
@@ -504,7 +433,7 @@ class _DormRulesPageState extends State<DormRulesPage> {
     setState(() {
       _isEditing = false;
       _showReviewOverlay = false;
-      _expandedTemperatureEditor = null;
+      _expandedInlineEditor = null;
     });
     await notifyPassiveToast(context, message: '已提交待确认规则，等待室友确认。');
   }
@@ -660,8 +589,8 @@ class _DormRulesPageState extends State<DormRulesPage> {
                                           selectedVentilationWindow:
                                               _selectedVentilationWindow,
                                           routineTags: _routineTags,
-                                          expandedTemperatureEditor:
-                                              _expandedTemperatureEditor,
+                                          expandedInlineEditor:
+                                              _expandedInlineEditor,
                                           onEditQuietHours:
                                               _showQuietHoursEditor,
                                           onEditLightsOff: _showLightsOffEditor,
@@ -695,24 +624,36 @@ class _DormRulesPageState extends State<DormRulesPage> {
                                               ),
                                           onEditRoutineTags:
                                               _showRoutineTagsEditor,
-                                          onToggleSummerTemp: () => setState(() {
-                                            _expandedTemperatureEditor =
-                                                _expandedTemperatureEditor ==
-                                                    _DormRulesTemperatureEditor
-                                                        .summer
-                                                ? null
-                                                : _DormRulesTemperatureEditor
-                                                      .summer;
-                                          }),
-                                          onToggleWinterTemp: () => setState(() {
-                                            _expandedTemperatureEditor =
-                                                _expandedTemperatureEditor ==
-                                                    _DormRulesTemperatureEditor
-                                                        .winter
-                                                ? null
-                                                : _DormRulesTemperatureEditor
-                                                      .winter;
-                                          }),
+                                          onToggleSummerTemp: () =>
+                                              setState(() {
+                                                _expandedInlineEditor =
+                                                    _expandedInlineEditor ==
+                                                        _DormRulesInlineEditor
+                                                            .summer
+                                                    ? null
+                                                    : _DormRulesInlineEditor
+                                                          .summer;
+                                              }),
+                                          onToggleWinterTemp: () =>
+                                              setState(() {
+                                                _expandedInlineEditor =
+                                                    _expandedInlineEditor ==
+                                                        _DormRulesInlineEditor
+                                                            .winter
+                                                    ? null
+                                                    : _DormRulesInlineEditor
+                                                          .winter;
+                                              }),
+                                          onToggleVentilationDuration: () =>
+                                              setState(() {
+                                                _expandedInlineEditor =
+                                                    _expandedInlineEditor ==
+                                                        _DormRulesInlineEditor
+                                                            .ventilationDuration
+                                                    ? null
+                                                    : _DormRulesInlineEditor
+                                                          .ventilationDuration;
+                                              }),
                                           onSummerTempChanged: (double value) =>
                                               setState(
                                                 () => _summerTemp = value,
@@ -720,6 +661,11 @@ class _DormRulesPageState extends State<DormRulesPage> {
                                           onWinterTempChanged: (double value) =>
                                               setState(
                                                 () => _winterTemp = value,
+                                              ),
+                                          onVentilationMinutesChanged:
+                                              (double value) => setState(
+                                                () =>
+                                                    _ventilationMinutes = value,
                                               ),
                                           onEditVentilationWindow: () =>
                                               _showSingleChoiceEditor(
@@ -734,16 +680,6 @@ class _DormRulesPageState extends State<DormRulesPage> {
                                                 onSelected: (String value) =>
                                                     _selectedVentilationWindow =
                                                         value,
-                                              ),
-                                          onEditVentilationMinutes: () =>
-                                              _showSliderEditor(
-                                                title: '通风时长',
-                                                value: _ventilationMinutes,
-                                                min: 10,
-                                                max: 60,
-                                                unit: '分钟',
-                                                onConfirmed: (double value) =>
-                                                    _ventilationMinutes = value,
                                               ),
                                           onExamWeekModeChanged: (bool value) =>
                                               setState(
@@ -784,6 +720,17 @@ class _DormRulesPageState extends State<DormRulesPage> {
                                         _DormRulesDisplayBody(
                                           dorm: dorm,
                                           palette: palette,
+                                          expandedGroup: _expandedDisplayGroup,
+                                          onToggleGroup:
+                                              (_DormRulesDisplayGroup group) {
+                                                setState(() {
+                                                  _expandedDisplayGroup =
+                                                      _expandedDisplayGroup ==
+                                                          group
+                                                      ? null
+                                                      : group;
+                                                });
+                                              },
                                         ),
                                         _DormRulesDisplayBottomBar(
                                           palette: palette,
@@ -1028,30 +975,40 @@ class _DormRulesHeaderPill extends StatelessWidget {
 }
 
 class _DormRulesDisplayBody extends StatelessWidget {
-  const _DormRulesDisplayBody({required this.dorm, required this.palette});
+  const _DormRulesDisplayBody({
+    required this.dorm,
+    required this.palette,
+    required this.expandedGroup,
+    required this.onToggleGroup,
+  });
 
   final Dorm dorm;
   final NightMoodPalette palette;
+  final _DormRulesDisplayGroup? expandedGroup;
+  final ValueChanged<_DormRulesDisplayGroup> onToggleGroup;
 
   @override
   Widget build(BuildContext context) {
-    final List<_DormRuleRowData> rules = _buildDisplayRules(dorm.rulesSettings);
+    final List<_DormRuleGroupData> groups = _buildDisplayRuleGroups(
+      dorm.rulesSettings,
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           _DormRulesIntroCard(palette: palette),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            '基本规则',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w600,
+          const SizedBox(height: AppSpacing.sm),
+          for (int index = 0; index < groups.length; index++) ...<Widget>[
+            _DormRulesDisplayGroupCard(
+              data: groups[index],
+              palette: palette,
+              expanded: expandedGroup == groups[index].group,
+              onTap: () => onToggleGroup(groups[index].group),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          _DormRulesGroupCard(rules: rules, palette: palette),
+            if (index != groups.length - 1)
+              const SizedBox(height: AppSpacing.sm),
+          ],
         ],
       ),
     );
@@ -1111,33 +1068,111 @@ class _DormRulesIntroCard extends StatelessWidget {
   }
 }
 
-class _DormRulesGroupCard extends StatelessWidget {
-  const _DormRulesGroupCard({required this.rules, required this.palette});
+class _DormRulesDisplayGroupCard extends StatelessWidget {
+  const _DormRulesDisplayGroupCard({
+    required this.data,
+    required this.palette,
+    required this.expanded,
+    required this.onTap,
+  });
 
-  final List<_DormRuleRowData> rules;
+  final _DormRuleGroupData data;
   final NightMoodPalette palette;
+  final bool expanded;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      key: const ValueKey<String>('dorm-rules-basic-group'),
-      borderRadius: AppRadius.card,
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      borderRadius: AppRadius.compactCard,
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
       color: Colors.white,
       boxShadow: const <BoxShadow>[],
       child: Column(
         children: <Widget>[
-          for (int index = 0; index < rules.length; index++) ...<Widget>[
-            _DormRulesGroupRow(
-              data: rules[index],
-              palette: palette,
-              iconFill: index.isEven
-                  ? _rulesMutedIconFill(palette)
-                  : _rulesAccentIconFill(palette),
+          AppSettingsItem(
+            key: ValueKey<String>('dorm-rules-display-group-${data.keySuffix}'),
+            title: data.title,
+            icon: data.icon,
+            iconColor: palette.primaryDeep,
+            iconBackgroundColor: AppColors.surfaceMuted,
+            iconContainerSize: AppSpacing.xxxl,
+            iconSize: AppSpacing.lg,
+            leadingWidth: AppSpacing.xxxl,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
             ),
-            if (index != rules.length - 1)
-              const SizedBox(height: AppSpacing.xxs),
-          ],
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  data.summary,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xxs),
+                AnimatedRotation(
+                  turns: expanded ? 0.25 : 0,
+                  duration: const Duration(milliseconds: 160),
+                  curve: Curves.easeOutCubic,
+                  child: const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: AppColors.textHint,
+                  ),
+                ),
+              ],
+            ),
+            onTap: onTap,
+          ),
+          KeyedSubtree(
+            key: ValueKey<String>(
+              'dorm-rules-display-group-${data.keySuffix}-body',
+            ),
+            child: AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 160),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (Widget child, Animation<double> animation) {
+                  return FadeTransition(opacity: animation, child: child);
+                },
+                child: expanded
+                    ? Padding(
+                        key: ValueKey<String>(
+                          'dorm-rules-display-group-${data.keySuffix}-rows',
+                        ),
+                        padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                        child: Column(
+                          children: <Widget>[
+                            for (
+                              int index = 0;
+                              index < data.rows.length;
+                              index++
+                            ) ...<Widget>[
+                              _DormRulesGroupRow(
+                                data: data.rows[index],
+                                palette: palette,
+                                iconFill: index.isEven
+                                    ? _rulesMutedIconFill(palette)
+                                    : _rulesAccentIconFill(palette),
+                              ),
+                              if (index != data.rows.length - 1)
+                                const SizedBox(height: AppSpacing.xxs),
+                            ],
+                          ],
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1399,7 +1434,7 @@ class _DormRulesEditBody extends StatelessWidget {
     required this.ventilationMinutes,
     required this.selectedVentilationWindow,
     required this.routineTags,
-    required this.expandedTemperatureEditor,
+    required this.expandedInlineEditor,
     required this.onEditQuietHours,
     required this.onEditLightsOff,
     required this.onEditNote,
@@ -1409,10 +1444,11 @@ class _DormRulesEditBody extends StatelessWidget {
     required this.onEditRoutineTags,
     required this.onToggleSummerTemp,
     required this.onToggleWinterTemp,
+    required this.onToggleVentilationDuration,
     required this.onSummerTempChanged,
     required this.onWinterTempChanged,
+    required this.onVentilationMinutesChanged,
     required this.onEditVentilationWindow,
-    required this.onEditVentilationMinutes,
     required this.onExamWeekModeChanged,
     required this.onBlackoutCurtainChanged,
     required this.onVibrationFirstChanged,
@@ -1434,7 +1470,7 @@ class _DormRulesEditBody extends StatelessWidget {
   final double ventilationMinutes;
   final String selectedVentilationWindow;
   final List<String> routineTags;
-  final _DormRulesTemperatureEditor? expandedTemperatureEditor;
+  final _DormRulesInlineEditor? expandedInlineEditor;
   final VoidCallback onEditQuietHours;
   final VoidCallback onEditLightsOff;
   final VoidCallback onEditNote;
@@ -1444,10 +1480,11 @@ class _DormRulesEditBody extends StatelessWidget {
   final VoidCallback onEditRoutineTags;
   final VoidCallback onToggleSummerTemp;
   final VoidCallback onToggleWinterTemp;
+  final VoidCallback onToggleVentilationDuration;
   final ValueChanged<double> onSummerTempChanged;
   final ValueChanged<double> onWinterTempChanged;
+  final ValueChanged<double> onVentilationMinutesChanged;
   final VoidCallback onEditVentilationWindow;
-  final VoidCallback onEditVentilationMinutes;
   final ValueChanged<bool> onExamWeekModeChanged;
   final ValueChanged<bool> onBlackoutCurtainChanged;
   final ValueChanged<bool> onVibrationFirstChanged;
@@ -1632,8 +1669,7 @@ class _DormRulesEditBody extends StatelessWidget {
                     palette: palette,
                     icon: Icons.sell_outlined,
                     title: '作息标签',
-                    value: _dormRulesPrimaryTag(routineTags),
-                    valueChip: true,
+                    value: _dormRulesTagsSummary(routineTags),
                     onTap: onEditRoutineTags,
                   ),
                 ],
@@ -1657,9 +1693,11 @@ class _DormRulesEditBody extends StatelessWidget {
                     sliderKey: const ValueKey<String>(
                       'dorm-rules-summer-temp-slider',
                     ),
+                    expanderKey: const ValueKey<String>(
+                      'dorm-rules-summer-temp-expander',
+                    ),
                     visible:
-                        expandedTemperatureEditor ==
-                        _DormRulesTemperatureEditor.summer,
+                        expandedInlineEditor == _DormRulesInlineEditor.summer,
                     valueLabel: '${summerTemp.round()}°C',
                     value: summerTemp,
                     min: 20,
@@ -1678,9 +1716,11 @@ class _DormRulesEditBody extends StatelessWidget {
                     sliderKey: const ValueKey<String>(
                       'dorm-rules-winter-temp-slider',
                     ),
+                    expanderKey: const ValueKey<String>(
+                      'dorm-rules-winter-temp-expander',
+                    ),
                     visible:
-                        expandedTemperatureEditor ==
-                        _DormRulesTemperatureEditor.winter,
+                        expandedInlineEditor == _DormRulesInlineEditor.winter,
                     valueLabel: '${winterTemp.round()}°C',
                     value: winterTemp,
                     min: 16,
@@ -1700,7 +1740,24 @@ class _DormRulesEditBody extends StatelessWidget {
                     icon: Icons.timer_outlined,
                     title: '通风时长',
                     value: '${ventilationMinutes.round()}分钟',
-                    onTap: onEditVentilationMinutes,
+                    onTap: onToggleVentilationDuration,
+                  ),
+                  _DormRulesInlineSlider(
+                    sliderKey: const ValueKey<String>(
+                      'dorm-rules-ventilation-duration-slider',
+                    ),
+                    expanderKey: const ValueKey<String>(
+                      'dorm-rules-ventilation-duration-expander',
+                    ),
+                    visible:
+                        expandedInlineEditor ==
+                        _DormRulesInlineEditor.ventilationDuration,
+                    valueLabel: '${ventilationMinutes.round()}分钟',
+                    value: ventilationMinutes,
+                    min: 10,
+                    max: 60,
+                    divisions: 50,
+                    onChanged: onVentilationMinutesChanged,
                   ),
                 ],
               ),
@@ -1884,7 +1941,6 @@ class _DormRulesCompactValueCard extends StatelessWidget {
     required this.title,
     required this.value,
     required this.onTap,
-    this.valueChip = false,
   });
 
   final NightMoodPalette palette;
@@ -1892,7 +1948,6 @@ class _DormRulesCompactValueCard extends StatelessWidget {
   final String title;
   final String value;
   final VoidCallback onTap;
-  final bool valueChip;
 
   @override
   Widget build(BuildContext context) {
@@ -1907,54 +1962,11 @@ class _DormRulesCompactValueCard extends StatelessWidget {
       titleStyle: _dormRulesEditItemTitleStyle(context),
       padding: _dormRulesEditItemPadding,
       onTap: onTap,
-      trailing: valueChip
-          ? _DormRulesValueChip(value: value, color: palette.primaryDeep)
-          : AppSettingsValueTrailing(
-              key: ValueKey<String>('dorm-rules-trailing-$title'),
-              value: value,
-              showChevron: true,
-            ),
-    );
-  }
-}
-
-class _DormRulesValueChip extends StatelessWidget {
-  const _DormRulesValueChip({required this.value, required this.color});
-
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.xxs,
-          ),
-          decoration: BoxDecoration(
-            color: color.withAlpha(24),
-            borderRadius: AppRadius.pill,
-          ),
-          child: Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.xxs),
-        const Icon(
-          Icons.chevron_right_rounded,
-          size: 18,
-          color: AppColors.textHint,
-        ),
-      ],
+      trailing: AppSettingsValueTrailing(
+        key: ValueKey<String>('dorm-rules-trailing-$title'),
+        value: value,
+        showChevron: true,
+      ),
     );
   }
 }
@@ -1962,6 +1974,7 @@ class _DormRulesValueChip extends StatelessWidget {
 class _DormRulesInlineSlider extends StatelessWidget {
   const _DormRulesInlineSlider({
     required this.sliderKey,
+    this.expanderKey,
     required this.visible,
     required this.valueLabel,
     required this.value,
@@ -1972,6 +1985,7 @@ class _DormRulesInlineSlider extends StatelessWidget {
   });
 
   final Key sliderKey;
+  final Key? expanderKey;
   final bool visible;
   final String valueLabel;
   final double value;
@@ -1982,62 +1996,73 @@ class _DormRulesInlineSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 180),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      child: visible
-          ? Padding(
-              key: ValueKey<Key>(sliderKey),
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md,
-                AppSpacing.xxs,
-                AppSpacing.md,
-                AppSpacing.sm,
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: <Widget>[
-                  const SizedBox(width: AppSpacing.xxxl),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Column(
-                      children: <Widget>[
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            valueLabel,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: AppColors.textSecondary,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                          ),
-                        ),
-                        SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            trackHeight: AppSpacing.xxs,
-                            overlayShape: SliderComponentShape.noOverlay,
-                            thumbShape: const RoundSliderThumbShape(
-                              enabledThumbRadius: AppSpacing.xs,
-                            ),
-                          ),
-                          child: Slider(
-                            key: sliderKey,
-                            value: value.clamp(min, max),
-                            min: min,
-                            max: max,
-                            divisions: divisions,
-                            onChanged: onChanged,
-                          ),
-                        ),
-                      ],
-                    ),
+    return KeyedSubtree(
+      key: expanderKey,
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topCenter,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 160),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (Widget child, Animation<double> animation) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          child: visible
+              ? Padding(
+                  key: ValueKey<Key>(sliderKey),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.md,
+                    AppSpacing.xxs,
+                    AppSpacing.md,
+                    AppSpacing.sm,
                   ),
-                ],
-              ),
-            )
-          : const SizedBox.shrink(),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: <Widget>[
+                      const SizedBox(width: AppSpacing.xxxl),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          children: <Widget>[
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                valueLabel,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: AppColors.textSecondary,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                              ),
+                            ),
+                            SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                trackHeight: AppSpacing.xxs,
+                                overlayShape: SliderComponentShape.noOverlay,
+                                thumbShape: const RoundSliderThumbShape(
+                                  enabledThumbRadius: AppSpacing.xs,
+                                ),
+                              ),
+                              child: Slider(
+                                key: sliderKey,
+                                value: value.clamp(min, max),
+                                min: min,
+                                max: max,
+                                divisions: divisions,
+                                onChanged: onChanged,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
+      ),
     );
   }
 }
@@ -2215,27 +2240,131 @@ class _DormRuleRowData {
   final String description;
 }
 
-List<_DormRuleRowData> _buildDisplayRules(DormRulesSettings settings) {
-  return <_DormRuleRowData>[
-    _DormRuleRowData(
-      icon: Icons.volume_off_rounded,
-      title: _quietHoursSummary(settings.quietHours),
-      description: '请使用耳机，避免外放声音',
+class _DormRuleGroupData {
+  const _DormRuleGroupData({
+    required this.group,
+    required this.keySuffix,
+    required this.icon,
+    required this.title,
+    required this.summary,
+    required this.rows,
+  });
+
+  final _DormRulesDisplayGroup group;
+  final String keySuffix;
+  final IconData icon;
+  final String title;
+  final String summary;
+  final List<_DormRuleRowData> rows;
+}
+
+List<_DormRuleGroupData> _buildDisplayRuleGroups(DormRulesSettings settings) {
+  return <_DormRuleGroupData>[
+    _DormRuleGroupData(
+      group: _DormRulesDisplayGroup.basic,
+      keySuffix: 'basic',
+      icon: Icons.rule_folder_outlined,
+      title: '基础规则',
+      summary: '3 项',
+      rows: <_DormRuleRowData>[
+        _DormRuleRowData(
+          icon: Icons.volume_off_rounded,
+          title: _quietHoursSummary(settings.quietHours),
+          description: '请使用耳机，避免外放声音',
+        ),
+        _DormRuleRowData(
+          icon: Icons.lightbulb_outline_rounded,
+          title: _compactRuleCopy(settings.lightsOffTime),
+          description: '请使用台灯或小夜灯',
+        ),
+        _DormRuleRowData(
+          icon: Icons.notes_rounded,
+          title: '补充说明',
+          description: _dormRulesPreviewLongText(settings.specialCase),
+        ),
+      ],
     ),
-    _DormRuleRowData(
-      icon: Icons.lightbulb_outline_rounded,
-      title: _compactRuleCopy(settings.lightsOffTime),
-      description: '请使用台灯或小夜灯',
+    _DormRuleGroupData(
+      group: _DormRulesDisplayGroup.lightQuiet,
+      keySuffix: 'light-quiet',
+      icon: Icons.light_mode_outlined,
+      title: '灯光与安静',
+      summary: '3 项',
+      rows: <_DormRuleRowData>[
+        _DormRuleRowData(
+          icon: Icons.menu_book_rounded,
+          title: '考试周模式',
+          description: settings.examWeekMode ? '提前进入静音协作' : '按日常公约执行',
+        ),
+        _DormRuleRowData(
+          icon: Icons.light_mode_outlined,
+          title: '个人照明要求',
+          description: _dormRulesPreviewLongText(settings.personalLighting),
+        ),
+        _DormRuleRowData(
+          icon: Icons.blinds_closed_outlined,
+          title: '遮光帘建议',
+          description: settings.blackoutCurtain ? '减少走廊和窗边杂光' : '暂不特别要求',
+        ),
+      ],
     ),
-    _DormRuleRowData(
-      icon: Icons.air_rounded,
-      title: '保持通风换气',
-      description: '每天至少开窗通风${settings.ventilationMinutes.round()}分钟',
+    _DormRuleGroupData(
+      group: _DormRulesDisplayGroup.routine,
+      keySuffix: 'routine',
+      icon: Icons.bedtime_rounded,
+      title: '闹钟与作息',
+      summary: '4 项',
+      rows: <_DormRuleRowData>[
+        _DormRuleRowData(
+          icon: Icons.vibration_rounded,
+          title: '优先震动提醒',
+          description: settings.vibrationFirst ? '先震动，降低打扰' : '可直接响铃提醒',
+        ),
+        _DormRuleRowData(
+          icon: Icons.alarm_on_rounded,
+          title: '闹钟响应时限',
+          description: '${settings.alarmResponseSeconds} 秒内处理响铃',
+        ),
+        _DormRuleRowData(
+          icon: Icons.bedtime_rounded,
+          title: '作息习惯备注',
+          description: _dormRulesPreviewLongText(settings.routineNote),
+        ),
+        _DormRuleRowData(
+          icon: Icons.sell_outlined,
+          title: '作息标签',
+          description: _dormRulesTagsSummary(settings.routineTags),
+        ),
+      ],
     ),
-    const _DormRuleRowData(
-      icon: Icons.delete_outline_rounded,
-      title: '及时清理垃圾',
-      description: '垃圾不过夜，保持宿舍整洁',
+    _DormRuleGroupData(
+      group: _DormRulesDisplayGroup.temperature,
+      keySuffix: 'temperature',
+      icon: Icons.thermostat_rounded,
+      title: '温度与通风',
+      summary: '4 项',
+      rows: <_DormRuleRowData>[
+        _DormRuleRowData(
+          icon: Icons.ac_unit_rounded,
+          title: '夏季空调',
+          description: '${settings.summerTempC.round()}°C',
+        ),
+        _DormRuleRowData(
+          icon: Icons.thermostat_rounded,
+          title: '冬季采暖',
+          description: '${settings.winterTempC.round()}°C',
+        ),
+        _DormRuleRowData(
+          icon: Icons.air_rounded,
+          title: '通风时段',
+          description: settings.ventilationWindow,
+        ),
+        _DormRuleRowData(
+          icon: Icons.timer_outlined,
+          title: '保持通风换气',
+          description: '每天至少开窗通风${settings.ventilationMinutes.round()}分钟',
+        ),
+      ],
     ),
   ];
 }
@@ -2301,11 +2430,23 @@ String _dormRulesPreviewText(String value) {
   return '${compact.substring(0, maxPreviewLength)}...';
 }
 
-String _dormRulesPrimaryTag(List<String> tags) {
+String _dormRulesPreviewLongText(String value) {
+  final String compact = value.trim().replaceAll(RegExp(r'\s+'), '');
+  if (compact.isEmpty) {
+    return '未设置';
+  }
+  const int maxPreviewLength = 22;
+  if (compact.length <= maxPreviewLength) {
+    return compact;
+  }
+  return '${compact.substring(0, maxPreviewLength)}...';
+}
+
+String _dormRulesTagsSummary(List<String> tags) {
   if (tags.isEmpty) {
     return '未设置';
   }
-  return tags.first;
+  return tags.join(' · ');
 }
 
 double _rulesPageWidthFactor(double maxWidth) {
