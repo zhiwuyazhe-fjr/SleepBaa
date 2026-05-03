@@ -2072,60 +2072,13 @@ class _DormRulesToggleCard extends StatelessWidget {
       leadingWidth: AppSpacing.xxxl,
       titleStyle: _dormRulesEditItemTitleStyle(context),
       padding: _dormRulesEditItemPadding,
-      trailing: _DormRulesThemeSwitch(
-        switchKey: title == '考试周模式'
+      trailing: AppSettingsToggle(
+        key: title == '考试周模式'
             ? const ValueKey<String>('dorm-rules-switch-exam-week')
             : null,
-        palette: palette,
         value: value,
-        onChanged: onChanged,
       ),
       onTap: () => onChanged(!value),
-    );
-  }
-}
-
-class _DormRulesThemeSwitch extends StatelessWidget {
-  const _DormRulesThemeSwitch({
-    this.switchKey,
-    required this.palette,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final Key? switchKey;
-  final NightMoodPalette palette;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Switch(
-      key: switchKey,
-      value: value,
-      onChanged: onChanged,
-      thumbColor: WidgetStateProperty.resolveWith<Color>((
-        Set<WidgetState> states,
-      ) {
-        return states.contains(WidgetState.selected)
-            ? palette.primary
-            : AppColors.surface;
-      }),
-      trackColor: WidgetStateProperty.resolveWith<Color>((
-        Set<WidgetState> states,
-      ) {
-        return states.contains(WidgetState.selected)
-            ? palette.primaryHighlight
-            : AppColors.surfaceMuted;
-      }),
-      trackOutlineColor: WidgetStateProperty.resolveWith<Color>((
-        Set<WidgetState> states,
-      ) {
-        return states.contains(WidgetState.selected)
-            ? palette.primarySoft
-            : AppColors.surfaceBorder;
-      }),
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
   }
 }
@@ -2160,8 +2113,11 @@ class _DormRulesEditBottomBar extends StatelessWidget {
                 child: PrimaryButton(
                   key: const ValueKey<String>('dorm-rules-cancel-button'),
                   label: '取消',
-                  variant: PrimaryButtonVariant.soft,
+                  variant: PrimaryButtonVariant.ghost,
                   size: PrimaryButtonSize.compact,
+                  backgroundColor: AppColors.surface,
+                  foregroundColor: AppColors.textPrimary,
+                  borderColor: AppColors.surfaceBorder,
                   onPressed: onCancel,
                 ),
               ),

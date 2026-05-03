@@ -1661,9 +1661,10 @@ void main() {
         buttonContext,
       ).extension<NightMoodPalette>()!;
       expect(cancelButton.size, PrimaryButtonSize.compact);
-      expect(cancelButton.variant, PrimaryButtonVariant.soft);
-      expect(cancelButton.backgroundColor, isNull);
-      expect(cancelButton.foregroundColor, isNull);
+      expect(cancelButton.variant, PrimaryButtonVariant.ghost);
+      expect(cancelButton.backgroundColor, AppColors.surface);
+      expect(cancelButton.foregroundColor, AppColors.textPrimary);
+      expect(cancelButton.borderColor, AppColors.surfaceBorder);
       expect(submitButton.size, PrimaryButtonSize.compact);
       expect(submitButton.variant, PrimaryButtonVariant.soft);
       expect(submitButton.backgroundColor, isNull);
@@ -1684,23 +1685,62 @@ void main() {
         AppSpacing.xxxl,
       );
 
-      final Switch examSwitch = tester.widget<Switch>(
-        find.byKey(const ValueKey<String>('dorm-rules-switch-exam-week')),
+      final Finder examToggleFinder = find.byKey(
+        const ValueKey<String>('dorm-rules-switch-exam-week'),
       );
+      final AppSettingsToggle examToggle = tester.widget<AppSettingsToggle>(
+        examToggleFinder,
+      );
+      expect(examToggle.value, isTrue);
       expect(
-        examSwitch.thumbColor?.resolve(<WidgetState>{WidgetState.selected}),
-        editPalette.primary,
+        find.descendant(of: examToggleFinder, matching: find.byType(Switch)),
+        findsNothing,
       );
+      final AnimatedContainer examToggleTrack = tester
+          .widget<AnimatedContainer>(
+            find.descendant(
+              of: examToggleFinder,
+              matching: find.byType(AnimatedContainer),
+            ),
+          );
+      final BoxDecoration examToggleDecoration =
+          examToggleTrack.decoration! as BoxDecoration;
+      final Border examToggleBorder = examToggleDecoration.border! as Border;
+      expect(examToggleTrack.duration, const Duration(milliseconds: 160));
+      expect(tester.getSize(examToggleFinder).width, 52);
+      expect(tester.getSize(examToggleFinder).height, 26);
+      expect(examToggleTrack.padding, const EdgeInsets.all(2));
+      expect(examToggleDecoration.color, editPalette.primarySoft);
       expect(
-        examSwitch.trackColor?.resolve(<WidgetState>{WidgetState.selected}),
-        editPalette.primaryHighlight,
+        examToggleBorder.top.color,
+        editPalette.primary.withValues(alpha: 0.28),
       );
-      expect(
-        examSwitch.trackOutlineColor?.resolve(<WidgetState>{
-          WidgetState.selected,
-        }),
-        editPalette.primarySoft,
+      final AnimatedAlign examToggleThumbAlign = tester.widget<AnimatedAlign>(
+        find.descendant(
+          of: examToggleFinder,
+          matching: find.byType(AnimatedAlign),
+        ),
       );
+      expect(examToggleThumbAlign.duration, const Duration(milliseconds: 160));
+      expect(examToggleThumbAlign.curve, Curves.easeOutCubic);
+      expect(examToggleThumbAlign.alignment, Alignment.centerRight);
+
+      await tester.tap(find.text('考试周模式'));
+      await tester.pump();
+      final AppSettingsToggle disabledExamToggle = tester
+          .widget<AppSettingsToggle>(examToggleFinder);
+      final AnimatedAlign disabledExamToggleThumbAlign = tester
+          .widget<AnimatedAlign>(
+            find.descendant(
+              of: examToggleFinder,
+              matching: find.byType(AnimatedAlign),
+            ),
+          );
+      expect(disabledExamToggle.value, isFalse);
+      expect(disabledExamToggleThumbAlign.alignment, Alignment.centerLeft);
+      await tester.tap(find.text('考试周模式'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<AppSettingsToggle>(examToggleFinder).value, isTrue);
 
       expect(find.byType(Slider), findsNothing);
       await tester.scrollUntilVisible(
