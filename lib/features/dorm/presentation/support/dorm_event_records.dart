@@ -6,20 +6,28 @@ import 'package:sleep_dorm_app/core/models/app_models.dart';
 
 class DormEventRecord {
   const DormEventRecord({
+    required this.id,
     required this.title,
     required this.detail,
     required this.color,
     required this.timeLabel,
     required this.icon,
+    required this.createdAt,
+    required this.isRead,
     this.actionRoute,
+    this.notificationId,
   });
 
+  final String id;
   final String title;
   final String detail;
   final Color color;
   final String timeLabel;
   final IconData icon;
+  final DateTime createdAt;
+  final bool isRead;
   final String? actionRoute;
+  final String? notificationId;
 }
 
 List<DormEventRecord> buildDormEventRecords({
@@ -27,42 +35,63 @@ List<DormEventRecord> buildDormEventRecords({
   required List<NotificationItem> notifications,
   required NightMoodPalette palette,
   DateTime? now,
+  bool fullHistory = false,
 }) {
   final DateTime effectiveNow = now ?? DateTime.now();
   final List<DormEventRecord> records = <DormEventRecord>[];
   final List<DormEvent> sortedEvents = dorm.events.toList(growable: false)
     ..sort((DormEvent a, DormEvent b) => b.createdAt.compareTo(a.createdAt));
 
-  for (final DormEvent event in sortedEvents.take(3)) {
+  final Iterable<DormEvent> eventRecords = fullHistory
+      ? sortedEvents
+      : sortedEvents.take(3);
+  for (final DormEvent event in eventRecords) {
     records.add(
       DormEventRecord(
+        id: 'event-${event.id}',
         title: event.title,
         detail: event.detail,
         color: _colorForDormEvent(event, palette),
         timeLabel: _relativeTimeLabel(event.createdAt, effectiveNow),
         icon: _iconForDormEvent(event),
+        createdAt: event.createdAt,
+        isRead: false,
       ),
     );
   }
 
-  NotificationItem? dormNotification;
-  for (final NotificationItem item in notifications) {
-    if (item.category == NotificationCategory.dorm) {
-      dormNotification = item;
-      break;
+  final List<NotificationItem> dormNotifications =
+      notifications
+          .where(
+            (NotificationItem item) =>
+                item.category == NotificationCategory.dorm,
+          )
+          .toList(growable: false)
+        ..sort(
+          (NotificationItem a, NotificationItem b) =>
+              b.createdAt.compareTo(a.createdAt),
+        );
+  final Iterable<NotificationItem> notificationRecords = fullHistory
+      ? dormNotifications
+      : dormNotifications.take(1);
+  for (final NotificationItem dormNotification in notificationRecords) {
+    if (records.any(
+      (DormEventRecord item) => item.title == dormNotification.title,
+    )) {
+      continue;
     }
-  }
-  if (dormNotification != null &&
-      !records.any(
-        (DormEventRecord item) => item.title == dormNotification!.title,
-      )) {
     records.add(
       DormEventRecord(
+        id: 'notification-${dormNotification.id}',
         title: dormNotification.title,
         detail: dormNotification.body,
         color: palette.primary,
         timeLabel: _relativeTimeLabel(dormNotification.createdAt, effectiveNow),
         icon: Icons.notifications_active_rounded,
+        createdAt: dormNotification.createdAt,
+        isRead: dormNotification.isRead,
+        notificationId: dormNotification.id,
+        actionRoute: dormNotification.route,
       ),
     );
   }
@@ -70,17 +99,20 @@ List<DormEventRecord> buildDormEventRecords({
   if (dorm.rules.isNotEmpty) {
     records.add(
       DormEventRecord(
+        id: 'rule-${dorm.rules.first.id}',
         title: '今晚默认执行寝室公约',
         detail: dorm.rules.first.title,
         color: palette.primary,
         timeLabel: '规则',
         icon: Icons.rule_rounded,
+        createdAt: effectiveNow,
+        isRead: false,
         actionRoute: AppRoutes.dormRules,
       ),
     );
   }
 
-  return records.take(4).toList(growable: false);
+  return fullHistory ? records : records.take(4).toList(growable: false);
 }
 
 String relativeDormEventTimeLabel(DateTime dateTime, {DateTime? now}) {
@@ -116,7 +148,7 @@ Color _colorForDormEvent(DormEvent event, NightMoodPalette palette) {
     DormEventType.memberStatus => palette.primary,
     DormEventType.ruleUpdate => palette.primary,
     DormEventType.notification => palette.primary,
-    DormEventType.invite => AppColors.calmBlue,
+    DormEventType.invite => palette.welcomeAccentColor,
     DormEventType.system => AppColors.textSecondary,
   };
 }

@@ -7,6 +7,7 @@ import 'package:sleep_dorm_app/features/analysis/presentation/pages/interference
 import 'package:sleep_dorm_app/features/assistant/presentation/pages/assistant_page.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/pages/assistant_history_page.dart';
 import 'package:sleep_dorm_app/features/auth/presentation/pages/phone_auth_page.dart';
+import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_current_status_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_invite_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_member_detail_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_page.dart';
@@ -65,6 +66,7 @@ abstract final class AppRoutes {
   static const String dormInvite = '/dorm/invite';
   static const String dormMember = '/dorm/member';
   static const String dormStatus = '/dorm/status';
+  static const String dormCurrentStatus = '/dorm/current_status';
   static const String dormBadges = '/dorm/badges';
   static const String profile = '/profile';
   static const String profileBadges = '/profile/badges';
@@ -350,6 +352,11 @@ GoRouter createRouter({
         path: AppRoutes.dormStatus,
         builder: (BuildContext context, GoRouterState state) =>
             const DormStatusPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.dormCurrentStatus,
+        builder: (BuildContext context, GoRouterState state) =>
+            const DormCurrentStatusPage(),
       ),
       GoRoute(
         path: AppRoutes.dormBadges,

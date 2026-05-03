@@ -30,10 +30,12 @@ import 'package:sleep_dorm_app/core/widgets/bottom_nav_shell.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/pages/assistant_page.dart';
 import 'package:sleep_dorm_app/features/auth/presentation/pages/phone_auth_page.dart';
+import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_current_status_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_member_detail_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_rules_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_status_page.dart';
+import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_journal_page.dart';
 import 'package:sleep_dorm_app/features/feedback/presentation/pages/morning_feedback_page.dart';
 import 'package:sleep_dorm_app/features/home/presentation/pages/home_post_sleep_page.dart';
@@ -77,7 +79,7 @@ void main() {
             null: const <Color>[
               Color(0xFF8EDDF2),
               Color(0xFF8EDDF2),
-              Color(0xFF00697A),
+              Color(0xFF8EDDF2),
             ],
             NightMood.happy: const <Color>[
               Color(0xFFFFA6C9),
@@ -1976,6 +1978,210 @@ void main() {
       findsWidgets,
     );
     expect(find.byType(AppMessageRecordCard), findsWidgets);
+  });
+
+  testWidgets('dorm current status more action opens the dedicated page', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+
+    await tester.scrollUntilVisible(
+      find.byKey(DormPage.currentStatusMoreKey),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    tester
+        .widget<TextButton>(find.byKey(DormPage.currentStatusMoreKey))
+        .onPressed!
+        .call();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DormCurrentStatusPage), findsOneWidget);
+    expect(find.text('当前室友状态'), findsWidgets);
+    expect(find.text('按室友查看'), findsOneWidget);
+  });
+
+  testWidgets('dorm hero settings opens existing dorm management page', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+
+    await tester.tap(find.byKey(DormPage.heroSettingsKey));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DormManagementPage), findsOneWidget);
+    expect(find.text('寝室管理'), findsWidgets);
+  });
+
+  testWidgets('dorm status page uses read-state tabs and grouped records', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormStatus,
+      clock: _dayClock,
+    );
+
+    expect(find.text('待处理'), findsWidgets);
+    expect(find.text('今天'), findsWidgets);
+    expect(find.text('更早'), findsWidgets);
+    expect(find.text('当前室友状态'), findsNothing);
+    expect(find.byKey(DormStatusPage.unreadOverviewKey), findsOneWidget);
+  });
+
+  test('full dorm status records include more than the home summary cap', () {
+    final DateTime now = _dayClock();
+    final Dorm dorm = Dorm(
+      id: 'dorm-test',
+      name: '测试寝室',
+      overview: '状态记录测试',
+      noiseDb: 32,
+      lightLabel: '偏暗',
+      quietLabel: '良好',
+      rules: const <DormRule>[
+        DormRule(id: 'quiet-hours', title: '安静时段', detail: '23:00 后安静'),
+      ],
+      members: const <DormMember>[],
+      events: List<DormEvent>.generate(5, (int index) {
+        return DormEvent(
+          id: 'event-$index',
+          type: DormEventType.memberStatus,
+          title: '室友状态 $index',
+          detail: '第 $index 条状态记录',
+          createdAt: now.subtract(Duration(minutes: index + 1)),
+        );
+      }),
+    );
+    final List<NotificationItem> notifications =
+        List<NotificationItem>.generate(
+          2,
+          (int index) => NotificationItem(
+            id: 'dorm-note-$index',
+            category: NotificationCategory.dorm,
+            title: '宿舍通知 $index',
+            body: '第 $index 条宿舍通知',
+            createdAt: now.subtract(Duration(hours: index + 1)),
+            route: AppRoutes.dorm,
+            readAt: index == 0 ? null : now,
+          ),
+        );
+    final NightMoodPalette palette = NightMoodPalette.fromMood(NightMood.calm);
+
+    final List<DormEventRecord> summaryRecords = buildDormEventRecords(
+      dorm: dorm,
+      notifications: notifications,
+      palette: palette,
+      now: now,
+    );
+    final List<DormEventRecord> fullRecords = buildDormEventRecords(
+      dorm: dorm,
+      notifications: notifications,
+      palette: palette,
+      now: now,
+      fullHistory: true,
+    );
+
+    expect(summaryRecords.length, 4);
+    expect(fullRecords, hasLength(8));
+    expect(
+      fullRecords.map((DormEventRecord record) => record.title),
+      containsAll(<String>['室友状态 4', '宿舍通知 1', '今晚默认执行寝室公约']),
+    );
+  });
+
+  testWidgets('tapping unread dorm status record marks it as read', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormStatus,
+      clock: _dayClock,
+    );
+
+    expect(find.byKey(DormStatusPage.activeRecordKey), findsOneWidget);
+    await tester.tap(find.byKey(DormStatusPage.activeRecordKey));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(DormStatusPage.activeRecordKey), findsOneWidget);
+
+    await tester.tap(find.text('更早').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(DormStatusPage.readRecordKey), findsOneWidget);
+  });
+
+  testWidgets('dorm status read state survives reopening the records page', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+
+    await tester.scrollUntilVisible(
+      find.byKey(DormPage.eventMoreKey),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    tester.widget<TextButton>(find.byKey(DormPage.eventMoreKey)).onPressed!();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(DormStatusPage.activeRecordKey));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.byKey(DormPage.eventMoreKey),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    tester.widget<TextButton>(find.byKey(DormPage.eventMoreKey)).onPressed!();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('更早').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('宿舍环境保持安静'), findsOneWidget);
+  });
+
+  testWidgets('dorm status pages use mood palette accents', (
+    WidgetTester tester,
+  ) async {
+    const NightMood mood = NightMood.calm;
+    final NightMoodPalette palette = NightMoodPalette.fromMood(mood);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormStatus,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(mood),
+    );
+
+    final ChoiceChip statusTab = tester.widget<ChoiceChip>(
+      find.widgetWithText(ChoiceChip, '待处理').first,
+    );
+    expect(statusTab.selectedColor, palette.welcomeAccentColor);
+    final AppMessageRecordCard statusOverview = tester
+        .widget<AppMessageRecordCard>(
+          find.byKey(DormStatusPage.unreadOverviewKey),
+        );
+    expect(statusOverview.iconBackgroundColor, palette.primaryHighlight);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormCurrentStatus,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(mood),
+    );
+
+    final ChoiceChip currentStatusTab = tester.widget<ChoiceChip>(
+      find.widgetWithText(ChoiceChip, '全部').first,
+    );
+    expect(currentStatusTab.selectedColor, palette.welcomeAccentColor);
+    final AppMessageRecordCard currentStatusOverview = tester
+        .widgetList<AppMessageRecordCard>(find.byType(AppMessageRecordCard))
+        .first;
+    expect(currentStatusOverview.iconBackgroundColor, palette.primaryHighlight);
   });
 
   testWidgets('dorm primary color uses the approved CTA token', (

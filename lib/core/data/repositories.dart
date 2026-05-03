@@ -183,6 +183,8 @@ abstract interface class DormRepository implements Listenable {
   Stream<List<DormMember>> watchMembers();
   Stream<List<DormRule>> watchRules();
   Stream<List<DormEvent>> watchEvents();
+  bool isDormStatusRecordRead(String recordId);
+  Future<void> markDormStatusRecordRead(String recordId);
   Future<void> createDorm({
     required String name,
     String? overview,

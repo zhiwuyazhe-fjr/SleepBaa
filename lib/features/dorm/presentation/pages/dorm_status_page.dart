@@ -5,14 +5,11 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
-import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_message_record_card.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_live_status_scope.dart';
-import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_member_status_presenter.dart';
-import 'package:sleep_dorm_app/features/dorm/presentation/widgets/dorm_member_avatar.dart';
 
-enum _DormStatusFilter { all, sleep, noise, reminder }
+enum _DormStatusReadFilter { unread, today, earlier }
 
 class DormStatusPage extends StatefulWidget {
   const DormStatusPage({super.key});
@@ -26,13 +23,19 @@ class DormStatusPage extends StatefulWidget {
   static const ValueKey<String> activeRecordKey = ValueKey<String>(
     'dorm-status-active-record',
   );
+  static const ValueKey<String> readRecordKey = ValueKey<String>(
+    'dorm-status-read-record',
+  );
+  static const ValueKey<String> unreadOverviewKey = ValueKey<String>(
+    'dorm-status-unread-overview',
+  );
 
   @override
   State<DormStatusPage> createState() => _DormStatusPageState();
 }
 
 class _DormStatusPageState extends State<DormStatusPage> {
-  _DormStatusFilter _filter = _DormStatusFilter.all;
+  _DormStatusReadFilter _filter = _DormStatusReadFilter.unread;
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +48,6 @@ class _DormStatusPageState extends State<DormStatusPage> {
           body: SafeArea(
             child: ListenableBuilder(
               listenable: Listenable.merge(<Listenable>[
-                services.authRepository,
                 services.dormRepository,
                 services.notificationRepository,
                 services.dormLiveStatusController,
@@ -53,20 +55,29 @@ class _DormStatusPageState extends State<DormStatusPage> {
               builder: (BuildContext context, Widget? child) {
                 final NightMoodPalette palette = context.nightMoodPalette;
                 final Dorm dorm = services.dormRepository.currentDorm;
-                final UserProfile currentUser =
-                    services.authRepository.currentUser;
-                final List<DormEventRecord> events = _filterEvents(
-                  buildDormEventRecords(
-                    dorm: dorm,
-                    notifications:
-                        services.notificationRepository.notifications,
-                    palette: palette,
-                    now: services.dormLiveStatusController.currentTime,
-                  ),
+                final DateTime now =
+                    services.dormLiveStatusController.currentTime;
+                final List<DormEventRecord> records =
+                    buildDormEventRecords(
+                          dorm: dorm,
+                          notifications:
+                              services.notificationRepository.notifications,
+                          palette: palette,
+                          now: now,
+                          fullHistory: true,
+                        )
+                        .map(
+                          (DormEventRecord record) =>
+                              _resolveReadState(services, record),
+                        )
+                        .toList(growable: false);
+                final List<DormEventRecord> visibleRecords = _recordsForFilter(
+                  records,
+                  now,
                 );
-                final int firstActiveIndex = events.indexWhere(
-                  _isActiveDormRecord,
-                );
+                final int unreadCount = records
+                    .where((DormEventRecord record) => !record.isRead)
+                    .length;
 
                 return LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints constraints) {
@@ -74,7 +85,7 @@ class _DormStatusPageState extends State<DormStatusPage> {
                       constraints.maxWidth,
                     );
                     return SingleChildScrollView(
-                      padding: const EdgeInsets.only(bottom: 112),
+                      padding: const EdgeInsets.only(bottom: AppSpacing.xxxl),
                       child: Align(
                         alignment: Alignment.topCenter,
                         child: FractionallySizedBox(
@@ -96,83 +107,21 @@ class _DormStatusPageState extends State<DormStatusPage> {
                                         Navigator.of(context).maybePop(),
                                   ),
                                   const SizedBox(height: AppSpacing.sm),
-                                  _DormStatusFilters(
+                                  _DormStatusOverview(unreadCount: unreadCount),
+                                  const SizedBox(height: AppSpacing.xs),
+                                  _DormStatusReadTabs(
                                     key: DormStatusPage.filterRowKey,
-                                    palette: palette,
                                     value: _filter,
-                                    onChanged: (_DormStatusFilter value) {
+                                    onChanged: (_DormStatusReadFilter value) {
                                       setState(() => _filter = value);
                                     },
                                   ),
-                                  const SizedBox(height: AppSpacing.md),
-                                  Text(
-                                    '今天',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelLarge
-                                        ?.copyWith(
-                                          color: AppColors.textSecondary,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                  ),
-                                  const SizedBox(height: AppSpacing.sm),
-                                  Column(
-                                    key: DormStatusPage.timelineKey,
-                                    children: events
-                                        .asMap()
-                                        .entries
-                                        .map((
-                                          MapEntry<int, DormEventRecord> entry,
-                                        ) {
-                                          final DormEventRecord event =
-                                              entry.value;
-                                          final bool active =
-                                              _isActiveDormRecord(event);
-                                          return Padding(
-                                            padding: const EdgeInsets.only(
-                                              bottom: AppSpacing.xs,
-                                            ),
-                                            child: AppMessageRecordCard(
-                                              key: entry.key == firstActiveIndex
-                                                  ? DormStatusPage
-                                                        .activeRecordKey
-                                                  : null,
-                                              icon: event.icon,
-                                              title: event.title,
-                                              detail: event.detail,
-                                              timeLabel: event.timeLabel,
-                                              highlighted: active,
-                                            ),
-                                          );
-                                        })
-                                        .toList(growable: false),
-                                  ),
-                                  const SizedBox(height: AppSpacing.xl),
-                                  Text(
-                                    '当前室友状态',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleLarge
-                                        ?.copyWith(
-                                          color: AppColors.textPrimary,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                  ),
-                                  const SizedBox(height: AppSpacing.sm),
-                                  ...dorm.members.map(
-                                    (DormMember member) => Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: AppSpacing.xs,
-                                      ),
-                                      child: _DormStatusMemberTile(
-                                        member: member,
-                                        currentUser: currentUser,
-                                        showPresence: shouldShowDormPresence(
-                                          dorm,
-                                          member,
-                                        ),
-                                      ),
-                                    ),
+                                  const SizedBox(height: AppSpacing.xs),
+                                  _DormStatusGroupedList(
+                                    label: _sectionLabel(_filter),
+                                    records: visibleRecords,
+                                    onTap: (DormEventRecord record) =>
+                                        _handleRecordTap(services, record),
                                   ),
                                 ],
                               ),
@@ -191,35 +140,78 @@ class _DormStatusPageState extends State<DormStatusPage> {
     );
   }
 
-  List<DormEventRecord> _filterEvents(List<DormEventRecord> events) {
+  DormEventRecord _resolveReadState(
+    AppServices services,
+    DormEventRecord record,
+  ) {
+    if (record.isRead ||
+        !services.dormRepository.isDormStatusRecordRead(record.id)) {
+      return record;
+    }
+    return DormEventRecord(
+      id: record.id,
+      title: record.title,
+      detail: record.detail,
+      color: record.color,
+      timeLabel: record.timeLabel,
+      icon: record.icon,
+      createdAt: record.createdAt,
+      isRead: true,
+      actionRoute: record.actionRoute,
+      notificationId: record.notificationId,
+    );
+  }
+
+  List<DormEventRecord> _recordsForFilter(
+    List<DormEventRecord> records,
+    DateTime now,
+  ) {
     return switch (_filter) {
-      _DormStatusFilter.all => events,
-      _DormStatusFilter.sleep =>
-        events
+      _DormStatusReadFilter.unread =>
+        records
+            .where((DormEventRecord record) => !record.isRead)
+            .toList(growable: false),
+      _DormStatusReadFilter.today =>
+        records
             .where(
-              (DormEventRecord event) =>
-                  event.title.contains('入睡') ||
-                  event.title.contains('起床') ||
-                  event.detail.contains('睡眠'),
+              (DormEventRecord record) =>
+                  record.isRead && _isSameDay(record.createdAt, now),
             )
             .toList(growable: false),
-      _DormStatusFilter.noise =>
-        events
+      _DormStatusReadFilter.earlier =>
+        records
             .where(
-              (DormEventRecord event) =>
-                  event.title.contains('噪') || event.detail.contains('声音'),
-            )
-            .toList(growable: false),
-      _DormStatusFilter.reminder =>
-        events
-            .where(
-              (DormEventRecord event) =>
-                  event.title.contains('提醒') ||
-                  event.detail.contains('提醒') ||
-                  event.title.contains('规则'),
+              (DormEventRecord record) =>
+                  record.isRead && !_isSameDay(record.createdAt, now),
             )
             .toList(growable: false),
     };
+  }
+
+  Future<void> _handleRecordTap(
+    AppServices services,
+    DormEventRecord record,
+  ) async {
+    if (record.isRead) {
+      return;
+    }
+    await services.dormRepository.markDormStatusRecordRead(record.id);
+    final String? notificationId = record.notificationId;
+    if (notificationId != null) {
+      await services.notificationRepository.markRead(notificationId);
+    }
+  }
+
+  String _sectionLabel(_DormStatusReadFilter filter) {
+    return switch (filter) {
+      _DormStatusReadFilter.unread => '待处理',
+      _DormStatusReadFilter.today => '今天',
+      _DormStatusReadFilter.earlier => '更早',
+    };
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 }
 
@@ -232,15 +224,13 @@ class _DormStatusHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: <Widget>[
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: AppRadius.button,
-            onTap: onBack,
-            child: const SizedBox.square(
-              dimension: 40,
-              child: Icon(Icons.chevron_left_rounded),
-            ),
+        IconButton(
+          onPressed: onBack,
+          icon: const Icon(Icons.chevron_left_rounded),
+          color: AppColors.textPrimary,
+          style: IconButton.styleFrom(
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
           ),
         ),
         const SizedBox(width: AppSpacing.xs),
@@ -256,32 +246,51 @@ class _DormStatusHeader extends StatelessWidget {
   }
 }
 
-class _DormStatusFilters extends StatelessWidget {
-  const _DormStatusFilters({
+class _DormStatusOverview extends StatelessWidget {
+  const _DormStatusOverview({required this.unreadCount});
+
+  final int unreadCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final NightMoodPalette palette = context.nightMoodPalette;
+    return AppMessageRecordCard(
+      key: DormStatusPage.unreadOverviewKey,
+      icon: Icons.notifications_active_rounded,
+      title: unreadCount > 0 ? '有 $unreadCount 条待处理状态' : '状态都已处理',
+      detail: unreadCount > 0 ? '点击状态卡片后会标记为已读' : '今天的寝室状态已经看完',
+      highlighted: false,
+      iconBackgroundColor: palette.primaryHighlight,
+      iconColor: AppColors.textStrong,
+    );
+  }
+}
+
+class _DormStatusReadTabs extends StatelessWidget {
+  const _DormStatusReadTabs({
     super.key,
-    required this.palette,
     required this.value,
     required this.onChanged,
   });
 
-  final NightMoodPalette palette;
-  final _DormStatusFilter value;
-  final ValueChanged<_DormStatusFilter> onChanged;
+  final _DormStatusReadFilter value;
+  final ValueChanged<_DormStatusReadFilter> onChanged;
 
   @override
   Widget build(BuildContext context) {
+    final NightMoodPalette palette = context.nightMoodPalette;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: _DormStatusFilter.values
-            .map((_DormStatusFilter filter) {
+        children: _DormStatusReadFilter.values
+            .map((_DormStatusReadFilter filter) {
               final bool selected = filter == value;
               return Padding(
                 padding: const EdgeInsets.only(right: AppSpacing.xs),
                 child: ChoiceChip(
                   selected: selected,
                   showCheckmark: false,
-                  label: Text(_filterLabel(filter)),
+                  label: Text(_tabLabel(filter)),
                   selectedColor: palette.welcomeAccentColor,
                   backgroundColor: AppColors.surfaceMuted,
                   side: BorderSide.none,
@@ -301,111 +310,98 @@ class _DormStatusFilters extends StatelessWidget {
     );
   }
 
-  String _filterLabel(_DormStatusFilter filter) {
+  String _tabLabel(_DormStatusReadFilter filter) {
     return switch (filter) {
-      _DormStatusFilter.all => '全部',
-      _DormStatusFilter.sleep => '睡眠',
-      _DormStatusFilter.noise => '噪声',
-      _DormStatusFilter.reminder => '提醒',
+      _DormStatusReadFilter.unread => '待处理',
+      _DormStatusReadFilter.today => '今天',
+      _DormStatusReadFilter.earlier => '更早',
     };
   }
 }
 
-class _DormStatusMemberTile extends StatelessWidget {
-  const _DormStatusMemberTile({
-    required this.member,
-    required this.currentUser,
-    required this.showPresence,
+class _DormStatusGroupedList extends StatelessWidget {
+  const _DormStatusGroupedList({
+    required this.label,
+    required this.records,
+    required this.onTap,
   });
 
-  final DormMember member;
-  final UserProfile currentUser;
-  final bool showPresence;
+  final String label;
+  final List<DormEventRecord> records;
+  final ValueChanged<DormEventRecord> onTap;
 
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
-    final bool isCurrentUser = member.uid == currentUser.uid;
-    final Color accentColor = dormPresenceSleepColor(
-      member,
-      showPresence: showPresence,
+    if (records.isEmpty) {
+      return Text(
+        '这一组暂时没有状态',
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+      );
+    }
+    final int firstUnreadIndex = records.indexWhere(
+      (DormEventRecord record) => !record.isRead,
     );
-    return AppCard(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
-      borderRadius: AppRadius.card,
-      boxShadow: const <BoxShadow>[],
-      child: Row(
-        children: <Widget>[
-          DormMemberAvatar(
-            key: ValueKey<String>('dorm-status-avatar-${member.uid}'),
-            size: 44,
-            accentColor: accentColor,
-            avatarBytes: isCurrentUser ? currentUser.avatarBytes : null,
-            avatarUrl: isCurrentUser
-                ? currentUser.avatarUrl ?? member.avatarUrl
-                : member.avatarUrl,
-            fallbackSeed:
-                isCurrentUser &&
-                    currentUser.avatarFallbackSeed?.trim().isNotEmpty == true
-                ? currentUser.avatarFallbackSeed!
-                : member.name,
+    final int firstReadIndex = records.indexWhere(
+      (DormEventRecord record) => record.isRead,
+    );
+    return Column(
+      key: DormStatusPage.timelineKey,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w700,
           ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  member.name,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xxs),
-                Text(
-                  member.note,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        ...records.asMap().entries.map((MapEntry<int, DormEventRecord> entry) {
+          final DormEventRecord record = entry.value;
+          final Key? key = _recordKey(
+            record: record,
+            index: entry.key,
+            firstUnreadIndex: firstUnreadIndex,
+            firstReadIndex: firstReadIndex,
+          );
+          return Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+            child: AppMessageRecordCard(
+              key: key,
+              icon: record.icon,
+              title: record.title,
+              detail: record.detail,
+              timeLabel: record.timeLabel,
+              highlighted: !record.isRead,
+              onTap: () => onTap(record),
+              iconBackgroundColor: !record.isRead
+                  ? palette.primaryHighlight
+                  : AppColors.surfaceMuted,
+              iconColor: AppColors.textStrong,
             ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: AppSpacing.xs,
-            ),
-            decoration: BoxDecoration(
-              color: palette.welcomeAccentColor,
-              borderRadius: AppRadius.pill,
-            ),
-            child: Text(
-              dormPresenceSleepLabel(member, showPresence: showPresence),
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: AppColors.textStrong,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
+          );
+        }),
+      ],
     );
   }
-}
 
-bool _isActiveDormRecord(DormEventRecord event) {
-  return event.title.contains('入睡') ||
-      event.title.contains('睡眠') ||
-      event.title.contains('噪') ||
-      event.title.contains('公约') ||
-      event.title.contains('提醒');
+  Key? _recordKey({
+    required DormEventRecord record,
+    required int index,
+    required int firstUnreadIndex,
+    required int firstReadIndex,
+  }) {
+    if (!record.isRead && index == firstUnreadIndex) {
+      return DormStatusPage.activeRecordKey;
+    }
+    if (record.isRead && index == firstReadIndex) {
+      return DormStatusPage.readRecordKey;
+    }
+    return null;
+  }
 }
 
 double _statusWidthFactor(double maxWidth) {

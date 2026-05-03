@@ -45,6 +45,12 @@ class DormPage extends StatefulWidget {
   static const ValueKey<String> eventMoreKey = ValueKey<String>(
     'dorm-events-more',
   );
+  static const ValueKey<String> currentStatusMoreKey = ValueKey<String>(
+    'dorm-current-status-more',
+  );
+  static const ValueKey<String> heroSettingsKey = ValueKey<String>(
+    'dorm-hero-settings',
+  );
   static const ValueKey<String> passiveToastKey = ValueKey<String>(
     'dorm-passive-toast',
   );
@@ -346,10 +352,11 @@ class _DormPencilScaffold extends StatelessWidget {
                           _DormAnimatedSection(
                             order: 2,
                             child: _DormPencilSectionHeader(
-                              title: '舍友动态',
-                              actionLabel: '邀请舍友',
+                              title: '当前室友状态',
+                              actionLabel: '查看全部',
+                              actionKey: DormPage.currentStatusMoreKey,
                               onAction: () =>
-                                  context.push(AppRoutes.dormInvite),
+                                  context.push(AppRoutes.dormCurrentStatus),
                             ),
                           ),
                           const SizedBox(height: AppSpacing.sm),
@@ -560,7 +567,7 @@ class _DormPencilSectionHeader extends StatelessWidget {
             key: actionKey,
             onPressed: onAction,
             style: TextButton.styleFrom(
-              foregroundColor: palette.primaryDeep,
+              foregroundColor: palette.welcomeAccentColor,
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               visualDensity: VisualDensity.compact,
@@ -570,7 +577,7 @@ class _DormPencilSectionHeader extends StatelessWidget {
             label: Text(
               actionLabel!,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: palette.primaryDeep,
+                color: palette.welcomeAccentColor,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -618,18 +625,29 @@ class _DormHeroCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              '宿舍脉搏',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: palette.primaryDeep.withAlpha(176),
-                fontWeight: FontWeight.w700,
-              ),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    '宿舍脉搏',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppColors.textStrong,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                _HeroActionPill(
+                  key: DormPage.heroSettingsKey,
+                  label: '寝室设置',
+                  onTap: () => context.push(AppRoutes.profileAccountDorm),
+                ),
+              ],
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
               '今晚宿舍整体状态平稳',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: palette.primaryDeep,
+                color: AppColors.textStrong,
                 height: 1.1,
                 fontWeight: FontWeight.w800,
               ),
@@ -657,19 +675,20 @@ class _DormPulseBadgePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final NightMoodPalette palette = context.nightMoodPalette;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: Colors.white.withAlpha(236),
+        color: AppColors.surface.withAlpha(236),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(badge.icon, size: 16, color: const Color(0xFF076B5E)),
+          Icon(badge.icon, size: 16, color: palette.welcomeAccentColor),
           const SizedBox(width: AppSpacing.xs),
           Text(
             badge.label,
@@ -693,11 +712,11 @@ class _HeroInfoPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.sm,
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xxs,
       ),
       decoration: BoxDecoration(
-        color: Colors.white.withAlpha(246),
+        color: AppColors.surface.withAlpha(246),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -711,6 +730,49 @@ class _HeroInfoPill extends StatelessWidget {
   }
 }
 
+class _HeroActionPill extends StatelessWidget {
+  const _HeroActionPill({super.key, required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface,
+      borderRadius: AppRadius.pill,
+      child: InkWell(
+        borderRadius: AppRadius.pill,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xs,
+            vertical: AppSpacing.xxs,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const Icon(
+                Icons.settings_rounded,
+                size: AppSpacing.sm,
+                color: AppColors.textStrong,
+              ),
+              const SizedBox(width: AppSpacing.xxs),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppColors.textStrong,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _HeroRatingPill extends StatelessWidget {
   const _HeroRatingPill({required this.score});
 
@@ -718,13 +780,14 @@ class _HeroRatingPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final NightMoodPalette palette = context.nightMoodPalette;
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.sm,
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xxs,
       ),
       decoration: BoxDecoration(
-        color: Colors.white.withAlpha(246),
+        color: AppColors.surface.withAlpha(246),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -740,12 +803,12 @@ class _HeroRatingPill extends StatelessWidget {
           const SizedBox(width: AppSpacing.xs),
           ...List<Widget>.generate(
             score,
-            (_) => const Padding(
-              padding: EdgeInsets.only(left: 2),
+            (_) => Padding(
+              padding: const EdgeInsets.only(left: 2),
               child: Icon(
                 Icons.star_rounded,
                 size: 16,
-                color: Color(0xFFF6B400),
+                color: palette.welcomeAccentColor,
               ),
             ),
           ),
@@ -772,7 +835,8 @@ class _DormMemberCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color accentColor = _memberColor(member.status);
+    final NightMoodPalette palette = context.nightMoodPalette;
+    final Color accentColor = _memberColor(member.status, palette);
     final String? resolvedBadgeId = isCurrentUser
         ? currentUserProfile?.displayBadgeId ?? member.displayBadgeId
         : member.displayBadgeId;
@@ -832,14 +896,17 @@ class _DormMemberCard extends StatelessWidget {
                           width: 18,
                           height: 18,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF6B400),
+                            color: palette.welcomeAccentColor,
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
+                            border: Border.all(
+                              color: AppColors.surface,
+                              width: 2,
+                            ),
                           ),
                           child: const Icon(
                             Icons.star_rounded,
                             size: 10,
-                            color: Colors.white,
+                            color: AppColors.surface,
                           ),
                         ),
                       ),
@@ -913,7 +980,7 @@ class _DormHubCard extends StatelessWidget {
                   color: palette.primaryHighlight,
                 ),
                 alignment: Alignment.center,
-                child: Icon(action.icon, color: palette.primaryDeep, size: 18),
+                child: Icon(action.icon, color: AppColors.textStrong, size: 18),
               ),
               const Spacer(),
               if (action.showDot)
@@ -1026,12 +1093,12 @@ bool _isDormHomeActiveRecord(DormEventRecord event) {
       event.title.contains('公约');
 }
 
-Color _memberColor(DormMemberStatus status) {
+Color _memberColor(DormMemberStatus status, NightMoodPalette palette) {
   return switch (status) {
-    DormMemberStatus.sleeping => const Color(0xFF4458D8),
-    DormMemberStatus.quiet => const Color(0xFF2D9272),
-    DormMemberStatus.away => const Color(0xFF8A8F9F),
-    DormMemberStatus.active => const Color(0xFFF39A3C),
+    DormMemberStatus.sleeping => palette.primary,
+    DormMemberStatus.quiet => palette.calmBlue,
+    DormMemberStatus.away => AppColors.textHint,
+    DormMemberStatus.active => palette.welcomeAccentColor,
   };
 }
 
@@ -1182,7 +1249,7 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
           child: Text(
             label,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: selected ? Colors.white : AppColors.textSecondary,
+              color: selected ? AppColors.surface : AppColors.textSecondary,
               fontWeight: FontWeight.w700,
             ),
           ),
