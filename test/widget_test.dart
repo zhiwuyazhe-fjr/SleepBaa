@@ -2003,6 +2003,19 @@ void main() {
     expect(find.text('按室友查看'), findsOneWidget);
   });
 
+  testWidgets('dorm current status overview has no fake view action', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormCurrentStatus,
+      clock: _dayClock,
+    );
+
+    expect(find.text('当前室友状态'), findsWidgets);
+    expect(find.text('查看'), findsNothing);
+  });
+
   testWidgets('dorm hero settings opens existing dorm management page', (
     WidgetTester tester,
   ) async {
@@ -2091,6 +2104,50 @@ void main() {
     );
   });
 
+  test('dorm member records are filtered before applying the recent cap', () {
+    final DateTime now = _dayClock();
+    final Dorm dorm = Dorm(
+      id: 'dorm-test',
+      name: '测试寝室',
+      overview: '成员动态测试',
+      noiseDb: 32,
+      lightLabel: '偏暗',
+      quietLabel: '良好',
+      rules: const <DormRule>[],
+      members: const <DormMember>[],
+      events: <DormEvent>[
+        for (int index = 0; index < 4; index += 1)
+          DormEvent(
+            id: 'other-$index',
+            type: DormEventType.memberStatus,
+            title: '其他室友动态 $index',
+            detail: '不应该进入目标室友详情',
+            createdAt: now.subtract(Duration(minutes: index + 1)),
+            actorUid: 'roommate-b',
+          ),
+        DormEvent(
+          id: 'target-status',
+          type: DormEventType.memberStatus,
+          title: '林淯已切换到睡眠模式',
+          detail: '目标室友自己的动态',
+          createdAt: now.subtract(const Duration(minutes: 8)),
+          actorUid: 'roommate-a',
+        ),
+      ],
+    );
+
+    final List<DormEventRecord> records = buildDormMemberEventRecords(
+      dorm: dorm,
+      memberUid: 'roommate-a',
+      palette: NightMoodPalette.fromMood(NightMood.sad),
+      now: now,
+    );
+
+    expect(records.map((DormEventRecord record) => record.title), <String>[
+      '林淯已切换到睡眠模式',
+    ]);
+  });
+
   testWidgets('tapping unread dorm status record marks it as read', (
     WidgetTester tester,
   ) async {
@@ -2161,6 +2218,20 @@ void main() {
       find.widgetWithText(ChoiceChip, '待处理').first,
     );
     expect(statusTab.selectedColor, palette.welcomeAccentColor);
+    expect(
+      statusTab.color?.resolve(<WidgetState>{
+        WidgetState.selected,
+        WidgetState.pressed,
+      }),
+      palette.welcomeAccentColor,
+    );
+    final ChoiceChip todayTab = tester.widget<ChoiceChip>(
+      find.widgetWithText(ChoiceChip, '今天').first,
+    );
+    expect(
+      todayTab.color?.resolve(<WidgetState>{WidgetState.pressed}),
+      AppColors.surfaceMuted,
+    );
     final AppMessageRecordCard statusOverview = tester
         .widget<AppMessageRecordCard>(
           find.byKey(DormStatusPage.unreadOverviewKey),
@@ -2178,10 +2249,49 @@ void main() {
       find.widgetWithText(ChoiceChip, '全部').first,
     );
     expect(currentStatusTab.selectedColor, palette.welcomeAccentColor);
+    expect(
+      currentStatusTab.color?.resolve(<WidgetState>{
+        WidgetState.selected,
+        WidgetState.pressed,
+      }),
+      palette.welcomeAccentColor,
+    );
     final AppMessageRecordCard currentStatusOverview = tester
         .widgetList<AppMessageRecordCard>(find.byType(AppMessageRecordCard))
         .first;
     expect(currentStatusOverview.iconBackgroundColor, palette.primaryHighlight);
+  });
+
+  testWidgets('dorm home event time labels are not rendered as action pills', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+
+    await tester.scrollUntilVisible(
+      find.byKey(DormPage.eventMoreKey),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('规则'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, '规则'), findsNothing);
+  });
+
+  testWidgets('dorm quiet rating is aligned to the right of the hero card', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+
+    final Finder hero = find.byKey(DormPage.heroGradientKey);
+    final Finder lastStar = find
+        .descendant(of: hero, matching: find.byIcon(Icons.star_rounded))
+        .last;
+
+    final double heroRight = tester.getTopRight(hero).dx;
+    final double ratingRight = tester.getTopRight(lastStar).dx;
+
+    expect(heroRight - ratingRight, lessThanOrEqualTo(AppSpacing.xxl));
   });
 
   testWidgets('dorm primary color uses the approved CTA token', (
@@ -2204,6 +2314,8 @@ void main() {
       find.byKey(const ValueKey<String>('dorm-member-private-status-pill')),
       findsOneWidget,
     );
+    expect(find.text('林淯已切换到睡眠模式'), findsOneWidget);
+    expect(find.text('宿舍环境保持安静'), findsNothing);
     expect(find.byType(AppMessageRecordCard), findsWidgets);
   });
 

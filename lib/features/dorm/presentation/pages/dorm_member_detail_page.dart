@@ -64,11 +64,12 @@ class DormMemberDetailPage extends StatelessWidget {
                 ? currentUser.avatarFallbackSeed!
                 : member.name;
             final NightMoodPalette palette = context.nightMoodPalette;
-            final List<DormEventRecord> memberEvents = buildDormEventRecords(
-              dorm: dorm,
-              notifications: services.notificationRepository.notifications,
-              palette: palette,
-            );
+            final List<DormEventRecord> memberEvents =
+                buildDormMemberEventRecords(
+                  dorm: dorm,
+                  memberUid: member.uid,
+                  palette: palette,
+                );
 
             return LayoutBuilder(
               builder: (BuildContext context, BoxConstraints constraints) {

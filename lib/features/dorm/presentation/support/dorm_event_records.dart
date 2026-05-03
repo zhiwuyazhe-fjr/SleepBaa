@@ -46,18 +46,7 @@ List<DormEventRecord> buildDormEventRecords({
       ? sortedEvents
       : sortedEvents.take(3);
   for (final DormEvent event in eventRecords) {
-    records.add(
-      DormEventRecord(
-        id: 'event-${event.id}',
-        title: event.title,
-        detail: event.detail,
-        color: _colorForDormEvent(event, palette),
-        timeLabel: _relativeTimeLabel(event.createdAt, effectiveNow),
-        icon: _iconForDormEvent(event),
-        createdAt: event.createdAt,
-        isRead: false,
-      ),
-    );
+    records.add(_recordFromDormEvent(event, palette, effectiveNow));
   }
 
   final List<NotificationItem> dormNotifications =
@@ -115,8 +104,48 @@ List<DormEventRecord> buildDormEventRecords({
   return fullHistory ? records : records.take(4).toList(growable: false);
 }
 
+List<DormEventRecord> buildDormMemberEventRecords({
+  required Dorm dorm,
+  required String memberUid,
+  required NightMoodPalette palette,
+  DateTime? now,
+  int limit = 3,
+}) {
+  final DateTime effectiveNow = now ?? DateTime.now();
+  final List<DormEvent> memberEvents =
+      dorm.events
+          .where((DormEvent event) => event.actorUid == memberUid)
+          .toList(growable: false)
+        ..sort(
+          (DormEvent a, DormEvent b) => b.createdAt.compareTo(a.createdAt),
+        );
+  return memberEvents
+      .take(limit)
+      .map(
+        (DormEvent event) => _recordFromDormEvent(event, palette, effectiveNow),
+      )
+      .toList(growable: false);
+}
+
 String relativeDormEventTimeLabel(DateTime dateTime, {DateTime? now}) {
   return _relativeTimeLabel(dateTime, now ?? DateTime.now());
+}
+
+DormEventRecord _recordFromDormEvent(
+  DormEvent event,
+  NightMoodPalette palette,
+  DateTime now,
+) {
+  return DormEventRecord(
+    id: 'event-${event.id}',
+    title: event.title,
+    detail: event.detail,
+    color: _colorForDormEvent(event, palette),
+    timeLabel: _relativeTimeLabel(event.createdAt, now),
+    icon: _iconForDormEvent(event),
+    createdAt: event.createdAt,
+    isRead: false,
+  );
 }
 
 String _relativeTimeLabel(DateTime dateTime, DateTime now) {

@@ -291,6 +291,7 @@ class _DormStatusReadTabs extends StatelessWidget {
                   selected: selected,
                   showCheckmark: false,
                   label: Text(_tabLabel(filter)),
+                  color: _dormStatusChipColor(palette),
                   selectedColor: palette.welcomeAccentColor,
                   backgroundColor: AppColors.surfaceMuted,
                   side: BorderSide.none,
@@ -317,6 +318,15 @@ class _DormStatusReadTabs extends StatelessWidget {
       _DormStatusReadFilter.earlier => '更早',
     };
   }
+}
+
+WidgetStateProperty<Color?> _dormStatusChipColor(NightMoodPalette palette) {
+  return WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+    if (states.contains(WidgetState.selected)) {
+      return palette.welcomeAccentColor;
+    }
+    return AppColors.surfaceMuted;
+  });
 }
 
 class _DormStatusGroupedList extends StatelessWidget {

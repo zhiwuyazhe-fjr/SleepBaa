@@ -189,23 +189,6 @@ class _CurrentStatusOverviewCard extends StatelessWidget {
       highlighted: false,
       iconBackgroundColor: palette.primaryHighlight,
       iconColor: AppColors.textStrong,
-      trailing: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: AppSpacing.xxs,
-        ),
-        decoration: BoxDecoration(
-          color: palette.welcomeAccentColor,
-          borderRadius: AppRadius.pill,
-        ),
-        child: Text(
-          '查看',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: AppColors.textStrong,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
     );
   }
 }
@@ -231,6 +214,7 @@ class _CurrentStatusFilters extends StatelessWidget {
                   selected: selected,
                   showCheckmark: false,
                   label: Text(_filterLabel(filter)),
+                  color: _currentStatusChipColor(palette),
                   selectedColor: palette.welcomeAccentColor,
                   backgroundColor: AppColors.surfaceMuted,
                   side: BorderSide.none,
@@ -257,6 +241,15 @@ class _CurrentStatusFilters extends StatelessWidget {
       _CurrentStatusFilter.pending => '待确认',
     };
   }
+}
+
+WidgetStateProperty<Color?> _currentStatusChipColor(NightMoodPalette palette) {
+  return WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+    if (states.contains(WidgetState.selected)) {
+      return palette.welcomeAccentColor;
+    }
+    return AppColors.surfaceMuted;
+  });
 }
 
 class _CurrentStatusList extends StatelessWidget {

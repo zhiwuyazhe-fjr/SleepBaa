@@ -451,11 +451,6 @@ class _DormPencilScaffold extends StatelessWidget {
                                       ),
                                       child: _DormEventTile(
                                         event: event,
-                                        onActionTap: event.actionRoute == null
-                                            ? null
-                                            : () => context.push(
-                                                event.actionRoute!,
-                                              ),
                                         onTap: () =>
                                             context.push(AppRoutes.dormStatus),
                                       ),
@@ -653,13 +648,36 @@ class _DormHeroCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: <Widget>[
-                _HeroInfoPill(label: onlineLabel),
-                _HeroRatingPill(score: quietScore),
-              ],
+            LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                final Widget onlinePill = _HeroInfoPill(label: onlineLabel);
+                final Widget ratingPill = _HeroRatingPill(score: quietScore);
+                if (constraints.maxWidth < 280) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      Align(alignment: Alignment.centerLeft, child: onlinePill),
+                      const SizedBox(height: AppSpacing.sm),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: ratingPill,
+                      ),
+                    ],
+                  );
+                }
+                return Row(
+                  children: <Widget>[
+                    Flexible(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: onlinePill,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Align(alignment: Alignment.centerRight, child: ratingPill),
+                  ],
+                );
+              },
             ),
           ],
         ),
@@ -1019,19 +1037,13 @@ class _DormHubCard extends StatelessWidget {
 }
 
 class _DormEventTile extends StatelessWidget {
-  const _DormEventTile({
-    required this.event,
-    required this.onTap,
-    this.onActionTap,
-  });
+  const _DormEventTile({required this.event, required this.onTap});
 
   final DormEventRecord event;
   final VoidCallback onTap;
-  final VoidCallback? onActionTap;
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
     final bool active = _isDormHomeActiveRecord(event);
     return AppMessageRecordCard(
       onTap: onTap,
@@ -1042,39 +1054,16 @@ class _DormEventTile extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          if (onActionTap != null)
-            TextButton(
-              onPressed: onActionTap,
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.textStrong,
-                backgroundColor: palette.welcomeAccentColor,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: 6,
-                ),
-                shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
-              ),
-              child: Text(
-                event.timeLabel,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: AppColors.textStrong,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                event.timeLabel,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: active
-                      ? AppColors.textStrong
-                      : AppColors.textSecondary,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                ),
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              event.timeLabel,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: active ? AppColors.textStrong : AppColors.textSecondary,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
+          ),
           const SizedBox(width: AppSpacing.xs),
           const Icon(
             Icons.chevron_right_rounded,
