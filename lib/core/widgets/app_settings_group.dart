@@ -61,6 +61,9 @@ class AppSettingsItem extends StatelessWidget {
     this.titleStyle,
     this.trailing,
     this.onTap,
+    this.iconBackgroundColor,
+    this.iconContainerSize = 36,
+    this.iconContainerBorderRadius,
     this.padding = const EdgeInsets.symmetric(
       horizontal: AppSpacing.md,
       vertical: AppSpacing.sm,
@@ -77,6 +80,9 @@ class AppSettingsItem extends StatelessWidget {
   final TextStyle? titleStyle;
   final Widget? trailing;
   final VoidCallback? onTap;
+  final Color? iconBackgroundColor;
+  final double iconContainerSize;
+  final BorderRadius? iconContainerBorderRadius;
   final EdgeInsetsGeometry padding;
   final double leadingWidth;
   final double? minHeight;
@@ -92,15 +98,14 @@ class AppSettingsItem extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
             if (icon != null) ...<Widget>[
-              SizedBox(
-                width: leadingWidth,
-                child: Center(
-                  child: Icon(
-                    icon,
-                    size: iconSize,
-                    color: iconColor ?? AppColors.textPrimary,
-                  ),
-                ),
+              _SettingsItemIcon(
+                icon: icon!,
+                iconColor: iconColor ?? AppColors.textPrimary,
+                iconSize: iconSize,
+                backgroundColor: iconBackgroundColor,
+                containerSize: iconContainerSize,
+                borderRadius: iconContainerBorderRadius,
+                leadingWidth: leadingWidth,
               ),
               const SizedBox(width: AppSpacing.sm),
             ],
@@ -144,6 +149,49 @@ class AppSettingsItem extends StatelessWidget {
         },
         child: row,
       ),
+    );
+  }
+}
+
+class _SettingsItemIcon extends StatelessWidget {
+  const _SettingsItemIcon({
+    required this.icon,
+    required this.iconColor,
+    required this.iconSize,
+    required this.backgroundColor,
+    required this.containerSize,
+    required this.borderRadius,
+    required this.leadingWidth,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final double iconSize;
+  final Color? backgroundColor;
+  final double containerSize;
+  final BorderRadius? borderRadius;
+  final double leadingWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    if (backgroundColor == null) {
+      return SizedBox(
+        width: leadingWidth,
+        child: Center(
+          child: Icon(icon, size: iconSize, color: iconColor),
+        ),
+      );
+    }
+
+    return Container(
+      width: containerSize,
+      height: containerSize,
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: borderRadius ?? AppRadius.iconContainer,
+      ),
+      alignment: Alignment.center,
+      child: Icon(icon, size: iconSize, color: iconColor),
     );
   }
 }
