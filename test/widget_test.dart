@@ -64,6 +64,55 @@ void main() {
         .setMockMethodCallHandler(_secureStorageChannel, null);
   });
 
+  test(
+    'night mood palette uses new hero gradients and neutral dark surface',
+    () {
+      final Map<NightMood?, List<Color>> expectedHeroGradients =
+          <NightMood?, List<Color>>{
+            null: const <Color>[
+              Color(0xFF8EDDF2),
+              Color(0xFF8EDDF2),
+              Color(0xFF00697A),
+            ],
+            NightMood.happy: const <Color>[
+              Color(0xFFFFA6C9),
+              Color(0xFFF7B6D1),
+              Color(0xFFB94C7E),
+            ],
+            NightMood.sad: const <Color>[
+              Color(0xFFFF9A72),
+              Color(0xFFF6B59A),
+              Color(0xFFBE6B4A),
+            ],
+            NightMood.calm: const <Color>[
+              Color(0xFF8DE0C2),
+              Color(0xFFA8E5D1),
+              Color(0xFF2C8E78),
+            ],
+          };
+
+      for (final MapEntry<NightMood?, List<Color>> entry
+          in expectedHeroGradients.entries) {
+        final NightMoodPalette palette = NightMoodPalette.fromMood(entry.key);
+
+        expect(
+          <Color>[
+            palette.heroGradientStart,
+            palette.heroGradientMid,
+            palette.heroGradientEnd,
+          ],
+          entry.value,
+          reason: '${entry.key?.name ?? 'default'} hero gradient',
+        );
+        expect(
+          palette.welcomeSurfaceColor,
+          AppColors.darkSurface,
+          reason: '${entry.key?.name ?? 'default'} welcome surface',
+        );
+      }
+    },
+  );
+
   test('cloudbase auth gate only blocks before bootstrap completes', () {
     expect(
       shouldShowCloudBaseAuthBlockingScreen(
@@ -1497,9 +1546,9 @@ void main() {
     final LinearGradient gradient = decoration.gradient! as LinearGradient;
     final NightMoodPalette palette = NightMoodPalette.fromMood(NightMood.calm);
 
-    expect(gradient.colors.first, palette.welcomeAccentColor);
-    expect(gradient.colors[1], palette.primarySoft);
-    expect(gradient.colors.last, palette.primary);
+    expect(gradient.colors.first, palette.heroGradientStart);
+    expect(gradient.colors[1], palette.heroGradientMid);
+    expect(gradient.colors.last, palette.heroGradientEnd);
   });
 
   testWidgets(

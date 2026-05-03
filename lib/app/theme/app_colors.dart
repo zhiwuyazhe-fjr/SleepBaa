@@ -38,9 +38,6 @@ abstract final class AppColors {
   static const Color assistantFabShellEnd = Color(0xFF121417);
   static const Color assistantFabShadow = Color(0x66000000);
 
-  static const Color success = Color(0xFF4F8B6F);
-  static const Color warning = Color(0xFFAD7A36);
-
   static const List<BoxShadow> cardShadow = <BoxShadow>[
     BoxShadow(color: Color(0x12000000), blurRadius: 24, offset: Offset(0, 8)),
     BoxShadow(color: Color(0x0C000000), blurRadius: 12, offset: Offset(0, 4)),

@@ -1258,14 +1258,14 @@ class _DormRulesGroupRow extends StatelessWidget {
               height: AppSpacing.xl,
             ),
             decoration: BoxDecoration(
-              color: AppColors.success,
+              color: palette.welcomeAccentColor,
               borderRadius: AppRadius.pill,
             ),
             alignment: Alignment.center,
-            child: const Icon(
+            child: Icon(
               Icons.check_rounded,
               size: AppSpacing.md,
-              color: Colors.white,
+              color: palette.welcomeTextOnAccent,
             ),
           ),
         ],
