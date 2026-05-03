@@ -4,6 +4,7 @@ import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -170,7 +171,7 @@ class _DormInvitePageState extends State<DormInvitePage> {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     return Scaffold(
-      appBar: AppBar(title: const Text('邀请舍友')),
+      backgroundColor: AppColors.background,
       body: ListenableBuilder(
         listenable: Listenable.merge(<Listenable>[
           services.authRepository,
@@ -183,49 +184,46 @@ class _DormInvitePageState extends State<DormInvitePage> {
               _pendingInviteFor(dorm) ?? _generatedInvite;
 
           return SafeArea(
-            child: ListView(
-              padding: AppPageInsets.page(bottom: AppSpacing.lg),
-              children: <Widget>[
-                AppCard(
-                  color: AppColors.surfaceMuted,
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  borderRadius: AppRadius.compactCard,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        mode == _DormInviteMode.manage ? dorm.name : '邀请舍友一起协作',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+            child: LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                final double widthFactor = _inviteWidthFactor(
+                  constraints.maxWidth,
+                );
+                return Align(
+                  alignment: Alignment.topCenter,
+                  child: FractionallySizedBox(
+                    widthFactor: widthFactor,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 760),
+                      child: ListView(
+                        padding: AppPageInsets.page(bottom: AppSpacing.lg),
+                        children: <Widget>[
+                          if (widget.showAppBar) ...<Widget>[
+                            _DormInviteHeader(
+                              onBack: () => Navigator.of(context).maybePop(),
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                          ],
+                          _DormInviteIntroCard(dorm: dorm, mode: mode),
+                          const SizedBox(height: AppSpacing.sm),
+                          ...switch (mode) {
+                            _DormInviteMode.choose => _buildChooseMode(),
+                            _DormInviteMode.create => _buildCreateMode(
+                              services,
+                            ),
+                            _DormInviteMode.join => _buildJoinMode(services),
+                            _DormInviteMode.manage => _buildManageMode(
+                              services: services,
+                              dorm: dorm,
+                              invite: invite,
+                            ),
+                          },
+                        ],
                       ),
-                      const SizedBox(height: AppSpacing.xxs),
-                      Text(
-                        mode == _DormInviteMode.manage
-                            ? (dorm.overview.isEmpty
-                                  ? '现在可以把邀请码发给舍友，大家一起同步睡眠状态和宿舍动态。'
-                                  : dorm.overview)
-                            : '初次使用时，先决定是创建宿舍还是通过邀请码加入宿舍。本页会把首轮流程一次走完。',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                ...switch (mode) {
-                  _DormInviteMode.choose => _buildChooseMode(),
-                  _DormInviteMode.create => _buildCreateMode(services),
-                  _DormInviteMode.join => _buildJoinMode(services),
-                  _DormInviteMode.manage => _buildManageMode(
-                    services: services,
-                    dorm: dorm,
-                    invite: invite,
-                  ),
-                },
-              ],
+                );
+              },
             ),
           );
         },
@@ -530,6 +528,94 @@ class _DormInvitePageState extends State<DormInvitePage> {
     final String minute = value.minute.toString().padLeft(2, '0');
     return '${value.year}-$month-$day $hour:$minute';
   }
+}
+
+class _DormInviteHeader extends StatelessWidget {
+  const _DormInviteHeader({required this.onBack});
+
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: AppRadius.button,
+            onTap: onBack,
+            child: const SizedBox.square(
+              dimension: 40,
+              child: Icon(Icons.chevron_left_rounded),
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        Text(
+          '邀请舍友',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DormInviteIntroCard extends StatelessWidget {
+  const _DormInviteIntroCard({required this.dorm, required this.mode});
+
+  final Dorm dorm;
+  final _DormInviteMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    final NightMoodPalette palette = context.nightMoodPalette;
+    return AppCard(
+      color: palette.primaryHighlight,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      borderRadius: AppRadius.card,
+      boxShadow: const <BoxShadow>[],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            mode == _DormInviteMode.manage ? dorm.name : '邀请舍友一起协作',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: palette.primaryDeep,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            mode == _DormInviteMode.manage
+                ? (dorm.overview.isEmpty
+                      ? '现在可以把邀请码发给舍友，大家一起同步睡眠状态和宿舍动态。'
+                      : dorm.overview)
+                : '先决定创建宿舍或通过邀请码加入，之后会同步宿舍成员、规则和室友动态。',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: palette.primaryDeep,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+double _inviteWidthFactor(double maxWidth) {
+  if (maxWidth >= 1200) {
+    return 0.38;
+  }
+  if (maxWidth >= 900) {
+    return 0.48;
+  }
+  if (maxWidth >= 700) {
+    return 0.68;
+  }
+  return 1;
 }
 
 class _LabeledField extends StatelessWidget {

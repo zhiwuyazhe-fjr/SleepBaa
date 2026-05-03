@@ -57,6 +57,9 @@ class AppSettingsItem extends StatelessWidget {
     required this.title,
     this.icon,
     this.iconColor,
+    this.iconBackgroundColor,
+    this.iconContainerKey,
+    this.iconContainerSize = 36,
     this.iconSize = 20,
     this.titleStyle,
     this.trailing,
@@ -73,6 +76,9 @@ class AppSettingsItem extends StatelessWidget {
   final String title;
   final IconData? icon;
   final Color? iconColor;
+  final Color? iconBackgroundColor;
+  final Key? iconContainerKey;
+  final double iconContainerSize;
   final double iconSize;
   final TextStyle? titleStyle;
   final Widget? trailing;
@@ -84,6 +90,9 @@ class AppSettingsItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Widget? leading = icon == null
+        ? null
+        : _buildLeadingIcon(icon!, color: iconColor ?? AppColors.textPrimary);
     Widget row = Padding(
       padding: padding,
       child: ConstrainedBox(
@@ -91,16 +100,10 @@ class AppSettingsItem extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
-            if (icon != null) ...<Widget>[
+            if (leading != null) ...<Widget>[
               SizedBox(
                 width: leadingWidth,
-                child: Center(
-                  child: Icon(
-                    icon,
-                    size: iconSize,
-                    color: iconColor ?? AppColors.textPrimary,
-                  ),
-                ),
+                child: Center(child: leading),
               ),
               const SizedBox(width: AppSpacing.sm),
             ],
@@ -143,6 +146,24 @@ class AppSettingsItem extends StatelessWidget {
           onTap!();
         },
         child: row,
+      ),
+    );
+  }
+
+  Widget _buildLeadingIcon(IconData icon, {required Color color}) {
+    if (iconBackgroundColor == null && iconContainerKey == null) {
+      return Icon(icon, size: iconSize, color: color);
+    }
+    return Container(
+      key: iconContainerKey,
+      width: iconContainerSize,
+      height: iconContainerSize,
+      decoration: BoxDecoration(
+        color: iconBackgroundColor ?? Colors.transparent,
+        borderRadius: AppRadius.iconContainer,
+      ),
+      child: Center(
+        child: Icon(icon, size: iconSize, color: color),
       ),
     );
   }
