@@ -342,7 +342,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       icon: Icons.auto_awesome_rounded,
                       title: '回复文字浮动',
                       iconColor: context.nightMoodPalette.primaryDeep,
-                      trailing: _SettingsValueTrailing(
+                      trailing: AppSettingsValueTrailing(
                         value: _isSavingAssistantMotion
                             ? '保存中...'
                             : _assistantReplyMotionTitle(
@@ -374,7 +374,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           icon: Icons.schedule_rounded,
                           title: '睡前提醒时间',
                           iconColor: context.nightMoodPalette.primaryDeep,
-                          trailing: _SettingsValueTrailing(
+                          trailing: AppSettingsValueTrailing(
                             value: Formatters.formatClock(_bedtimeReminder),
                           ),
                           onTap: _pickReminderTime,
@@ -595,34 +595,6 @@ class _SettingsToggle extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _SettingsValueTrailing extends StatelessWidget {
-  const _SettingsValueTrailing({required this.value});
-
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Text(
-          value,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.xxs),
-        const Icon(
-          Icons.chevron_right_rounded,
-          size: 18,
-          color: AppColors.textHint,
-        ),
-      ],
     );
   }
 }

@@ -20,6 +20,8 @@ class DormRulesPage extends StatefulWidget {
   State<DormRulesPage> createState() => _DormRulesPageState();
 }
 
+enum _DormRulesTemperatureEditor { summer, winter }
+
 class _DormRulesPageState extends State<DormRulesPage> {
   final TextEditingController _quietStartController = TextEditingController();
   final TextEditingController _quietEndController = TextEditingController();
@@ -44,6 +46,7 @@ class _DormRulesPageState extends State<DormRulesPage> {
   double _ventilationMinutes = 30;
   String _selectedVentilationWindow = '早晨';
   List<String> _routineTags = const <String>['考试周', '夜猫子', '早起党'];
+  _DormRulesTemperatureEditor? _expandedTemperatureEditor;
   String _loadedProposalId = '';
   String _loadedSettingsSignature = '';
 
@@ -134,7 +137,10 @@ class _DormRulesPageState extends State<DormRulesPage> {
   void _cancelEditing(DormRulesSettings settings) {
     FocusScope.of(context).unfocus();
     _populateFromSettings(settings);
-    setState(() => _isEditing = false);
+    setState(() {
+      _isEditing = false;
+      _expandedTemperatureEditor = null;
+    });
   }
 
   Future<void> _showTextEditor({
@@ -498,6 +504,7 @@ class _DormRulesPageState extends State<DormRulesPage> {
     setState(() {
       _isEditing = false;
       _showReviewOverlay = false;
+      _expandedTemperatureEditor = null;
     });
     await notifyPassiveToast(context, message: '已提交待确认规则，等待室友确认。');
   }
@@ -585,18 +592,32 @@ class _DormRulesPageState extends State<DormRulesPage> {
                           child: FractionallySizedBox(
                             widthFactor: widthFactor,
                             child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 220),
+                              duration: const Duration(milliseconds: 260),
                               switchInCurve: Curves.easeOutCubic,
                               switchOutCurve: Curves.easeInCubic,
                               transitionBuilder:
                                   (Widget child, Animation<double> animation) {
+                                    final bool isEditPage =
+                                        child.key ==
+                                        const ValueKey<String>(
+                                          'dorm-rules-edit-view',
+                                        );
+                                    final Offset beginOffset = isEditPage
+                                        ? const Offset(1, 0)
+                                        : const Offset(-1, 0);
+                                    final Animation<double> curvedAnimation =
+                                        CurvedAnimation(
+                                          parent: animation,
+                                          curve: Curves.easeOutCubic,
+                                          reverseCurve: Curves.easeInCubic,
+                                        );
                                     return FadeTransition(
-                                      opacity: animation,
+                                      opacity: curvedAnimation,
                                       child: SlideTransition(
                                         position: Tween<Offset>(
-                                          begin: const Offset(0, 0.018),
+                                          begin: beginOffset,
                                           end: Offset.zero,
-                                        ).animate(animation),
+                                        ).animate(curvedAnimation),
                                         child: child,
                                       ),
                                     );
@@ -639,6 +660,8 @@ class _DormRulesPageState extends State<DormRulesPage> {
                                           selectedVentilationWindow:
                                               _selectedVentilationWindow,
                                           routineTags: _routineTags,
+                                          expandedTemperatureEditor:
+                                              _expandedTemperatureEditor,
                                           onEditQuietHours:
                                               _showQuietHoursEditor,
                                           onEditLightsOff: _showLightsOffEditor,
@@ -672,25 +695,31 @@ class _DormRulesPageState extends State<DormRulesPage> {
                                               ),
                                           onEditRoutineTags:
                                               _showRoutineTagsEditor,
-                                          onEditSummerTemp: () =>
-                                              _showSliderEditor(
-                                                title: '夏季空调',
-                                                value: _summerTemp,
-                                                min: 20,
-                                                max: 30,
-                                                unit: '°C',
-                                                onConfirmed: (double value) =>
-                                                    _summerTemp = value,
+                                          onToggleSummerTemp: () => setState(() {
+                                            _expandedTemperatureEditor =
+                                                _expandedTemperatureEditor ==
+                                                    _DormRulesTemperatureEditor
+                                                        .summer
+                                                ? null
+                                                : _DormRulesTemperatureEditor
+                                                      .summer;
+                                          }),
+                                          onToggleWinterTemp: () => setState(() {
+                                            _expandedTemperatureEditor =
+                                                _expandedTemperatureEditor ==
+                                                    _DormRulesTemperatureEditor
+                                                        .winter
+                                                ? null
+                                                : _DormRulesTemperatureEditor
+                                                      .winter;
+                                          }),
+                                          onSummerTempChanged: (double value) =>
+                                              setState(
+                                                () => _summerTemp = value,
                                               ),
-                                          onEditWinterTemp: () =>
-                                              _showSliderEditor(
-                                                title: '冬季采暖',
-                                                value: _winterTemp,
-                                                min: 16,
-                                                max: 28,
-                                                unit: '°C',
-                                                onConfirmed: (double value) =>
-                                                    _winterTemp = value,
+                                          onWinterTempChanged: (double value) =>
+                                              setState(
+                                                () => _winterTemp = value,
                                               ),
                                           onEditVentilationWindow: () =>
                                               _showSingleChoiceEditor(
@@ -838,7 +867,6 @@ class _DormRulesPageState extends State<DormRulesPage> {
                           child: FractionallySizedBox(
                             widthFactor: widthFactor,
                             child: _DormRulesEditBottomBar(
-                              palette: palette,
                               onCancel: () =>
                                   _cancelEditing(dorm.rulesSettings),
                               onConfirm: _handleSave,
@@ -993,8 +1021,7 @@ class _DormRulesHeaderPill extends StatelessWidget {
       icon: icon,
       expand: false,
       size: PrimaryButtonSize.compact,
-      backgroundColor: palette.welcomeAccentColor,
-      foregroundColor: palette.primaryDeep,
+      variant: PrimaryButtonVariant.soft,
       onPressed: onPressed,
     );
   }
@@ -1372,6 +1399,7 @@ class _DormRulesEditBody extends StatelessWidget {
     required this.ventilationMinutes,
     required this.selectedVentilationWindow,
     required this.routineTags,
+    required this.expandedTemperatureEditor,
     required this.onEditQuietHours,
     required this.onEditLightsOff,
     required this.onEditNote,
@@ -1379,8 +1407,10 @@ class _DormRulesEditBody extends StatelessWidget {
     required this.onEditAlarmResponse,
     required this.onEditRoutineNote,
     required this.onEditRoutineTags,
-    required this.onEditSummerTemp,
-    required this.onEditWinterTemp,
+    required this.onToggleSummerTemp,
+    required this.onToggleWinterTemp,
+    required this.onSummerTempChanged,
+    required this.onWinterTempChanged,
     required this.onEditVentilationWindow,
     required this.onEditVentilationMinutes,
     required this.onExamWeekModeChanged,
@@ -1404,6 +1434,7 @@ class _DormRulesEditBody extends StatelessWidget {
   final double ventilationMinutes;
   final String selectedVentilationWindow;
   final List<String> routineTags;
+  final _DormRulesTemperatureEditor? expandedTemperatureEditor;
   final VoidCallback onEditQuietHours;
   final VoidCallback onEditLightsOff;
   final VoidCallback onEditNote;
@@ -1411,8 +1442,10 @@ class _DormRulesEditBody extends StatelessWidget {
   final VoidCallback onEditAlarmResponse;
   final VoidCallback onEditRoutineNote;
   final VoidCallback onEditRoutineTags;
-  final VoidCallback onEditSummerTemp;
-  final VoidCallback onEditWinterTemp;
+  final VoidCallback onToggleSummerTemp;
+  final VoidCallback onToggleWinterTemp;
+  final ValueChanged<double> onSummerTempChanged;
+  final ValueChanged<double> onWinterTempChanged;
   final VoidCallback onEditVentilationWindow;
   final VoidCallback onEditVentilationMinutes;
   final ValueChanged<bool> onExamWeekModeChanged;
@@ -1618,14 +1651,42 @@ class _DormRulesEditBody extends StatelessWidget {
                     icon: Icons.ac_unit_rounded,
                     title: '夏季空调',
                     value: '${summerTemp.round()}°C',
-                    onTap: onEditSummerTemp,
+                    onTap: onToggleSummerTemp,
+                  ),
+                  _DormRulesInlineSlider(
+                    sliderKey: const ValueKey<String>(
+                      'dorm-rules-summer-temp-slider',
+                    ),
+                    visible:
+                        expandedTemperatureEditor ==
+                        _DormRulesTemperatureEditor.summer,
+                    valueLabel: '${summerTemp.round()}°C',
+                    value: summerTemp,
+                    min: 20,
+                    max: 30,
+                    divisions: 10,
+                    onChanged: onSummerTempChanged,
                   ),
                   _DormRulesCompactValueCard(
                     palette: palette,
                     icon: Icons.thermostat_rounded,
                     title: '冬季采暖',
                     value: '${winterTemp.round()}°C',
-                    onTap: onEditWinterTemp,
+                    onTap: onToggleWinterTemp,
+                  ),
+                  _DormRulesInlineSlider(
+                    sliderKey: const ValueKey<String>(
+                      'dorm-rules-winter-temp-slider',
+                    ),
+                    visible:
+                        expandedTemperatureEditor ==
+                        _DormRulesTemperatureEditor.winter,
+                    valueLabel: '${winterTemp.round()}°C',
+                    value: winterTemp,
+                    min: 16,
+                    max: 28,
+                    divisions: 12,
+                    onChanged: onWinterTempChanged,
                   ),
                   _DormRulesCompactValueCard(
                     palette: palette,
@@ -1692,10 +1753,10 @@ class _DormRulesEditableQuietHoursCard extends StatelessWidget {
       titleStyle: _dormRulesEditItemTitleStyle(context),
       padding: _dormRulesEditItemPadding,
       onTap: onTap,
-      trailing: _DormRulesValueTrailing(
+      trailing: AppSettingsValueTrailing(
+        key: const ValueKey<String>('dorm-rules-trailing-quiet-hours'),
         value:
             '${quietStartController.text.trim()} - ${quietEndController.text.trim()}',
-        color: AppColors.textSecondary,
         showChevron: true,
       ),
     );
@@ -1784,9 +1845,9 @@ class _DormRulesEditableLightsCard extends StatelessWidget {
       titleStyle: _dormRulesEditItemTitleStyle(context),
       padding: _dormRulesEditItemPadding,
       onTap: onTap,
-      trailing: _DormRulesValueTrailing(
+      trailing: AppSettingsValueTrailing(
+        key: const ValueKey<String>('dorm-rules-trailing-lights-off'),
         value: lightsOffCopy,
-        color: AppColors.textSecondary,
         showChevron: true,
       ),
     );
@@ -1848,9 +1909,9 @@ class _DormRulesCompactValueCard extends StatelessWidget {
       onTap: onTap,
       trailing: valueChip
           ? _DormRulesValueChip(value: value, color: palette.primaryDeep)
-          : _DormRulesValueTrailing(
+          : AppSettingsValueTrailing(
+              key: ValueKey<String>('dorm-rules-trailing-$title'),
               value: value,
-              color: AppColors.textSecondary,
               showChevron: true,
             ),
     );
@@ -1898,6 +1959,89 @@ class _DormRulesValueChip extends StatelessWidget {
   }
 }
 
+class _DormRulesInlineSlider extends StatelessWidget {
+  const _DormRulesInlineSlider({
+    required this.sliderKey,
+    required this.visible,
+    required this.valueLabel,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.divisions,
+    required this.onChanged,
+  });
+
+  final Key sliderKey;
+  final bool visible;
+  final String valueLabel;
+  final double value;
+  final double min;
+  final double max;
+  final int divisions;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 180),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      child: visible
+          ? Padding(
+              key: ValueKey<Key>(sliderKey),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.xxs,
+                AppSpacing.md,
+                AppSpacing.sm,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: <Widget>[
+                  const SizedBox(width: AppSpacing.xxxl),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      children: <Widget>[
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            valueLabel,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                          ),
+                        ),
+                        SliderTheme(
+                          data: SliderTheme.of(context).copyWith(
+                            trackHeight: AppSpacing.xxs,
+                            overlayShape: SliderComponentShape.noOverlay,
+                            thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: AppSpacing.xs,
+                            ),
+                          ),
+                          child: Slider(
+                            key: sliderKey,
+                            value: value.clamp(min, max),
+                            min: min,
+                            max: max,
+                            divisions: divisions,
+                            onChanged: onChanged,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : const SizedBox.shrink(),
+    );
+  }
+}
+
 class _DormRulesToggleCard extends StatelessWidget {
   const _DormRulesToggleCard({
     required this.palette,
@@ -1937,44 +2081,6 @@ class _DormRulesToggleCard extends StatelessWidget {
         onChanged: onChanged,
       ),
       onTap: () => onChanged(!value),
-    );
-  }
-}
-
-class _DormRulesValueTrailing extends StatelessWidget {
-  const _DormRulesValueTrailing({
-    required this.value,
-    required this.color,
-    this.showChevron = false,
-  });
-
-  final String value;
-  final Color color;
-  final bool showChevron;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: color,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        if (showChevron) ...<Widget>[
-          const SizedBox(width: AppSpacing.xxs),
-          const Icon(
-            Icons.chevron_right_rounded,
-            size: 18,
-            color: AppColors.textHint,
-          ),
-        ],
-      ],
     );
   }
 }
@@ -2026,12 +2132,10 @@ class _DormRulesThemeSwitch extends StatelessWidget {
 
 class _DormRulesEditBottomBar extends StatelessWidget {
   const _DormRulesEditBottomBar({
-    required this.palette,
     required this.onCancel,
     required this.onConfirm,
   });
 
-  final NightMoodPalette palette;
   final VoidCallback onCancel;
   final VoidCallback onConfirm;
 
@@ -2054,10 +2158,10 @@ class _DormRulesEditBottomBar extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 child: PrimaryButton(
+                  key: const ValueKey<String>('dorm-rules-cancel-button'),
                   label: '取消',
-                  variant: PrimaryButtonVariant.ghost,
+                  variant: PrimaryButtonVariant.soft,
                   size: PrimaryButtonSize.compact,
-                  borderColor: AppColors.surfaceBorder,
                   onPressed: onCancel,
                 ),
               ),
@@ -2068,8 +2172,7 @@ class _DormRulesEditBottomBar extends StatelessWidget {
                   label: '发起确认',
                   icon: Icons.send_rounded,
                   size: PrimaryButtonSize.compact,
-                  backgroundColor: palette.welcomeAccentColor,
-                  foregroundColor: palette.primaryDeep,
+                  variant: PrimaryButtonVariant.soft,
                   onPressed: onConfirm,
                 ),
               ),

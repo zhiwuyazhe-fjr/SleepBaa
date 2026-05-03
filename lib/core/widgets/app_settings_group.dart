@@ -175,6 +175,45 @@ class AppSettingsItem extends StatelessWidget {
   }
 }
 
+class AppSettingsValueTrailing extends StatelessWidget {
+  const AppSettingsValueTrailing({
+    super.key,
+    required this.value,
+    this.showChevron = true,
+    this.maxLines = 1,
+  });
+
+  final String value;
+  final bool showChevron;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(
+          value,
+          maxLines: maxLines,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        if (showChevron) ...<Widget>[
+          const SizedBox(width: AppSpacing.xxs),
+          const Icon(
+            Icons.chevron_right_rounded,
+            size: 18,
+            color: AppColors.textHint,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class AppSettingsDetailItem extends StatelessWidget {
   const AppSettingsDetailItem({
     super.key,

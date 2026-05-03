@@ -1537,6 +1537,13 @@ void main() {
         const ValueKey<String>('dorm-rules-edit-entry'),
       );
       expect(editButton, findsOneWidget);
+      final PrimaryButton editEntryButton = tester.widget<PrimaryButton>(
+        find.descendant(of: editButton, matching: find.byType(PrimaryButton)),
+      );
+      expect(editEntryButton.size, PrimaryButtonSize.compact);
+      expect(editEntryButton.variant, PrimaryButtonVariant.soft);
+      expect(editEntryButton.backgroundColor, isNull);
+      expect(editEntryButton.foregroundColor, isNull);
       expect(
         tester.getTopRight(editButton).dx,
         lessThanOrEqualTo(390 - AppSpacing.md),
@@ -1544,6 +1551,21 @@ void main() {
 
       await tester.tap(editButton);
       await tester.pump();
+
+      final SlideTransition editSlideTransition = tester
+          .widget<SlideTransition>(
+            find
+                .ancestor(
+                  of: find.byKey(
+                    const ValueKey<String>('dorm-rules-edit-view'),
+                  ),
+                  matching: find.byType(SlideTransition),
+                )
+                .first,
+          );
+      expect(editSlideTransition.position.value.dx, greaterThan(0));
+      expect(editSlideTransition.position.value.dy, 0);
+      await tester.pumpAndSettle();
 
       expect(find.text('编辑宿舍公约'), findsOneWidget);
       expect(find.text('修改后需要室友确认'), findsOneWidget);
@@ -1556,6 +1578,25 @@ void main() {
       expect(find.text('基础规则'), findsOneWidget);
       expect(find.text('安静时段'), findsOneWidget);
       expect(find.text('23:00 - 07:00'), findsOneWidget);
+      final Finder quietTrailing = find.byKey(
+        const ValueKey<String>('dorm-rules-trailing-quiet-hours'),
+      );
+      final Text quietTrailingText = tester.widget<Text>(
+        find.descendant(
+          of: quietTrailing,
+          matching: find.text('23:00 - 07:00'),
+        ),
+      );
+      final Icon quietTrailingChevron = tester.widget<Icon>(
+        find.descendant(
+          of: quietTrailing,
+          matching: find.byIcon(Icons.chevron_right_rounded),
+        ),
+      );
+      expect(quietTrailingText.style?.color, AppColors.textSecondary);
+      expect(quietTrailingText.style?.fontWeight, FontWeight.w500);
+      expect(quietTrailingChevron.size, 18);
+      expect(quietTrailingChevron.color, AppColors.textHint);
       expect(find.text('开始'), findsNothing);
       expect(find.text('结束'), findsNothing);
       expect(find.text('熄灯提醒'), findsOneWidget);
@@ -1564,14 +1605,28 @@ void main() {
       expect(find.text('个人照明要求'), findsOneWidget);
       expect(find.text('60 秒'), findsOneWidget);
       expect(find.text('26°C'), findsOneWidget);
+      final Text summerTrailingText = tester.widget<Text>(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('dorm-rules-trailing-夏季空调')),
+          matching: find.text('26°C'),
+        ),
+      );
+      expect(summerTrailingText.style?.color, AppColors.textSecondary);
+      expect(summerTrailingText.style?.fontWeight, FontWeight.w500);
       expect(find.text('夜猫子'), findsNothing);
       expect(find.byType(Slider), findsNothing);
       expect(find.text('闹钟与作息'), findsOneWidget);
       expect(find.text('温度与通风'), findsOneWidget);
       expect(find.text('保存后发送给 3 位室友确认'), findsNothing);
       expect(find.text('发起确认'), findsOneWidget);
-      expect(find.widgetWithText(PrimaryButton, '取消'), findsOneWidget);
-      expect(find.widgetWithText(PrimaryButton, '发起确认'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('dorm-rules-cancel-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('dorm-rules-submit-button')),
+        findsOneWidget,
+      );
       expect(
         tester.getBottomLeft(find.text('发起确认')).dy,
         lessThanOrEqualTo(844),
@@ -1598,12 +1653,21 @@ void main() {
       final PrimaryButton submitButton = tester.widget<PrimaryButton>(
         find.byKey(const ValueKey<String>('dorm-rules-submit-button')),
       );
+      final PrimaryButton cancelButton = tester.widget<PrimaryButton>(
+        find.byKey(const ValueKey<String>('dorm-rules-cancel-button')),
+      );
 
       final NightMoodPalette editPalette = Theme.of(
         buttonContext,
       ).extension<NightMoodPalette>()!;
-      expect(submitButton.backgroundColor, editPalette.welcomeAccentColor);
-      expect(submitButton.foregroundColor, editPalette.primaryDeep);
+      expect(cancelButton.size, PrimaryButtonSize.compact);
+      expect(cancelButton.variant, PrimaryButtonVariant.soft);
+      expect(cancelButton.backgroundColor, isNull);
+      expect(cancelButton.foregroundColor, isNull);
+      expect(submitButton.size, PrimaryButtonSize.compact);
+      expect(submitButton.variant, PrimaryButtonVariant.soft);
+      expect(submitButton.backgroundColor, isNull);
+      expect(submitButton.foregroundColor, isNull);
       final Container quietIconContainer = tester.widget<Container>(
         find.byKey(const ValueKey<String>('dorm-rules-edit-icon-quiet-hours')),
       );
@@ -1638,6 +1702,44 @@ void main() {
         editPalette.primarySoft,
       );
 
+      expect(find.byType(Slider), findsNothing);
+      await tester.scrollUntilVisible(
+        find.text('夏季空调'),
+        320,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+      await tester.tap(find.text('夏季空调'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('dorm-rules-summer-temp-slider')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('dorm-rules-slider-sheet')),
+        findsNothing,
+      );
+      final Slider summerSlider = tester.widget<Slider>(
+        find.byKey(const ValueKey<String>('dorm-rules-summer-temp-slider')),
+      );
+      expect(summerSlider.value, 26);
+      expect(summerSlider.min, 20);
+      expect(summerSlider.max, 30);
+
+      await tester.tap(find.text('夏季空调'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('dorm-rules-summer-temp-slider')),
+        findsNothing,
+      );
+
+      await tester.scrollUntilVisible(
+        find.text('熄灯提醒'),
+        -320,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
       await tester.tap(find.text('熄灯提醒'));
       await tester.pumpAndSettle();
 
