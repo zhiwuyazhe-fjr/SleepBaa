@@ -69,8 +69,6 @@ class AppSettingsItem extends StatelessWidget {
     this.titleStyle,
     this.trailing,
     this.onTap,
-    this.iconBackgroundColor,
-    this.iconContainerSize = 36,
     this.iconContainerBorderRadius,
     this.padding = const EdgeInsets.symmetric(
       horizontal: AppSpacing.md,
@@ -91,8 +89,6 @@ class AppSettingsItem extends StatelessWidget {
   final TextStyle? titleStyle;
   final Widget? trailing;
   final VoidCallback? onTap;
-  final Color? iconBackgroundColor;
-  final double iconContainerSize;
   final BorderRadius? iconContainerBorderRadius;
   final EdgeInsetsGeometry padding;
   final double leadingWidth;
@@ -101,9 +97,6 @@ class AppSettingsItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Widget? leading = icon == null
-        ? null
-        : _buildLeadingIcon(icon!, color: iconColor ?? AppColors.textPrimary);
     Widget row = Padding(
       padding: padding,
       child: ConstrainedBox(
@@ -117,6 +110,7 @@ class AppSettingsItem extends StatelessWidget {
                 iconColor: iconColor ?? AppColors.textPrimary,
                 iconSize: iconSize,
                 backgroundColor: iconBackgroundColor,
+                containerKey: iconContainerKey,
                 containerSize: iconContainerSize,
                 borderRadius: iconContainerBorderRadius,
                 leadingWidth: leadingWidth,
@@ -162,26 +156,6 @@ class AppSettingsItem extends StatelessWidget {
           onTap!();
         },
         child: row,
-      ),
-    );
-  }
-
-  Widget _buildLeadingIcon(IconData icon, {required Color color}) {
-    if (iconBackgroundColor == null && iconContainerKey == null) {
-      return Icon(icon, size: iconSize, color: color);
-    }
-    return Container(
-      key: iconContainerKey,
-      constraints: BoxConstraints.tightFor(
-        width: iconContainerSize,
-        height: iconContainerSize,
-      ),
-      decoration: BoxDecoration(
-        color: iconBackgroundColor ?? Colors.transparent,
-        borderRadius: AppRadius.iconContainer,
-      ),
-      child: Center(
-        child: Icon(icon, size: iconSize, color: color),
       ),
     );
   }
@@ -274,6 +248,7 @@ class _SettingsItemIcon extends StatelessWidget {
     required this.iconColor,
     required this.iconSize,
     required this.backgroundColor,
+    required this.containerKey,
     required this.containerSize,
     required this.borderRadius,
     required this.leadingWidth,
@@ -283,13 +258,14 @@ class _SettingsItemIcon extends StatelessWidget {
   final Color iconColor;
   final double iconSize;
   final Color? backgroundColor;
+  final Key? containerKey;
   final double containerSize;
   final BorderRadius? borderRadius;
   final double leadingWidth;
 
   @override
   Widget build(BuildContext context) {
-    if (backgroundColor == null) {
+    if (backgroundColor == null && containerKey == null) {
       return SizedBox(
         width: leadingWidth,
         child: Center(
@@ -299,10 +275,11 @@ class _SettingsItemIcon extends StatelessWidget {
     }
 
     return Container(
+      key: containerKey,
       width: containerSize,
       height: containerSize,
       decoration: BoxDecoration(
-        color: backgroundColor,
+        color: backgroundColor ?? Colors.transparent,
         borderRadius: borderRadius ?? AppRadius.iconContainer,
       ),
       alignment: Alignment.center,
