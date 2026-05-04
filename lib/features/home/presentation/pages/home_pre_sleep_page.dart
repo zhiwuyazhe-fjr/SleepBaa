@@ -234,20 +234,7 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                             SectionTitle(
                               title: '快捷功能',
                               actionLabel: '编辑',
-                              titleStyle: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall
-                                  ?.copyWith(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                              actionStyle: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: const Color(0xFFA0A0A0),
-                                    fontWeight: FontWeight.w400,
-                                  ),
+                              variant: SectionTitleVariant.dorm,
                               onAction: () =>
                                   context.push(AppRoutes.homeQuickActionsEdit),
                             ),
@@ -276,20 +263,7 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                             SectionTitle(
                               title: '今晚影响因素',
                               actionLabel: '查看详情',
-                              titleStyle: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall
-                                  ?.copyWith(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                              actionStyle: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: const Color(0xFFA0A0A0),
-                                    fontWeight: FontWeight.w400,
-                                  ),
+                              variant: SectionTitleVariant.dorm,
                               onAction: () => context.push(
                                 AppRoutes.analysisInterferenceFactors,
                               ),
@@ -361,20 +335,7 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                             SectionTitle(
                               title: '今晚行动建议',
                               actionLabel: '查看全部',
-                              titleStyle: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall
-                                  ?.copyWith(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                              actionStyle: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: const Color(0xFFA0A0A0),
-                                    fontWeight: FontWeight.w400,
-                                  ),
+                              variant: SectionTitleVariant.dorm,
                               onAction: () =>
                                   context.push(AppRoutes.interventionTask),
                             ),

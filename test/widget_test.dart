@@ -224,6 +224,42 @@ void main() {
     expect(find.text('设置'), findsOneWidget);
   });
 
+  testWidgets('home section header typography matches dorm standard', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+    );
+
+    final Text quickTitle = tester.widget<Text>(find.text('快捷功能'));
+    expect(quickTitle.style?.fontSize, 18);
+    expect(quickTitle.style?.fontWeight, FontWeight.w800);
+    expect(quickTitle.style?.color, AppColors.textPrimary);
+
+    final Finder editFinder = find.text('编辑').first;
+    final BuildContext editContext = tester.element(editFinder);
+    final NightMoodPalette palette = editContext.nightMoodPalette;
+    final Text editText = tester.widget<Text>(editFinder);
+    expect(editText.style?.fontSize, 12);
+    expect(editText.style?.fontWeight, FontWeight.w700);
+    expect(editText.style?.color, palette.welcomeAccentColor);
+
+    final Finder editButton = find
+        .ancestor(of: editFinder, matching: find.byType(TextButton))
+        .first;
+    final Icon editChevron = tester.widget<Icon>(
+      find
+          .descendant(
+            of: editButton,
+            matching: find.byIcon(Icons.chevron_right_rounded),
+          )
+          .first,
+    );
+    expect(editChevron.size, 16);
+  });
+
   testWidgets('home quick action editor saves a selected four item set', (
     WidgetTester tester,
   ) async {
