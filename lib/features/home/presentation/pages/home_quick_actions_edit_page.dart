@@ -175,7 +175,8 @@ class _HomeQuickActionsEditPageState extends State<HomeQuickActionsEditPage> {
                     '请选择 4 个快捷功能',
                     textAlign: TextAlign.center,
                     style: textTheme.bodySmall?.copyWith(
-                      color: AppColors.warning,
+                      color: context.nightMoodPalette.welcomeAccentColor,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),

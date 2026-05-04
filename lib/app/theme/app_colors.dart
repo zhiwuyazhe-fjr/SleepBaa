@@ -15,14 +15,14 @@ abstract final class AppColors {
   static const Color textHint = Color(0xFFA0A0A0);
   static const Color textSubtle = Color(0xFF888888);
 
-  static const Color primary = Color(0xFF00697A);
+  static const Color primary = Color(0xFF8EDDF2);
   static const Color primarySoft = Color(0xFF8EDDF2);
   static const Color primaryHighlight = Color(0xFFB2EBF2);
   static const Color primaryDeep = Color(0xFF004F5D);
   static const Color calmBlue = Color(0xFF4EA8C2);
 
   static const Color darkBackground = Color(0xFF0C0E10);
-  static const Color darkCard = Color(0xFF0B192E);
+  static const Color darkCard = Color(0xFF1A1A1A);
   static const Color darkSurface = Color(0xFF1A1C1E);
   static const Color darkPill = Color(0xFF1A1A1A);
   static const Color darkGlass = Color(0x0AFFFFFF);
@@ -37,9 +37,6 @@ abstract final class AppColors {
   static const Color assistantFabShellStart = Color(0xFF2B3240);
   static const Color assistantFabShellEnd = Color(0xFF121417);
   static const Color assistantFabShadow = Color(0x66000000);
-
-  static const Color success = Color(0xFF4F8B6F);
-  static const Color warning = Color(0xFFAD7A36);
 
   static const List<BoxShadow> cardShadow = <BoxShadow>[
     BoxShadow(color: Color(0x12000000), blurRadius: 24, offset: Offset(0, 8)),

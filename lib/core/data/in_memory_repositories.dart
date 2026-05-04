@@ -1599,6 +1599,7 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
       StreamController<List<DormRule>>.broadcast();
   final StreamController<List<DormEvent>> _eventsController =
       StreamController<List<DormEvent>>.broadcast();
+  final Set<String> _readDormStatusRecordIds = <String>{};
 
   Dorm _currentDorm;
 
@@ -1618,12 +1619,28 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
   Stream<List<DormEvent>> watchEvents() => _eventsController.stream;
 
   @override
+  bool isDormStatusRecordRead(String recordId) {
+    return _readDormStatusRecordIds.contains(recordId);
+  }
+
+  @override
+  Future<void> markDormStatusRecordRead(String recordId) async {
+    final String normalizedRecordId = recordId.trim();
+    if (normalizedRecordId.isEmpty ||
+        !_readDormStatusRecordIds.add(normalizedRecordId)) {
+      return;
+    }
+    notifyListeners();
+  }
+
+  @override
   Future<void> createDorm({
     required String name,
     String? overview,
     DormRulesSettings? rulesSettings,
     DormLocationAnchor? locationAnchor,
   }) async {
+    _readDormStatusRecordIds.clear();
     final DormRulesSettings nextRules =
         rulesSettings ?? buildDefaultDormRulesSettings();
     final DateTime now = DateTime.now();

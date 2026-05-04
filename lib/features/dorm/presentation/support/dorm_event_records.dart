@@ -6,20 +6,28 @@ import 'package:sleep_dorm_app/core/models/app_models.dart';
 
 class DormEventRecord {
   const DormEventRecord({
+    required this.id,
     required this.title,
     required this.detail,
     required this.color,
     required this.timeLabel,
     required this.icon,
+    required this.createdAt,
+    required this.isRead,
     this.actionRoute,
+    this.notificationId,
   });
 
+  final String id;
   final String title;
   final String detail;
   final Color color;
   final String timeLabel;
   final IconData icon;
+  final DateTime createdAt;
+  final bool isRead;
   final String? actionRoute;
+  final String? notificationId;
 }
 
 List<DormEventRecord> buildDormEventRecords({
@@ -27,42 +35,52 @@ List<DormEventRecord> buildDormEventRecords({
   required List<NotificationItem> notifications,
   required NightMoodPalette palette,
   DateTime? now,
+  bool fullHistory = false,
 }) {
   final DateTime effectiveNow = now ?? DateTime.now();
   final List<DormEventRecord> records = <DormEventRecord>[];
   final List<DormEvent> sortedEvents = dorm.events.toList(growable: false)
     ..sort((DormEvent a, DormEvent b) => b.createdAt.compareTo(a.createdAt));
 
-  for (final DormEvent event in sortedEvents.take(3)) {
-    records.add(
-      DormEventRecord(
-        title: event.title,
-        detail: event.detail,
-        color: _colorForDormEvent(event, palette),
-        timeLabel: _relativeTimeLabel(event.createdAt, effectiveNow),
-        icon: _iconForDormEvent(event),
-      ),
-    );
+  final Iterable<DormEvent> eventRecords = fullHistory
+      ? sortedEvents
+      : sortedEvents.take(3);
+  for (final DormEvent event in eventRecords) {
+    records.add(_recordFromDormEvent(event, palette, effectiveNow));
   }
 
-  NotificationItem? dormNotification;
-  for (final NotificationItem item in notifications) {
-    if (item.category == NotificationCategory.dorm) {
-      dormNotification = item;
-      break;
+  final List<NotificationItem> dormNotifications =
+      notifications
+          .where(
+            (NotificationItem item) =>
+                item.category == NotificationCategory.dorm,
+          )
+          .toList(growable: false)
+        ..sort(
+          (NotificationItem a, NotificationItem b) =>
+              b.createdAt.compareTo(a.createdAt),
+        );
+  final Iterable<NotificationItem> notificationRecords = fullHistory
+      ? dormNotifications
+      : dormNotifications.take(1);
+  for (final NotificationItem dormNotification in notificationRecords) {
+    if (records.any(
+      (DormEventRecord item) => item.title == dormNotification.title,
+    )) {
+      continue;
     }
-  }
-  if (dormNotification != null &&
-      !records.any(
-        (DormEventRecord item) => item.title == dormNotification!.title,
-      )) {
     records.add(
       DormEventRecord(
+        id: 'notification-${dormNotification.id}',
         title: dormNotification.title,
         detail: dormNotification.body,
         color: palette.primary,
         timeLabel: _relativeTimeLabel(dormNotification.createdAt, effectiveNow),
         icon: Icons.notifications_active_rounded,
+        createdAt: dormNotification.createdAt,
+        isRead: dormNotification.isRead,
+        notificationId: dormNotification.id,
+        actionRoute: dormNotification.route,
       ),
     );
   }
@@ -70,21 +88,64 @@ List<DormEventRecord> buildDormEventRecords({
   if (dorm.rules.isNotEmpty) {
     records.add(
       DormEventRecord(
+        id: 'rule-${dorm.rules.first.id}',
         title: '今晚默认执行寝室公约',
         detail: dorm.rules.first.title,
-        color: const Color(0xFF63D4ED),
+        color: palette.primary,
         timeLabel: '规则',
         icon: Icons.rule_rounded,
+        createdAt: effectiveNow,
+        isRead: false,
         actionRoute: AppRoutes.dormRules,
       ),
     );
   }
 
-  return records.take(4).toList(growable: false);
+  return fullHistory ? records : records.take(4).toList(growable: false);
+}
+
+List<DormEventRecord> buildDormMemberEventRecords({
+  required Dorm dorm,
+  required String memberUid,
+  required NightMoodPalette palette,
+  DateTime? now,
+  int limit = 3,
+}) {
+  final DateTime effectiveNow = now ?? DateTime.now();
+  final List<DormEvent> memberEvents =
+      dorm.events
+          .where((DormEvent event) => event.actorUid == memberUid)
+          .toList(growable: false)
+        ..sort(
+          (DormEvent a, DormEvent b) => b.createdAt.compareTo(a.createdAt),
+        );
+  return memberEvents
+      .take(limit)
+      .map(
+        (DormEvent event) => _recordFromDormEvent(event, palette, effectiveNow),
+      )
+      .toList(growable: false);
 }
 
 String relativeDormEventTimeLabel(DateTime dateTime, {DateTime? now}) {
   return _relativeTimeLabel(dateTime, now ?? DateTime.now());
+}
+
+DormEventRecord _recordFromDormEvent(
+  DormEvent event,
+  NightMoodPalette palette,
+  DateTime now,
+) {
+  return DormEventRecord(
+    id: 'event-${event.id}',
+    title: event.title,
+    detail: event.detail,
+    color: _colorForDormEvent(event, palette),
+    timeLabel: _relativeTimeLabel(event.createdAt, now),
+    icon: _iconForDormEvent(event),
+    createdAt: event.createdAt,
+    isRead: false,
+  );
 }
 
 String _relativeTimeLabel(DateTime dateTime, DateTime now) {
@@ -113,10 +174,10 @@ IconData _iconForDormEvent(DormEvent event) {
 
 Color _colorForDormEvent(DormEvent event, NightMoodPalette palette) {
   return switch (event.type) {
-    DormEventType.memberStatus => const Color(0xFFF1A936),
-    DormEventType.ruleUpdate => const Color(0xFF63D4ED),
+    DormEventType.memberStatus => palette.primary,
+    DormEventType.ruleUpdate => palette.primary,
     DormEventType.notification => palette.primary,
-    DormEventType.invite => const Color(0xFF5B8CFF),
+    DormEventType.invite => palette.welcomeAccentColor,
     DormEventType.system => AppColors.textSecondary,
   };
 }

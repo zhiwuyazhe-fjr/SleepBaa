@@ -30,14 +30,7 @@ void main() {
 
       expect(find.byType(DormStatusPage), findsOneWidget);
       expect(services.dormLiveStatusController.isPolling, isTrue);
-      expect(
-        find.byKey(const ValueKey<String>('dorm-status-avatar-roommate-a')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey<String>('dorm-status-avatar-roommate-b')),
-        findsOneWidget,
-      );
+      expect(find.byKey(DormStatusPage.timelineKey), findsOneWidget);
 
       final BuildContext statusContext = tester.element(
         find.byType(DormStatusPage),

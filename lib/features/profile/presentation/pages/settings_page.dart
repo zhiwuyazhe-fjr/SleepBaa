@@ -579,7 +579,7 @@ class _SettingsSwitchRow extends StatelessWidget {
       iconColor: context.nightMoodPalette.primaryDeep,
       iconBackgroundColor: AppColors.surfaceMuted,
       title: title,
-      trailing: _SettingsToggle(
+      trailing: AppSettingsToggle(
         key: ValueKey<String>('settings-toggle-$title'),
         value: value,
       ),

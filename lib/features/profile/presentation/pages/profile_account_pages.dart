@@ -619,7 +619,7 @@ class _MemberRow extends StatelessWidget {
               child: Text(
                 member.name.isEmpty ? '?' : member.name.characters.first,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: context.nightMoodPalette.primaryDeep,
+                  color: AppColors.textStrong,
                   fontWeight: FontWeight.w700,
                 ),
               ),
