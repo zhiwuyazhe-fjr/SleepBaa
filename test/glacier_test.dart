@@ -987,6 +987,41 @@ void main() {
       );
     },
   );
+
+  testWidgets('sleep goal slider expands and collapses from the settings row', (
+    WidgetTester tester,
+  ) async {
+    await _pumpRouteApp(tester, AppRoutes.profileSettings);
+
+    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(find.text('目标睡眠时长'), findsOneWidget);
+    expect(
+      tester
+          .widget<AnimatedCrossFade>(find.byType(AnimatedCrossFade))
+          .crossFadeState,
+      CrossFadeState.showFirst,
+    );
+
+    await tester.tap(find.text('目标睡眠时长'));
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<AnimatedCrossFade>(find.byType(AnimatedCrossFade))
+          .crossFadeState,
+      CrossFadeState.showSecond,
+    );
+
+    await tester.tap(find.text('目标睡眠时长'));
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<AnimatedCrossFade>(find.byType(AnimatedCrossFade))
+          .crossFadeState,
+      CrossFadeState.showFirst,
+    );
+  });
 }
 
 Future<void> _pumpApp(

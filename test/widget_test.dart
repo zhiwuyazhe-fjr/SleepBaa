@@ -2580,6 +2580,77 @@ void main() {
     expect(find.byType(DreamJournalPage), findsOneWidget);
   });
 
+  testWidgets('dream journal list uses standard app cards', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dreamJournal,
+      clock: _dayClock,
+    );
+
+    await tester.ensureVisible(find.text('漂浮柑橘岛'));
+
+    final AppCard entryCard = tester.widget<AppCard>(
+      find.ancestor(of: find.text('漂浮柑橘岛'), matching: find.byType(AppCard)),
+    );
+
+    expect(entryCard.borderRadius, AppRadius.compactCard);
+  });
+
+  testWidgets(
+    'dream journal top tabs suppress default rectangular press overlay',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.dreamJournal,
+        clock: _dayClock,
+      );
+
+      final TabBar tabBar = tester.widget<TabBar>(find.byType(TabBar));
+      final Color? pressedOverlay = tabBar.overlayColor?.resolve(<WidgetState>{
+        WidgetState.pressed,
+      });
+
+      expect(pressedOverlay, Colors.transparent);
+      expect(tabBar.splashFactory, NoSplash.splashFactory);
+    },
+  );
+
+  testWidgets(
+    'dream journal create tab uses integrated composer and no snackbar feedback',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.dreamJournal,
+        clock: _dayClock,
+      );
+
+      await tester.tap(find.text('新建'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PrimaryButton), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('dream-composer-field')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('dream-composer-submit')),
+        findsOneWidget,
+      );
+
+      await tester.enterText(find.byType(TextField), '我梦见自己在桥上');
+      await tester.tap(
+        find.byKey(const ValueKey<String>('dream-composer-submit')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 420));
+
+      expect(find.byType(SnackBar), findsNothing);
+      expect(find.text('我梦见自己在桥上'), findsOneWidget);
+    },
+  );
+
   testWidgets('profile heatmap card opens calendar page', (
     WidgetTester tester,
   ) async {

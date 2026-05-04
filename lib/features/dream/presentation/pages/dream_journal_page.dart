@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
+import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/dream_content.dart';
 
 class DreamJournalPage extends StatelessWidget {
@@ -74,28 +77,36 @@ class DreamJournalPage extends StatelessWidget {
                             AppSpacing.xl,
                             AppSpacing.md,
                           ),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: Colors.white.withAlpha(210),
-                              borderRadius: AppRadius.pill,
-                              border: Border.all(
-                                color: palette.primarySoft.withAlpha(120),
-                              ),
-                            ),
-                            child: TabBar(
-                              dividerColor: Colors.transparent,
-                              indicator: BoxDecoration(
-                                color: palette.primary,
+                          child: ClipRRect(
+                            borderRadius: AppRadius.pill,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Colors.white.withAlpha(210),
                                 borderRadius: AppRadius.pill,
+                                border: Border.all(
+                                  color: palette.primarySoft.withAlpha(120),
+                                ),
                               ),
-                              labelColor: Colors.white,
-                              unselectedLabelColor: AppColors.textSecondary,
-                              indicatorSize: TabBarIndicatorSize.tab,
-                              tabs: const <Widget>[
-                                Tab(text: '梦境'),
-                                Tab(text: '映射'),
-                                Tab(text: '新建'),
-                              ],
+                              child: TabBar(
+                                dividerColor: Colors.transparent,
+                                overlayColor:
+                                    const WidgetStatePropertyAll<Color>(
+                                      Colors.transparent,
+                                    ),
+                                splashFactory: NoSplash.splashFactory,
+                                indicator: BoxDecoration(
+                                  color: palette.primary,
+                                  borderRadius: AppRadius.pill,
+                                ),
+                                labelColor: Colors.white,
+                                unselectedLabelColor: AppColors.textSecondary,
+                                indicatorSize: TabBarIndicatorSize.tab,
+                                tabs: const <Widget>[
+                                  Tab(text: '梦境'),
+                                  Tab(text: '映射'),
+                                  Tab(text: '新建'),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -132,7 +143,22 @@ class _DreamCreateTabState extends State<_DreamCreateTab> {
   final List<String> _entries = <String>[];
 
   @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_handleDraftChanged);
+  }
+
+  bool get _canSave => _controller.text.trim().isNotEmpty;
+
+  void _handleDraftChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
   void dispose() {
+    _controller.removeListener(_handleDraftChanged);
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -162,9 +188,7 @@ class _DreamCreateTabState extends State<_DreamCreateTab> {
         _controller.clear();
       });
       _focusNode.unfocus();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('这段梦已经收进“梦境记录”。')),
-      );
+      await notifyPassiveToast(context, message: '这段梦已经收进“梦境记录”。');
     }
   }
 
@@ -187,11 +211,9 @@ class _DreamCreateTabState extends State<_DreamCreateTab> {
         children: <Widget>[
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl,
-                AppSpacing.xl,
-                AppSpacing.xl,
-                AppSpacing.xl,
+              padding: AppPageInsets.page(
+                top: AppSpacing.xl,
+                bottom: AppSpacing.lg,
               ),
               children: <Widget>[
                 Center(
@@ -264,18 +286,14 @@ class _DreamCreateTabState extends State<_DreamCreateTab> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  decoration: BoxDecoration(
-                    color: Color.alphaBlend(
-                      palette.primaryHighlight.withAlpha(120),
-                      Colors.white,
-                    ),
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    border: Border.all(
-                      color: palette.primarySoft.withAlpha(90),
-                    ),
+                AppCard(
+                  color: Color.alphaBlend(
+                    palette.primaryHighlight.withAlpha(110),
+                    Colors.white,
                   ),
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  borderRadius: AppRadius.compactCard,
+                  border: _dreamCardBorder(palette, alpha: 110),
                   child: Text(
                     '如果刚醒来还模糊，可以先从“我看到了什么”“我当时什么感觉”“有没有一句特别清楚的话”开始写，我会帮你把梦记轻轻收好。',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -311,10 +329,10 @@ class _DreamCreateTabState extends State<_DreamCreateTab> {
                               ],
                             ),
                             borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(24),
-                              topRight: Radius.circular(24),
-                              bottomLeft: Radius.circular(24),
-                              bottomRight: Radius.circular(8),
+                              topLeft: Radius.circular(AppRadius.standard),
+                              topRight: Radius.circular(AppRadius.standard),
+                              bottomLeft: Radius.circular(AppRadius.standard),
+                              bottomRight: Radius.circular(AppRadius.xs),
                             ),
                             boxShadow: AppColors.cardShadow,
                           ),
@@ -343,82 +361,121 @@ class _DreamCreateTabState extends State<_DreamCreateTab> {
               AppSpacing.xl,
             ),
             decoration: BoxDecoration(
-              color: Colors.white.withAlpha(245),
+              color: Colors.white.withAlpha(248),
               border: Border(
-                top: BorderSide(color: palette.primarySoft.withAlpha(70)),
+                top: BorderSide(color: palette.primarySoft.withAlpha(80)),
               ),
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: <Widget>[
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: palette.primaryHighlight.withAlpha(70),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: palette.primarySoft.withAlpha(90),
-                      ),
-                    ),
-                    child: TextField(
-                      controller: _controller,
-                      focusNode: _focusNode,
-                      minLines: 1,
-                      maxLines: 5,
-                      textInputAction: TextInputAction.newline,
-                      decoration: InputDecoration(
-                        hintText: '例如：我梦见自己站在很高的桥上，风很冷，但并不害怕...',
-                        hintStyle: Theme.of(context).textTheme.bodyMedium
-                            ?.copyWith(
-                              color: AppColors.textSecondary.withAlpha(170),
-                            ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.lg,
-                          vertical: 16,
-                        ),
-                      ),
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        height: 1.6,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: <Color>[
-                        palette.primary,
-                        Color.lerp(palette.primary, palette.primaryDeep, 0.4)!,
-                      ],
-                    ),
-                    boxShadow: AppColors.floatingShadow,
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(26),
-                      onTap: _saveDream,
-                      child: const Center(
-                        child: Icon(
-                          Icons.send_rounded,
-                          color: Colors.white,
-                          size: 22,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            child: _DreamComposer(
+              controller: _controller,
+              focusNode: _focusNode,
+              palette: palette,
+              canSubmit: _canSave,
+              onSubmit: _saveDream,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DreamComposer extends StatelessWidget {
+  const _DreamComposer({
+    required this.controller,
+    required this.focusNode,
+    required this.palette,
+    required this.canSubmit,
+    required this.onSubmit,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final NightMoodPalette palette;
+  final bool canSubmit;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          palette.primaryHighlight.withAlpha(78),
+          Colors.white,
+        ),
+        borderRadius: AppRadius.control,
+        border: Border.all(color: palette.primarySoft.withAlpha(100)),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x12000000),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: <Widget>[
+            Expanded(
+              child: TextField(
+                key: const ValueKey<String>('dream-composer-field'),
+                controller: controller,
+                focusNode: focusNode,
+                minLines: 1,
+                maxLines: 5,
+                textInputAction: TextInputAction.newline,
+                cursorColor: palette.primaryDeep,
+                decoration: InputDecoration(
+                  isCollapsed: true,
+                  hintText: '例如：我梦见自己站在很高的桥上，风很冷，但并不害怕...',
+                  hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary.withAlpha(170),
+                    height: 1.45,
+                  ),
+                  border: InputBorder.none,
+                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(height: 1.55),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Semantics(
+              button: true,
+              label: '收好这段梦',
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  key: const ValueKey<String>('dream-composer-submit'),
+                  borderRadius: AppRadius.pill,
+                  onTap: canSubmit ? onSubmit : null,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: canSubmit
+                          ? palette.primary
+                          : palette.primaryHighlight.withAlpha(180),
+                      borderRadius: AppRadius.pill,
+                    ),
+                    child: Icon(
+                      Icons.arrow_upward_rounded,
+                      size: 18,
+                      color: canSubmit ? Colors.white : palette.primaryDeep,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -446,11 +503,9 @@ class _DreamListTab extends StatelessWidget {
         ];
 
         return ListView(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.xl,
-            AppSpacing.lg,
-            AppSpacing.xl,
-            120,
+          padding: AppPageInsets.page(
+            top: AppSpacing.lg,
+            bottom: AppSpacing.xxxl,
           ),
           children: <Widget>[
             _HighlightCard(palette: palette),
@@ -465,11 +520,7 @@ class _DreamListTab extends StatelessWidget {
             ...allEntries.asMap().entries.map(
               (MapEntry<int, DreamEntryData> item) => Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                child: _DreamEntryCard(
-                  entry: item.value,
-                  palette: palette,
-                  index: item.key,
-                ),
+                child: _DreamEntryCard(entry: item.value, palette: palette),
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
@@ -522,25 +573,19 @@ class _DreamMappingTab extends StatelessWidget {
     return ListenableBuilder(
       listenable: services.sleepCaptureRepository,
       builder: (BuildContext context, Widget? child) {
-        final List<SleepCaptureRecord> records = services
-            .sleepCaptureRepository
+        final List<SleepCaptureRecord> records = services.sleepCaptureRepository
             .recordsByType(SleepCaptureType.dream);
         final _DreamAnalysisViewData analysis = _buildDreamAnalysis(records);
         return ListView(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.xl,
-            AppSpacing.lg,
-            AppSpacing.xl,
-            120,
+          padding: AppPageInsets.page(
+            top: AppSpacing.lg,
+            bottom: AppSpacing.xxxl,
           ),
           children: <Widget>[
-            Container(
+            AppCard(
               padding: const EdgeInsets.all(AppSpacing.xl),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: AppRadius.cardLarge,
-                boxShadow: AppColors.cardShadow,
-              ),
+              borderRadius: AppRadius.compactCard,
+              border: _dreamCardBorder(palette),
               child: Column(
                 children: <Widget>[
                   Container(
@@ -590,13 +635,10 @@ class _DreamMappingTab extends StatelessWidget {
             ...analysis.insights.map(
               (DreamInsightData insight) => Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                child: Container(
+                child: AppCard(
                   padding: const EdgeInsets.all(AppSpacing.lg),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: AppRadius.card,
-                    boxShadow: AppColors.cardShadow,
-                  ),
+                  borderRadius: AppRadius.compactCard,
+                  border: _dreamCardBorder(palette),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -688,13 +730,10 @@ class _HighlightCard extends StatelessWidget {
         final _DreamAnalysisViewData analysis = _buildDreamAnalysis(
           services.sleepCaptureRepository.recordsByType(SleepCaptureType.dream),
         );
-        return Container(
+        return AppCard(
           padding: const EdgeInsets.all(AppSpacing.xl),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: AppRadius.cardLarge,
-            boxShadow: AppColors.cardShadow,
-          ),
+          borderRadius: AppRadius.compactCard,
+          border: _dreamCardBorder(palette),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -726,16 +765,16 @@ class _HighlightCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.lg),
               Text(
                 analysis.highlight.title,
-                style: Theme.of(
-                  context,
-                ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 analysis.highlight.description,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
               const SizedBox(height: AppSpacing.xl),
               Row(
@@ -744,7 +783,9 @@ class _HighlightCard extends StatelessWidget {
                   final Color barColor = _barColorForSeed(pattern.colorSeed);
                   return Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.xxs,
+                      ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: <Widget>[
@@ -754,8 +795,8 @@ class _HighlightCard extends StatelessWidget {
                             height: 28 + (pattern.value * 80),
                             decoration: BoxDecoration(
                               color: barColor,
-                              borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(24),
+                              borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(AppRadius.md),
                               ),
                             ),
                           ),
@@ -805,13 +846,10 @@ class _PatternBreakdownCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: AppRadius.cardLarge,
-        boxShadow: AppColors.cardShadow,
-      ),
+      borderRadius: AppRadius.compactCard,
+      border: _dreamCardBorder(palette),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -860,15 +898,17 @@ class _PatternBreakdownCard extends StatelessWidget {
               };
               return Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xxs,
+                  ),
                   child: Column(
                     children: <Widget>[
                       Container(
                         height: baseHeight,
                         decoration: BoxDecoration(
                           color: barColor.withAlpha(90),
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(22),
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(AppRadius.standard),
                           ),
                         ),
                         alignment: Alignment.bottomCenter,
@@ -876,8 +916,8 @@ class _PatternBreakdownCard extends StatelessWidget {
                           height: math.max(18, baseHeight - 28),
                           decoration: BoxDecoration(
                             color: barColor,
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(22),
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(AppRadius.standard),
                             ),
                           ),
                         ),
@@ -941,12 +981,11 @@ _DreamAnalysisViewData _buildDreamAnalysis(List<SleepCaptureRecord> records) {
       counts.update(label, (int value) => value + 1, ifAbsent: () => 1);
     }
   }
-  final List<MapEntry<String, int>> topLabels =
-      counts.entries.toList()
-        ..sort((MapEntry<String, int> a, MapEntry<String, int> b) {
-          final int byCount = b.value.compareTo(a.value);
-          return byCount != 0 ? byCount : a.key.compareTo(b.key);
-        });
+  final List<MapEntry<String, int>> topLabels = counts.entries.toList()
+    ..sort((MapEntry<String, int> a, MapEntry<String, int> b) {
+      final int byCount = b.value.compareTo(a.value);
+      return byCount != 0 ? byCount : a.key.compareTo(b.key);
+    });
 
   final List<DreamPatternData> patterns = <DreamPatternData>[
     for (int index = 0; index < 4; index++)
@@ -983,7 +1022,8 @@ _DreamAnalysisViewData _buildDreamAnalysis(List<SleepCaptureRecord> records) {
         summary: '最近梦记里最常见的是“$topLabel”，说明它已经开始成为你这段时间梦境的稳定主题。',
         points: <String>[
           '最近记录共 $total 条，最高频线索是“$topLabel”。',
-          if (topLabels.length > 1) '第二常见线索是“${topLabels[1].key}”，说明梦境主题不是完全单一的。',
+          if (topLabels.length > 1)
+            '第二常见线索是“${topLabels[1].key}”，说明梦境主题不是完全单一的。',
           '这类高频标签来自你真实输入内容和 AI 摘要中的关键词提取，而不是固定示例。',
         ],
         icon: Icons.explore_rounded,
@@ -1013,7 +1053,8 @@ _DreamAnalysisViewData _buildDreamAnalysis(List<SleepCaptureRecord> records) {
 }
 
 Set<String> _dreamPatternLabelsForRecord(SleepCaptureRecord record) {
-  final String text = '${record.title} ${record.outline} ${record.content}'.toLowerCase();
+  final String text = '${record.title} ${record.outline} ${record.content}'
+      .toLowerCase();
   final Set<String> labels = <String>{};
   void match(String label, List<String> keywords) {
     if (keywords.any((String keyword) => text.contains(keyword))) {
@@ -1040,137 +1081,99 @@ String _formatRelativeDreamTime(DateTime dateTime) {
 }
 
 class _DreamEntryCard extends StatelessWidget {
-  const _DreamEntryCard({
-    required this.entry,
-    required this.palette,
-    required this.index,
-  });
+  const _DreamEntryCard({required this.entry, required this.palette});
 
   final DreamEntryData entry;
   final NightMoodPalette palette;
-  final int index;
 
   @override
   Widget build(BuildContext context) {
-    final BorderRadius radius = switch (index % 3) {
-      0 => const BorderRadius.only(
-        topLeft: Radius.circular(AppRadius.md),
-        topRight: Radius.circular(AppRadius.xl),
-        bottomLeft: Radius.circular(AppRadius.md),
-        bottomRight: Radius.circular(AppRadius.md),
-      ),
-      1 => const BorderRadius.only(
-        topLeft: Radius.circular(AppRadius.xl),
-        topRight: Radius.circular(AppRadius.md),
-        bottomLeft: Radius.circular(AppRadius.md),
-        bottomRight: Radius.circular(AppRadius.xl),
-      ),
-      _ => const BorderRadius.only(
-        topLeft: Radius.circular(AppRadius.md),
-        topRight: Radius.circular(AppRadius.md),
-        bottomLeft: Radius.circular(AppRadius.xl),
-        bottomRight: Radius.circular(AppRadius.md),
-      ),
-    };
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: radius,
-        onTap: () => context.push(AppRoutes.dreamDetail),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: radius,
-            boxShadow: AppColors.cardShadow,
-            border: Border.all(color: palette.primaryHighlight.withAlpha(80)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Wrap(
-                      spacing: AppSpacing.xs,
-                      runSpacing: AppSpacing.xs,
-                      children: entry.tags.take(2).map((String tag) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.sm,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: palette.primaryHighlight.withAlpha(150),
-                            borderRadius: AppRadius.pill,
-                          ),
-                          child: Text(
-                            tag,
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(
-                                  color: palette.primaryDeep,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                        );
-                      }).toList(),
+    return AppCard(
+      onTap: () => context.push(AppRoutes.dreamDetail),
+      borderRadius: AppRadius.compactCard,
+      border: _dreamCardBorder(palette, alpha: 100),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Wrap(
+                spacing: AppSpacing.xs,
+                runSpacing: AppSpacing.xs,
+                children: entry.tags.take(2).map((String tag) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: 6,
                     ),
-                    const Spacer(),
-                    Text(
-                      entry.timeLabel,
+                    decoration: BoxDecoration(
+                      color: palette.primaryHighlight.withAlpha(150),
+                      borderRadius: AppRadius.pill,
+                    ),
+                    child: Text(
+                      tag,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  entry.title,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  entry.summary,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                    height: 1.45,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Row(
-                  children: <Widget>[
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: palette.primaryHighlight.withAlpha(170),
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
-                      ),
-                      child: Icon(entry.icon, color: palette.primary),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text(
-                      '醒来情绪：${entry.moodLabel}',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         color: palette.primaryDeep,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const Spacer(),
-                    const Icon(
-                      Icons.east_rounded,
-                      color: AppColors.textSecondary,
-                    ),
-                  ],
+                  );
+                }).toList(),
+              ),
+              const Spacer(),
+              Text(
+                entry.timeLabel,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: AppColors.textSecondary,
                 ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            entry.title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            entry.summary,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppColors.textSecondary,
+              height: 1.45,
             ),
           ),
-        ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: <Widget>[
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: palette.primaryHighlight.withAlpha(170),
+                  borderRadius: AppRadius.iconContainer,
+                ),
+                child: Icon(entry.icon, color: palette.primary),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                '醒来情绪：${entry.moodLabel}',
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(color: palette.primaryDeep),
+              ),
+              const Spacer(),
+              const Icon(Icons.east_rounded, color: AppColors.textSecondary),
+            ],
+          ),
+        ],
       ),
     );
   }
+}
+
+Border _dreamCardBorder(NightMoodPalette palette, {int alpha = 90}) {
+  return Border.all(color: palette.primaryHighlight.withAlpha(alpha));
 }
