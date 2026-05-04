@@ -15,6 +15,7 @@ import 'package:sleep_dorm_app/core/widgets/app_message_record_card.dart';
 import 'package:sleep_dorm_app/core/utils/dorm_quiet_rating.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
+import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_invite_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_member_status_presenter.dart';
@@ -351,10 +352,11 @@ class _DormPencilScaffold extends StatelessWidget {
                           const SizedBox(height: AppSpacing.lg),
                           _DormAnimatedSection(
                             order: 2,
-                            child: _DormPencilSectionHeader(
+                            child: SectionTitle(
                               title: '当前室友状态',
                               actionLabel: '查看全部',
                               actionKey: DormPage.currentStatusMoreKey,
+                              variant: SectionTitleVariant.dorm,
                               onAction: () =>
                                   context.push(AppRoutes.dormCurrentStatus),
                             ),
@@ -397,8 +399,9 @@ class _DormPencilScaffold extends StatelessWidget {
                           const SizedBox(height: AppSpacing.xl),
                           _DormAnimatedSection(
                             order: 4,
-                            child: const _DormPencilSectionHeader(
+                            child: const SectionTitle(
                               title: '智能寝室协同中心',
+                              variant: SectionTitleVariant.dorm,
                             ),
                           ),
                           const SizedBox(height: AppSpacing.sm),
@@ -431,10 +434,11 @@ class _DormPencilScaffold extends StatelessWidget {
                           const SizedBox(height: AppSpacing.xl),
                           _DormAnimatedSection(
                             order: 6,
-                            child: _DormPencilSectionHeader(
+                            child: SectionTitle(
                               title: '寝室状态记录',
                               actionLabel: '查看更多',
                               actionKey: DormPage.eventMoreKey,
+                              variant: SectionTitleVariant.dorm,
                               onAction: () =>
                                   context.push(AppRoutes.dormStatus),
                             ),
@@ -524,59 +528,6 @@ class _DormHeader extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           _DormPulseBadgePill(badge: dormPulseBadge!),
         ],
-      ],
-    );
-  }
-}
-
-class _DormPencilSectionHeader extends StatelessWidget {
-  const _DormPencilSectionHeader({
-    required this.title,
-    this.actionLabel,
-    this.actionKey,
-    this.onAction,
-  });
-
-  final String title;
-  final String? actionLabel;
-  final Key? actionKey;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: <Widget>[
-        Expanded(
-          child: Text(
-            title,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-        if (actionLabel != null && onAction != null)
-          TextButton.icon(
-            key: actionKey,
-            onPressed: onAction,
-            style: TextButton.styleFrom(
-              foregroundColor: palette.welcomeAccentColor,
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              visualDensity: VisualDensity.compact,
-            ),
-            iconAlignment: IconAlignment.end,
-            icon: const Icon(Icons.chevron_right_rounded, size: 16),
-            label: Text(
-              actionLabel!,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: palette.welcomeAccentColor,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
       ],
     );
   }
