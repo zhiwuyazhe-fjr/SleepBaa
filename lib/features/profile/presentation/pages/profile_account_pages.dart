@@ -38,26 +38,30 @@ class AccountManagementPage extends StatelessWidget {
             AppSettingsGroup(
               children: <Widget>[
                 AppSettingsItem(
-                  icon: Icons.badge_outlined,
+                  icon: Icons.person_outline_rounded,
                   iconColor: palette.primaryDeep,
+                  iconBackgroundColor: AppColors.surfaceMuted,
                   title: '个人资料',
                   onTap: () => context.push(AppRoutes.profileAccountProfile),
                 ),
                 AppSettingsItem(
-                  icon: Icons.password_rounded,
+                  icon: Icons.lock_reset_rounded,
                   iconColor: palette.primaryDeep,
+                  iconBackgroundColor: AppColors.surfaceMuted,
                   title: '重置密码',
                   onTap: () => context.push(AppRoutes.profileAccountPassword),
                 ),
                 AppSettingsItem(
-                  icon: Icons.login_rounded,
+                  icon: Icons.phonelink_lock_rounded,
                   iconColor: palette.primaryDeep,
+                  iconBackgroundColor: AppColors.surfaceMuted,
                   title: '登录管理',
                   onTap: () => context.push(AppRoutes.profileAccountLogin),
                 ),
                 AppSettingsItem(
-                  icon: Icons.night_shelter_rounded,
+                  icon: Icons.meeting_room_outlined,
                   iconColor: palette.primaryDeep,
+                  iconBackgroundColor: AppColors.surfaceMuted,
                   title: '寝室管理',
                   onTap: () => context.push(AppRoutes.profileAccountDorm),
                 ),
@@ -442,21 +446,24 @@ class _DormManagementPageState extends State<DormManagementPage> {
                 AppSettingsGroup(
                   children: <Widget>[
                     AppSettingsItem(
-                      icon: Icons.group_add_rounded,
+                      icon: Icons.group_add_outlined,
                       iconColor: palette.primaryDeep,
+                      iconBackgroundColor: AppColors.surfaceMuted,
                       title: '邀请舍友',
                       onTap: () => context.push(AppRoutes.dormInvite),
                     ),
                     AppSettingsItem(
-                      icon: Icons.rule_folder_outlined,
+                      icon: Icons.fact_check_outlined,
                       iconColor: palette.primaryDeep,
-                      title: '查看宿舍规则',
+                      iconBackgroundColor: AppColors.surfaceMuted,
+                      title: '查看寝室规则',
                       onTap: () => context.push(AppRoutes.dormRules),
                     ),
                     AppSettingsItem(
-                      icon: Icons.edit_rounded,
+                      icon: Icons.edit_note_rounded,
                       iconColor: palette.primaryDeep,
-                      title: '编辑宿舍名称',
+                      iconBackgroundColor: AppColors.surfaceMuted,
+                      title: '编辑寝室名称',
                       onTap: () => _renameDorm(services, dorm),
                     ),
                   ],

@@ -14,7 +14,6 @@ import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
-import 'package:sleep_dorm_app/core/widgets/app_menu_group_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/mood_avatar.dart';
@@ -34,6 +33,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _isSavingSettings = false;
   bool _isApplyingNightMood = false;
   bool _isSavingAssistantMotion = false;
+  bool _isSleepGoalExpanded = false;
   double _sleepGoalHours = 7.5;
   bool _bedtimeReminderEnabled = true;
   bool _morningReminderEnabled = true;
@@ -245,15 +245,13 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                 ],
-                AppMenuGroupCard(
-                  borderRadius: AppRadius.compactCard,
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
-                  itemPadding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                    vertical: AppSpacing.sm,
-                  ),
-                  items: <AppMenuGroupCardItem>[
-                    AppMenuGroupCardItem(
+                AppSettingsGroup(
+                  title: '账号',
+                  children: <Widget>[
+                    AppSettingsItem(
+                      icon: Icons.person_outline_rounded,
+                      iconColor: context.nightMoodPalette.primaryDeep,
+                      iconBackgroundColor: AppColors.surfaceMuted,
                       title: '账号管理',
                       titleStyle: textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
@@ -342,6 +340,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       icon: Icons.auto_awesome_rounded,
                       title: '回复文字浮动',
                       iconColor: context.nightMoodPalette.primaryDeep,
+                      iconBackgroundColor: AppColors.surfaceMuted,
                       trailing: _SettingsValueTrailing(
                         value: _isSavingAssistantMotion
                             ? '保存中...'
@@ -365,6 +364,13 @@ class _SettingsPageState extends State<SettingsPage> {
                           title: '目标睡眠时长',
                           valueLabel:
                               '${_sleepGoalHours.toStringAsFixed(1)} 小时',
+                          expanded: _isSleepGoalExpanded,
+                          onToggle: () {
+                            setState(
+                              () =>
+                                  _isSleepGoalExpanded = !_isSleepGoalExpanded,
+                            );
+                          },
                           onChanged: (double value) {
                             setState(() => _sleepGoalHours = value);
                           },
@@ -374,6 +380,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           icon: Icons.schedule_rounded,
                           title: '睡前提醒时间',
                           iconColor: context.nightMoodPalette.primaryDeep,
+                          iconBackgroundColor: AppColors.surfaceMuted,
                           trailing: _SettingsValueTrailing(
                             value: Formatters.formatClock(_bedtimeReminder),
                           ),
@@ -397,7 +404,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         _SettingsSwitchRow(
                           icon: Icons.notifications_active_outlined,
-                          title: '宿舍动态提醒',
+                          title: '寝室动态提醒',
                           value: _dormAlertsEnabled,
                           onChanged: (bool value) {
                             setState(() => _dormAlertsEnabled = value);
@@ -447,76 +454,103 @@ class _SettingsSliderRow extends StatelessWidget {
   const _SettingsSliderRow({
     required this.title,
     required this.valueLabel,
+    required this.expanded,
+    required this.onToggle,
     required this.onChanged,
     required this.value,
   });
 
   final String title;
   final String valueLabel;
+  final bool expanded;
+  final VoidCallback onToggle;
   final ValueChanged<double> onChanged;
   final double value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: <Widget>[
+        AppSettingsItem(
+          icon: Icons.hotel_rounded,
+          iconColor: context.nightMoodPalette.primaryDeep,
+          iconBackgroundColor: AppColors.surfaceMuted,
+          title: title,
+          trailing: _SettingsValueTrailing(
+            value: valueLabel,
+            icon: expanded
+                ? Icons.keyboard_arrow_up_rounded
+                : Icons.keyboard_arrow_down_rounded,
+          ),
+          onTap: onToggle,
+        ),
+        AnimatedCrossFade(
+          firstChild: const SizedBox(width: double.infinity),
+          secondChild: _SleepGoalSliderPanel(
+            value: value,
+            onChanged: onChanged,
+          ),
+          crossFadeState: expanded
+              ? CrossFadeState.showSecond
+              : CrossFadeState.showFirst,
+          duration: const Duration(milliseconds: 180),
+          firstCurve: Curves.easeOutCubic,
+          secondCurve: Curves.easeOutCubic,
+          sizeCurve: Curves.easeOutCubic,
+        ),
+      ],
+    );
+  }
+}
+
+class _SleepGoalSliderPanel extends StatelessWidget {
+  const _SleepGoalSliderPanel({required this.value, required this.onChanged});
+
+  final double value;
+  final ValueChanged<double> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
-        AppSpacing.xs,
+        0,
         AppSpacing.md,
         AppSpacing.sm,
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
         children: <Widget>[
-          SizedBox(
-            width: 28,
-            child: Center(
-              child: Icon(
-                Icons.hotel_rounded,
-                size: 20,
-                color: context.nightMoodPalette.primaryDeep,
+          Row(
+            children: <Widget>[
+              Text(
+                '6 小时',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.textHint,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
+              const Spacer(),
+              Text(
+                '9 小时',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.textHint,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                    Text(
-                      valueLabel,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-                SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 4,
-                    overlayShape: SliderComponentShape.noOverlay,
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 8,
-                    ),
-                  ),
-                  child: Slider(
-                    value: value,
-                    min: 6,
-                    max: 9,
-                    divisions: 12,
-                    onChanged: onChanged,
-                  ),
-                ),
-              ],
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 4,
+              overlayShape: SliderComponentShape.noOverlay,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+            ),
+            child: Slider(
+              value: value,
+              min: 6,
+              max: 9,
+              divisions: 12,
+              onChanged: onChanged,
             ),
           ),
         ],
@@ -543,6 +577,7 @@ class _SettingsSwitchRow extends StatelessWidget {
     return AppSettingsItem(
       icon: icon,
       iconColor: context.nightMoodPalette.primaryDeep,
+      iconBackgroundColor: AppColors.surfaceMuted,
       title: title,
       trailing: _SettingsToggle(
         key: ValueKey<String>('settings-toggle-$title'),
@@ -600,9 +635,13 @@ class _SettingsToggle extends StatelessWidget {
 }
 
 class _SettingsValueTrailing extends StatelessWidget {
-  const _SettingsValueTrailing({required this.value});
+  const _SettingsValueTrailing({
+    required this.value,
+    this.icon = Icons.chevron_right_rounded,
+  });
 
   final String value;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -617,11 +656,7 @@ class _SettingsValueTrailing extends StatelessWidget {
           ),
         ),
         const SizedBox(width: AppSpacing.xxs),
-        const Icon(
-          Icons.chevron_right_rounded,
-          size: 18,
-          color: AppColors.textHint,
-        ),
+        Icon(icon, size: 18, color: AppColors.textHint),
       ],
     );
   }

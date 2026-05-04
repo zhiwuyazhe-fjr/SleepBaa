@@ -16,6 +16,9 @@ class AppMenuGroupCardItem {
     this.subtitleStyle,
     this.iconColor,
     this.iconSize = 20,
+    this.iconBackgroundColor,
+    this.iconContainerSize = 36,
+    this.iconContainerBorderRadius,
   });
 
   final IconData? icon;
@@ -27,6 +30,9 @@ class AppMenuGroupCardItem {
   final TextStyle? subtitleStyle;
   final Color? iconColor;
   final double iconSize;
+  final Color? iconBackgroundColor;
+  final double iconContainerSize;
+  final BorderRadius? iconContainerBorderRadius;
 }
 
 class AppMenuGroupCard extends StatelessWidget {
@@ -88,16 +94,7 @@ class _AppMenuGroupRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
               if (item.icon != null) ...<Widget>[
-                SizedBox(
-                  width: item.iconSize + AppSpacing.xs,
-                  child: Center(
-                    child: Icon(
-                      item.icon,
-                      size: item.iconSize,
-                      color: item.iconColor ?? AppColors.textPrimary,
-                    ),
-                  ),
-                ),
+                _AppMenuGroupIcon(item: item),
                 const SizedBox(width: AppSpacing.sm),
               ],
               Expanded(
@@ -130,6 +127,36 @@ class _AppMenuGroupRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _AppMenuGroupIcon extends StatelessWidget {
+  const _AppMenuGroupIcon({required this.item});
+
+  final AppMenuGroupCardItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color iconColor = item.iconColor ?? AppColors.textPrimary;
+    if (item.iconBackgroundColor == null) {
+      return SizedBox(
+        width: item.iconSize + AppSpacing.xs,
+        child: Center(
+          child: Icon(item.icon!, size: item.iconSize, color: iconColor),
+        ),
+      );
+    }
+
+    return Container(
+      width: item.iconContainerSize,
+      height: item.iconContainerSize,
+      decoration: BoxDecoration(
+        color: item.iconBackgroundColor,
+        borderRadius: item.iconContainerBorderRadius ?? AppRadius.iconContainer,
+      ),
+      alignment: Alignment.center,
+      child: Icon(item.icon!, size: item.iconSize, color: iconColor),
     );
   }
 }
