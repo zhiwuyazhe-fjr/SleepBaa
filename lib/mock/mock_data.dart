@@ -43,14 +43,24 @@ abstract final class MockData {
   static const List<AssistantSuggestion> assistantSuggestions =
       <AssistantSuggestion>[
         AssistantSuggestion(
-          title: '今晚先试 15 分钟呼吸放松',
-          summary: '根据最近几晚的入睡节奏，你对温和、低刺激的呼吸引导更容易起效。',
-          tag: '今晚建议',
+          title: '本地演示已准备好',
+          summary: '无需注册或连接 CloudBase，也可以直接查看首页、宿舍、梦境、报告和助手流程。',
+          tag: '演示模式',
         ),
         AssistantSuggestion(
-          title: '把手机提醒延后到明早',
-          summary: '今晚的主要干扰更像是屏幕刺激，而不是宿舍噪声。',
+          title: '今晚先试 15 分钟呼吸放松',
+          summary: '根据预置的最近几晚睡眠记录，温和、低刺激的睡前流程更容易起效。',
           tag: '优先处理',
+        ),
+        AssistantSuggestion(
+          title: '先选今晚心情',
+          summary: '开心、低落、平静会影响主题色、陪伴语和本地建议排序，可在欢迎流程或设置里切换。',
+          tag: '心情',
+        ),
+        AssistantSuggestion(
+          title: '回看事记仓库',
+          summary: '本地演示已预置几条睡前事记，可查看 AI 整理提要和原文内容。',
+          tag: '事记',
         ),
       ];
 
@@ -58,7 +68,7 @@ abstract final class MockData {
       <ConversationPlaceholder>[
         ConversationPlaceholder(
           fromAssistant: true,
-          message: '我已经整理好你最近几晚的干扰模式，可以先从声音和屏幕光开始。',
+          message: '这是本地演示对话，我会根据预置的宿舍、睡眠和梦境数据给出建议。',
         ),
         ConversationPlaceholder(
           fromAssistant: false,
@@ -67,6 +77,18 @@ abstract final class MockData {
         ConversationPlaceholder(
           fromAssistant: true,
           message: '可以先准备耳塞，再把睡眠模式切到“轻干预 + 噪声优先”。',
+        ),
+        ConversationPlaceholder(
+          fromAssistant: false,
+          message: '如果我今天有点低落，建议会不会太多？',
+        ),
+        ConversationPlaceholder(
+          fromAssistant: true,
+          message: '不会。低落时会优先给慢呼吸、思绪清理和柔和音频，尽量减少任务感。',
+        ),
+        ConversationPlaceholder(
+          fromAssistant: true,
+          message: '你也可以去“我的 / 事记仓库”看看预置记录，那里有 AI 整理提要。',
         ),
       ];
 

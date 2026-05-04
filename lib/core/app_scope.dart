@@ -150,7 +150,8 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
     _nightWelcomeController = NightWelcomeController(
       clock: widget.clock ?? DateTime.now,
       showInDebugOutsideNight:
-          widget.showNightWelcomeOutsideNightInDebug ?? kDebugMode,
+          widget.showNightWelcomeOutsideNightInDebug ??
+          (kDebugMode || (!widget.environment.usesCloudBase && kReleaseMode)),
       initialLocalHandledEveningPeriodKey:
           widget.initialLocalEveningWelcome?.periodKey,
     );
@@ -383,7 +384,9 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
     _feedbackRepository = InMemoryFeedbackRepository(
       sleepSessionRepository: _sleepSessionRepository,
     );
-    _sleepCaptureRepository = InMemorySleepCaptureRepository();
+    _sleepCaptureRepository = InMemorySleepCaptureRepository(
+      initialRecords: buildDefaultSleepCaptureRecords(),
+    );
     _notificationRepository = InMemoryNotificationRepository(
       ownerUid: _authRepository.currentUser.uid,
     );
@@ -395,6 +398,7 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
     );
     _assistantRepository = InMemoryAssistantRepository(
       userId: _authRepository.currentUser.uid,
+      seedDemoConversation: true,
     );
     _assistantReplyGateway = const StubAssistantReplyGateway();
     _insightsRepository = InMemoryInsightsRepository(

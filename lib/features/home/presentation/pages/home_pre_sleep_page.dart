@@ -18,7 +18,38 @@ import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.d
 List<NightRecommendation> displayedTonightRecommendations(
   List<NightRecommendation> recommendations,
 ) {
-  return recommendations.take(3).toList(growable: false);
+  final List<NightRecommendation> displayed = <NightRecommendation>[];
+
+  for (final NightRecommendation recommendation in recommendations) {
+    if (recommendation.type == RecommendationType.audio) {
+      displayed.add(recommendation);
+      break;
+    }
+  }
+
+  for (final NightRecommendation recommendation in recommendations) {
+    if (recommendation.type == RecommendationType.audio) {
+      continue;
+    }
+    displayed.add(recommendation);
+    if (displayed.length == 3) {
+      break;
+    }
+  }
+
+  if (displayed.length < 3) {
+    for (final NightRecommendation recommendation in recommendations) {
+      if (displayed.contains(recommendation)) {
+        continue;
+      }
+      displayed.add(recommendation);
+      if (displayed.length == 3) {
+        break;
+      }
+    }
+  }
+
+  return displayed.toList(growable: false);
 }
 
 class HomePreSleepPage extends StatefulWidget {

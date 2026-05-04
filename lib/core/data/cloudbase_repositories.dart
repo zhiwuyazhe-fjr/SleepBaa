@@ -424,6 +424,15 @@ IconData _iconForAction(String actionId, RecommendationType type) {
 
 Map<String, AudioTrack> _remoteAudioTrackCatalog = <String, AudioTrack>{};
 
+const int _cloudBaseTonightRecommendationLimit = 6;
+
+List<AudioTrack> _defaultAudioCatalog() {
+  return buildDefaultRecommendations()
+      .where((NightRecommendation item) => _isPlayableTrack(item.track))
+      .map((NightRecommendation item) => item.track!)
+      .toList(growable: false);
+}
+
 AudioTrack? _firstRemoteAudioTrack() {
   if (_remoteAudioTrackCatalog.isEmpty) {
     return null;
@@ -2465,7 +2474,7 @@ class CloudBaseRecommendationRepository extends ChangeNotifier
        _settingsRepository = settingsRepository,
        _snapshotStore = snapshotStore,
        _appApiClient = appApiClient,
-       _tonightRecommendations = buildDefaultRecommendations() {
+       _tonightRecommendations = buildDefaultTonightRecommendations() {
     _snapshotStore.addListener(_applySnapshot);
     unawaited(_refreshAudioCatalog(hydrateCurrentRecommendations: true));
   }
@@ -2489,12 +2498,7 @@ class CloudBaseRecommendationRepository extends ChangeNotifier
     if (remoteTracks.isNotEmpty) {
       return List<AudioTrack>.unmodifiable(remoteTracks);
     }
-    return List<AudioTrack>.unmodifiable(
-      _tonightRecommendations
-          .where((NightRecommendation item) => _isPlayableTrack(item.track))
-          .map((NightRecommendation item) => item.track!)
-          .toList(growable: false),
-    );
+    return List<AudioTrack>.unmodifiable(_defaultAudioCatalog());
   }
 
   @override
@@ -2518,7 +2522,7 @@ class CloudBaseRecommendationRepository extends ChangeNotifier
         // Fall back to local defaults below.
       }
     }
-    _tonightRecommendations = buildDefaultRecommendations()
+    _tonightRecommendations = buildDefaultTonightRecommendations()
         .map(
           (NightRecommendation item) =>
               item.copyWith(executionState: RecommendationExecutionState.idle),
@@ -2589,6 +2593,7 @@ class CloudBaseRecommendationRepository extends ChangeNotifier
             item.id: item.executionState,
         };
     _tonightRecommendations = actions
+        .take(_cloudBaseTonightRecommendationLimit)
         .map(_recommendationFromAction)
         .map(
           (NightRecommendation item) =>

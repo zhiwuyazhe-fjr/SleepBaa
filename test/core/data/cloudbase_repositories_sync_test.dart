@@ -53,6 +53,46 @@ void main() {
   );
 
   test(
+    'cloudbase recommendation repository starts with compact tonight fallback',
+    () {
+      final _UnconfiguredCloudBaseAppApiClient appApiClient =
+          _UnconfiguredCloudBaseAppApiClient();
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(uid: 'cloud-user'),
+      );
+      final InMemoryUserSettingsRepository settingsRepository =
+          InMemoryUserSettingsRepository();
+      final CloudBaseRecommendationRepository repository =
+          CloudBaseRecommendationRepository(
+            authRepository: authRepository,
+            settingsRepository: settingsRepository,
+            snapshotStore: snapshotStore,
+            appApiClient: appApiClient,
+          );
+
+      expect(repository.tonightRecommendations.map((item) => item.id), <String>[
+        'phone-down',
+        'breath-reset',
+        'audio-ocean',
+        'screen-dim',
+        'bed-tidy',
+        'alarm-ready',
+      ]);
+      expect(
+        repository.tonightRecommendations.length,
+        lessThan(buildDefaultRecommendations().length),
+      );
+
+      repository.dispose();
+      authRepository.dispose();
+      settingsRepository.dispose();
+    },
+  );
+
+  test(
     'cloudbase recommendation repository renders structured tonight plan actions in order',
     () async {
       final _UnconfiguredCloudBaseAppApiClient appApiClient =
@@ -111,6 +151,40 @@ void main() {
       settingsRepository.dispose();
     },
   );
+
+  test('cloudbase recommendation repository caps oversized plan snapshots', () {
+    final _UnconfiguredCloudBaseAppApiClient appApiClient =
+        _UnconfiguredCloudBaseAppApiClient();
+    final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+      appApiClient: appApiClient,
+    );
+    final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+      initialProfile: buildDefaultUserProfile().copyWith(uid: 'cloud-user'),
+    );
+    final InMemoryUserSettingsRepository settingsRepository =
+        InMemoryUserSettingsRepository();
+    final CloudBaseRecommendationRepository repository =
+        CloudBaseRecommendationRepository(
+          authRepository: authRepository,
+          settingsRepository: settingsRepository,
+          snapshotStore: snapshotStore,
+          appApiClient: appApiClient,
+        );
+
+    snapshotStore.pushPayload(
+      _recommendationPlanPayload(
+        buildDefaultRecommendations()
+            .map((NightRecommendation item) => item.id)
+            .toList(growable: false),
+      ),
+    );
+
+    expect(repository.tonightRecommendations, hasLength(6));
+
+    repository.dispose();
+    authRepository.dispose();
+    settingsRepository.dispose();
+  });
 
   test(
     'cloudbase sleep session repository keeps local state responsive while remote sync is queued',

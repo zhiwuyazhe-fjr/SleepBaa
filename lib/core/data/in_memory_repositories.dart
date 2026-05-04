@@ -11,15 +11,23 @@ import 'package:sleep_dorm_app/core/utils/id_generator.dart';
 UserProfile buildDefaultUserProfile() {
   return const UserProfile(
     uid: 'anon-paul',
-    displayName: 'Paul',
-    tagline: 'Dorm Sleep Explorer',
-    role: '宿舍睡眠优化实验成员',
-    earnedBadgeIds: <String>['first-week', 'early-sleeper', 'sleep-master'],
+    displayName: 'Paul（本地演示）',
+    tagline: '免注册本地演示账号',
+    role: '眠羊本地演示用户 · 可直接查看主要流程',
+    earnedBadgeIds: <String>[
+      'first-week',
+      'early-sleeper',
+      'quiet-guardian',
+      'gentle-reminder',
+      'sleep-master',
+    ],
+    equippedBadgeId: 'sleep-master',
     dormId: 'dorm-204',
     showDormPulseBadge: true,
+    selectedDormBadgeId: 'no-wake-room',
     phoneNumber: null,
     phoneLinkedAt: null,
-    avatarFallbackSeed: 'Paul',
+    avatarFallbackSeed: 'Paul Demo',
   );
 }
 
@@ -71,8 +79,8 @@ Dorm buildDefaultDorm(String currentUserId) {
   return Dorm(
     id: 'dorm-204',
     name: '梅苑 2 栋 204',
-    overview: '宿舍整体状态平稳，灯光已调暗，适合逐步进入睡眠模式。',
-    noiseDb: 32,
+    overview: '本地演示宿舍已预置室友状态、安静公约和近期事件，可直接查看宿舍协同睡眠流程。',
+    noiseDb: 34,
     lightLabel: '偏暗',
     quietLabel: '良好',
     rules: buildDormSummaryRules(settings),
@@ -85,9 +93,12 @@ Dorm buildDefaultDorm(String currentUserId) {
         status: DormMemberStatus.quiet,
         presenceStatus: DormPresenceStatus.returned,
         sleepModeActive: false,
+        appOnline: true,
+        appLastSeenAt: DateTime.now().subtract(const Duration(minutes: 3)),
         lastActiveAt: DateTime.now().subtract(const Duration(minutes: 22)),
-        note: '准备做睡前放松。',
+        note: '本地演示账号，今晚准备先做睡前放松。',
         displayBadgeId: 'sleep-master',
+        noiseDb: 31,
       ),
       DormMember(
         uid: 'roommate-a',
@@ -95,9 +106,12 @@ Dorm buildDefaultDorm(String currentUserId) {
         status: DormMemberStatus.quiet,
         presenceStatus: DormPresenceStatus.returned,
         sleepModeActive: true,
+        appOnline: true,
+        appLastSeenAt: DateTime.now().subtract(const Duration(minutes: 5)),
         lastActiveAt: DateTime.now().subtract(const Duration(minutes: 12)),
         note: '已开启睡眠模式。',
         displayBadgeId: 'monthly-perfect',
+        noiseDb: 28,
       ),
       DormMember(
         uid: 'roommate-b',
@@ -105,18 +119,48 @@ Dorm buildDefaultDorm(String currentUserId) {
         status: DormMemberStatus.active,
         presenceStatus: DormPresenceStatus.away,
         sleepModeActive: false,
+        appOnline: true,
+        appLastSeenAt: DateTime.now().subtract(const Duration(minutes: 1)),
         lastActiveAt: DateTime.now().subtract(const Duration(minutes: 6)),
         note: '正在收拾桌面，预计 10 分钟后安静下来。',
         displayBadgeId: 'quiet-guardian',
+        noiseDb: 36,
+      ),
+      DormMember(
+        uid: 'roommate-c',
+        name: '小周',
+        status: DormMemberStatus.sleeping,
+        presenceStatus: DormPresenceStatus.returned,
+        sleepModeActive: true,
+        appOnline: false,
+        appLastSeenAt: DateTime.now().subtract(const Duration(minutes: 40)),
+        lastActiveAt: DateTime.now().subtract(const Duration(minutes: 46)),
+        note: '已入睡，请尽量避免强光和外放声音。',
+        displayBadgeId: 'sunrise-club',
+        noiseDb: 27,
       ),
     ],
     events: <DormEvent>[
+      DormEvent(
+        id: 'seed-event-demo',
+        type: DormEventType.system,
+        title: '本地演示数据已载入',
+        detail: '当前 APK 使用本地内存数据，不需要注册登录，也不会访问团队 CloudBase 数据。',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 3)),
+      ),
       DormEvent(
         id: 'seed-event-quiet',
         type: DormEventType.notification,
         title: '宿舍环境保持安静',
         detail: '公共灯已经关闭，环境噪声保持在 35 dB 以下。',
         createdAt: DateTime.now().subtract(const Duration(minutes: 10)),
+      ),
+      DormEvent(
+        id: 'seed-event-rule',
+        type: DormEventType.ruleUpdate,
+        title: '考试周安静公约生效',
+        detail: '23:00 后默认关闭公共灯，手机提醒改为振动优先。',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 14)),
       ),
       DormEvent(
         id: 'seed-event-status',
@@ -127,7 +171,17 @@ Dorm buildDefaultDorm(String currentUserId) {
         actorUid: 'roommate-a',
       ),
     ],
-    invites: const <DormInvite>[],
+    invites: <DormInvite>[
+      DormInvite(
+        id: 'demo-invite-1',
+        dormId: 'dorm-204',
+        code: '204888',
+        createdByUid: currentUserId,
+        createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+        expiresAt: DateTime.now().add(const Duration(hours: 22)),
+        status: DormInviteStatus.pending,
+      ),
+    ],
     locationAnchor: DormLocationAnchor(
       latitude: 31.2304,
       longitude: 121.4737,
@@ -322,6 +376,26 @@ List<NightRecommendation> buildDefaultRecommendations() {
       executionState: RecommendationExecutionState.idle,
     ),
   ];
+}
+
+List<NightRecommendation> buildDefaultTonightRecommendations() {
+  final Map<String, NightRecommendation> catalog =
+      <String, NightRecommendation>{
+        for (final NightRecommendation item in buildDefaultRecommendations())
+          item.id: item,
+      };
+  const List<String> tonightIds = <String>[
+    'phone-down',
+    'breath-reset',
+    'audio-ocean',
+    'screen-dim',
+    'bed-tidy',
+    'alarm-ready',
+  ];
+  return tonightIds
+      .map((String id) => catalog[id])
+      .nonNulls
+      .toList(growable: false);
 }
 
 class InMemoryAuthRepository extends ChangeNotifier implements AuthRepository {
@@ -1192,16 +1266,39 @@ class InMemorySleepSessionRepository extends ChangeNotifier
             tags: const <String>['1 分钟'],
             executionState: RecommendationExecutionState.completed,
           ),
+          NightRecommendation(
+            id: 'phone-down',
+            title: '手机远离枕边',
+            subtitle: '减少睡前屏幕刺激',
+            type: RecommendationType.quickAction,
+            icon: Icons.phone_android_rounded,
+            tags: const <String>['立刻执行'],
+            executionState: RecommendationExecutionState.completed,
+          ),
         ];
 
     for (int offset = 18; offset >= 2; offset--) {
       final DateTime day = now.subtract(Duration(days: offset));
-      final double durationHours = 6.1 + ((offset % 5) * 0.35);
-      final DateTime startedAt = DateTime(day.year, day.month, day.day, 23, 20);
-      final DateTime endedAt = DateTime(day.year, day.month, day.day + 1, 7, 0);
+      final double durationHours = 6.35 + ((offset % 5) * 0.28);
+      final int startMinute = offset.isEven ? 18 : 34;
+      final int endMinute = offset.isEven ? 8 : 22;
+      final DateTime startedAt = DateTime(
+        day.year,
+        day.month,
+        day.day,
+        23,
+        startMinute,
+      );
+      final DateTime endedAt = DateTime(
+        day.year,
+        day.month,
+        day.day + 1,
+        6 + (offset % 2),
+        endMinute,
+      );
       seeded.add(
         SleepSession(
-          id: 'history-$offset',
+          id: 'demo-night-$offset',
           uid: uid,
           startedAt: startedAt,
           endedAt: endedAt,
@@ -1210,7 +1307,11 @@ class InMemorySleepSessionRepository extends ChangeNotifier
           sleepModeActive: false,
           dormId: 'dorm-204',
           recommendations: historyRecommendations,
-          selectedRecommendationIds: const <String>['audio-ocean'],
+          selectedRecommendationIds: const <String>[
+            'audio-ocean',
+            'earplug',
+            'phone-down',
+          ],
           segments: <SleepSegment>[
             SleepSegment(startedAt: startedAt, endedAt: endedAt),
           ],
@@ -1225,13 +1326,28 @@ class InMemorySleepSessionRepository extends ChangeNotifier
                 note: '翻身后重新入睡，还算稳定。',
               ),
           ],
-          feedback: const <RecommendationFeedback>[],
+          feedback: <RecommendationFeedback>[
+            RecommendationFeedback(
+              recommendationId: 'audio-ocean',
+              status: RecommendationFeedbackStatus.effective,
+              note: '放松音频有帮助，入睡前没有继续刷手机。',
+              submittedAt: DateTime(day.year, day.month, day.day + 1, 7, 40),
+            ),
+            RecommendationFeedback(
+              recommendationId: 'earplug',
+              status: offset.isEven
+                  ? RecommendationFeedbackStatus.effective
+                  : RecommendationFeedbackStatus.neutral,
+              note: offset.isEven ? '挡住了走廊声。' : '今晚宿舍本来就比较安静。',
+              submittedAt: DateTime(day.year, day.month, day.day + 1, 7, 41),
+            ),
+          ],
           summary: MorningSummary(
-            sleepQuality: 3 + (offset % 3),
-            restedLevel: 3 + (offset % 2),
+            sleepQuality: 4 + (offset % 2),
+            restedLevel: 3 + (offset % 3),
             totalSleepHours: durationHours,
             awakeningsCount: offset.isEven ? 1 : 0,
-            note: offset.isEven ? '睡前音频帮助明显。' : '整体比较平稳。',
+            note: offset.isEven ? '睡前音频和耳塞帮助明显，半夜醒来后能重新入睡。' : '宿舍较安静，入睡节奏比较平稳。',
           ),
           updatedAt: DateTime(day.year, day.month, day.day + 1, 7, 0),
         ),
@@ -1264,7 +1380,11 @@ class InMemorySleepSessionRepository extends ChangeNotifier
         sleepModeActive: false,
         dormId: 'dorm-204',
         recommendations: historyRecommendations,
-        selectedRecommendationIds: const <String>['audio-ocean', 'earplug'],
+        selectedRecommendationIds: const <String>[
+          'audio-ocean',
+          'earplug',
+          'phone-down',
+        ],
         segments: <SleepSegment>[
           SleepSegment(startedAt: pendingStartedAt, endedAt: pendingEndedAt),
         ],
@@ -1317,9 +1437,47 @@ class InMemoryFeedbackRepository extends ChangeNotifier
   }
 }
 
+List<SleepCaptureRecord> buildDefaultSleepCaptureRecords() {
+  final DateTime now = DateTime.now();
+  return <SleepCaptureRecord>[
+    SleepCaptureRecord(
+      id: 'memo-demo-tonight-plan',
+      type: SleepCaptureType.memo,
+      sessionId: 'pending-yesterday',
+      createdAt: now.subtract(const Duration(hours: 9, minutes: 12)),
+      title: '事记 22:48 · 睡前收口',
+      outline: 'AI整理：这段事记主要围绕“把今晚要担心的事先放到明天”，适合睡前做一个轻量收口。',
+      content: '今晚先把明早要交的材料列三条，不继续展开。室友晚回来的声音如果出现，就先戴耳塞，不再看手机确认时间。',
+    ),
+    SleepCaptureRecord(
+      id: 'memo-demo-roommate-noise',
+      type: SleepCaptureType.memo,
+      sessionId: 'demo-night-2',
+      createdAt: now.subtract(const Duration(days: 2, hours: 8, minutes: 35)),
+      title: '事记 23:16 · 室友晚归',
+      outline: 'AI整理：这段事记主要围绕“走廊声和室友晚归”，可用于观察夜间醒来的触发因素。',
+      content: '23 点后走廊有几次脚步声，阿哲回来时压低了声音。自己醒了一下，但没有开灯，也没有继续刷手机。',
+    ),
+    SleepCaptureRecord(
+      id: 'memo-demo-exam-week',
+      type: SleepCaptureType.memo,
+      sessionId: 'demo-night-5',
+      createdAt: now.subtract(const Duration(days: 5, hours: 7, minutes: 58)),
+      title: '事记 23:02 · 考试周压力',
+      outline: 'AI整理：这段事记主要围绕“考试周任务压力”，可以和睡眠质量、梦境情绪一起回看。',
+      content: '复习还没完全结束，但今晚不再补新内容。把明早第一件事写在便利贴上，睡前只保留耳塞和雨声。',
+    ),
+  ];
+}
+
 class InMemorySleepCaptureRepository extends ChangeNotifier
     implements SleepCaptureRepository {
-  List<SleepCaptureRecord> _records = const <SleepCaptureRecord>[];
+  InMemorySleepCaptureRepository({List<SleepCaptureRecord>? initialRecords})
+    : _records = List<SleepCaptureRecord>.from(
+        initialRecords ?? const <SleepCaptureRecord>[],
+      );
+
+  List<SleepCaptureRecord> _records;
   PendingSleepMemoBanner? _pendingSleepMemoBanner;
   Timer? _bannerTimer;
 
@@ -1503,6 +1661,16 @@ class InMemoryNotificationRepository extends ChangeNotifier
   InMemoryNotificationRepository({String ownerUid = 'anon-paul'})
     : _notifications = <NotificationItem>[
         NotificationItem(
+          id: 'local-demo-ready',
+          category: NotificationCategory.system,
+          title: '本地演示模式已启用',
+          body: '当前版本使用预置 mock 数据，可免注册查看首页、宿舍、报告、梦境和助手流程。',
+          createdAt: DateTime.now().subtract(const Duration(minutes: 5)),
+          route: AppRoutes.profile,
+          readAt: null,
+          ownerUid: ownerUid,
+        ),
+        NotificationItem(
           id: 'feedback-pending',
           category: NotificationCategory.reminder,
           title: '晨间反馈待完成',
@@ -1520,6 +1688,16 @@ class InMemoryNotificationRepository extends ChangeNotifier
           createdAt: DateTime.now().subtract(const Duration(hours: 8)),
           route: AppRoutes.dorm,
           readAt: null,
+          ownerUid: ownerUid,
+        ),
+        NotificationItem(
+          id: 'assistant-local',
+          category: NotificationCategory.system,
+          title: '小眠本地回复可用',
+          body: '不连接 CloudBase 时，助手会使用本地规则回复，适合快速演示对话体验。',
+          createdAt: DateTime.now().subtract(const Duration(hours: 3)),
+          route: AppRoutes.assistant,
+          readAt: DateTime.now().subtract(const Duration(hours: 1)),
           ownerUid: ownerUid,
         ),
         NotificationItem(
@@ -2125,13 +2303,34 @@ class InMemoryDreamRepository extends ChangeNotifier
   InMemoryDreamRepository({String userId = 'anon-paul'})
     : _entries = <DreamEntry>[
         DreamEntry(
+          id: 'dream-3',
+          userId: userId,
+          title: '会发光的床帘',
+          body: '床帘像一层很薄的月光，外面有人轻轻走动，但声音被雨声盖住了。我知道自己还在宿舍里，于是慢慢放松下来。',
+          tags: const <String>['宿舍', '月光', '安全感'],
+          createdAt: DateTime.now().subtract(const Duration(hours: 7)),
+          emotionLabel: '安心',
+          sessionId: 'pending-yesterday',
+        ),
+        DreamEntry(
+          id: 'dream-2',
+          userId: userId,
+          title: '考试前的清晨操场',
+          body: '我在清晨的操场上等朋友，天色很亮但不刺眼。后来发现大家都没有迟到，只是我比平时更早醒来。',
+          tags: const <String>['考试周', '清晨', '释然'],
+          createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 1)),
+          emotionLabel: '轻松',
+          sessionId: 'demo-night-2',
+        ),
+        DreamEntry(
           id: 'dream-1',
           userId: userId,
           title: '下雨的走廊',
           body: '我走过一条安静的长走廊，每扇门后面都透着一点暖黄的灯光。',
           tags: const <String>['平静', '雨夜', '走廊'],
-          createdAt: DateTime.now().subtract(const Duration(hours: 10)),
+          createdAt: DateTime.now().subtract(const Duration(days: 5, hours: 2)),
           emotionLabel: '回味',
+          sessionId: 'demo-night-5',
         ),
       ];
 
@@ -2340,9 +2539,11 @@ class InMemoryInsightsRepository extends ChangeNotifier
 
 class InMemoryAssistantRepository extends ChangeNotifier
     implements AssistantRepository {
-  InMemoryAssistantRepository({String userId = 'anon-paul'})
-    : _userId = userId,
-      _assistantProfile = buildDefaultAssistantProfile(userId) {
+  InMemoryAssistantRepository({
+    String userId = 'anon-paul',
+    bool seedDemoConversation = false,
+  }) : _userId = userId,
+       _assistantProfile = buildDefaultAssistantProfile(userId) {
     final AssistantThread thread = AssistantThread(
       id: 'thread-default',
       userId: userId,
@@ -2350,15 +2551,127 @@ class InMemoryAssistantRepository extends ChangeNotifier
       createdAt: DateTime.now().subtract(const Duration(hours: 2)),
       updatedAt: DateTime.now().subtract(const Duration(minutes: 10)),
     );
-    _threads = <AssistantThread>[thread];
+    if (!seedDemoConversation) {
+      _threads = <AssistantThread>[thread];
+      _currentThreadId = thread.id;
+      _messagesByThread[thread.id] = <AssistantMessage>[
+        AssistantMessage(
+          id: 'msg-welcome',
+          threadId: thread.id,
+          role: AssistantMessageRole.assistant,
+          content: '一个轻柔的 15 分钟呼吸练习，也许能帮你慢慢切换到入睡状态。要不要我现在带你开始？',
+          createdAt: DateTime.now().subtract(const Duration(minutes: 9)),
+        ),
+      ];
+      return;
+    }
+
+    final AssistantThread reviewThread = AssistantThread(
+      id: 'thread-review-demo',
+      userId: userId,
+      title: '昨晚为什么醒了一次',
+      createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 2)),
+      updatedAt: DateTime.now().subtract(const Duration(days: 1, hours: 1)),
+    );
+    final AssistantThread moodThread = AssistantThread(
+      id: 'thread-mood-demo',
+      userId: userId,
+      title: '心情选择会影响什么',
+      createdAt: DateTime.now().subtract(const Duration(days: 3, hours: 1)),
+      updatedAt: DateTime.now().subtract(const Duration(days: 3)),
+    );
+    _threads = <AssistantThread>[thread, reviewThread, moodThread];
     _currentThreadId = thread.id;
     _messagesByThread[thread.id] = <AssistantMessage>[
       AssistantMessage(
-        id: 'msg-welcome',
+        id: 'msg-demo-intro',
         threadId: thread.id,
         role: AssistantMessageRole.assistant,
-        content: '一个轻柔的 15 分钟呼吸练习，也许能帮你慢慢切换到入睡状态。要不要我现在带你开始？',
-        createdAt: DateTime.now().subtract(const Duration(minutes: 9)),
+        content: '这是本地演示对话，不需要登录或联网。我会根据预置的宿舍、睡眠、梦境、事记和心情数据给出轻量建议。',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 24)),
+      ),
+      AssistantMessage(
+        id: 'msg-user-tonight',
+        threadId: thread.id,
+        role: AssistantMessageRole.user,
+        content: '今晚室友可能晚回来，我想先把入睡节奏稳住。',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 20)),
+      ),
+      AssistantMessage(
+        id: 'msg-demo-plan',
+        threadId: thread.id,
+        role: AssistantMessageRole.assistant,
+        content: '可以先做三件小事：把手机放远、准备耳塞、播放低刺激白噪音。这样即使有人晚回，也不容易把注意力拉走。',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 17)),
+      ),
+      AssistantMessage(
+        id: 'msg-user-mood',
+        threadId: thread.id,
+        role: AssistantMessageRole.user,
+        content: '如果我心情有点低落，今晚建议会变吗？',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 13)),
+      ),
+      AssistantMessage(
+        id: 'msg-demo-mood-reply',
+        threadId: thread.id,
+        role: AssistantMessageRole.assistant,
+        content:
+            '会轻一点。低落时我会优先推荐“慢呼吸、思绪清理、柔和音频”，少给任务感强的建议；平静时会更偏向维持节奏，开心时会帮你把好状态平稳收住。',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 10)),
+      ),
+      AssistantMessage(
+        id: 'msg-demo-summary',
+        threadId: thread.id,
+        role: AssistantMessageRole.assistant,
+        content:
+            '你现在可以先在欢迎流程或“我的-设置”里选择心情，再看“今晚行动建议”。本地演示里也预置了事记仓库，方便查看 AI 整理提要如何和睡眠记录关联。',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 7)),
+      ),
+    ];
+    _messagesByThread[reviewThread.id] = <AssistantMessage>[
+      AssistantMessage(
+        id: 'msg-review-user',
+        threadId: reviewThread.id,
+        role: AssistantMessageRole.user,
+        content: '昨晚 3 点多醒了一次，可能是走廊声音。',
+        createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 2)),
+      ),
+      AssistantMessage(
+        id: 'msg-review-assistant',
+        threadId: reviewThread.id,
+        role: AssistantMessageRole.assistant,
+        content: '记录里显示你大约 12 分钟后重新入睡，说明干扰可控。今晚可以提前戴耳塞，并让宿舍事件提醒保持静默。',
+        createdAt: DateTime.now().subtract(
+          const Duration(days: 1, hours: 1, minutes: 58),
+        ),
+      ),
+      AssistantMessage(
+        id: 'msg-review-next',
+        threadId: reviewThread.id,
+        role: AssistantMessageRole.assistant,
+        content: '我也把这条原因同步到了事记回看里：它更像是一次短时环境干扰，不需要把整晚评价得太差。',
+        createdAt: DateTime.now().subtract(
+          const Duration(days: 1, hours: 1, minutes: 54),
+        ),
+      ),
+    ];
+    _messagesByThread[moodThread.id] = <AssistantMessage>[
+      AssistantMessage(
+        id: 'msg-mood-user',
+        threadId: moodThread.id,
+        role: AssistantMessageRole.user,
+        content: '首页那个开心、低落、平静是做什么用的？',
+        createdAt: DateTime.now().subtract(const Duration(days: 3, hours: 1)),
+      ),
+      AssistantMessage(
+        id: 'msg-mood-assistant',
+        threadId: moodThread.id,
+        role: AssistantMessageRole.assistant,
+        content:
+            '它会影响今晚的主题色、陪伴语和建议排序。比如你选“低落”，我会先给更温柔、低负担的行动；选“开心”，会帮你延续状态但不过度兴奋。',
+        createdAt: DateTime.now().subtract(
+          const Duration(days: 3, minutes: 56),
+        ),
       ),
     ];
   }
@@ -2420,7 +2733,7 @@ class InMemoryAssistantRepository extends ChangeNotifier
     final AssistantThread thread = AssistantThread(
       id: IdGenerator.next('assistant-thread'),
       userId: _userId,
-      title: title ?? '鏂扮殑鍔╃湢瀵硅瘽',
+      title: title ?? '新的助眠对话',
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
