@@ -100,11 +100,18 @@ class AssistantCaptureResult {
 
 enum AssistantStreamEventType {
   ack,
+  planningStarted,
+  toolStarted,
+  toolCompleted,
+  toolFailed,
+  actionCommitted,
+  memoryUpdated,
   messageDelta,
   messageCompleted,
   surfacePatch,
   captureRecord,
   memorySynced,
+  agentDone,
   done,
   error,
 }
@@ -115,9 +122,13 @@ class AssistantStreamEvent {
     this.delta,
     this.reply,
     this.runId,
+    this.planId,
     this.intent,
     this.provider,
     this.model,
+    this.toolName,
+    this.toolTitle,
+    this.toolStatus,
     this.assistantMessageId,
     this.errorMessage,
     this.errorCode,
@@ -134,9 +145,13 @@ class AssistantStreamEvent {
   final String? delta;
   final String? reply;
   final String? runId;
+  final String? planId;
   final String? intent;
   final String? provider;
   final String? model;
+  final String? toolName;
+  final String? toolTitle;
+  final String? toolStatus;
   final String? assistantMessageId;
   final String? errorMessage;
   final String? errorCode;
@@ -408,7 +423,7 @@ class CloudBaseAssistantReplyGateway implements AssistantReplyGateway {
       AssistantStreamEvent? completedEvent;
       try {
         final Stream<CloudBaseSseFrame> frames = await _appApiClient.postSse(
-          '/api/assistant/reply/stream',
+          '/api/agent/run/stream',
           body: requestBody,
         );
 
@@ -625,9 +640,16 @@ class CloudBaseAssistantReplyGateway implements AssistantReplyGateway {
             errorCode: event.errorCode,
           );
         case AssistantStreamEventType.ack:
+        case AssistantStreamEventType.planningStarted:
+        case AssistantStreamEventType.toolStarted:
+        case AssistantStreamEventType.toolCompleted:
+        case AssistantStreamEventType.toolFailed:
+        case AssistantStreamEventType.actionCommitted:
+        case AssistantStreamEventType.memoryUpdated:
         case AssistantStreamEventType.surfacePatch:
         case AssistantStreamEventType.captureRecord:
         case AssistantStreamEventType.memorySynced:
+        case AssistantStreamEventType.agentDone:
         case AssistantStreamEventType.done:
           break;
       }
@@ -731,8 +753,15 @@ class CloudBaseAssistantReplyGateway implements AssistantReplyGateway {
             recordPersistedRemotely: false,
           );
         case AssistantStreamEventType.ack:
+        case AssistantStreamEventType.planningStarted:
+        case AssistantStreamEventType.toolStarted:
+        case AssistantStreamEventType.toolCompleted:
+        case AssistantStreamEventType.toolFailed:
+        case AssistantStreamEventType.actionCommitted:
+        case AssistantStreamEventType.memoryUpdated:
         case AssistantStreamEventType.surfacePatch:
         case AssistantStreamEventType.memorySynced:
+        case AssistantStreamEventType.agentDone:
         case AssistantStreamEventType.done:
           break;
       }
@@ -814,7 +843,77 @@ AssistantStreamEvent _assistantEventFromFrame(
     case 'ack':
       return AssistantStreamEvent(
         type: AssistantStreamEventType.ack,
+        runId: data['runId'] as String?,
+        planId: data['planId'] as String?,
         assistantMessageId: data['assistantMessageId'] as String?,
+      );
+    case 'planning_started':
+      return AssistantStreamEvent(
+        type: AssistantStreamEventType.planningStarted,
+        runId: data['runId'] as String?,
+        planId: data['planId'] as String?,
+        updatedSurfaces: const <String>['agent_planning'],
+      );
+    case 'tool_started':
+      final String toolName = data['toolName'] as String? ?? '';
+      return AssistantStreamEvent(
+        type: AssistantStreamEventType.toolStarted,
+        runId: data['runId'] as String?,
+        planId: data['planId'] as String?,
+        toolName: toolName,
+        toolTitle: data['toolTitle'] as String?,
+        toolStatus: 'running',
+        updatedSurfaces: _agentToolSurfaceIds(toolName),
+      );
+    case 'tool_completed':
+      final String toolName = data['toolName'] as String? ?? '';
+      return AssistantStreamEvent(
+        type: AssistantStreamEventType.toolCompleted,
+        runId: data['runId'] as String?,
+        planId: data['planId'] as String?,
+        toolName: toolName,
+        toolTitle: data['toolTitle'] as String?,
+        toolStatus: 'success',
+        updatedSurfaces: <String>[
+          ..._stringList(data['updatedSurfaces']),
+          ..._agentToolSurfaceIds(toolName),
+        ],
+      );
+    case 'tool_failed':
+      final String toolName = data['toolName'] as String? ?? '';
+      return AssistantStreamEvent(
+        type: AssistantStreamEventType.toolFailed,
+        runId: data['runId'] as String?,
+        planId: data['planId'] as String?,
+        toolName: toolName,
+        toolTitle: data['toolTitle'] as String?,
+        toolStatus: data['skipped'] == true ? 'skipped' : 'failed',
+        errorMessage: data['error'] as String?,
+        updatedSurfaces: <String>[
+          'agent_tool_failed',
+          ..._agentToolSurfaceIds(toolName),
+        ],
+      );
+    case 'action_committed':
+      final String toolName = data['toolName'] as String? ?? '';
+      return AssistantStreamEvent(
+        type: AssistantStreamEventType.actionCommitted,
+        runId: data['runId'] as String?,
+        planId: data['planId'] as String?,
+        toolName: toolName,
+        toolTitle: data['toolTitle'] as String?,
+        toolStatus: 'committed',
+        updatedSurfaces: <String>[
+          ..._stringList(data['updatedSurfaces']),
+          ..._agentToolSurfaceIds(toolName),
+        ],
+      );
+    case 'memory_updated':
+      return AssistantStreamEvent(
+        type: AssistantStreamEventType.memoryUpdated,
+        runId: data['runId'] as String?,
+        count: (data['count'] as num?)?.toInt(),
+        updatedSurfaces: const <String>['agent_memory'],
       );
     case 'message_delta':
       return AssistantStreamEvent(
@@ -854,6 +953,17 @@ AssistantStreamEvent _assistantEventFromFrame(
         type: AssistantStreamEventType.memorySynced,
         count: (data['count'] as num?)?.toInt(),
       );
+    case 'agent_done':
+      return AssistantStreamEvent(
+        type: AssistantStreamEventType.agentDone,
+        runId: data['runId'] as String?,
+        planId: data['planId'] as String?,
+        errorMessage: data['errorMessage'] as String?,
+        updatedSurfaces: <String>[
+          ..._stringList(data['updatedSurfaces']),
+          'agent_done',
+        ],
+      );
     case 'done':
       return AssistantStreamEvent(
         type: AssistantStreamEventType.done,
@@ -879,6 +989,14 @@ AssistantStreamEvent _assistantEventFromFrame(
         sourceMode: AssistantReplySourceMode.error,
       );
   }
+}
+
+List<String> _agentToolSurfaceIds(String toolName) {
+  final String normalized = toolName.trim().toLowerCase().replaceAll('.', '_');
+  if (normalized.isEmpty) {
+    return const <String>[];
+  }
+  return <String>['agent_tool_$normalized'];
 }
 
 AssistantReplySourceMode _sourceModeFromWire(dynamic value) {

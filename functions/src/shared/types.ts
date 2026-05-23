@@ -18,6 +18,24 @@ export type AssistantRunSourceMode =
   | "fallbackSuccess"
   | "error";
 
+export type AgentRunStatus =
+  | "planned"
+  | "running"
+  | "success"
+  | "partial_success"
+  | "failed";
+
+export type AgentToolRisk = "read" | "low" | "write" | "high";
+
+export type AgentStepStatus =
+  | "pending"
+  | "running"
+  | "success"
+  | "skipped"
+  | "failed";
+
+export type AgentAutonomyMode = "full" | "confirm_required" | "read_only";
+
 export type AssistantPromptMode =
   | "chat_reply"
   | "turn_insight_extract"
@@ -195,6 +213,12 @@ export interface AssistantMemoryItem {
   sourceThreadId?: string | null;
   sourceMessageId?: string | null;
   salience: number;
+  decayScore?: number | null;
+  contradictionGroup?: string | null;
+  evidenceRefs?: string[];
+  sourceActionId?: string | null;
+  sourceAgentRunId?: string | null;
+  effectivenessScore?: number | null;
   lastUsedAt?: string | null;
   sourceRefs: string[];
   createdAt: string;
@@ -361,6 +385,105 @@ export interface AssistantRunDoc {
   createdAt: string;
 }
 
+export interface AgentGoalDoc {
+  id: string;
+  text: string;
+  intent: string;
+  riskLevel: "low" | "medium" | "high";
+  autonomyMode: AgentAutonomyMode;
+  createdAt: string;
+}
+
+export interface AgentToolDefinitionDoc {
+  name: string;
+  title: string;
+  description: string;
+  risk: AgentToolRisk;
+  inputSchema: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
+  undoable: boolean;
+  requiresHardConfirm: boolean;
+}
+
+export interface AgentStepDoc {
+  id: string;
+  title: string;
+  toolName: string;
+  input: Record<string, unknown>;
+  status: AgentStepStatus;
+  risk: AgentToolRisk;
+  dependsOn: string[];
+}
+
+export interface AgentPlanDoc {
+  id: string;
+  runId: string;
+  userId: string;
+  threadId?: string | null;
+  goal: AgentGoalDoc;
+  steps: AgentStepDoc[];
+  status: AgentRunStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentToolCallDoc {
+  id: string;
+  runId: string;
+  planId: string;
+  stepId: string;
+  userId: string;
+  threadId?: string | null;
+  toolName: string;
+  risk: AgentToolRisk;
+  status: AgentStepStatus;
+  input: Record<string, unknown>;
+  output?: Record<string, unknown> | null;
+  error?: string | null;
+  undoPayload?: Record<string, unknown> | null;
+  startedAt: string;
+  finishedAt?: string | null;
+  durationMs?: number | null;
+}
+
+export interface AgentRunDoc {
+  id: string;
+  userId: string;
+  threadId?: string | null;
+  goal: AgentGoalDoc;
+  planId?: string | null;
+  status: AgentRunStatus;
+  autonomyMode: AgentAutonomyMode;
+  summary?: string | null;
+  provider: string;
+  model: string;
+  sourceMode: AssistantRunSourceMode;
+  toolCallCount: number;
+  memorySyncedCount: number;
+  updatedSurfaces: SurfaceId[];
+  error?: string | null;
+  startedAt: string;
+  completedAt?: string | null;
+  durationMs?: number | null;
+}
+
+export interface AgentExecutionResult {
+  runId: string;
+  planId: string;
+  reply: string;
+  status: AgentRunStatus;
+  goal: AgentGoalDoc;
+  plan: AgentPlanDoc;
+  toolCalls: AgentToolCallDoc[];
+  updatedSurfaces: SurfaceId[];
+  memorySyncedCount: number;
+  provider: string;
+  model: string;
+  sourceMode: AssistantRunSourceMode;
+  errorMessage?: string | null;
+  surfacePatch?: AssistantSurfacePatchDoc | null;
+}
+
 export interface AssistantContext {
   assistantProfile: ContextAssistantProfile;
   user: ContextUserProfile;
@@ -431,11 +554,18 @@ export interface MorningReviewResult {
 
 export type AssistantSseEventName =
   | "ack"
+  | "planning_started"
+  | "tool_started"
+  | "tool_completed"
+  | "tool_failed"
+  | "action_committed"
+  | "memory_updated"
   | "message_delta"
   | "message_completed"
   | "surface_patch"
   | "capture_record"
   | "memory_synced"
+  | "agent_done"
   | "done"
   | "error";
 

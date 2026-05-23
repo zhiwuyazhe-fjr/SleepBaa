@@ -365,6 +365,22 @@ class AssistantConversationController extends ChangeNotifier {
             );
             await finishTurn();
             break;
+          case AssistantStreamEventType.planningStarted:
+          case AssistantStreamEventType.toolStarted:
+          case AssistantStreamEventType.toolCompleted:
+          case AssistantStreamEventType.toolFailed:
+          case AssistantStreamEventType.actionCommitted:
+          case AssistantStreamEventType.memoryUpdated:
+          case AssistantStreamEventType.agentDone:
+            _recordUpdatedSurfaces(
+              messageIds: <String?>[
+                resolvedAssistantMessageId,
+                clientAssistantMessageId,
+                event.assistantMessageId,
+              ],
+              surfaceIds: event.updatedSurfaces,
+            );
+            break;
           case AssistantStreamEventType.ack:
           case AssistantStreamEventType.captureRecord:
           case AssistantStreamEventType.memorySynced:
@@ -508,6 +524,22 @@ class AssistantConversationController extends ChangeNotifier {
               errorCode: event.errorCode,
             );
             await finishTurn();
+            break;
+          case AssistantStreamEventType.planningStarted:
+          case AssistantStreamEventType.toolStarted:
+          case AssistantStreamEventType.toolCompleted:
+          case AssistantStreamEventType.toolFailed:
+          case AssistantStreamEventType.actionCommitted:
+          case AssistantStreamEventType.memoryUpdated:
+          case AssistantStreamEventType.agentDone:
+            _recordUpdatedSurfaces(
+              messageIds: <String?>[
+                resolvedAssistantMessageId,
+                clientAssistantMessageId,
+                event.assistantMessageId,
+              ],
+              surfaceIds: event.updatedSurfaces,
+            );
             break;
           case AssistantStreamEventType.ack:
           case AssistantStreamEventType.memorySynced:

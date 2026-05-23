@@ -889,6 +889,87 @@ List<AssistantToolStatus> assistantToolStatusesFromSurfaceIds(
 AssistantToolStatus? _toolStatusForSurfaceId(String surfaceId) {
   final String normalized = surfaceId.trim().toLowerCase();
   switch (normalized) {
+    case 'agent_planning':
+      return const AssistantToolStatus(
+        icon: Icons.account_tree_outlined,
+        label: '小眠已拆解任务',
+      );
+    case 'agent_tool_context_read':
+      return const AssistantToolStatus(
+        icon: Icons.manage_search,
+        label: '已读取睡眠上下文',
+      );
+    case 'agent_tool_sleep_records_read':
+      return const AssistantToolStatus(
+        icon: Icons.bedtime_outlined,
+        label: '已检查睡眠记录',
+      );
+    case 'agent_tool_dream_records_read':
+      return const AssistantToolStatus(
+        icon: Icons.nights_stay_outlined,
+        label: '已检查梦记',
+      );
+    case 'agent_tool_interference_save_tonight':
+      return const AssistantToolStatus(
+        icon: Icons.tune,
+        label: '今晚干扰已更新',
+      );
+    case 'agent_tool_plan_generate_tonight':
+      return const AssistantToolStatus(
+        icon: Icons.route,
+        label: '今晚计划已生成',
+      );
+    case 'agent_tool_cards_refresh':
+      return const AssistantToolStatus(
+        icon: Icons.dashboard_customize_outlined,
+        label: '页面卡片已刷新',
+      );
+    case 'agent_tool_dorm_reminder_send':
+      return const AssistantToolStatus(
+        icon: Icons.record_voice_over_outlined,
+        label: '已发送宿舍温和提醒',
+      );
+    case 'agent_tool_dorm_status_update':
+      return const AssistantToolStatus(
+        icon: Icons.volume_off,
+        label: '宿舍状态已同步',
+      );
+    case 'agent_tool_dorm_rules_save':
+      return const AssistantToolStatus(
+        icon: Icons.rule,
+        label: '宿舍公约已提交',
+      );
+    case 'agent_tool_notification_write':
+      return const AssistantToolStatus(
+        icon: Icons.notifications_active,
+        label: '通知已写入',
+      );
+    case 'agent_tool_capture_save':
+      return const AssistantToolStatus(
+        icon: Icons.edit_note,
+        label: '记录已收纳',
+      );
+    case 'agent_tool_navigation_suggest':
+      return const AssistantToolStatus(
+        icon: Icons.open_in_new,
+        label: '已准备跳转入口',
+      );
+    case 'agent_tool_memory_upsert':
+    case 'agent_memory':
+      return const AssistantToolStatus(
+        icon: Icons.auto_awesome,
+        label: '长期记忆已更新',
+      );
+    case 'agent_tool_failed':
+      return const AssistantToolStatus(
+        icon: Icons.error_outline,
+        label: '有动作未完成',
+      );
+    case 'agent_done':
+      return const AssistantToolStatus(
+        icon: Icons.task_alt,
+        label: '中枢任务已完成',
+      );
     case 'alarm':
     case 'sleep_alarm':
     case 'bedtime_alarm':
@@ -920,6 +1001,12 @@ AssistantToolStatus? _toolStatusForSurfaceId(String surfaceId) {
     case 'profile_report':
       return const AssistantToolStatus(icon: Icons.insights, label: '画像摘要已更新');
     default:
+      if (normalized.startsWith('agent_tool_')) {
+        return const AssistantToolStatus(
+          icon: Icons.extension,
+          label: '小眠已调用工具',
+        );
+      }
       return null;
   }
 }

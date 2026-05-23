@@ -3,6 +3,9 @@ import {
   AssistantContext,
   AssistantMemoryCandidate,
   AssistantProfileDoc,
+  AgentPlanDoc,
+  AgentRunDoc,
+  AgentToolCallDoc,
   AssistantMemoryItem,
   AssistantRunDoc,
   AssistantThreadSummaryDoc,
@@ -133,6 +136,9 @@ const Collections = {
   userState: "user_state",
   cardSnapshots: "card_snapshots",
   assistantRuns: "assistant_runs",
+  agentRuns: "agent_runs",
+  agentPlans: "agent_plans",
+  agentToolCalls: "agent_tool_calls",
   assistantProfiles: "assistant_profiles",
   accountMigrations: "account_migrations",
   assistantThreadSummaries: "assistant_thread_summaries",
@@ -1155,6 +1161,18 @@ export interface AssistantDataRepository {
     uid: string,
     runId: string,
     run: AssistantRunDoc,
+  ): Promise<void>;
+  writeAgentRun(uid: string, runId: string, run: AgentRunDoc): Promise<void>;
+  getAgentRun(uid: string, runId: string): Promise<AgentRunDoc | null>;
+  writeAgentPlan(
+    uid: string,
+    planId: string,
+    plan: AgentPlanDoc,
+  ): Promise<void>;
+  writeAgentToolCall(
+    uid: string,
+    callId: string,
+    call: AgentToolCallDoc,
   ): Promise<void>;
   setDreamAnalysis(
     entryId: string,
@@ -2767,6 +2785,51 @@ export class FirestoreRepository implements AssistantDataRepository {
     });
   }
 
+  async writeAgentRun(
+    uid: string,
+    runId: string,
+    run: AgentRunDoc,
+  ): Promise<void> {
+    await this.ensureUserBootstrap(uid);
+    await this.store.set(Collections.agentRuns, `${uid}:${runId}`, {
+      ...(run as unknown as JsonMap),
+      uid,
+      runId,
+    });
+  }
+
+  async getAgentRun(uid: string, runId: string): Promise<AgentRunDoc | null> {
+    await this.ensureUserBootstrap(uid);
+    const doc = await this.store.get(Collections.agentRuns, `${uid}:${runId}`);
+    return doc ? (withoutMeta(doc) as unknown as AgentRunDoc) : null;
+  }
+
+  async writeAgentPlan(
+    uid: string,
+    planId: string,
+    plan: AgentPlanDoc,
+  ): Promise<void> {
+    await this.ensureUserBootstrap(uid);
+    await this.store.set(Collections.agentPlans, `${uid}:${planId}`, {
+      ...(plan as unknown as JsonMap),
+      uid,
+      planId,
+    });
+  }
+
+  async writeAgentToolCall(
+    uid: string,
+    callId: string,
+    call: AgentToolCallDoc,
+  ): Promise<void> {
+    await this.ensureUserBootstrap(uid);
+    await this.store.set(Collections.agentToolCalls, `${uid}:${callId}`, {
+      ...(call as unknown as JsonMap),
+      uid,
+      callId,
+    });
+  }
+
   async setDreamAnalysis(
     entryId: string,
     analysis: DreamAnalysis,
@@ -3899,6 +3962,16 @@ export class FirestoreRepository implements AssistantDataRepository {
           sourceThreadId: asString(value.sourceThreadId) || null,
           sourceMessageId: asString(value.sourceMessageId) || null,
           salience: asNumber(value.salience, 0.5),
+          decayScore:
+            value.decayScore == null ? null : asNumber(value.decayScore, 1),
+          contradictionGroup: asString(value.contradictionGroup) || null,
+          evidenceRefs: asStringArray(value.evidenceRefs),
+          sourceActionId: asString(value.sourceActionId) || null,
+          sourceAgentRunId: asString(value.sourceAgentRunId) || null,
+          effectivenessScore:
+            value.effectivenessScore == null
+              ? null
+              : asNumber(value.effectivenessScore, 0),
           lastUsedAt: asString(value.lastUsedAt) || null,
           sourceRefs: asStringArray(value.sourceRefs),
           createdAt: asString(value.createdAt, nowIso()),

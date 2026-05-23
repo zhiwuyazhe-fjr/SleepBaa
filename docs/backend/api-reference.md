@@ -126,3 +126,26 @@
 ```powershell
 rg -n "app\.(get|post)" functions/src/http/app_api.ts
 ```
+## Agent API
+
+2026-05-23 新增内嵌中枢 Agent 接口：
+
+| Method | Path | 请求重点 | 响应重点 |
+| --- | --- | --- | --- |
+| `POST` | `/api/agent/tools` | 无必填 body | `{ tools }`，返回内部 JSON tool registry |
+| `POST` | `/api/agent/runs/:id` | URL 中传 run id | `{ run }`；不存在时 `AGENT_RUN_NOT_FOUND` |
+| `POST` | `/api/agent/run/stream` | `{ threadId?, prompt, title?, clientUserMessageId?, clientAssistantMessageId? }` | SSE：规划、工具调用、记忆更新、最终回复 |
+
+Agent SSE 事件：
+
+| Event | 说明 |
+| --- | --- |
+| `planning_started` | 已生成目标和步骤计划 |
+| `tool_started` | 某个工具开始执行 |
+| `tool_completed` | 工具执行成功，可能携带 `updatedSurfaces` |
+| `tool_failed` | 工具失败或因硬确认要求跳过 |
+| `action_committed` | 写入型动作已提交 |
+| `memory_updated` | 长期记忆已更新 |
+| `agent_done` | Agent run 已完成，携带 run/plan/status/updatedSurfaces |
+
+兼容规则：`/api/assistant/reply/stream` 继续可用；跨模块 prompt 会自动委托 AgentRuntime。传 `agentRuntime: "off"` 可保留旧回复链路。

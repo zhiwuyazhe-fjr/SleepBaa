@@ -79,6 +79,81 @@ void main() {
     },
   );
 
+  test('cloudbase assistant reply gateway parses agent tool events', () async {
+    final _FakeStreamCloudBaseAppApiClient
+    appApiClient = _FakeStreamCloudBaseAppApiClient(
+      postSseBehaviors: <Future<Stream<CloudBaseSseFrame>> Function()>[
+        () async => Stream<CloudBaseSseFrame>.fromIterable(const <
+          CloudBaseSseFrame
+        >[
+          CloudBaseSseFrame(event: 'ack', data: '{}'),
+          CloudBaseSseFrame(
+            event: 'planning_started',
+            data: '{"runId":"run-1","planId":"plan-1"}',
+          ),
+          CloudBaseSseFrame(
+            event: 'tool_completed',
+            data:
+                '{"runId":"run-1","planId":"plan-1","toolName":"plan.generate_tonight","toolTitle":"生成今晚计划","updatedSurfaces":["home_pre_sleep"]}',
+          ),
+          CloudBaseSseFrame(
+            event: 'memory_updated',
+            data: '{"runId":"run-1","count":1}',
+          ),
+          CloudBaseSseFrame(
+            event: 'agent_done',
+            data:
+                '{"runId":"run-1","planId":"plan-1","updatedSurfaces":["assistant_context"]}',
+          ),
+          CloudBaseSseFrame(
+            event: 'message_completed',
+            data:
+                '{"reply":"done","sourceMode":"fallbackSuccess","assistantMessageId":"assistant-1","runId":"run-1"}',
+          ),
+          CloudBaseSseFrame(event: 'done', data: '{"runId":"run-1"}'),
+        ]),
+      ],
+    );
+    final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
+      appApiClient: appApiClient,
+    );
+    final CloudBaseAssistantReplyGateway gateway =
+        CloudBaseAssistantReplyGateway(
+          appApiClient: appApiClient,
+          snapshotStore: snapshotStore,
+        );
+
+    final List<AssistantStreamEvent> events = await gateway
+        .streamReply(
+          prompt: '帮我规划今晚',
+          threadId: 'thread-1',
+          clientUserMessageId: 'user-1',
+          clientAssistantMessageId: 'assistant-1',
+          dorm: _testDorm(),
+        )
+        .toList();
+
+    expect(
+      events.map((AssistantStreamEvent event) => event.type),
+      containsAll(<AssistantStreamEventType>[
+        AssistantStreamEventType.planningStarted,
+        AssistantStreamEventType.toolCompleted,
+        AssistantStreamEventType.memoryUpdated,
+        AssistantStreamEventType.agentDone,
+      ]),
+    );
+    expect(
+      events
+          .where(
+            (AssistantStreamEvent event) =>
+                event.type == AssistantStreamEventType.toolCompleted,
+          )
+          .single
+          .updatedSurfaces,
+      containsAll(<String>['home_pre_sleep', 'agent_tool_plan_generate_tonight']),
+    );
+  });
+
   test(
     'cloudbase assistant reply gateway does not retry after reply delta has started',
     () async {
@@ -398,7 +473,7 @@ class _FakeStreamCloudBaseAppApiClient extends CloudBaseAppApiClient {
     String path, {
     Map<String, dynamic> body = const <String, dynamic>{},
   }) async {
-    expect(path, '/api/assistant/reply/stream');
+    expect(path, '/api/agent/run/stream');
     postSseCallCount += 1;
     return postSseBehaviors[postSseCallCount - 1]();
   }

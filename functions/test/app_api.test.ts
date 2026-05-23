@@ -954,6 +954,55 @@ test(
 );
 
 test(
+  "agent tools and run stream expose tool execution events",
+  { concurrency: false },
+  async () => {
+    await withLocalAppApiServer(async ({ baseUrl, uid }) => {
+      const headers = {
+        "content-type": "application/json",
+        "x-debug-uid": uid,
+      };
+      const toolsResponse = await fetch(`${baseUrl}/api/agent/tools`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({}),
+      });
+      assert.equal(toolsResponse.status, 200);
+      const toolsPayload = await toolsResponse.json();
+      const toolNames = (toolsPayload.tools as Array<Record<string, unknown>>)
+        .map((tool) => tool.name);
+      assert.ok(toolNames.includes("plan.generate_tonight"));
+      assert.ok(toolNames.includes("memory.upsert"));
+
+      const response = await fetch(`${baseUrl}/api/agent/run/stream`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          threadId: `${uid}-agent-thread`,
+          prompt: "帮我规划今晚",
+          clientUserMessageId: `${uid}-agent-user`,
+          clientAssistantMessageId: `${uid}-agent-assistant`,
+        }),
+      });
+
+      assert.equal(response.status, 200);
+      const events = parseSseEvents(await response.text());
+      assert.equal(events[0]?.event, "ack");
+      assert.ok(events.some((item) => item.event === "planning_started"));
+      assert.ok(events.some((item) => item.event === "tool_started"));
+      assert.ok(events.some((item) => item.event === "tool_completed"));
+      assert.ok(events.some((item) => item.event === "agent_done"));
+      const completed = events.find(
+        (item) => item.event === "message_completed",
+      );
+      assert.ok(completed);
+      assert.equal(completed.data.assistantMessageId, `${uid}-agent-assistant`);
+      assert.equal(events[events.length - 1]?.event, "done");
+    });
+  },
+);
+
+test(
   "assistant reply stream releases the thread lease before delayed background postprocess completes",
   { concurrency: false },
   async () => {
