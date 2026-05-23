@@ -50,8 +50,21 @@ function asString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => String(item));
+}
+
 function uniqueSurfaces(values: Iterable<SurfaceId>): SurfaceId[] {
   return Array.from(new Set(values));
+}
+
+function asMap(value: unknown): JsonMap {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? ({ ...(value as JsonMap) } as JsonMap)
+    : {};
 }
 
 function riskFromPrompt(prompt: string): AgentGoalDoc["riskLevel"] {
@@ -498,6 +511,53 @@ async function writePlan(
   });
 }
 
+function schemaTypeMatches(value: unknown, type: string): boolean {
+  if (value == null) {
+    return true;
+  }
+  switch (type) {
+    case "string":
+      return typeof value === "string";
+    case "number":
+      return typeof value === "number" && Number.isFinite(value);
+    case "integer":
+      return typeof value === "number" && Number.isInteger(value);
+    case "boolean":
+      return typeof value === "boolean";
+    case "array":
+      return Array.isArray(value);
+    case "object":
+      return typeof value === "object" && !Array.isArray(value);
+    default:
+      return true;
+  }
+}
+
+export function validateAgentToolInput(
+  toolName: string,
+  input: JsonMap,
+  schema: Record<string, unknown>,
+): string[] {
+  const root = asMap(schema);
+  const properties = asMap(root.properties);
+  const required = asStringArray(root.required);
+  const errors: string[] = [];
+  for (const field of required) {
+    const value = input[field];
+    if (value == null || value === "") {
+      errors.push(`${toolName}.${field} is required`);
+    }
+  }
+  for (const [field, value] of Object.entries(input)) {
+    const fieldSchema = asMap(properties[field]);
+    const type = asString(fieldSchema.type);
+    if (type && !schemaTypeMatches(value, type)) {
+      errors.push(`${toolName}.${field} must be ${type}`);
+    }
+  }
+  return errors;
+}
+
 export function shouldRoutePromptToAgent(prompt: string): boolean {
   const normalized = prompt.toLowerCase();
   return (
@@ -632,6 +692,40 @@ export async function runAgent(
         requiresHardConfirm: tool.definition.requiresHardConfirm,
         skipped: true,
         error: "hard_confirm_required",
+      });
+      await writePlan(params.repo, params.uid, plan, "running");
+      continue;
+    }
+
+    const validationErrors = validateAgentToolInput(
+      step.toolName,
+      step.input,
+      tool.definition.inputSchema,
+    );
+    if (validationErrors.length > 0) {
+      const message = `invalid_tool_input: ${validationErrors.join("; ")}`;
+      const failedCall: AgentToolCallDoc = {
+        ...baseCall,
+        status: "failed",
+        output: null,
+        error: message,
+        finishedAt: nowIso(),
+        durationMs: Date.now() - callStartedAt,
+      };
+      step.status = "failed";
+      errorMessage = errorMessage ? `${errorMessage}; ${message}` : message;
+      toolCalls.push(failedCall);
+      await params.repo.writeAgentToolCall(params.uid, callId, failedCall);
+      await emit(params, "tool_failed", {
+        runId,
+        planId: plan.id,
+        stepId: step.id,
+        callId,
+        toolName: step.toolName,
+        toolTitle: tool.definition.title,
+        risk: step.risk,
+        undoable: tool.definition.undoable,
+        error: message,
       });
       await writePlan(params.repo, params.uid, plan, "running");
       continue;

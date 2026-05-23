@@ -4,6 +4,7 @@ import {
   listAgentTools,
   runAgent,
   shouldRoutePromptToAgent,
+  validateAgentToolInput,
 } from "../src/agent/agent_runtime";
 import { DeterministicAIProvider } from "../src/providers/ai_provider";
 import { createRepositoryFromEnv } from "../src/repositories/firestore_repositories";
@@ -27,6 +28,21 @@ test("agent tool registry exposes core sleep and dorm tools", () => {
 test("agent routing detects cross-module sleep prompts", () => {
   assert.equal(shouldRoutePromptToAgent("我睡不着，室友很吵"), true);
   assert.equal(shouldRoutePromptToAgent("hi"), false);
+});
+
+test("agent tool input validator catches schema type mismatches", () => {
+  const inviteTool = listAgentTools().find(
+    (tool) => tool.name === "dorm.invite.create",
+  );
+  assert.ok(inviteTool);
+  assert.deepEqual(
+    validateAgentToolInput(
+      inviteTool.name,
+      { expiresInHours: "soon" },
+      inviteTool.inputSchema,
+    ),
+    ["dorm.invite.create.expiresInHours must be number"],
+  );
 });
 
 test("agent runtime executes a noisy dorm goal with audit records", async () => {

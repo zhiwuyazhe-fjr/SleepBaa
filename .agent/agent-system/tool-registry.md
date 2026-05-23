@@ -54,3 +54,10 @@
 | `audio.recommend` | read | 否 | 基于音频目录返回助眠音频建议和页面入口 |
 | `report.profile.read` | read | 否 | 汇总最近睡眠、梦记和长期记忆，用于报告解读 |
 | `dorm.invite.create` | write | 否 | 创建宿舍邀请码，供宿舍协同入口调用 |
+
+## 第六轮运行时校验
+
+- 每个工具执行前都会按 `inputSchema.properties` 和 `inputSchema.required` 做基础入参校验。
+- 校验覆盖 `string`、`number`、`integer`、`boolean`、`array`、`object` 基础类型。
+- 校验失败不会调用业务 handler，会写入 `agent_tool_calls`，并通过 SSE 发出 `tool_failed`。
+- 失败错误统一以 `invalid_tool_input` 开头，便于排查 planner 生成异常或前端上下文传参异常。

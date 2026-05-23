@@ -105,3 +105,22 @@
 - Agent 工具注册表覆盖睡眠模式、音频、报告、宿舍邀请等更多 App 模块。
 - “开始睡眠模式”“退出睡眠”“解读报告”“推荐助眠音频”“邀请室友”等 prompt 能进入专门计划分支。
 - 后端函数测试 83 项通过。
+
+## 2026-05-23 第六轮
+
+目标：强化 Agent 工具执行前的入参校验，避免 planner 或前端上下文生成异常时把错误数据写入业务模块。
+
+计划：
+
+- [x] 新增 `validateAgentToolInput`，按工具 `inputSchema` 检查 required 字段和基础类型。
+- [x] 在工具执行前加入统一校验，失败时不调用业务 handler。
+- [x] 校验失败写入 `agent_tool_calls`，状态为 `failed`，错误原因以 `invalid_tool_input` 开头。
+- [x] 校验失败通过 SSE 发出 `tool_failed`，保留 `callId`、`toolName`、`risk`、`undoable` 等排查字段。
+- [x] 增加后端测试覆盖 schema 类型不匹配场景。
+- [x] 跑 `npm --prefix functions run build`、`npm --prefix functions test` 与 `git diff --check`。
+
+结果：
+
+- AgentRuntime 对所有已注册工具执行统一 schema 守门，不再只依赖工具 handler 内部容错。
+- 无效工具输入会形成完整审计链路，前端也能收到明确失败事件。
+- 后续扩展工具时，只要补齐 `inputSchema`，即可自动获得基础校验能力。
