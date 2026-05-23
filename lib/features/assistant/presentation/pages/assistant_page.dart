@@ -26,12 +26,16 @@ class AssistantPage extends StatefulWidget {
     this.initialCaptureTab = AssistantCaptureTab.dream,
     this.captureSessionId,
     this.allowCaptureSessionRepair = false,
+    this.initialPrompt,
+    this.autoSubmitInitialPrompt = false,
   });
 
   final bool captureModeEnabled;
   final AssistantCaptureTab initialCaptureTab;
   final String? captureSessionId;
   final bool allowCaptureSessionRepair;
+  final String? initialPrompt;
+  final bool autoSubmitInitialPrompt;
 
   @override
   State<AssistantPage> createState() => _AssistantPageState();
@@ -60,6 +64,7 @@ class _AssistantPageState extends State<AssistantPage>
   bool _archiveCollapseHintPrimedFromEntry = false;
   bool _archiveAtBottom = true;
   bool _primaryStageAtTop = true;
+  bool _didApplyInitialPrompt = false;
   int? _replyPullPointerId;
   double? _replyPullLastLocalDy;
   double _replyPullExtent = 0;
@@ -113,7 +118,12 @@ class _AssistantPageState extends State<AssistantPage>
       if (!mounted) {
         return;
       }
-      await context.appServices.assistantConversationController.bootstrap();
+      final AppServices services = context.appServices;
+      await services.assistantConversationController.bootstrap();
+      if (!mounted) {
+        return;
+      }
+      await _applyInitialPrompt(services);
     });
   }
 
@@ -173,6 +183,32 @@ class _AssistantPageState extends State<AssistantPage>
         _focusNode.requestFocus();
         break;
     }
+  }
+
+  Future<void> _applyInitialPrompt(AppServices services) async {
+    if (_didApplyInitialPrompt || widget.captureModeEnabled) {
+      return;
+    }
+    _didApplyInitialPrompt = true;
+    final String prompt = widget.initialPrompt?.trim() ?? '';
+    if (prompt.isEmpty) {
+      return;
+    }
+    setState(() {
+      _inputController.text = prompt;
+      _inputController.selection = TextSelection.collapsed(
+        offset: _inputController.text.length,
+      );
+    });
+    if (!widget.autoSubmitInitialPrompt) {
+      _focusNode.requestFocus();
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    if (!mounted) {
+      return;
+    }
+    await _handleSubmit(services);
   }
 
   Future<void> _handleComposerAddTap() async {

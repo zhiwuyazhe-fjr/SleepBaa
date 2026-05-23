@@ -136,6 +136,22 @@ abstract final class AppRoutes {
     ).toString();
   }
 
+  static String assistantAgentLocation({
+    required String prompt,
+    String? source,
+    bool autoSubmit = true,
+  }) {
+    final String normalizedPrompt = prompt.trim();
+    return Uri(
+      path: assistant,
+      queryParameters: <String, String>{
+        if (normalizedPrompt.isNotEmpty) 'agentPrompt': normalizedPrompt,
+        if ((source ?? '').trim().isNotEmpty) 'source': source!.trim(),
+        if (autoSubmit) 'autoSubmit': '1',
+      },
+    ).toString();
+  }
+
   static bool isFeedbackMorningRoute(String route) {
     final Uri? parsed = Uri.tryParse(route);
     return (parsed?.path ?? route) == feedbackMorning;
@@ -450,6 +466,9 @@ GoRouter createRouter({
             captureSessionId: state.uri.queryParameters['sessionId'],
             allowCaptureSessionRepair:
                 state.uri.queryParameters['repairSession'] == '1',
+            initialPrompt: state.uri.queryParameters['agentPrompt'],
+            autoSubmitInitialPrompt:
+                state.uri.queryParameters['autoSubmit'] == '1',
           );
         },
       ),

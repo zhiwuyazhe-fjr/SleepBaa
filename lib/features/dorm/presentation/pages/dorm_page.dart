@@ -28,6 +28,20 @@ const List<String> _gentleReminderPresets = <String>[
 
 enum _GentleReminderTab { content, target }
 
+String _dormAgentPrompt({
+  required Dorm dorm,
+  required String currentUserId,
+  required int quietStars,
+}) {
+  final int roommateCount = dorm.members
+      .where((DormMember member) => member.uid != currentUserId)
+      .length;
+  return '请作为小眠中枢处理宿舍协同：'
+      '当前宿舍 ${dorm.name}，噪音 ${dorm.noiseDb} dB，安静评级 $quietStars 星，'
+      '室友数量 $roommateCount，当前状态 ${dorm.quietLabel}。'
+      '请读取宿舍上下文，判断是否需要温和提醒、状态同步或公约草案，并执行低风险动作。';
+}
+
 class DormPage extends StatefulWidget {
   const DormPage({super.key});
 
@@ -216,6 +230,21 @@ class _DormPageState extends State<DormPage> {
               ? dormHonorBadgeById(selectedDormBadgeId)
               : null;
           final List<_DormHubAction> actions = <_DormHubAction>[
+            _DormHubAction(
+              title: '小眠协同',
+              detail: '交给中枢处理',
+              icon: Icons.auto_awesome_rounded,
+              onTap: () => context.push(
+                AppRoutes.assistantAgentLocation(
+                  source: 'dorm',
+                  prompt: _dormAgentPrompt(
+                    dorm: dorm,
+                    currentUserId: currentUserId,
+                    quietStars: quietStars,
+                  ),
+                ),
+              ),
+            ),
             _DormHubAction(
               title: '宿舍公约',
               detail: hasPendingRuleDot ? '有新规则待确认' : '查看详情',

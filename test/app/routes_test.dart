@@ -79,6 +79,19 @@ void main() {
       );
     }
   });
+
+  test('assistant agent location carries page context prompt', () {
+    final String location = AppRoutes.assistantAgentLocation(
+      prompt: '帮我规划今晚',
+      source: 'home_pre_sleep',
+    );
+    final Uri uri = Uri.parse(location);
+
+    expect(uri.path, AppRoutes.assistant);
+    expect(uri.queryParameters['agentPrompt'], '帮我规划今晚');
+    expect(uri.queryParameters['source'], 'home_pre_sleep');
+    expect(uri.queryParameters['autoSubmit'], '1');
+  });
 }
 
 SleepSession _session({

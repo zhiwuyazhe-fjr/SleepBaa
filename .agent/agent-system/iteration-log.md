@@ -63,3 +63,24 @@
 - 前端流式事件已经保留工具调用 id 与撤销/补偿载荷，后续可直接渲染结果卡或撤销入口。
 - 后端函数测试 82 项通过。
 - 已通过 `flutter test test\core\backend\assistant_reply_gateway_test.dart test\features\assistant\presentation\controllers\assistant_conversation_controller_test.dart`。
+
+## 2026-05-23 第四轮
+
+目标：把小眠从“助手页里的对话能力”推进为 App 各核心页面可调用的中枢入口。
+
+计划：
+
+- [x] 新增 `AppRoutes.assistantAgentLocation`，支持携带 `agentPrompt`、`source` 和自动提交参数。
+- [x] `AssistantPage` 支持读取初始 agent prompt，并在页面打开后自动提交给中枢运行时。
+- [x] 新增通用 `AssistantAgentEntryButton`，用于页面内“让小眠处理”入口。
+- [x] 首页睡前页接入“让小眠规划今晚”，携带噪音、干扰因素和候选建议上下文。
+- [x] 宿舍页接入“小眠协同”，携带宿舍噪音、安静评级和室友数量上下文。
+- [x] 睡眠模式页接入“让小眠处理”，携带活跃睡眠会话和宿舍状态上下文。
+- [x] 睡眠报告页接入“让小眠解读报告”，携带报告指标、最近记录和待反馈数量。
+- [x] 跑 `flutter test test\app\routes_test.dart`、助手相关 Flutter 测试、`flutter test test\features\dorm\presentation\pages\dorm_page_hub_card_test.dart`、`git diff --check`。
+
+结果：
+
+- 首页、宿舍、睡眠模式、报告页都可以直接唤起小眠中枢，并把页面状态转成结构化 prompt。
+- 助手页支持 deep link 自动提交，用户点击入口后不需要手动复制上下文。
+- 新入口仍复用现有助手 SSE、工具状态流和 AgentRuntime 审计链路。

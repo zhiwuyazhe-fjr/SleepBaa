@@ -8,6 +8,7 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
+import 'package:sleep_dorm_app/core/widgets/assistant_agent_entry.dart';
 import 'package:sleep_dorm_app/core/widgets/home_metric_card.dart';
 import 'package:sleep_dorm_app/core/widgets/quick_action_icon_button.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
@@ -50,6 +51,23 @@ List<NightRecommendation> displayedTonightRecommendations(
   }
 
   return displayed.toList(growable: false);
+}
+
+String _homeAgentPrompt({
+  required Dorm dorm,
+  required TonightInterferenceState interference,
+  required List<NightRecommendation> recommendations,
+}) {
+  final String actionTitles = recommendations
+      .take(3)
+      .map((NightRecommendation item) => item.title)
+      .join('、');
+  return '请作为小眠中枢处理今晚睡前规划：'
+      '当前宿舍噪音 ${dorm.noiseDb} dB，安静状态 ${dorm.quietLabel}；'
+      '干扰因素包括噪音 ${interference.noise.gradeLabel}、光线 ${interference.light.gradeLabel}、'
+      '手机 ${interference.phoneUsage.gradeLabel}、情绪 ${interference.emotion.gradeLabel}。'
+      '请读取上下文、刷新今晚建议，并把需要我或宿舍协同的动作直接安排好。'
+      '${actionTitles.isEmpty ? '' : '当前候选建议：$actionTitles。'}';
 }
 
 class HomePreSleepPage extends StatefulWidget {
@@ -259,6 +277,16 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                     context.go(AppRoutes.homePostSleep);
                                   }
                                 },
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            AssistantAgentEntryButton(
+                              label: '让小眠规划今晚',
+                              source: 'home_pre_sleep',
+                              prompt: _homeAgentPrompt(
+                                dorm: dorm,
+                                interference: interference,
+                                recommendations: recommendations,
                               ),
                             ),
                             const SizedBox(height: AppSpacing.xl),
