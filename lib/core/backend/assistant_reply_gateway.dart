@@ -335,6 +335,7 @@ class AssistantStreamEvent {
     this.toolTitle,
     this.toolStatus,
     this.toolCallId,
+    this.toolOutput,
     this.undoable,
     this.committed,
     this.undoPayload,
@@ -362,6 +363,7 @@ class AssistantStreamEvent {
   final String? toolTitle;
   final String? toolStatus;
   final String? toolCallId;
+  final Map<String, dynamic>? toolOutput;
   final bool? undoable;
   final bool? committed;
   final Map<String, dynamic>? undoPayload;
@@ -1196,6 +1198,7 @@ AssistantStreamEvent _assistantEventFromFrame(
         toolStatus: 'success',
         undoable: data['undoable'] as bool?,
         committed: data['committed'] as bool?,
+        toolOutput: _mapOf(data['output']),
         undoPayload: data['undoPayload'] == null
             ? null
             : _mapOf(data['undoPayload']),
@@ -1233,6 +1236,7 @@ AssistantStreamEvent _assistantEventFromFrame(
         toolStatus: 'committed',
         undoable: data['undoable'] as bool?,
         committed: true,
+        toolOutput: _mapOf(data['output']),
         undoPayload: data['undoPayload'] == null
             ? null
             : _mapOf(data['undoPayload']),

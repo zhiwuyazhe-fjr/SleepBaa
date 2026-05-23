@@ -30,15 +30,22 @@ class AssistantToolStatus {
     required this.label,
     this.undoCallId,
     this.undoStatus,
+    this.navigationRoute,
+    this.navigationLabel,
   });
 
   final IconData icon;
   final String label;
   final String? undoCallId;
   final String? undoStatus;
+  final String? navigationRoute;
+  final String? navigationLabel;
 
   bool get canUndo =>
       undoCallId != null && undoCallId!.isNotEmpty && undoStatus == 'available';
+
+  bool get canNavigate =>
+      navigationRoute != null && navigationRoute!.trim().isNotEmpty;
 }
 
 class AssistantConversationSlice {
@@ -769,12 +776,14 @@ class AssistantInlineStatusList extends StatelessWidget {
     required this.metrics,
     required this.palette,
     this.onUndoPressed,
+    this.onNavigatePressed,
   });
 
   final List<AssistantToolStatus> statuses;
   final AssistantSurfaceMetrics metrics;
   final AssistantSurfacePalette palette;
   final ValueChanged<AssistantToolStatus>? onUndoPressed;
+  final ValueChanged<AssistantToolStatus>? onNavigatePressed;
 
   @override
   Widget build(BuildContext context) {
@@ -825,6 +834,33 @@ class AssistantInlineStatusList extends StatelessWidget {
                       visualDensity: VisualDensity.compact,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       minimumSize: Size(metrics.unit(50), metrics.unit(28)),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: metrics.unit(8),
+                        vertical: 0,
+                      ),
+                    ),
+                  ),
+                ],
+                if (status.canNavigate &&
+                    onNavigatePressed != null) ...<Widget>[
+                  SizedBox(width: metrics.unit(8)),
+                  TextButton.icon(
+                    key: ValueKey<String>(
+                      'assistant-navigate-${Uri.encodeComponent(status.navigationRoute!)}',
+                    ),
+                    onPressed: () => onNavigatePressed!(status),
+                    icon: Icon(Icons.open_in_new, size: metrics.unit(13)),
+                    label: Text(
+                      status.navigationLabel?.trim().isNotEmpty == true
+                          ? status.navigationLabel!.trim()
+                          : '打开',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      minimumSize: Size(metrics.unit(54), metrics.unit(28)),
                       padding: EdgeInsets.symmetric(
                         horizontal: metrics.unit(8),
                         vertical: 0,
@@ -941,6 +977,11 @@ AssistantToolStatus? _toolStatusForSurfaceId(String surfaceId) {
   if (undoStatus != null) {
     return undoStatus;
   }
+  final AssistantToolStatus? navigationStatus =
+      _navigationToolStatusForSurfaceId(raw);
+  if (navigationStatus != null) {
+    return navigationStatus;
+  }
   final String normalized = raw.toLowerCase();
   switch (normalized) {
     case 'agent_planning':
@@ -1048,6 +1089,32 @@ AssistantToolStatus? _toolStatusForSurfaceId(String surfaceId) {
       }
       return null;
   }
+}
+
+AssistantToolStatus? _navigationToolStatusForSurfaceId(String surfaceId) {
+  const String prefix = 'agent_navigation:';
+  if (!surfaceId.startsWith(prefix)) {
+    return null;
+  }
+  final String payload = surfaceId.substring(prefix.length);
+  final int separator = payload.indexOf(':');
+  if (separator <= 0) {
+    return null;
+  }
+  final String route = Uri.decodeComponent(payload.substring(0, separator));
+  if (route.trim().isEmpty) {
+    return null;
+  }
+  final String actionLabel = Uri.decodeComponent(
+    payload.substring(separator + 1),
+  ).trim();
+  final String label = actionLabel.isEmpty ? '继续处理' : actionLabel;
+  return AssistantToolStatus(
+    icon: Icons.open_in_new,
+    label: '可跳转：$label',
+    navigationRoute: route,
+    navigationLabel: label,
+  );
 }
 
 AssistantToolStatus? _undoToolStatusForSurfaceId(String surfaceId) {

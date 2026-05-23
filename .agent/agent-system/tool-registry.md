@@ -68,3 +68,10 @@
 - `agent_tool_calls` 新增 `undoStatus`、`undoAppliedAt`、`undoResult`、`undoError`，撤销结果回写原调用记录。
 - 当前支持精确撤销：`interference.save_tonight`、`sleep.mode.exit`。
 - 仅有补偿说明、无法精确恢复的工具调用返回 `AGENT_TOOL_UNDO_UNAVAILABLE`，并写入 unavailable 审计状态。
+
+## 第十一轮前端结果动作
+
+- `tool_completed` / `action_committed` 的工具输出可被 Flutter 解析为 `toolOutput`。
+- `navigation.suggest` 输出 `{ route, label }` 时，前端会生成 `agent_navigation:*` 状态 token。
+- 助手当前回复会把导航 token 渲染成跳转按钮，只接受 `/` 开头的 App 内路由。
+- 该能力只消费已有工具输出，不提升工具风险等级，也不绕过高风险硬确认。

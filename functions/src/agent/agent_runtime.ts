@@ -76,7 +76,11 @@ function riskFromPrompt(prompt: string): AgentGoalDoc["riskLevel"] {
   ) {
     return "high";
   }
-  if (/发送|提醒|公约|保存|更新|处理|send|save|update|rules|remind/.test(normalized)) {
+  if (
+    /发送|提醒|公约|保存|更新|处理|send|save|update|rules|remind/.test(
+      normalized,
+    )
+  ) {
     return "medium";
   }
   return "low";
@@ -126,9 +130,7 @@ function detectAgentIntent(prompt: string): ExtendedAgentIntent {
     return "report_review";
   }
   if (
-    /audio|sound|rain|music|white noise|音频|白噪音|雨声|助眠/.test(
-      normalized,
-    )
+    /audio|sound|rain|music|white noise|音频|白噪音|雨声|助眠/.test(normalized)
   ) {
     return "audio_support";
   }
@@ -162,7 +164,11 @@ function addStep(
   });
 }
 
-function addMemoryStep(steps: AgentStepDoc[], prompt: string, kind: string): void {
+function addMemoryStep(
+  steps: AgentStepDoc[],
+  prompt: string,
+  kind: string,
+): void {
   const normalized = prompt.trim();
   if (normalized.length < 8) {
     return;
@@ -175,7 +181,9 @@ function addMemoryStep(steps: AgentStepDoc[], prompt: string, kind: string): voi
       content: normalized,
       canonicalKey: `${kind}:${normalized.toLowerCase().slice(0, 64)}`,
       keywords: Array.from(
-        new Set(normalized.toLowerCase().match(/[a-z0-9\u4e00-\u9fff]+/g) ?? []),
+        new Set(
+          normalized.toLowerCase().match(/[a-z0-9\u4e00-\u9fff]+/g) ?? [],
+        ),
       ).slice(0, 8),
       confidence: kind === "intervention_effect" ? 0.8 : 0.72,
       salience: kind === "intervention_effect" ? 0.82 : 0.72,
@@ -455,7 +463,9 @@ function buildAgentReply(params: {
 }): string {
   const assistantName =
     params.context?.assistantProfile.assistantName?.trim() || "小眠";
-  const succeeded = params.toolCalls.filter((call) => call.status === "success");
+  const succeeded = params.toolCalls.filter(
+    (call) => call.status === "success",
+  );
   const failed = params.toolCalls.filter((call) => call.status === "failed");
   const skipped = params.toolCalls.filter((call) => call.status === "skipped");
   if (params.goal.autonomyMode === "confirm_required") {
@@ -787,6 +797,7 @@ export async function runAgent(
           callId,
           toolName: step.toolName,
           toolTitle: tool.definition.title,
+          output: result.output,
           updatedSurfaces: result.updatedSurfaces ?? [],
           undoable: tool.definition.undoable,
           undoPayload: result.undoPayload ?? null,
@@ -794,10 +805,10 @@ export async function runAgent(
       }
       if ((result.memorySyncedCount ?? 0) > 0) {
         await emit(params, "memory_updated", {
-        runId,
-        count: result.memorySyncedCount,
-        callId,
-      });
+          runId,
+          count: result.memorySyncedCount,
+          callId,
+        });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

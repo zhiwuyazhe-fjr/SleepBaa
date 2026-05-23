@@ -183,6 +183,38 @@ class _MemoryOverviewGateway extends StubAssistantReplyGateway {
   }
 }
 
+class _NavigationSuggestionGateway extends StubAssistantReplyGateway {
+  @override
+  Stream<AssistantStreamEvent> streamReply({
+    required String prompt,
+    required String threadId,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  }) async* {
+    yield AssistantStreamEvent(
+      type: AssistantStreamEventType.ack,
+      assistantMessageId: clientAssistantMessageId,
+    );
+    yield const AssistantStreamEvent(
+      type: AssistantStreamEventType.toolCompleted,
+      toolName: 'navigation.suggest',
+      toolStatus: 'success',
+      toolOutput: <String, dynamic>{
+        'route': '/sleep/audio_catalog',
+        'label': '打开助眠音频',
+      },
+    );
+    yield AssistantStreamEvent(
+      type: AssistantStreamEventType.messageCompleted,
+      reply: 'Handled',
+      sourceMode: AssistantReplySourceMode.remoteSuccess,
+      assistantMessageId: clientAssistantMessageId,
+    );
+    yield const AssistantStreamEvent(type: AssistantStreamEventType.done);
+  }
+}
+
 void main() {
   test('submitPrompt streams assistant reply and resets turn state', () async {
     final InMemoryAssistantRepository assistantRepository =
@@ -291,6 +323,42 @@ void main() {
       'audio-rain',
     );
   });
+
+  test(
+    'navigation suggestions are exposed as assistant surface tokens',
+    () async {
+      final InMemoryAssistantRepository assistantRepository =
+          InMemoryAssistantRepository(userId: 'assistant-user');
+      final AssistantConversationController controller =
+          AssistantConversationController(
+            assistantRepository: assistantRepository,
+            sleepCaptureRepository: InMemorySleepCaptureRepository(),
+            sleepSessionRepository: InMemorySleepSessionRepository(
+              initialUid: 'assistant-user',
+            ),
+            dormRepository: InMemoryDormRepository(
+              currentUserId: 'assistant-user',
+            ),
+            assistantReplyGateway: _NavigationSuggestionGateway(),
+          );
+
+      await controller.bootstrap();
+      final AssistantConversationSubmitResult result = await controller
+          .submitPrompt('推荐助眠音频');
+      await _drainAsyncWork();
+
+      final String token =
+          'agent_navigation:${Uri.encodeComponent('/sleep/audio_catalog')}:'
+          '${Uri.encodeComponent('打开助眠音频')}';
+      expect(result, AssistantConversationSubmitResult.sent);
+      expect(
+        controller.updatedSurfacesForMessage(
+          controller.currentMessages.last.id,
+        ),
+        contains(token),
+      );
+    },
+  );
 
   test('startNewConversation reuses an existing blank thread', () async {
     final InMemoryAssistantRepository assistantRepository =

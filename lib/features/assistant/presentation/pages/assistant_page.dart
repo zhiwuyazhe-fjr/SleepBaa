@@ -246,6 +246,21 @@ class _AssistantPageState extends State<AssistantPage>
     );
   }
 
+  Future<void> _handleNavigateToolCall(AssistantToolStatus status) async {
+    final String route = status.navigationRoute?.trim() ?? '';
+    if (route.isEmpty) {
+      return;
+    }
+    try {
+      context.push(route);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      await notifyPassiveToast(context, message: '暂时无法打开这个入口。');
+    }
+  }
+
   Future<void> _handleMemoryOverviewTap(AppServices services) async {
     final AssistantConversationController controller =
         services.assistantConversationController;
@@ -669,6 +684,9 @@ class _AssistantPageState extends State<AssistantPage>
                   onUndoToolCall: (AssistantToolStatus status) {
                     unawaited(_handleUndoToolCall(services, status));
                   },
+                  onNavigateToolCall: (AssistantToolStatus status) {
+                    unawaited(_handleNavigateToolCall(status));
+                  },
                   captureModeEnabled: widget.captureModeEnabled,
                   selectedCaptureTab: _selectedTab,
                   onCaptureTabChanged: (AssistantCaptureTab tab) {
@@ -761,6 +779,7 @@ class _AssistantStageViewport extends StatelessWidget {
     required this.controller,
     required this.replyMotionLevel,
     required this.onUndoToolCall,
+    required this.onNavigateToolCall,
     required this.captureModeEnabled,
     required this.selectedCaptureTab,
     required this.onCaptureTabChanged,
@@ -789,6 +808,7 @@ class _AssistantStageViewport extends StatelessWidget {
   final AssistantConversationController controller;
   final AssistantReplyMotionLevel replyMotionLevel;
   final ValueChanged<AssistantToolStatus> onUndoToolCall;
+  final ValueChanged<AssistantToolStatus> onNavigateToolCall;
   final bool captureModeEnabled;
   final AssistantCaptureTab selectedCaptureTab;
   final ValueChanged<AssistantCaptureTab> onCaptureTabChanged;
@@ -827,6 +847,7 @@ class _AssistantStageViewport extends StatelessWidget {
             statuses: statuses,
             replyMotionLevel: replyMotionLevel,
             onUndoToolCall: onUndoToolCall,
+            onNavigateToolCall: onNavigateToolCall,
             captureModeEnabled: captureModeEnabled,
             selectedCaptureTab: selectedCaptureTab,
             onCaptureTabChanged: onCaptureTabChanged,
@@ -1033,6 +1054,7 @@ class _AssistantPrimaryStage extends StatelessWidget {
     required this.statuses,
     required this.replyMotionLevel,
     required this.onUndoToolCall,
+    required this.onNavigateToolCall,
     required this.captureModeEnabled,
     required this.selectedCaptureTab,
     required this.onCaptureTabChanged,
@@ -1048,6 +1070,7 @@ class _AssistantPrimaryStage extends StatelessWidget {
   final List<AssistantToolStatus> statuses;
   final AssistantReplyMotionLevel replyMotionLevel;
   final ValueChanged<AssistantToolStatus> onUndoToolCall;
+  final ValueChanged<AssistantToolStatus> onNavigateToolCall;
   final bool captureModeEnabled;
   final AssistantCaptureTab selectedCaptureTab;
   final ValueChanged<AssistantCaptureTab> onCaptureTabChanged;
@@ -1086,6 +1109,7 @@ class _AssistantPrimaryStage extends StatelessWidget {
         statuses: statuses,
         motionLevel: replyMotionLevel,
         onUndoToolCall: onUndoToolCall,
+        onNavigateToolCall: onNavigateToolCall,
       ),
     };
     final double stageTopInset = switch (stageState) {
@@ -1715,6 +1739,7 @@ class _AssistantReplyStage extends StatelessWidget {
     required this.statuses,
     required this.motionLevel,
     required this.onUndoToolCall,
+    required this.onNavigateToolCall,
   });
 
   final AssistantSurfaceMetrics metrics;
@@ -1723,6 +1748,7 @@ class _AssistantReplyStage extends StatelessWidget {
   final List<AssistantToolStatus> statuses;
   final AssistantReplyMotionLevel motionLevel;
   final ValueChanged<AssistantToolStatus> onUndoToolCall;
+  final ValueChanged<AssistantToolStatus> onNavigateToolCall;
 
   @override
   Widget build(BuildContext context) {
@@ -1764,6 +1790,7 @@ class _AssistantReplyStage extends StatelessWidget {
                     metrics: metrics,
                     palette: palette,
                     onUndoPressed: onUndoToolCall,
+                    onNavigatePressed: onNavigateToolCall,
                   ),
                 ],
               ],

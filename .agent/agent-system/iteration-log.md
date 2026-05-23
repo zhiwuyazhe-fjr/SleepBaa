@@ -202,3 +202,23 @@
 - 小眠助手页现在具备长期记忆/自我进化的前端观测入口，不再只依赖后端 API 或数据库人工排查。
 - 记忆概览已经通过统一网关接入，后续可在“我的”“报告页”或调试页复用同一模型。
 - 第十轮没有改变自动行动权限边界，只读取和展示记忆观测结果。
+
+## 2026-05-23 第十一轮
+
+目标：补齐 Agent 执行结果的“可行动入口”，让 `navigation.suggest` 不只显示状态文案，还能在助手回复里提供可点击跳转按钮。
+
+计划：
+
+- [x] `action_committed` SSE 事件补充 `output`，与 `tool_completed` 保持工具输出字段一致。
+- [x] Flutter `AssistantStreamEvent` 新增 `toolOutput`，解析 `tool_completed` / `action_committed` 的工具输出。
+- [x] `AssistantConversationController` 将 `navigation.suggest` 的 `{ route, label }` 输出转成稳定 `agent_navigation:*` surface token。
+- [x] `AssistantToolStatus` 新增 `navigationRoute` / `navigationLabel`，并支持 `canNavigate`。
+- [x] 助手当前回复的工具状态列表新增跳转按钮，点击后用 GoRouter 打开对应 App 路由。
+- [x] 增加网关、controller 和 assistant surface 测试，覆盖工具输出解析、导航 token 暴露和 token 解码。
+- [x] 跑 `npm --prefix functions run build`、`npm --prefix functions test`、目标文件 `flutter analyze`、相关 Flutter 测试、`flutter test test/widget_test.dart --name "assistant memory header opens memory overview sheet"` 与 `git diff --check`。
+
+结果：
+
+- Agent 现在能把“打开助眠音频”“继续写梦记”“需要你确认后再执行”等导航建议变成助手页内的行动按钮。
+- 前端仍只接受 `/` 开头的 App 内路由，避免工具输出任意外链或无效路由直接进入跳转链路。
+- 这轮不新增写入权限，只增强工具结果的可消费性。

@@ -94,7 +94,7 @@ void main() {
           CloudBaseSseFrame(
             event: 'tool_completed',
             data:
-                '{"runId":"run-1","planId":"plan-1","callId":"call-1","toolName":"plan.generate_tonight","toolTitle":"生成今晚计划","updatedSurfaces":["home_pre_sleep"],"committed":true,"undoable":true,"undoPayload":{"previousUnknown":true}}',
+                '{"runId":"run-1","planId":"plan-1","callId":"call-1","toolName":"plan.generate_tonight","toolTitle":"生成今晚计划","output":{"actionCount":3},"updatedSurfaces":["home_pre_sleep"],"committed":true,"undoable":true,"undoPayload":{"previousUnknown":true}}',
           ),
           CloudBaseSseFrame(
             event: 'memory_updated',
@@ -156,6 +156,7 @@ void main() {
       ]),
     );
     expect(completed.toolCallId, 'call-1');
+    expect(completed.toolOutput, containsPair('actionCount', 3));
     expect(completed.committed, true);
     expect(completed.undoable, true);
     expect(completed.undoPayload, containsPair('previousUnknown', true));

@@ -780,10 +780,30 @@ class AssistantConversationController extends ChangeNotifier {
 
   List<String> _surfaceIdsForAgentEvent(AssistantStreamEvent event) {
     final List<String> surfaces = List<String>.from(event.updatedSurfaces);
+    final String? navigationToken = _navigationSurfaceTokenForAgentEvent(event);
+    if (navigationToken != null) {
+      surfaces.add(navigationToken);
+    }
     if (_shouldExposeUndo(event)) {
       surfaces.add('agent_undo_available:${event.toolCallId!.trim()}');
     }
     return surfaces;
+  }
+
+  String? _navigationSurfaceTokenForAgentEvent(AssistantStreamEvent event) {
+    if (event.type != AssistantStreamEventType.toolCompleted ||
+        event.toolName != 'navigation.suggest') {
+      return null;
+    }
+    final Map<String, dynamic> output =
+        event.toolOutput ?? const <String, dynamic>{};
+    final String route = (output['route'] as String? ?? '').trim();
+    if (route.isEmpty || !route.startsWith('/')) {
+      return null;
+    }
+    final String label = (output['label'] as String? ?? '继续处理').trim();
+    return 'agent_navigation:${Uri.encodeComponent(route)}:'
+        '${Uri.encodeComponent(label.isEmpty ? '继续处理' : label)}';
   }
 
   bool _shouldExposeUndo(AssistantStreamEvent event) {

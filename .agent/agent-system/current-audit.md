@@ -47,3 +47,4 @@
 - 第八轮后，Flutter 助手页可展示可撤销动作，并调用后端 undo API。
 - 第九轮后，`/api/agent/memory` 可返回长期记忆、自我进化策略权重和行动效果概览。
 - 第十轮后，Flutter 助手页头部新增“记忆与进化”入口，可直接读取并展示 `/api/agent/memory` 概览。
+- 第十一轮后，`navigation.suggest` 的工具输出可在助手回复中转成跳转按钮，连接 Agent 执行结果与 App 页面。
