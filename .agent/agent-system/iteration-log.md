@@ -124,3 +124,23 @@
 - AgentRuntime 对所有已注册工具执行统一 schema 守门，不再只依赖工具 handler 内部容错。
 - 无效工具输入会形成完整审计链路，前端也能收到明确失败事件。
 - 后续扩展工具时，只要补齐 `inputSchema`，即可自动获得基础校验能力。
+
+## 2026-05-23 第七轮
+
+目标：补齐 Agent 自主执行后的补偿闭环，让已提交动作不只可审计，也能在可行时由后端执行精确撤销。
+
+计划：
+
+- [x] 扩展 `AgentToolCallDoc`，记录 `undoStatus`、`undoAppliedAt`、`undoResult`、`undoError`。
+- [x] 仓库层新增 `getAgentToolCall`，可按 callId 拉取单次工具调用。
+- [x] 新增 `undoAgentToolCall`，统一处理补偿逻辑和审计回写。
+- [x] 新增 `/api/agent/tool-calls/:id/undo`，供前端撤销入口或排查工具调用。
+- [x] 第一批支持精确撤销 `interference.save_tonight` 和 `sleep.mode.exit`；仅有补偿说明的动作返回 unavailable。
+- [x] 增加 Agent API 集成测试，覆盖撤销成功和重复撤销幂等。
+- [x] 跑 `npm --prefix functions run build`、`npm --prefix functions test` 与 `git diff --check`。
+
+结果：
+
+- 成功工具调用现在可以被后端重新定位，并把撤销结果写回原 `agent_tool_calls`。
+- 今晚干扰因素可恢复到执行前快照；退出睡眠模式可恢复执行前的睡眠会话快照。
+- 无法精确撤销的动作不会假装成功，会返回明确原因并写入 `undoStatus: unavailable`。

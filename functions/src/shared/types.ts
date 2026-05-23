@@ -35,6 +35,7 @@ export type AgentStepStatus =
   | "failed";
 
 export type AgentAutonomyMode = "full" | "confirm_required" | "read_only";
+export type AgentToolUndoStatus = "applied" | "unavailable";
 
 export type AssistantPromptMode =
   | "chat_reply"
@@ -441,6 +442,10 @@ export interface AgentToolCallDoc {
   output?: Record<string, unknown> | null;
   error?: string | null;
   undoPayload?: Record<string, unknown> | null;
+  undoStatus?: AgentToolUndoStatus | null;
+  undoAppliedAt?: string | null;
+  undoResult?: Record<string, unknown> | null;
+  undoError?: string | null;
   startedAt: string;
   finishedAt?: string | null;
   durationMs?: number | null;

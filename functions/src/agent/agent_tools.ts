@@ -695,7 +695,7 @@ const TOOLS: AgentTool[] = [
       return {
         output: { interference: saved },
         updatedSurfaces: ["home_pre_sleep", "assistant_context"],
-        undoPayload: previous ? { previous } : null,
+        undoPayload: { previous },
         committed: true,
       };
     },

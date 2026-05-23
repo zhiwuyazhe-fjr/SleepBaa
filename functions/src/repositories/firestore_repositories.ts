@@ -1165,6 +1165,10 @@ export interface AssistantDataRepository {
   writeAgentRun(uid: string, runId: string, run: AgentRunDoc): Promise<void>;
   getAgentRun(uid: string, runId: string): Promise<AgentRunDoc | null>;
   getAgentPlan(uid: string, planId: string): Promise<AgentPlanDoc | null>;
+  getAgentToolCall(
+    uid: string,
+    callId: string,
+  ): Promise<AgentToolCallDoc | null>;
   listAgentToolCalls(uid: string, runId: string): Promise<AgentToolCallDoc[]>;
   writeAgentPlan(
     uid: string,
@@ -2810,6 +2814,18 @@ export class FirestoreRepository implements AssistantDataRepository {
     await this.ensureUserBootstrap(uid);
     const doc = await this.store.get(Collections.agentPlans, `${uid}:${planId}`);
     return doc ? (withoutMeta(doc) as unknown as AgentPlanDoc) : null;
+  }
+
+  async getAgentToolCall(
+    uid: string,
+    callId: string,
+  ): Promise<AgentToolCallDoc | null> {
+    await this.ensureUserBootstrap(uid);
+    const doc = await this.store.get(
+      Collections.agentToolCalls,
+      `${uid}:${callId}`,
+    );
+    return doc ? (withoutMeta(doc) as unknown as AgentToolCallDoc) : null;
   }
 
   async listAgentToolCalls(

@@ -1096,6 +1096,46 @@ test(
             Boolean(call.undoPayload),
         ),
       );
+      const interferenceCall = runPayload.toolCalls.find(
+        (call) =>
+          call.toolName === "interference.save_tonight" &&
+          call.status === "success",
+      );
+      assert.ok(interferenceCall);
+      const undoResponse = await fetch(
+        `${baseUrl}/api/agent/tool-calls/${encodeURIComponent(
+          String(interferenceCall.id),
+        )}/undo`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({}),
+        },
+      );
+      assert.equal(undoResponse.status, 200);
+      const undoPayload = (await undoResponse.json()) as {
+        status: string;
+        call: Record<string, unknown>;
+        updatedSurfaces: string[];
+      };
+      assert.equal(undoPayload.status, "applied");
+      assert.equal(undoPayload.call.undoStatus, "applied");
+      assert.ok(undoPayload.updatedSurfaces.includes("home_pre_sleep"));
+      const secondUndoResponse = await fetch(
+        `${baseUrl}/api/agent/tool-calls/${encodeURIComponent(
+          String(interferenceCall.id),
+        )}/undo`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({}),
+        },
+      );
+      assert.equal(secondUndoResponse.status, 200);
+      const secondUndoPayload = (await secondUndoResponse.json()) as {
+        alreadyApplied?: boolean;
+      };
+      assert.equal(secondUndoPayload.alreadyApplied, true);
       assert.equal(events[events.length - 1]?.event, "done");
     });
   },

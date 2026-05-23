@@ -61,3 +61,10 @@
 - 校验覆盖 `string`、`number`、`integer`、`boolean`、`array`、`object` 基础类型。
 - 校验失败不会调用业务 handler，会写入 `agent_tool_calls`，并通过 SSE 发出 `tool_failed`。
 - 失败错误统一以 `invalid_tool_input` 开头，便于排查 planner 生成异常或前端上下文传参异常。
+
+## 第七轮补偿能力
+
+- 新增 `/api/agent/tool-calls/:id/undo`，按工具调用 id 触发后端补偿。
+- `agent_tool_calls` 新增 `undoStatus`、`undoAppliedAt`、`undoResult`、`undoError`，撤销结果回写原调用记录。
+- 当前支持精确撤销：`interference.save_tonight`、`sleep.mode.exit`。
+- 仅有补偿说明、无法精确恢复的工具调用返回 `AGENT_TOOL_UNDO_UNAVAILABLE`，并写入 unavailable 审计状态。

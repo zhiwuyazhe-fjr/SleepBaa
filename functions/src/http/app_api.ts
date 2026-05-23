@@ -6,6 +6,10 @@ import {
   runAgent,
   shouldRoutePromptToAgent,
 } from "../agent/agent_runtime";
+import {
+  AgentToolUndoError,
+  undoAgentToolCall,
+} from "../agent/agent_undo";
 import { acceptDormInviteCallable } from "../callables/accept_dorm_invite";
 import { assistantCaptureCallable } from "../callables/assistant_capture";
 import { assistantReplyCallable } from "../callables/assistant_reply";
@@ -1603,6 +1607,31 @@ export function createAppApiServer() {
         repo.listAgentToolCalls(request.authContext!.uid, run.id),
       ]);
       response.json({ run, plan, toolCalls });
+    }),
+  );
+
+  app.post(
+    "/api/agent/tool-calls/:id/undo",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      try {
+        const result = await undoAgentToolCall({
+          repo,
+          uid: request.authContext!.uid,
+          callId: asString(request.params.id),
+        });
+        response.json(result);
+      } catch (error) {
+        if (error instanceof AgentToolUndoError) {
+          response.status(error.httpStatus).json({
+            code: error.code,
+            message: error.message,
+            result: error.result ?? null,
+          });
+          return;
+        }
+        throw error;
+      }
     }),
   );
 
