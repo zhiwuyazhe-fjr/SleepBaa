@@ -225,6 +225,25 @@ class _AssistantPageState extends State<AssistantPage>
     await notifyPassiveToast(context, message: '语音输入还在接入中。');
   }
 
+  Future<void> _handleUndoToolCall(
+    AppServices services,
+    AssistantToolStatus status,
+  ) async {
+    final String callId = status.undoCallId?.trim() ?? '';
+    if (callId.isEmpty) {
+      return;
+    }
+    final bool applied = await services.assistantConversationController
+        .undoToolCall(callId);
+    if (!mounted) {
+      return;
+    }
+    await notifyPassiveToast(
+      context,
+      message: applied ? '已撤销这项动作。' : '这项动作暂时不能撤销。',
+    );
+  }
+
   Future<void> _startNewConversation(AppServices services) async {
     _resetArchiveState();
     setState(() {
@@ -610,6 +629,9 @@ class _AssistantPageState extends State<AssistantPage>
                   statuses: latestStatuses,
                   controller: controller,
                   replyMotionLevel: replyMotionLevel,
+                  onUndoToolCall: (AssistantToolStatus status) {
+                    unawaited(_handleUndoToolCall(services, status));
+                  },
                   captureModeEnabled: widget.captureModeEnabled,
                   selectedCaptureTab: _selectedTab,
                   onCaptureTabChanged: (AssistantCaptureTab tab) {
@@ -701,6 +723,7 @@ class _AssistantStageViewport extends StatelessWidget {
     required this.statuses,
     required this.controller,
     required this.replyMotionLevel,
+    required this.onUndoToolCall,
     required this.captureModeEnabled,
     required this.selectedCaptureTab,
     required this.onCaptureTabChanged,
@@ -728,6 +751,7 @@ class _AssistantStageViewport extends StatelessWidget {
   final List<AssistantToolStatus> statuses;
   final AssistantConversationController controller;
   final AssistantReplyMotionLevel replyMotionLevel;
+  final ValueChanged<AssistantToolStatus> onUndoToolCall;
   final bool captureModeEnabled;
   final AssistantCaptureTab selectedCaptureTab;
   final ValueChanged<AssistantCaptureTab> onCaptureTabChanged;
@@ -765,6 +789,7 @@ class _AssistantStageViewport extends StatelessWidget {
             latestAssistantText: slice.latestAssistant?.content.trim() ?? '',
             statuses: statuses,
             replyMotionLevel: replyMotionLevel,
+            onUndoToolCall: onUndoToolCall,
             captureModeEnabled: captureModeEnabled,
             selectedCaptureTab: selectedCaptureTab,
             onCaptureTabChanged: onCaptureTabChanged,
@@ -970,6 +995,7 @@ class _AssistantPrimaryStage extends StatelessWidget {
     required this.latestAssistantText,
     required this.statuses,
     required this.replyMotionLevel,
+    required this.onUndoToolCall,
     required this.captureModeEnabled,
     required this.selectedCaptureTab,
     required this.onCaptureTabChanged,
@@ -984,6 +1010,7 @@ class _AssistantPrimaryStage extends StatelessWidget {
   final String latestAssistantText;
   final List<AssistantToolStatus> statuses;
   final AssistantReplyMotionLevel replyMotionLevel;
+  final ValueChanged<AssistantToolStatus> onUndoToolCall;
   final bool captureModeEnabled;
   final AssistantCaptureTab selectedCaptureTab;
   final ValueChanged<AssistantCaptureTab> onCaptureTabChanged;
@@ -1021,6 +1048,7 @@ class _AssistantPrimaryStage extends StatelessWidget {
         replyText: latestAssistantText,
         statuses: statuses,
         motionLevel: replyMotionLevel,
+        onUndoToolCall: onUndoToolCall,
       ),
     };
     final double stageTopInset = switch (stageState) {
@@ -1649,6 +1677,7 @@ class _AssistantReplyStage extends StatelessWidget {
     required this.replyText,
     required this.statuses,
     required this.motionLevel,
+    required this.onUndoToolCall,
   });
 
   final AssistantSurfaceMetrics metrics;
@@ -1656,6 +1685,7 @@ class _AssistantReplyStage extends StatelessWidget {
   final String replyText;
   final List<AssistantToolStatus> statuses;
   final AssistantReplyMotionLevel motionLevel;
+  final ValueChanged<AssistantToolStatus> onUndoToolCall;
 
   @override
   Widget build(BuildContext context) {
@@ -1696,6 +1726,7 @@ class _AssistantReplyStage extends StatelessWidget {
                     statuses: statuses,
                     metrics: metrics,
                     palette: palette,
+                    onUndoPressed: onUndoToolCall,
                   ),
                 ],
               ],

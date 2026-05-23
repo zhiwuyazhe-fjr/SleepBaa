@@ -144,3 +144,23 @@
 - 成功工具调用现在可以被后端重新定位，并把撤销结果写回原 `agent_tool_calls`。
 - 今晚干扰因素可恢复到执行前快照；退出睡眠模式可恢复执行前的睡眠会话快照。
 - 无法精确撤销的动作不会假装成功，会返回明确原因并写入 `undoStatus: unavailable`。
+
+## 2026-05-23 第八轮
+
+目标：把第七轮后端补偿能力接入 Flutter 助手页，让用户能在当前中枢回复下直接撤销可精确恢复的动作。
+
+计划：
+
+- [x] `AssistantReplyGateway` 新增 `undoToolCall`，CloudBase 实现调用 `/api/agent/tool-calls/:id/undo`。
+- [x] 撤销成功后刷新 CloudBase snapshot store，拉取后端已重建的卡片快照。
+- [x] `AssistantConversationController` 记录 `action_committed` 中可精确撤销的工具调用，并维护 available/running/applied/failed 状态 token。
+- [x] 助手当前回复的工具状态列表增加撤销按钮，点击后调用 controller 并展示被动 toast。
+- [x] 增加 Flutter 网关测试与 controller 测试，覆盖 undo endpoint 调用、撤销 token 暴露和幂等状态替换。
+- [x] 跑 `flutter test test/core/backend/assistant_reply_gateway_test.dart`、`flutter test test/features/assistant/presentation/controllers/assistant_conversation_controller_test.dart`、`flutter test test/core/facades/app_facades_test.dart`。
+- [ ] 全量 `flutter test test/widget_test.dart` 仍有既有失败，集中在旧助手入口 finder、宿舍状态、徽章、报告和睡眠模式断言，需单独清理。
+
+结果：
+
+- 当前助手回复能展示“可撤销一项动作”，并只对 `interference.save_tonight`、`sleep.mode.exit` 这类已支持精确撤销的动作开放按钮。
+- 撤销中、撤销成功、撤销失败都会回写到当前消息的工具状态，避免重复点击时没有反馈。
+- 前端撤销链路已经和第七轮后端审计/补偿 API 对齐。

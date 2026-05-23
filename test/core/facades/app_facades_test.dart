@@ -174,6 +174,13 @@ class _FakeAssistantGateway implements AssistantReplyGateway {
       updatedSurfaces: const <String>['assistant_context'],
     );
   }
+
+  @override
+  Future<AssistantToolUndoResult> undoToolCall({
+    required String toolCallId,
+  }) async {
+    return AssistantToolUndoResult(status: 'applied', callId: toolCallId);
+  }
 }
 
 class _ErrorAssistantGateway implements AssistantReplyGateway {
@@ -249,6 +256,13 @@ class _ErrorAssistantGateway implements AssistantReplyGateway {
       ),
       recordPersistedRemotely: false,
     );
+  }
+
+  @override
+  Future<AssistantToolUndoResult> undoToolCall({
+    required String toolCallId,
+  }) async {
+    return AssistantToolUndoResult(status: 'unavailable', callId: toolCallId);
   }
 }
 
@@ -332,6 +346,13 @@ class _TimeoutAssistantGateway implements AssistantReplyGateway {
       ),
       recordPersistedRemotely: false,
     );
+  }
+
+  @override
+  Future<AssistantToolUndoResult> undoToolCall({
+    required String toolCallId,
+  }) async {
+    return AssistantToolUndoResult(status: 'unavailable', callId: toolCallId);
   }
 }
 

@@ -82,6 +82,58 @@ class _CaptureWithoutRecordGateway implements AssistantReplyGateway {
   }) async {
     throw UnimplementedError();
   }
+
+  @override
+  Future<AssistantToolUndoResult> undoToolCall({
+    required String toolCallId,
+  }) async {
+    return AssistantToolUndoResult(status: 'applied', callId: toolCallId);
+  }
+}
+
+class _AgentUndoGateway extends StubAssistantReplyGateway {
+  String? lastUndoCallId;
+
+  @override
+  Stream<AssistantStreamEvent> streamReply({
+    required String prompt,
+    required String threadId,
+    required String clientUserMessageId,
+    required String clientAssistantMessageId,
+    required Dorm dorm,
+  }) async* {
+    yield AssistantStreamEvent(
+      type: AssistantStreamEventType.ack,
+      assistantMessageId: clientAssistantMessageId,
+    );
+    yield const AssistantStreamEvent(
+      type: AssistantStreamEventType.actionCommitted,
+      toolCallId: 'call-1',
+      toolName: 'interference.save_tonight',
+      committed: true,
+      undoable: true,
+      updatedSurfaces: <String>['home_pre_sleep'],
+    );
+    yield AssistantStreamEvent(
+      type: AssistantStreamEventType.messageCompleted,
+      reply: 'Handled',
+      sourceMode: AssistantReplySourceMode.remoteSuccess,
+      assistantMessageId: clientAssistantMessageId,
+    );
+    yield const AssistantStreamEvent(type: AssistantStreamEventType.done);
+  }
+
+  @override
+  Future<AssistantToolUndoResult> undoToolCall({
+    required String toolCallId,
+  }) async {
+    lastUndoCallId = toolCallId;
+    return AssistantToolUndoResult(
+      status: 'applied',
+      callId: toolCallId,
+      updatedSurfaces: const <String>['home_pre_sleep'],
+    );
+  }
 }
 
 void main() {
@@ -117,6 +169,49 @@ void main() {
     expect(
       controller.currentMessages.last.status,
       AssistantMessageStatus.complete,
+    );
+  });
+
+  test('agent committed actions expose and apply undo tokens', () async {
+    final InMemoryAssistantRepository assistantRepository =
+        InMemoryAssistantRepository(userId: 'assistant-user');
+    final _AgentUndoGateway gateway = _AgentUndoGateway();
+    final AssistantConversationController controller =
+        AssistantConversationController(
+          assistantRepository: assistantRepository,
+          sleepCaptureRepository: InMemorySleepCaptureRepository(),
+          sleepSessionRepository: InMemorySleepSessionRepository(
+            initialUid: 'assistant-user',
+          ),
+          dormRepository: InMemoryDormRepository(
+            currentUserId: 'assistant-user',
+          ),
+          assistantReplyGateway: gateway,
+        );
+
+    await controller.bootstrap();
+    final AssistantConversationSubmitResult result = await controller
+        .submitPrompt('roommate noise');
+    await _drainAsyncWork();
+
+    expect(result, AssistantConversationSubmitResult.sent);
+    final AssistantMessage latest = controller.currentMessages.last;
+    expect(
+      controller.updatedSurfacesForMessage(latest.id),
+      contains('agent_undo_available:call-1'),
+    );
+
+    final bool undone = await controller.undoToolCall('call-1');
+
+    expect(undone, true);
+    expect(gateway.lastUndoCallId, 'call-1');
+    expect(
+      controller.updatedSurfacesForMessage(latest.id),
+      isNot(contains('agent_undo_available:call-1')),
+    );
+    expect(
+      controller.updatedSurfacesForMessage(latest.id),
+      contains('agent_undo_applied:call-1'),
     );
   });
 
@@ -156,73 +251,76 @@ void main() {
     );
   });
 
-  test('startNewConversation reuses dream and memo blank threads separately', () async {
-    final InMemoryAssistantRepository assistantRepository =
-        InMemoryAssistantRepository(userId: 'assistant-user');
-    final AssistantConversationController controller =
-        AssistantConversationController(
-          assistantRepository: assistantRepository,
-          sleepCaptureRepository: InMemorySleepCaptureRepository(),
-          sleepSessionRepository: InMemorySleepSessionRepository(
-            initialUid: 'assistant-user',
-          ),
-          dormRepository: InMemoryDormRepository(
-            currentUserId: 'assistant-user',
-          ),
-          assistantReplyGateway: const StubAssistantReplyGateway(),
-        );
+  test(
+    'startNewConversation reuses dream and memo blank threads separately',
+    () async {
+      final InMemoryAssistantRepository assistantRepository =
+          InMemoryAssistantRepository(userId: 'assistant-user');
+      final AssistantConversationController controller =
+          AssistantConversationController(
+            assistantRepository: assistantRepository,
+            sleepCaptureRepository: InMemorySleepCaptureRepository(),
+            sleepSessionRepository: InMemorySleepSessionRepository(
+              initialUid: 'assistant-user',
+            ),
+            dormRepository: InMemoryDormRepository(
+              currentUserId: 'assistant-user',
+            ),
+            assistantReplyGateway: const StubAssistantReplyGateway(),
+          );
 
-    await controller.bootstrap();
-    final AssistantThread dreamFirst = await controller.startNewConversation(
-      title: '梦记收纳',
-    );
-    final AssistantThread dreamSecond = await controller.startNewConversation(
-      title: '梦记收纳',
-    );
-    final AssistantThread memoFirst = await controller.startNewConversation(
-      title: '事记收纳',
-    );
-    final AssistantThread memoSecond = await controller.startNewConversation(
-      title: '事记收纳',
-    );
-    final AssistantThread dreamAgain = await controller.startNewConversation(
-      title: '梦记收纳',
-    );
+      await controller.bootstrap();
+      final AssistantThread dreamFirst = await controller.startNewConversation(
+        title: '梦记收纳',
+      );
+      final AssistantThread dreamSecond = await controller.startNewConversation(
+        title: '梦记收纳',
+      );
+      final AssistantThread memoFirst = await controller.startNewConversation(
+        title: '事记收纳',
+      );
+      final AssistantThread memoSecond = await controller.startNewConversation(
+        title: '事记收纳',
+      );
+      final AssistantThread dreamAgain = await controller.startNewConversation(
+        title: '梦记收纳',
+      );
 
-    expect(dreamSecond.id, dreamFirst.id);
-    expect(memoSecond.id, memoFirst.id);
-    expect(memoFirst.id, isNot(dreamFirst.id));
-    expect(dreamAgain.id, dreamFirst.id);
+      expect(dreamSecond.id, dreamFirst.id);
+      expect(memoSecond.id, memoFirst.id);
+      expect(memoFirst.id, isNot(dreamFirst.id));
+      expect(dreamAgain.id, dreamFirst.id);
 
-    await assistantRepository.sendUserMessage(
-      threadId: memoFirst.id,
-      content: '明早记得带伞',
-    );
-    final AssistantThread memoAfterMessage = await controller
-        .startNewConversation(title: '事记收纳');
+      await assistantRepository.sendUserMessage(
+        threadId: memoFirst.id,
+        content: '明早记得带伞',
+      );
+      final AssistantThread memoAfterMessage = await controller
+          .startNewConversation(title: '事记收纳');
 
-    expect(memoAfterMessage.id, isNot(memoFirst.id));
-    expect(
-      assistantRepository.threads
-          .where(
-            (AssistantThread thread) =>
-                thread.title == '梦记收纳' &&
-                assistantRepository.messagesForThread(thread.id).isEmpty,
-          )
-          .length,
-      1,
-    );
-    expect(
-      assistantRepository.threads
-          .where(
-            (AssistantThread thread) =>
-                thread.title == '事记收纳' &&
-                assistantRepository.messagesForThread(thread.id).isEmpty,
-          )
-          .length,
-      1,
-    );
-  });
+      expect(memoAfterMessage.id, isNot(memoFirst.id));
+      expect(
+        assistantRepository.threads
+            .where(
+              (AssistantThread thread) =>
+                  thread.title == '梦记收纳' &&
+                  assistantRepository.messagesForThread(thread.id).isEmpty,
+            )
+            .length,
+        1,
+      );
+      expect(
+        assistantRepository.threads
+            .where(
+              (AssistantThread thread) =>
+                  thread.title == '事记收纳' &&
+                  assistantRepository.messagesForThread(thread.id).isEmpty,
+            )
+            .length,
+        1,
+      );
+    },
+  );
 
   test(
     'submitPrompt returns busy when the active thread is already streaming',

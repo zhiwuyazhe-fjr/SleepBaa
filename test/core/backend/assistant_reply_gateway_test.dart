@@ -161,6 +161,36 @@ void main() {
     expect(completed.undoPayload, containsPair('previousUnknown', true));
   });
 
+  test('cloudbase assistant reply gateway calls agent undo endpoint', () async {
+    final _FakeStreamCloudBaseAppApiClient appApiClient =
+        _FakeStreamCloudBaseAppApiClient(
+          postSseBehaviors: <Future<Stream<CloudBaseSseFrame>> Function()>[],
+          postResponse: const <String, dynamic>{
+            'status': 'applied',
+            'call': <String, dynamic>{'id': 'call-1', 'undoStatus': 'applied'},
+            'updatedSurfaces': <String>['home_pre_sleep'],
+          },
+        );
+    final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
+      appApiClient: appApiClient,
+    );
+    final CloudBaseAssistantReplyGateway gateway =
+        CloudBaseAssistantReplyGateway(
+          appApiClient: appApiClient,
+          snapshotStore: snapshotStore,
+        );
+
+    final AssistantToolUndoResult result = await gateway.undoToolCall(
+      toolCallId: 'call-1',
+    );
+
+    expect(result.applied, true);
+    expect(result.callId, 'call-1');
+    expect(result.updatedSurfaces, contains('home_pre_sleep'));
+    expect(appApiClient.lastPostPath, '/api/agent/tool-calls/call-1/undo');
+    expect(appApiClient.bootstrapCallCount, 1);
+  });
+
   test(
     'cloudbase assistant reply gateway does not retry after reply delta has started',
     () async {
@@ -437,34 +467,38 @@ void main() {
 }
 
 class _FakeStreamCloudBaseAppApiClient extends CloudBaseAppApiClient {
-  _FakeStreamCloudBaseAppApiClient({required this.postSseBehaviors})
-    : super(
-        environment: const AppEnvironment(
-          target: AppBackendTarget.production,
-          appIdPrefix: 'com.dormsleep.app',
-          cloudbaseEnvId: 'demo-env',
-          cloudbaseAuthBaseUrl: 'https://example.com',
-          cloudbaseAppApiBaseUrl: 'https://example.com',
-          cloudbasePublishableKey: 'publishable-key',
-          cloudbaseClientId: 'demo-env',
-        ),
-        sessionStore: _FakeSessionStore(),
-        authClient: CloudBaseAuthClient(
-          environment: const AppEnvironment(
-            target: AppBackendTarget.production,
-            appIdPrefix: 'com.dormsleep.app',
-            cloudbaseEnvId: 'demo-env',
-            cloudbaseAuthBaseUrl: 'https://example.com',
-            cloudbaseAppApiBaseUrl: 'https://example.com',
-            cloudbasePublishableKey: 'publishable-key',
-            cloudbaseClientId: 'demo-env',
-          ),
-        ),
-      );
+  _FakeStreamCloudBaseAppApiClient({
+    required this.postSseBehaviors,
+    this.postResponse = const <String, dynamic>{},
+  }) : super(
+         environment: const AppEnvironment(
+           target: AppBackendTarget.production,
+           appIdPrefix: 'com.dormsleep.app',
+           cloudbaseEnvId: 'demo-env',
+           cloudbaseAuthBaseUrl: 'https://example.com',
+           cloudbaseAppApiBaseUrl: 'https://example.com',
+           cloudbasePublishableKey: 'publishable-key',
+           cloudbaseClientId: 'demo-env',
+         ),
+         sessionStore: _FakeSessionStore(),
+         authClient: CloudBaseAuthClient(
+           environment: const AppEnvironment(
+             target: AppBackendTarget.production,
+             appIdPrefix: 'com.dormsleep.app',
+             cloudbaseEnvId: 'demo-env',
+             cloudbaseAuthBaseUrl: 'https://example.com',
+             cloudbaseAppApiBaseUrl: 'https://example.com',
+             cloudbasePublishableKey: 'publishable-key',
+             cloudbaseClientId: 'demo-env',
+           ),
+         ),
+       );
 
   final List<Future<Stream<CloudBaseSseFrame>> Function()> postSseBehaviors;
+  final Map<String, dynamic> postResponse;
   int postSseCallCount = 0;
   int bootstrapCallCount = 0;
+  String? lastPostPath;
 
   @override
   bool get isConfigured => true;
@@ -483,6 +517,15 @@ class _FakeStreamCloudBaseAppApiClient extends CloudBaseAppApiClient {
     expect(path, '/api/agent/run/stream');
     postSseCallCount += 1;
     return postSseBehaviors[postSseCallCount - 1]();
+  }
+
+  @override
+  Future<Map<String, dynamic>> post(
+    String path, {
+    Map<String, dynamic> body = const <String, dynamic>{},
+  }) async {
+    lastPostPath = path;
+    return postResponse;
   }
 }
 

@@ -98,6 +98,42 @@ class AssistantCaptureResult {
   final List<String> updatedSurfaces;
 }
 
+class AssistantToolUndoResult {
+  const AssistantToolUndoResult({
+    required this.status,
+    required this.callId,
+    this.updatedSurfaces = const <String>[],
+    this.alreadyApplied = false,
+    this.errorMessage,
+  });
+
+  factory AssistantToolUndoResult.fromJson(
+    Map<String, dynamic> json, {
+    String? errorMessage,
+  }) {
+    final Map<String, dynamic> call = _mapOf(json['call']);
+    return AssistantToolUndoResult(
+      status: json['status'] as String? ?? 'unavailable',
+      callId:
+          call['id'] as String? ??
+          call['callId'] as String? ??
+          json['callId'] as String? ??
+          '',
+      updatedSurfaces: _stringList(json['updatedSurfaces']),
+      alreadyApplied: json['alreadyApplied'] == true,
+      errorMessage: errorMessage,
+    );
+  }
+
+  final String status;
+  final String callId;
+  final List<String> updatedSurfaces;
+  final bool alreadyApplied;
+  final String? errorMessage;
+
+  bool get applied => status == 'applied';
+}
+
 enum AssistantStreamEventType {
   ack,
   planningStarted,
@@ -208,6 +244,8 @@ abstract interface class AssistantReplyGateway {
     required String clientAssistantMessageId,
     required Dorm dorm,
   });
+
+  Future<AssistantToolUndoResult> undoToolCall({required String toolCallId});
 }
 
 class StubAssistantReplyGateway implements AssistantReplyGateway {
@@ -391,6 +429,13 @@ class StubAssistantReplyGateway implements AssistantReplyGateway {
       ),
     );
   }
+
+  @override
+  Future<AssistantToolUndoResult> undoToolCall({
+    required String toolCallId,
+  }) async {
+    return AssistantToolUndoResult(status: 'applied', callId: toolCallId);
+  }
 }
 
 class CloudBaseAssistantReplyGateway implements AssistantReplyGateway {
@@ -404,6 +449,34 @@ class CloudBaseAssistantReplyGateway implements AssistantReplyGateway {
   final CloudBaseSnapshotStore _snapshotStore;
   bool _reconcileQueued = false;
   bool _reconcileInFlight = false;
+
+  @override
+  Future<AssistantToolUndoResult> undoToolCall({
+    required String toolCallId,
+  }) async {
+    try {
+      final Map<String, dynamic> payload = await _appApiClient.post(
+        '/api/agent/tool-calls/${Uri.encodeComponent(toolCallId)}/undo',
+        body: const <String, dynamic>{},
+      );
+      final AssistantToolUndoResult result = AssistantToolUndoResult.fromJson(
+        payload,
+      );
+      if (result.updatedSurfaces.isNotEmpty) {
+        await _snapshotStore.refresh();
+      }
+      return result;
+    } on CloudBaseAppApiException catch (error) {
+      final Map<String, dynamic> resultMap = _mapOf(error.body?['result']);
+      if (resultMap.isNotEmpty) {
+        return AssistantToolUndoResult.fromJson(
+          resultMap,
+          errorMessage: error.message,
+        );
+      }
+      rethrow;
+    }
+  }
 
   @override
   Stream<AssistantStreamEvent> streamReply({

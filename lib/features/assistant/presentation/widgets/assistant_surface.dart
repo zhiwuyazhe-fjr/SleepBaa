@@ -25,10 +25,20 @@ class AssistantSurfaceMetrics {
 }
 
 class AssistantToolStatus {
-  const AssistantToolStatus({required this.icon, required this.label});
+  const AssistantToolStatus({
+    required this.icon,
+    required this.label,
+    this.undoCallId,
+    this.undoStatus,
+  });
 
   final IconData icon;
   final String label;
+  final String? undoCallId;
+  final String? undoStatus;
+
+  bool get canUndo =>
+      undoCallId != null && undoCallId!.isNotEmpty && undoStatus == 'available';
 }
 
 class AssistantConversationSlice {
@@ -743,11 +753,13 @@ class AssistantInlineStatusList extends StatelessWidget {
     required this.statuses,
     required this.metrics,
     required this.palette,
+    this.onUndoPressed,
   });
 
   final List<AssistantToolStatus> statuses;
   final AssistantSurfaceMetrics metrics;
   final AssistantSurfacePalette palette;
+  final ValueChanged<AssistantToolStatus>? onUndoPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -785,6 +797,26 @@ class AssistantInlineStatusList extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (status.canUndo && onUndoPressed != null) ...<Widget>[
+                  SizedBox(width: metrics.unit(8)),
+                  TextButton.icon(
+                    key: ValueKey<String>(
+                      'assistant-undo-${status.undoCallId}',
+                    ),
+                    onPressed: () => onUndoPressed!(status),
+                    icon: Icon(Icons.undo, size: metrics.unit(13)),
+                    label: const Text('撤销'),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      minimumSize: Size(metrics.unit(50), metrics.unit(28)),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: metrics.unit(8),
+                        vertical: 0,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -878,7 +910,9 @@ List<AssistantToolStatus> assistantToolStatusesFromSurfaceIds(
   final Set<String> seenLabels = <String>{};
   for (final String surfaceId in surfaceIds) {
     final AssistantToolStatus? status = _toolStatusForSurfaceId(surfaceId);
-    if (status == null || !seenLabels.add(status.label)) {
+    final String seenKey =
+        '${status?.label}:${status?.undoCallId ?? ''}:${status?.undoStatus ?? ''}';
+    if (status == null || !seenLabels.add(seenKey)) {
       continue;
     }
     statuses.add(status);
@@ -887,7 +921,12 @@ List<AssistantToolStatus> assistantToolStatusesFromSurfaceIds(
 }
 
 AssistantToolStatus? _toolStatusForSurfaceId(String surfaceId) {
-  final String normalized = surfaceId.trim().toLowerCase();
+  final String raw = surfaceId.trim();
+  final AssistantToolStatus? undoStatus = _undoToolStatusForSurfaceId(raw);
+  if (undoStatus != null) {
+    return undoStatus;
+  }
+  final String normalized = raw.toLowerCase();
   switch (normalized) {
     case 'agent_planning':
       return const AssistantToolStatus(
@@ -910,15 +949,9 @@ AssistantToolStatus? _toolStatusForSurfaceId(String surfaceId) {
         label: '已检查梦记',
       );
     case 'agent_tool_interference_save_tonight':
-      return const AssistantToolStatus(
-        icon: Icons.tune,
-        label: '今晚干扰已更新',
-      );
+      return const AssistantToolStatus(icon: Icons.tune, label: '今晚干扰已更新');
     case 'agent_tool_plan_generate_tonight':
-      return const AssistantToolStatus(
-        icon: Icons.route,
-        label: '今晚计划已生成',
-      );
+      return const AssistantToolStatus(icon: Icons.route, label: '今晚计划已生成');
     case 'agent_tool_cards_refresh':
       return const AssistantToolStatus(
         icon: Icons.dashboard_customize_outlined,
@@ -935,20 +968,14 @@ AssistantToolStatus? _toolStatusForSurfaceId(String surfaceId) {
         label: '宿舍状态已同步',
       );
     case 'agent_tool_dorm_rules_save':
-      return const AssistantToolStatus(
-        icon: Icons.rule,
-        label: '宿舍公约已提交',
-      );
+      return const AssistantToolStatus(icon: Icons.rule, label: '宿舍公约已提交');
     case 'agent_tool_notification_write':
       return const AssistantToolStatus(
         icon: Icons.notifications_active,
         label: '通知已写入',
       );
     case 'agent_tool_capture_save':
-      return const AssistantToolStatus(
-        icon: Icons.edit_note,
-        label: '记录已收纳',
-      );
+      return const AssistantToolStatus(icon: Icons.edit_note, label: '记录已收纳');
     case 'agent_tool_navigation_suggest':
       return const AssistantToolStatus(
         icon: Icons.open_in_new,
@@ -966,10 +993,7 @@ AssistantToolStatus? _toolStatusForSurfaceId(String surfaceId) {
         label: '有动作未完成',
       );
     case 'agent_done':
-      return const AssistantToolStatus(
-        icon: Icons.task_alt,
-        label: '中枢任务已完成',
-      );
+      return const AssistantToolStatus(icon: Icons.task_alt, label: '中枢任务已完成');
     case 'alarm':
     case 'sleep_alarm':
     case 'bedtime_alarm':
@@ -1007,6 +1031,46 @@ AssistantToolStatus? _toolStatusForSurfaceId(String surfaceId) {
           label: '小眠已调用工具',
         );
       }
+      return null;
+  }
+}
+
+AssistantToolStatus? _undoToolStatusForSurfaceId(String surfaceId) {
+  final List<String> parts = surfaceId.split(':');
+  if (parts.length != 2 || parts[1].trim().isEmpty) {
+    return null;
+  }
+  final String callId = parts[1].trim();
+  switch (parts[0].trim().toLowerCase()) {
+    case 'agent_undo_available':
+      return AssistantToolStatus(
+        icon: Icons.undo,
+        label: '可撤销一项动作',
+        undoCallId: callId,
+        undoStatus: 'available',
+      );
+    case 'agent_undo_running':
+      return AssistantToolStatus(
+        icon: Icons.pending_actions_outlined,
+        label: '正在撤销动作',
+        undoCallId: callId,
+        undoStatus: 'running',
+      );
+    case 'agent_undo_applied':
+      return AssistantToolStatus(
+        icon: Icons.task_alt,
+        label: '已撤销一项动作',
+        undoCallId: callId,
+        undoStatus: 'applied',
+      );
+    case 'agent_undo_failed':
+      return AssistantToolStatus(
+        icon: Icons.error_outline,
+        label: '撤销未完成',
+        undoCallId: callId,
+        undoStatus: 'failed',
+      );
+    default:
       return null;
   }
 }

@@ -66,6 +66,31 @@ class AssistantConversationController extends ChangeNotifier {
     );
   }
 
+  Future<bool> undoToolCall(String toolCallId) async {
+    final String normalizedCallId = toolCallId.trim();
+    if (normalizedCallId.isEmpty) {
+      return false;
+    }
+    _setUndoSurfaceToken(normalizedCallId, 'agent_undo_running');
+    try {
+      final AssistantToolUndoResult result = await _assistantReplyGateway
+          .undoToolCall(toolCallId: normalizedCallId);
+      if (!result.applied) {
+        _setUndoSurfaceToken(normalizedCallId, 'agent_undo_failed');
+        return false;
+      }
+      _setUndoSurfaceToken(
+        normalizedCallId,
+        'agent_undo_applied',
+        extraSurfaceIds: result.updatedSurfaces,
+      );
+      return true;
+    } catch (_) {
+      _setUndoSurfaceToken(normalizedCallId, 'agent_undo_failed');
+      return false;
+    }
+  }
+
   String? get latestUserPrompt {
     for (final AssistantMessage message in currentMessages.reversed) {
       if (message.role == AssistantMessageRole.user &&
@@ -262,10 +287,7 @@ class AssistantConversationController extends ChangeNotifier {
     return _assistantRepository.messagesForThread(thread.id).isEmpty;
   }
 
-  bool _isReusableBlankThread(
-    AssistantThread? thread,
-    String normalizedTitle,
-  ) {
+  bool _isReusableBlankThread(AssistantThread? thread, String normalizedTitle) {
     if (!_isBlankThread(thread)) {
       return false;
     }
@@ -378,7 +400,7 @@ class AssistantConversationController extends ChangeNotifier {
                 clientAssistantMessageId,
                 event.assistantMessageId,
               ],
-              surfaceIds: event.updatedSurfaces,
+              surfaceIds: _surfaceIdsForAgentEvent(event),
             );
             break;
           case AssistantStreamEventType.ack:
@@ -538,7 +560,7 @@ class AssistantConversationController extends ChangeNotifier {
                 clientAssistantMessageId,
                 event.assistantMessageId,
               ],
-              surfaceIds: event.updatedSurfaces,
+              surfaceIds: _surfaceIdsForAgentEvent(event),
             );
             break;
           case AssistantStreamEventType.ack:
@@ -720,6 +742,82 @@ class AssistantConversationController extends ChangeNotifier {
     if (changed) {
       notifyListeners();
     }
+  }
+
+  List<String> _surfaceIdsForAgentEvent(AssistantStreamEvent event) {
+    final List<String> surfaces = List<String>.from(event.updatedSurfaces);
+    if (_shouldExposeUndo(event)) {
+      surfaces.add('agent_undo_available:${event.toolCallId!.trim()}');
+    }
+    return surfaces;
+  }
+
+  bool _shouldExposeUndo(AssistantStreamEvent event) {
+    final String toolCallId = event.toolCallId?.trim() ?? '';
+    return event.type == AssistantStreamEventType.actionCommitted &&
+        event.committed == true &&
+        event.undoable == true &&
+        toolCallId.isNotEmpty &&
+        (event.toolName == 'interference.save_tonight' ||
+            event.toolName == 'sleep.mode.exit');
+  }
+
+  void _setUndoSurfaceToken(
+    String toolCallId,
+    String status, {
+    Iterable<String> extraSurfaceIds = const <String>[],
+  }) {
+    final String token = '$status:$toolCallId';
+    bool changed = false;
+    for (final MapEntry<String, List<String>> entry
+        in _updatedSurfacesByMessageId.entries.toList()) {
+      final List<String> current = entry.value;
+      final List<String> next = current
+          .where(
+            (String surfaceId) => !_isUndoSurfaceForCall(surfaceId, toolCallId),
+          )
+          .toList(growable: true);
+      for (final String surfaceId in <String>[...extraSurfaceIds, token]) {
+        final String normalized = surfaceId.trim();
+        if (normalized.isNotEmpty && !next.contains(normalized)) {
+          next.add(normalized);
+        }
+      }
+      if (!listEquals(current, next)) {
+        _updatedSurfacesByMessageId[entry.key] = next;
+        changed = true;
+      }
+    }
+    if (!changed) {
+      final String? latestMessageId = _latestAssistantMessageId();
+      if (latestMessageId != null) {
+        _recordUpdatedSurfaces(
+          messageIds: <String?>[latestMessageId],
+          surfaceIds: <String>[...extraSurfaceIds, token],
+        );
+      }
+      return;
+    }
+    notifyListeners();
+  }
+
+  bool _isUndoSurfaceForCall(String surfaceId, String toolCallId) {
+    final List<String> parts = surfaceId.split(':');
+    return parts.length == 2 &&
+        parts[1] == toolCallId &&
+        (parts[0] == 'agent_undo_available' ||
+            parts[0] == 'agent_undo_running' ||
+            parts[0] == 'agent_undo_applied' ||
+            parts[0] == 'agent_undo_failed');
+  }
+
+  String? _latestAssistantMessageId() {
+    for (final AssistantMessage message in currentMessages.reversed) {
+      if (message.role == AssistantMessageRole.assistant) {
+        return message.id;
+      }
+    }
+    return null;
   }
 
   void _relayState() {
