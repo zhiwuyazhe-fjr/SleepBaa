@@ -3944,13 +3944,31 @@ export class FirestoreRepository implements AssistantDataRepository {
       const ageDays = Number.isNaN(updatedAt)
         ? 365
         : Math.max(0, (Date.now() - updatedAt) / (24 * 60 * 60 * 1000));
-      const recencyScore = Math.max(0, 15 - ageDays);
+      const storedDecay =
+        value.decayScore == null ? null : asNumber(value.decayScore, 1);
+      const decayScore =
+        storedDecay == null
+          ? Math.max(0.1, 1 - ageDays / 90)
+          : Math.max(0.05, Math.min(1, storedDecay));
+      const recencyScore = Math.max(0, 15 - ageDays) * decayScore;
       const kindScore =
         allowedKinds.size === 0 || allowedKinds.has(kind) ? 8 : 0;
       const overlapScore = queryTokens.length === 0 ? 0 : overlapCount * 12;
-      const salienceScore = asNumber(value.salience, 0.5) * 20;
+      const salienceScore = asNumber(value.salience, 0.5) * 20 * decayScore;
+      const confidenceScore = asNumber(value.confidence, 0.5) * 8;
+      const effectivenessScore =
+        value.effectivenessScore == null
+          ? 0
+          : Math.min(12, Math.abs(asNumber(value.effectivenessScore, 0)) * 12);
       return {
-        score: salienceScore + overlapScore + recencyScore + kindScore,
+        docId: asString(doc._id, asString(value.id)),
+        score:
+          salienceScore +
+          overlapScore +
+          recencyScore +
+          kindScore +
+          confidenceScore +
+          effectivenessScore,
         item: {
           id: asString(value.id, asString(value._id)),
           kind: asString(value.kind, "profile"),
@@ -3962,8 +3980,7 @@ export class FirestoreRepository implements AssistantDataRepository {
           sourceThreadId: asString(value.sourceThreadId) || null,
           sourceMessageId: asString(value.sourceMessageId) || null,
           salience: asNumber(value.salience, 0.5),
-          decayScore:
-            value.decayScore == null ? null : asNumber(value.decayScore, 1),
+          decayScore,
           contradictionGroup: asString(value.contradictionGroup) || null,
           evidenceRefs: asStringArray(value.evidenceRefs),
           sourceActionId: asString(value.sourceActionId) || null,
@@ -3980,10 +3997,24 @@ export class FirestoreRepository implements AssistantDataRepository {
       };
     });
 
-    return scored
+    const selected = scored
       .sort((left, right) => right.score - left.score)
-      .slice(0, limit)
-      .map((entry) => entry.item);
+      .slice(0, limit);
+    const usedAt = nowIso();
+    await Promise.all(
+      selected
+        .map((entry) => entry.docId)
+        .filter(Boolean)
+        .map((docId) =>
+          this.store.merge(Collections.assistantMemoryItems, docId, {
+            lastUsedAt: usedAt,
+          }),
+        ),
+    );
+    return selected.map((entry) => ({
+      ...entry.item,
+      lastUsedAt: usedAt,
+    }));
   }
 
   private async ensureUserBootstrap(uid: string): Promise<void> {

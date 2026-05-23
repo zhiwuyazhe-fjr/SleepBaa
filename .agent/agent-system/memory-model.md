@@ -31,10 +31,16 @@
 - 多次有效建议升高 `effectivenessScore` 与 `salience`。
 - 多次无效或被拒绝建议降低 `effectivenessScore`，后续 planner 减少选择。
 
+## 第二轮落地状态
+
+- reply insight、legacy memory、morning feedback 都会补齐 `decayScore`、`evidenceRefs`、`contradictionGroup`、`sourceAgentRunId` 等扩展字段。
+- 晨间反馈会把有效建议写成 `intervention_effect` 正向证据，把无效建议写成负向证据，并生成 `strategy_weight` 摘要。
+- 记忆检索排序已使用衰减分、置信度和行动有效性分；被选中的记忆会刷新 `lastUsedAt`。
+- TonightPlan 的行动排序已读取 `intervention_effect` / `strategy_weight`，让有效行动升权、无效行动降权。
+
 ## 自我进化边界
 
 - 不做代码自修改。
 - 只更新可审计的画像、偏好、策略权重和行动效果。
 - 高风险动作仍需要硬确认。
 - 不输出医疗诊断或治疗结论。
-

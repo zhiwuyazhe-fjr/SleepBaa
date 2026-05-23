@@ -8,11 +8,14 @@ import {
   classifyIntent,
 } from "../providers/ai_provider";
 import { AssistantDataRepository } from "../repositories/firestore_repositories";
+import {
+  buildMemoryItemsFromCandidates,
+  buildMorningFeedbackMemoryItems,
+} from "../services/assistant_memory_governance";
 import { buildCardSnapshots } from "../services/materialize_card_snapshots";
 import {
   AssistantContext,
   AssistantIntent,
-  AssistantMemoryCandidate,
   AssistantMemoryItem,
   AssistantRunDoc,
   AssistantRunSourceMode,
@@ -247,6 +250,12 @@ function buildLegacyMemoryItems(
       sourceThreadId: threadId,
       sourceMessageId: null,
       salience: item.confidence,
+      decayScore: 1,
+      contradictionGroup: `${item.kind}:${normalized.toLowerCase().slice(0, 64)}`,
+      evidenceRefs: ["assistant_messages", `thread:${threadId}`],
+      sourceActionId: null,
+      sourceAgentRunId: null,
+      effectivenessScore: null,
       lastUsedAt: timestamp,
       sourceRefs: ["assistant_messages", `thread:${threadId}`],
       createdAt: timestamp,
@@ -470,35 +479,6 @@ function mergeInterferenceSignals(
       } satisfies InterferenceSnapshotDoc),
     updatedAt: nowIso(),
   };
-}
-
-function buildMemoryItemsFromCandidates(
-  uid: string,
-  candidates: AssistantMemoryCandidate[],
-): AssistantMemoryItem[] {
-  const timestamp = nowIso();
-  return candidates.map((item) => {
-    const canonicalKey = item.canonicalKey.trim();
-    const safeKey = canonicalKey
-      .replace(/[^a-z0-9\u4e00-\u9fff]+/gi, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 64);
-    return {
-      id: `${uid}:${item.kind}:${safeKey || randomUUID()}`,
-      kind: item.kind,
-      content: item.content,
-      canonicalKey,
-      keywords: item.keywords,
-      confidence: item.confidence,
-      sourceThreadId: item.sourceThreadId ?? null,
-      sourceMessageId: item.sourceMessageId ?? null,
-      salience: item.salience,
-      lastUsedAt: timestamp,
-      sourceRefs: item.sourceRefs,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-  });
 }
 
 function emptyInsightExtraction(): TurnInsightExtraction {
@@ -897,10 +877,11 @@ export async function finalizeAssistantReplyPostprocess(params: {
     insightResult.value.updatedSurfaces,
     ["assistant_context"],
   );
-  const memoryItems = buildMemoryItemsFromCandidates(
-    params.uid,
-    insightResult.value.memoryCandidates,
-  );
+  const memoryItems = buildMemoryItemsFromCandidates({
+    uid: params.uid,
+    candidates: insightResult.value.memoryCandidates,
+    sourceAgentRunId: params.phase.runId,
+  });
   const fallbackMemory =
     memoryItems.length > 0
       ? memoryItems
@@ -1257,10 +1238,11 @@ async function buildReplyOutcome(params: {
     reply: replyResult.value,
   });
 
-  const memoryItems = buildMemoryItemsFromCandidates(
-    params.uid,
-    insightResult.value.memoryCandidates,
-  );
+  const memoryItems = buildMemoryItemsFromCandidates({
+    uid: params.uid,
+    candidates: insightResult.value.memoryCandidates,
+    sourceAgentRunId: runId,
+  });
   const fallbackMemory =
     memoryItems.length > 0
       ? memoryItems
@@ -1599,9 +1581,9 @@ export async function handleSleepSessionChange(
   }
 
   if (afterStatus === "completed" && beforeStatus !== "completed") {
-    const review: MorningReviewResult = (
-      await provider.analyzeFeedback(context, sessionId)
-    ).value;
+    const runId = randomUUID();
+    const reviewResult = await provider.analyzeFeedback(context, sessionId);
+    const review: MorningReviewResult = reviewResult.value;
     const nextState: UserStateDoc = {
       ...previous,
       currentPhase: "home_pre_sleep",
@@ -1626,6 +1608,33 @@ export async function handleSleepSessionChange(
         "assistant_context",
       ]),
     );
+    const feedbackMemory = buildMorningFeedbackMemoryItems({
+      uid,
+      sessionId,
+      review,
+      runId,
+    });
+    if (feedbackMemory.length > 0) {
+      await repo.upsertAssistantMemoryItems(uid, feedbackMemory);
+    }
+    await persistRun(repo, uid, runId, {
+      eventType: "morning_feedback_analysis",
+      threadId: previous.latestThreadId ?? null,
+      provider: reviewResult.providerName,
+      model: reviewResult.modelName,
+      status: runStatusFromSourceMode(reviewResult.sourceMode),
+      sourceMode: reviewResult.sourceMode,
+      inputRefs: ["sleep_sessions", "user_state", "assistant_memory_items"],
+      outputRefs: [
+        "user_state.feedbackLoop",
+        "assistant_memory_items",
+        "profile_report",
+        "morning_feedback",
+        "assistant_context",
+      ],
+      error: reviewResult.errorMessage ?? null,
+      createdAt: nowIso(),
+    });
   }
 }
 

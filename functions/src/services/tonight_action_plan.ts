@@ -369,16 +369,48 @@ function canonicalActionId(action: Partial<RecommendedAction>): ActionId | null 
 
 function feedbackScore(context: AssistantContext, action: CatalogAction): number {
   const loop = context.userState?.feedbackLoop;
-  if (!loop) {
-    return 0;
-  }
-  const effective = loop.effectiveActions.some(
-    (item) => item === action.id || item.includes(action.title),
-  );
-  const ineffective = loop.ineffectiveActions.some(
-    (item) => item === action.id || item.includes(action.title),
-  );
-  return (effective ? 10 : 0) + (ineffective ? -14 : 0);
+  const effective =
+    loop?.effectiveActions.some(
+      (item) => item === action.id || item.includes(action.title),
+    ) ?? false;
+  const ineffective =
+    loop?.ineffectiveActions.some(
+      (item) => item === action.id || item.includes(action.title),
+    ) ?? false;
+  const memoryScore = (context.longTermMemory ?? []).reduce((sum, item) => {
+    if (item.kind !== "intervention_effect" && item.kind !== "strategy_weight") {
+      return sum;
+    }
+    const haystack = [
+      item.content,
+      item.canonicalKey ?? "",
+      item.sourceActionId ?? "",
+      ...(item.keywords ?? []),
+    ]
+      .join(" ")
+      .toLowerCase();
+    const actionText = `${action.id} ${action.title} ${action.subtitle}`.toLowerCase();
+    const matches =
+      haystack.includes(action.id.toLowerCase()) ||
+      haystack.includes(action.title.toLowerCase()) ||
+      action.aliases.some((alias) => alias.test(haystack)) ||
+      actionText
+        .split(/\s+/)
+        .filter((token) => token.length >= 2)
+        .some((token) => haystack.includes(token));
+    if (!matches) {
+      return sum;
+    }
+    const effect = item.effectivenessScore ?? 0;
+    if (effect > 0) {
+      return sum + Math.min(12, effect * 12);
+    }
+    if (effect < 0) {
+      return sum - Math.min(16, Math.abs(effect) * 16);
+    }
+    return sum;
+  }, 0);
+  return (effective ? 10 : 0) + (ineffective ? -14 : 0) + memoryScore;
 }
 
 function moodScore(context: AssistantContext, action: CatalogAction): number {

@@ -725,6 +725,61 @@ test(
 );
 
 test(
+  "morning feedback writes intervention effect memory for future planning",
+  { concurrency: false },
+  async () => {
+    await withLocalAppApiServer(async ({ baseUrl, uid }) => {
+      const sessionId = `${uid}-feedback-memory-session`;
+      const response = await fetch(`${baseUrl}/api/feedback/morning`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-debug-uid": uid,
+        },
+        body: JSON.stringify({
+          sessionId,
+          session: {
+            id: sessionId,
+            startedAt: "2026-05-22T15:00:00.000Z",
+            endedAt: "2026-05-22T23:00:00.000Z",
+            status: "completed",
+          },
+          summary: {
+            totalSleepHours: 7.5,
+            sleepQuality: 80,
+            restedLevel: 78,
+          },
+          feedback: [],
+        }),
+      });
+
+      assert.equal(response.status, 200);
+      const repo = createRepositoryFromEnv();
+      const context = await repo.buildAssistantContext(uid, undefined, {
+        memoryLimit: 10,
+        memoryKinds: ["intervention_effect", "strategy_weight"],
+      });
+      const memory = context.longTermMemory ?? [];
+      assert.ok(
+        memory.some(
+          (item) =>
+            item.kind === "intervention_effect" &&
+            item.effectivenessScore === 1,
+        ),
+      );
+      assert.ok(
+        memory.some(
+          (item) =>
+            item.kind === "intervention_effect" &&
+            item.effectivenessScore === -1,
+        ),
+      );
+      assert.ok(memory.some((item) => item.kind === "strategy_weight"));
+    });
+  },
+);
+
+test(
   "sleep exit keeps closed segments and tracked duration in bootstrap payload",
   { concurrency: false },
   async () => {

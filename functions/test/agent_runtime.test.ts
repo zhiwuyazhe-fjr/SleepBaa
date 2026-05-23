@@ -7,6 +7,8 @@ import {
 } from "../src/agent/agent_runtime";
 import { DeterministicAIProvider } from "../src/providers/ai_provider";
 import { createRepositoryFromEnv } from "../src/repositories/firestore_repositories";
+import { pickRecommendedActions } from "../src/services/tonight_action_plan";
+import { AssistantContext } from "../src/shared/types";
 
 test("agent tool registry exposes core sleep and dorm tools", () => {
   const names = listAgentTools().map((tool) => tool.name);
@@ -81,3 +83,88 @@ test("agent runtime executes a noisy dorm goal with audit records", async () => 
   assert.equal(storedRun.toolCallCount, result.toolCalls.length);
 });
 
+test("intervention effect memory adjusts future action ranking", () => {
+  const context: AssistantContext = {
+    assistantProfile: {
+      userId: "user-1",
+      assistantName: "Xiaomian",
+      identityPrompt: "sleep assistant",
+      tone: "gentle",
+      relationshipRole: "assistant",
+      updatedAt: "2026-05-23T00:00:00.000Z",
+    },
+    user: {
+      uid: "user-1",
+      displayName: "Test",
+      tagline: "",
+      role: "",
+      dormId: "dorm-1",
+    },
+    settings: {
+      sleepGoalHours: 7.5,
+      bedtimeReminderEnabled: true,
+      morningReminderEnabled: true,
+      dormAlertsEnabled: true,
+      bedtimeReminder: { hour: 23, minute: 0 },
+      preferredTrackTitle: "",
+      smartSuggestionsEnabled: true,
+      selectedNightMood: "calm",
+      homeQuickActionIds: [],
+    },
+    dorm: {
+      id: "dorm-1",
+      name: "Dorm 1",
+      overview: "",
+      noiseDb: 50,
+      lightLabel: "Dim",
+      quietLabel: "Stable",
+      members: [],
+      events: [],
+    },
+    recentSessions: [],
+    recentDreams: [],
+    recentMessages: [],
+    longTermMemory: [
+      {
+        id: "m-effective-audio",
+        kind: "intervention_effect",
+        content: "effective audio-ocean",
+        canonicalKey: "intervention_effect:audio-ocean",
+        keywords: ["audio-ocean"],
+        confidence: 0.9,
+        salience: 0.9,
+        decayScore: 1,
+        evidenceRefs: ["test"],
+        sourceActionId: "audio-ocean",
+        sourceAgentRunId: null,
+        effectivenessScore: 1,
+        lastUsedAt: null,
+        sourceRefs: ["test"],
+        createdAt: "2026-05-23T00:00:00.000Z",
+        updatedAt: "2026-05-23T00:00:00.000Z",
+      },
+      {
+        id: "m-ineffective-earplug",
+        kind: "intervention_effect",
+        content: "ineffective earplug",
+        canonicalKey: "intervention_effect:earplug",
+        keywords: ["earplug"],
+        confidence: 0.9,
+        salience: 0.9,
+        decayScore: 1,
+        evidenceRefs: ["test"],
+        sourceActionId: "earplug",
+        sourceAgentRunId: null,
+        effectivenessScore: -1,
+        lastUsedAt: null,
+        sourceRefs: ["test"],
+        createdAt: "2026-05-23T00:00:00.000Z",
+        updatedAt: "2026-05-23T00:00:00.000Z",
+      },
+    ],
+    userState: null,
+  };
+
+  const actions = pickRecommendedActions(context);
+  assert.equal(actions[0]?.id, "audio-ocean");
+});
