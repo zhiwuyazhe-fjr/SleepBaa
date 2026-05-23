@@ -13,9 +13,14 @@ import { AssistantContext } from "../src/shared/types";
 test("agent tool registry exposes core sleep and dorm tools", () => {
   const names = listAgentTools().map((tool) => tool.name);
   assert.ok(names.includes("context.read"));
+  assert.ok(names.includes("sleep.mode.enter"));
+  assert.ok(names.includes("sleep.mode.exit"));
   assert.ok(names.includes("plan.generate_tonight"));
   assert.ok(names.includes("interference.save_tonight"));
   assert.ok(names.includes("dorm.reminder.send"));
+  assert.ok(names.includes("dorm.invite.create"));
+  assert.ok(names.includes("report.profile.read"));
+  assert.ok(names.includes("audio.recommend"));
   assert.ok(names.includes("memory.upsert"));
 });
 
@@ -81,6 +86,40 @@ test("agent runtime executes a noisy dorm goal with audit records", async () => 
   assert.ok(storedRun);
   assert.equal(storedRun.status, "success");
   assert.equal(storedRun.toolCallCount, result.toolCalls.length);
+});
+
+test("agent runtime can enter sleep mode through tools", async () => {
+  const repo = createRepositoryFromEnv({
+    AI_PROVIDER_MODE: "deterministic",
+    CLOUDBASE_ENV_ID: undefined,
+    TCB_ENV: undefined,
+    SCF_NAMESPACE: undefined,
+  } as NodeJS.ProcessEnv);
+  const provider = new DeterministicAIProvider();
+  const uid = `agent-sleep-${Date.now()}-${Math.random()
+    .toString(16)
+    .slice(2)}`;
+  await repo.createDorm(uid, { name: "Sleep Dorm" });
+
+  const result = await runAgent({
+    repo,
+    provider,
+    uid,
+    threadId: `${uid}-thread`,
+    prompt: "Start sleep mode for me.",
+  });
+
+  assert.equal(result.status, "success");
+  assert.ok(result.updatedSurfaces.includes("sleep_mode"));
+  assert.ok(
+    result.toolCalls.some(
+      (call) =>
+        call.toolName === "sleep.mode.enter" && call.status === "success",
+    ),
+  );
+  const context = await repo.buildAssistantContext(uid);
+  assert.equal(context.userState?.currentPhase, "sleep_mode");
+  assert.ok(context.userState?.activeSessionId);
 });
 
 test("intervention effect memory adjusts future action ranking", () => {

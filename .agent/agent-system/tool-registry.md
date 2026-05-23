@@ -44,3 +44,13 @@
 - `/api/agent/runs/:id` 已返回 `run`、`plan`、`toolCalls`，可用于排查完整执行链路。
 - SSE 工具事件已带 `callId`、`undoable`、`committed`、`undoPayload`，前端可以将工具状态和后端审计记录对齐。
 - 高风险动作仍不会自动执行；被跳过的工具会写 `agent_tool_calls` 并发出 `tool_failed`，错误原因为 `hard_confirm_required`。
+
+## 第五轮新增工具
+
+| Tool | 风险 | 是否需要硬确认 | 说明 |
+| --- | --- | --- | --- |
+| `sleep.mode.enter` | write | 否 | 创建或复用睡眠会话，并同步宿舍睡眠状态 |
+| `sleep.mode.exit` | write | 否 | 退出睡眠模式，进入晨间反馈/报告刷新链路 |
+| `audio.recommend` | read | 否 | 基于音频目录返回助眠音频建议和页面入口 |
+| `report.profile.read` | read | 否 | 汇总最近睡眠、梦记和长期记忆，用于报告解读 |
+| `dorm.invite.create` | write | 否 | 创建宿舍邀请码，供宿舍协同入口调用 |

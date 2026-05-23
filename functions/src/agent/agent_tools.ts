@@ -5,7 +5,10 @@ import {
 } from "../providers/ai_provider";
 import { AssistantDataRepository } from "../repositories/firestore_repositories";
 import { buildCardSnapshots } from "../services/materialize_card_snapshots";
-import { prepareTonightPlan } from "../orchestrators/assistant_orchestrator";
+import {
+  handleSleepSessionChange,
+  prepareTonightPlan,
+} from "../orchestrators/assistant_orchestrator";
 import {
   AgentToolDefinitionDoc,
   AgentToolRisk,
@@ -76,6 +79,10 @@ function asStringArray(value: unknown): string[] {
   return value.map((item) => String(item));
 }
 
+function asList(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
 function asNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
@@ -127,6 +134,48 @@ function buildFallbackUserState(context: AssistantContext): UserStateDoc {
     feedbackLoop: null,
     updatedAt: nowIso(),
   };
+}
+
+function sleepDayKeyFromIso(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return nowIso().slice(0, 10);
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+function activeSessionId(context: AssistantContext): string {
+  return (
+    context.userState?.activeSessionId ||
+    context.recentSessions.find((session) => session.status === "active")?.id ||
+    ""
+  );
+}
+
+function closeSleepSegments(
+  value: unknown,
+  fallbackStartedAt: string,
+  endedAt: string,
+): JsonMap[] {
+  const segments = asList(value).map((item) => asMap(item));
+  const normalized =
+    segments.length > 0 ? segments : [{ startedAt: fallbackStartedAt }];
+  return normalized.map((segment, index) => {
+    const isLast = index === normalized.length - 1;
+    return {
+      ...segment,
+      endedAt: asString(segment.endedAt, isLast ? endedAt : ""),
+    };
+  });
+}
+
+function trackedDurationMinutes(startedAt: string, endedAt: string): number {
+  const start = Date.parse(startedAt);
+  const end = Date.parse(endedAt);
+  if (Number.isNaN(start) || Number.isNaN(end) || end <= start) {
+    return 0;
+  }
+  return Math.max(0, Math.round((end - start) / 60000));
 }
 
 function snapshot(params: {
@@ -381,6 +430,160 @@ const TOOLS: AgentTool[] = [
   },
   {
     definition: definition({
+      name: "sleep.mode.enter",
+      title: "进入睡眠模式",
+      description: "创建或复用当前睡眠会话，并同步宿舍睡眠状态。",
+      risk: "write",
+      undoable: true,
+    }),
+    async execute(input, state) {
+      const context = await ensureContext(state);
+      const existingActiveId = activeSessionId(context);
+      if (existingActiveId) {
+        return {
+          output: {
+            sessionId: existingActiveId,
+            status: "active",
+            reused: true,
+          },
+          updatedSurfaces: ["sleep_mode", "assistant_context"],
+        };
+      }
+      const startedAt = nowIso();
+      const sessionId = asString(input.sessionId, randomUUID());
+      const session = {
+        id: sessionId,
+        uid: state.uid,
+        startedAt,
+        endedAt: null,
+        sleepDayKey: sleepDayKeyFromIso(startedAt),
+        status: "active",
+        sleepModeActive: true,
+        dormId: context.dorm.id,
+        recommendations: context.userState?.tonightPlan?.recommendedActions ?? [],
+        selectedRecommendationIds: [],
+        segments: [{ startedAt, endedAt: null }],
+        trackedDurationMinutes: 0,
+        awakenings: [],
+        feedback: [],
+        summary: null,
+        updatedAt: startedAt,
+      };
+      await state.repo.saveSleepSession(session);
+      await state.repo.updateDormMemberStatus(state.uid, {
+        status: "sleeping",
+        sleepModeActive: true,
+        note: asString(input.note, "Agent started sleep mode."),
+      });
+      await handleSleepSessionChange(
+        state.repo,
+        state.provider,
+        state.uid,
+        sessionId,
+        null,
+        "active",
+      );
+      state.context = await state.repo.buildAssistantContext(
+        state.uid,
+        state.threadId ?? undefined,
+        { profile: "insight_full", memoryQuery: state.prompt },
+      );
+      return {
+        output: { sessionId, status: "active" },
+        updatedSurfaces: ["sleep_mode", "assistant_context"],
+        undoPayload: {
+          compensation: "Use sleep.mode.exit with this sessionId if needed.",
+          sessionId,
+        },
+        committed: true,
+      };
+    },
+  },
+  {
+    definition: definition({
+      name: "sleep.mode.exit",
+      title: "退出睡眠模式",
+      description: "结束当前睡眠模式并进入晨间反馈或报告刷新链路。",
+      risk: "write",
+      undoable: true,
+      inputSchema: objectSchema({
+        sessionId: stringSchema("Sleep session id. Optional when active."),
+        status: stringSchema("completed or awaitingFeedback."),
+      }),
+    }),
+    async execute(input, state) {
+      const context = await ensureContext(state);
+      const sessionId = asString(input.sessionId, activeSessionId(context));
+      if (!sessionId) {
+        return {
+          output: {
+            skipped: true,
+            reason: "missing_active_sleep_session",
+            route: "/assistant?flow=sleep_capture&mode=memo",
+          },
+        };
+      }
+      const existing = await state.repo.getSleepSession(sessionId);
+      if (!existing) {
+        return {
+          output: {
+            skipped: true,
+            reason: "sleep_session_not_found",
+            sessionId,
+          },
+        };
+      }
+      const endedAt = nowIso();
+      const startedAt = asString(existing.startedAt, endedAt);
+      const completed = asString(input.status) === "completed";
+      const nextStatus = completed ? "completed" : "awaitingFeedback";
+      const session = {
+        ...existing,
+        id: sessionId,
+        uid: state.uid,
+        endedAt,
+        status: nextStatus,
+        sleepModeActive: false,
+        segments: closeSleepSegments(existing.segments, startedAt, endedAt),
+        trackedDurationMinutes: asNumber(
+          existing.trackedDurationMinutes,
+          trackedDurationMinutes(startedAt, endedAt),
+        ),
+        updatedAt: endedAt,
+      };
+      await state.repo.saveSleepSession(session);
+      await state.repo.updateDormMemberStatus(state.uid, {
+        sleepModeActive: false,
+        status: "quiet",
+        note: "Agent exited sleep mode.",
+      });
+      await handleSleepSessionChange(
+        state.repo,
+        state.provider,
+        state.uid,
+        sessionId,
+        asString(existing.status) || null,
+        nextStatus,
+      );
+      state.context = await state.repo.buildAssistantContext(
+        state.uid,
+        state.threadId ?? undefined,
+        { profile: "insight_full", memoryQuery: state.prompt },
+      );
+      return {
+        output: { sessionId, status: nextStatus },
+        updatedSurfaces: [
+          "morning_feedback",
+          "profile_report",
+          "assistant_context",
+        ],
+        undoPayload: { previous: existing },
+        committed: true,
+      };
+    },
+  },
+  {
+    definition: definition({
       name: "dream.records.read",
       title: "读取梦记",
       description: "返回最近梦记摘要。",
@@ -406,6 +609,64 @@ const TOOLS: AgentTool[] = [
     async execute(_input, state) {
       return {
         output: await state.repo.getAudioTrackCatalog(state.uid),
+      };
+    },
+  },
+  {
+    definition: definition({
+      name: "audio.recommend",
+      title: "推荐睡眠音频",
+      description: "读取音频目录并返回适合当前夜间状态的音频入口。",
+      risk: "read",
+    }),
+    async execute(_input, state) {
+      const catalog = await state.repo.getAudioTrackCatalog(state.uid);
+      const tracks = asList((catalog as JsonMap).tracks).map((item) =>
+        asMap(item),
+      );
+      const track =
+        tracks.find((item) =>
+          /rain|ocean|breeze|wind|雨|海|风/i.test(asString(item.title)),
+        ) ??
+        tracks[0] ??
+        null;
+      return {
+        output: {
+          track,
+          route: "/sleep/audio_catalog",
+          count: tracks.length,
+        },
+      };
+    },
+  },
+  {
+    definition: definition({
+      name: "report.profile.read",
+      title: "读取睡眠报告摘要",
+      description: "汇总最近睡眠、梦记和长期记忆，用于报告解读与后续行动。",
+      risk: "read",
+    }),
+    async execute(_input, state) {
+      const context = await ensureContext(state);
+      const completed = context.recentSessions.filter(
+        (session) => session.totalSleepHours != null,
+      );
+      const averageSleepHours =
+        completed.length === 0
+          ? null
+          : completed.reduce(
+              (sum, session) => sum + (session.totalSleepHours ?? 0),
+              0,
+            ) / completed.length;
+      return {
+        output: {
+          recentSessionCount: context.recentSessions.length,
+          completedSessionCount: completed.length,
+          averageSleepHours,
+          dreamCount: context.recentDreams.length,
+          memoryCount: context.longTermMemory?.length ?? 0,
+          latestSession: context.recentSessions[0] ?? null,
+        },
       };
     },
   },
@@ -624,6 +885,31 @@ const TOOLS: AgentTool[] = [
         updatedSurfaces: ["assistant_context"],
         undoPayload: {
           compensation: "若产生待确认公约，可在宿舍公约页拒绝或重新提交。",
+        },
+        committed: true,
+      };
+    },
+  },
+  {
+    definition: definition({
+      name: "dorm.invite.create",
+      title: "创建宿舍邀请",
+      description: "创建一个可分享给室友的宿舍邀请码。",
+      risk: "write",
+      inputSchema: objectSchema({
+        expiresInHours: { type: "number", description: "Invite expiry hours." },
+      }),
+    }),
+    async execute(input, state) {
+      const result = await state.repo.createDormInvite(
+        state.uid,
+        asNumber(input.expiresInHours, 72),
+      );
+      return {
+        output: result,
+        updatedSurfaces: ["assistant_context"],
+        undoPayload: {
+          compensation: "Invite cannot be deleted here; create a new invite if it expires.",
         },
         committed: true,
       };

@@ -1028,6 +1028,9 @@ test(
         .map((tool) => tool.name);
       assert.ok(toolNames.includes("plan.generate_tonight"));
       assert.ok(toolNames.includes("memory.upsert"));
+      assert.ok(toolNames.includes("sleep.mode.enter"));
+      assert.ok(toolNames.includes("dorm.invite.create"));
+      assert.ok(toolNames.includes("report.profile.read"));
 
       const createDormResponse = await fetch(`${baseUrl}/api/dorm/create`, {
         method: "POST",

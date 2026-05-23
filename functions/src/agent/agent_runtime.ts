@@ -81,8 +81,44 @@ function parseGoal(prompt: string): AgentGoalDoc {
   };
 }
 
-function detectAgentIntent(prompt: string): AssistantIntent | "dorm_rules" {
+type ExtendedAgentIntent =
+  | AssistantIntent
+  | "dorm_rules"
+  | "dorm_invite"
+  | "sleep_mode_enter"
+  | "sleep_mode_exit"
+  | "report_review"
+  | "audio_support";
+
+function detectAgentIntent(prompt: string): ExtendedAgentIntent {
   const normalized = prompt.toLowerCase();
+  if (/invite|join dorm|邀请码|邀请|加入宿舍|拉室友/.test(normalized)) {
+    return "dorm_invite";
+  }
+  if (
+    /exit sleep|finish sleep|end sleep|退出睡眠|结束睡眠|醒了|起床/.test(
+      normalized,
+    )
+  ) {
+    return "sleep_mode_exit";
+  }
+  if (
+    /enter sleep|start sleep|sleep mode|开始睡眠|进入睡眠|睡眠模式/.test(
+      normalized,
+    )
+  ) {
+    return "sleep_mode_enter";
+  }
+  if (/report|weekly|summary|报告|复盘|趋势|画像/.test(normalized)) {
+    return "report_review";
+  }
+  if (
+    /audio|sound|rain|music|white noise|音频|白噪音|雨声|助眠/.test(
+      normalized,
+    )
+  ) {
+    return "audio_support";
+  }
   if (/公约|规则|约定|rules|agreement/.test(normalized)) {
     return "dorm_rules";
   }
@@ -226,6 +262,54 @@ function buildPlan(params: {
       input: { surfaces: ["home_pre_sleep", "assistant_context"] },
     });
     addMemoryStep(steps, params.prompt, "agent_action");
+  } else if (params.goal.intent === "sleep_mode_enter") {
+    addStep(steps, {
+      title: "进入睡眠模式",
+      toolName: "sleep.mode.enter",
+      input: { source: "agent_sleep_mode_enter" },
+    });
+    addStep(steps, {
+      title: "刷新睡眠模式卡片",
+      toolName: "cards.refresh",
+      input: { surfaces: ["sleep_mode", "assistant_context"] },
+    });
+    addMemoryStep(steps, params.prompt, "agent_action");
+  } else if (params.goal.intent === "sleep_mode_exit") {
+    addStep(steps, {
+      title: "退出睡眠模式",
+      toolName: "sleep.mode.exit",
+      input: { source: "agent_sleep_mode_exit" },
+    });
+    addStep(steps, {
+      title: "刷新晨间反馈与报告",
+      toolName: "cards.refresh",
+      input: {
+        surfaces: ["morning_feedback", "profile_report", "assistant_context"],
+      },
+    });
+    addMemoryStep(steps, params.prompt, "agent_action");
+  } else if (params.goal.intent === "report_review") {
+    addStep(steps, {
+      title: "读取睡眠报告摘要",
+      toolName: "report.profile.read",
+    });
+    addStep(steps, {
+      title: "刷新报告卡片",
+      toolName: "cards.refresh",
+      input: { surfaces: ["profile_report", "assistant_context"] },
+    });
+    addMemoryStep(steps, params.prompt, "sleep_pattern");
+  } else if (params.goal.intent === "audio_support") {
+    addStep(steps, {
+      title: "推荐睡眠音频",
+      toolName: "audio.recommend",
+    });
+    addStep(steps, {
+      title: "给出音频页面入口",
+      toolName: "navigation.suggest",
+      input: { route: "/sleep/audio_catalog", label: "打开助眠音频" },
+    });
+    addMemoryStep(steps, params.prompt, "preference");
   } else if (params.goal.intent === "dream_reflection") {
     addStep(steps, {
       title: "读取最近梦记",
@@ -253,6 +337,18 @@ function buildPlan(params: {
     });
     addStep(steps, {
       title: "刷新助手上下文",
+      toolName: "cards.refresh",
+      input: { surfaces: ["assistant_context"] },
+    });
+    addMemoryStep(steps, params.prompt, "dorm_context");
+  } else if (params.goal.intent === "dorm_invite") {
+    addStep(steps, {
+      title: "创建宿舍邀请",
+      toolName: "dorm.invite.create",
+      input: { expiresInHours: 72 },
+    });
+    addStep(steps, {
+      title: "刷新宿舍上下文",
       toolName: "cards.refresh",
       input: { surfaces: ["assistant_context"] },
     });
@@ -315,6 +411,16 @@ function summarizeToolName(toolName: string): string {
       return "同步了宿舍安静状态";
     case "dorm.rules.save":
       return "保存了宿舍公约草案";
+    case "dorm.invite.create":
+      return "创建了宿舍邀请";
+    case "sleep.mode.enter":
+      return "进入了睡眠模式";
+    case "sleep.mode.exit":
+      return "退出了睡眠模式";
+    case "report.profile.read":
+      return "读取了睡眠报告摘要";
+    case "audio.recommend":
+      return "准备了助眠音频建议";
     case "cards.refresh":
       return "刷新了页面卡片";
     case "memory.upsert":
@@ -395,7 +501,7 @@ async function writePlan(
 export function shouldRoutePromptToAgent(prompt: string): boolean {
   const normalized = prompt.toLowerCase();
   return (
-    /睡不着|失眠|室友|宿舍|吵|噪|今晚|规划|计划|建议|公约|规则|提醒|处理|帮我|can't sleep|roommate|dorm|noise|tonight|plan|suggest|rules|remind/.test(
+    /睡不着|失眠|室友|宿舍|吵|噪|今晚|规划|计划|建议|公约|规则|提醒|处理|帮我|邀请|报告|复盘|睡眠模式|助眠|音频|can't sleep|roommate|dorm|noise|tonight|plan|suggest|rules|remind|invite|report|sleep mode|audio/.test(
       normalized,
     ) || riskFromPrompt(prompt) !== "low"
   );
@@ -647,7 +753,12 @@ export async function runAgent(
       ));
     runtimeState.context = context;
     const replyIntent: AssistantIntent =
-      goal.intent === "dorm_rules"
+      goal.intent === "dorm_rules" ||
+      goal.intent === "dorm_invite" ||
+      goal.intent === "sleep_mode_enter" ||
+      goal.intent === "sleep_mode_exit" ||
+      goal.intent === "report_review" ||
+      goal.intent === "audio_support"
         ? "general_support"
         : (goal.intent as AssistantIntent);
     const providerReply = await params.provider.generateStructuredReply(
