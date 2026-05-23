@@ -438,6 +438,7 @@ export interface AgentToolCallDoc {
   toolName: string;
   risk: AgentToolRisk;
   status: AgentStepStatus;
+  committed?: boolean;
   input: Record<string, unknown>;
   output?: Record<string, unknown> | null;
   error?: string | null;

@@ -8,8 +8,16 @@ import {
 } from "../src/agent/agent_runtime";
 import { DeterministicAIProvider } from "../src/providers/ai_provider";
 import { createRepositoryFromEnv } from "../src/repositories/firestore_repositories";
+import {
+  buildAgentExecutionMemoryItems,
+  buildAgentUndoMemoryItems,
+} from "../src/services/assistant_memory_governance";
 import { pickRecommendedActions } from "../src/services/tonight_action_plan";
-import { AssistantContext } from "../src/shared/types";
+import {
+  AgentGoalDoc,
+  AgentToolCallDoc,
+  AssistantContext,
+} from "../src/shared/types";
 
 test("agent tool registry exposes core sleep and dorm tools", () => {
   const names = listAgentTools().map((tool) => tool.name);
@@ -43,6 +51,127 @@ test("agent tool input validator catches schema type mismatches", () => {
     ),
     ["dorm.invite.create.expiresInHours must be number"],
   );
+});
+
+function toolCall(
+  params: Partial<AgentToolCallDoc> & {
+    id: string;
+    toolName: string;
+  },
+): AgentToolCallDoc {
+  return {
+    id: params.id,
+    runId: params.runId ?? "run-1",
+    planId: params.planId ?? "plan-1",
+    stepId: params.stepId ?? `step-${params.id}`,
+    userId: params.userId ?? "user-1",
+    threadId: params.threadId ?? "thread-1",
+    toolName: params.toolName,
+    risk: params.risk ?? "write",
+    status: params.status ?? "success",
+    committed: params.committed ?? false,
+    input: params.input ?? {},
+    output: params.output ?? null,
+    error: params.error ?? null,
+    undoPayload: params.undoPayload ?? null,
+    startedAt: params.startedAt ?? "2026-05-23T00:00:00.000Z",
+    finishedAt: params.finishedAt ?? "2026-05-23T00:00:01.000Z",
+    durationMs: params.durationMs ?? 1000,
+  };
+}
+
+function goal(overrides: Partial<AgentGoalDoc> = {}): AgentGoalDoc {
+  return {
+    id: overrides.id ?? "goal-1",
+    text: overrides.text ?? "我睡不着，室友很吵",
+    intent: overrides.intent ?? "noise_issue",
+    riskLevel: overrides.riskLevel ?? "medium",
+    autonomyMode: overrides.autonomyMode ?? "full",
+    createdAt: overrides.createdAt ?? "2026-05-23T00:00:00.000Z",
+  };
+}
+
+test("agent execution memory summarizes committed and incomplete outcomes", () => {
+  const items = buildAgentExecutionMemoryItems({
+    uid: "user-1",
+    runId: "run-1",
+    threadId: "thread-1",
+    prompt: "我睡不着，室友很吵，帮我处理一下",
+    goal: goal(),
+    toolCalls: [
+      toolCall({
+        id: "call-1",
+        toolName: "dorm.status.update",
+        committed: true,
+        output: { status: "quiet" },
+      }),
+      toolCall({
+        id: "call-2",
+        toolName: "capture.save",
+        status: "failed",
+        committed: false,
+        error: "missing_session_id",
+      }),
+    ],
+  });
+
+  assert.ok(
+    items.some(
+      (item) =>
+        item.kind === "agent_action" &&
+        item.content.includes("Agent committed actions"),
+    ),
+  );
+  assert.ok(
+    items.some(
+      (item) =>
+        item.kind === "agent_action" &&
+        item.content.includes("incomplete actions"),
+    ),
+  );
+  const dormStrategy = items.find(
+    (item) =>
+      item.kind === "strategy_weight" && item.sourceActionId === "dorm-quiet",
+  );
+  assert.ok(dormStrategy);
+  assert.equal(dormStrategy.effectivenessScore, 0.18);
+  const captureStrategy = items.find(
+    (item) =>
+      item.kind === "strategy_weight" &&
+      item.sourceActionId === "thought-clean",
+  );
+  assert.ok(captureStrategy);
+  assert.equal(captureStrategy.effectivenessScore, -0.35);
+  assert.ok(
+    captureStrategy.evidenceRefs?.includes("agent_tool_calls:call-2"),
+  );
+});
+
+test("agent undo memory down-ranks reverted actions", () => {
+  const items = buildAgentUndoMemoryItems({
+    uid: "user-1",
+    call: toolCall({
+      id: "call-undo",
+      toolName: "dorm.status.update",
+      committed: true,
+      output: { status: "quiet" },
+    }),
+    output: { restored: "dormStatus" },
+  });
+
+  assert.ok(
+    items.some(
+      (item) =>
+        item.kind === "agent_action" &&
+        item.content.includes("User undid Agent action"),
+    ),
+  );
+  const strategy = items.find(
+    (item) =>
+      item.kind === "strategy_weight" && item.sourceActionId === "dorm-quiet",
+  );
+  assert.ok(strategy);
+  assert.equal(strategy.effectivenessScore, -0.7);
 });
 
 test("agent runtime executes a noisy dorm goal with audit records", async () => {
@@ -102,6 +231,24 @@ test("agent runtime executes a noisy dorm goal with audit records", async () => 
   assert.ok(storedRun);
   assert.equal(storedRun.status, "success");
   assert.equal(storedRun.toolCallCount, result.toolCalls.length);
+  const memories = await repo.listAssistantMemoryItems(uid, {
+    limit: 50,
+    touchLastUsed: false,
+  });
+  assert.ok(
+    memories.some(
+      (item) =>
+        item.kind === "agent_action" &&
+        item.evidenceRefs?.includes(`agent_runs:${result.runId}`),
+    ),
+  );
+  assert.ok(
+    memories.some(
+      (item) =>
+        item.kind === "strategy_weight" &&
+        item.sourceActionId === "dorm-quiet",
+    ),
+  );
 });
 
 test("agent runtime can enter sleep mode through tools", async () => {

@@ -52,6 +52,14 @@
 - 助手页“记忆与进化”入口展示总量、画像分布、近期记忆、行动效果、策略权重和冲突证据。
 - 前端入口仅做观测读取，不触发 `memory.upsert`，也不改变自动行动权限边界。
 
+## 第十二轮执行结果反哺
+
+- `AgentToolCallDoc.committed` 记录工具是否真正提交了业务动作，避免把只读成功或返回 skipped 的工具误当作执行成功。
+- Agent run 结束后会合成 `agent_action` 记忆，记录本轮已提交动作、跳过动作和失败动作，证据引用 `agent_runs:<id>` 与 `agent_tool_calls:<id>`。
+- 可映射到行动目录的工具会生成 `strategy_weight` 弱信号，例如宿舍状态/提醒映射到 `dorm-quiet`，capture 映射到 `thought-clean`。
+- 工具成功提交只写入小幅正向策略权重；工具失败、缺参或返回 skipped 写入小幅负向权重；晨间反馈仍是更强的 `intervention_effect` 证据。
+- 用户执行 undo 后会写入 `agent_action:undo:*` 与对应负向 `strategy_weight`，表示该动作刚被用户撤回，后续规划应谨慎重复。
+
 ## 自我进化边界
 
 - 不做代码自修改。

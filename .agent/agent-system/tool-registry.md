@@ -75,3 +75,10 @@
 - `navigation.suggest` 输出 `{ route, label }` 时，前端会生成 `agent_navigation:*` 状态 token。
 - 助手当前回复会把导航 token 渲染成跳转按钮，只接受 `/` 开头的 App 内路由。
 - 该能力只消费已有工具输出，不提升工具风险等级，也不绕过高风险硬确认。
+
+## 第十二轮执行结果记忆
+
+- `agent_tool_calls` 现在记录 `committed`，用于区分“工具 handler 成功返回”和“业务动作已提交”。
+- AgentRuntime 会在 run 结束后读取本轮工具调用，自动合成 `agent_action` 与 `strategy_weight` 记忆。
+- 失败、跳过或返回 `{ skipped: true }` 的工具不会被当作成功行动；非硬确认类未完成动作会写入弱负向策略证据。
+- 撤销成功后会写入 undo 记忆，并对映射行动降权；撤销记忆是自我进化信号，不改变原始工具审计记录。

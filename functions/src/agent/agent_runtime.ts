@@ -24,6 +24,7 @@ import {
   findAgentTool,
   listAgentTools,
 } from "./agent_tools";
+import { buildAgentExecutionMemoryItems } from "../services/assistant_memory_governance";
 
 type JsonMap = Record<string, unknown>;
 
@@ -664,6 +665,7 @@ export async function runAgent(
       toolName: step.toolName,
       risk: step.risk,
       status: "running",
+      committed: false,
       input: step.input,
       output: null,
       error: null,
@@ -683,6 +685,7 @@ export async function runAgent(
       const skippedCall: AgentToolCallDoc = {
         ...baseCall,
         status: "skipped",
+        committed: false,
         output: { skipped: true, reason: "hard_confirm_required" },
         finishedAt: nowIso(),
         durationMs: Date.now() - callStartedAt,
@@ -717,6 +720,7 @@ export async function runAgent(
       const failedCall: AgentToolCallDoc = {
         ...baseCall,
         status: "failed",
+        committed: false,
         output: null,
         error: message,
         finishedAt: nowIso(),
@@ -769,6 +773,7 @@ export async function runAgent(
       const completedCall: AgentToolCallDoc = {
         ...baseCall,
         status: "success",
+        committed: result.committed ?? false,
         output: result.output,
         undoPayload: result.undoPayload ?? null,
         finishedAt: nowIso(),
@@ -817,6 +822,7 @@ export async function runAgent(
       const failedCall: AgentToolCallDoc = {
         ...baseCall,
         status: "failed",
+        committed: false,
         output: null,
         error: message,
         finishedAt: nowIso(),
@@ -846,6 +852,32 @@ export async function runAgent(
       ? "partial_success"
       : "failed"
     : "success";
+
+  try {
+    const executionMemoryItems = buildAgentExecutionMemoryItems({
+      uid: params.uid,
+      runId,
+      threadId: params.threadId ?? null,
+      prompt: params.prompt,
+      goal,
+      toolCalls,
+    });
+    if (executionMemoryItems.length > 0) {
+      await params.repo.upsertAssistantMemoryItems(
+        params.uid,
+        executionMemoryItems,
+      );
+      memorySyncedCount += executionMemoryItems.length;
+      await emit(params, "memory_updated", {
+        runId,
+        count: executionMemoryItems.length,
+        source: "agent_execution_outcome",
+      });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    errorMessage = errorMessage ? `${errorMessage}; ${message}` : message;
+  }
 
   let baseReply = "";
   try {

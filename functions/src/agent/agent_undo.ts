@@ -1,4 +1,5 @@
 import { AssistantDataRepository } from "../repositories/firestore_repositories";
+import { buildAgentUndoMemoryItems } from "../services/assistant_memory_governance";
 import { buildCardSnapshots } from "../services/materialize_card_snapshots";
 import {
   AgentToolCallDoc,
@@ -259,6 +260,18 @@ export async function undoAgentToolCall(params: {
     undoError: null,
   };
   await params.repo.writeAgentToolCall(params.uid, call.id, nextCall);
+  try {
+    const memoryItems = buildAgentUndoMemoryItems({
+      uid: params.uid,
+      call: nextCall,
+      output: applied.output,
+    });
+    if (memoryItems.length > 0) {
+      await params.repo.upsertAssistantMemoryItems(params.uid, memoryItems);
+    }
+  } catch {
+    // Undo has already been applied; memory synthesis should not roll it back.
+  }
   return {
     status: "applied",
     call: nextCall,
