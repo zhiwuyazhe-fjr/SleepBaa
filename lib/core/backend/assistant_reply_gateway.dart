@@ -44,6 +44,175 @@ String? assistantErrorCodeFromException(Object error) {
   return null;
 }
 
+class AssistantMemoryKindSummary {
+  const AssistantMemoryKindSummary({
+    required this.kind,
+    required this.count,
+    this.averageConfidence,
+    this.averageSalience,
+  });
+
+  factory AssistantMemoryKindSummary.fromJson(Map<String, dynamic> json) {
+    return AssistantMemoryKindSummary(
+      kind: json['kind'] as String? ?? 'profile',
+      count: _intFromJson(json['count']),
+      averageConfidence: _doubleFromJson(json['averageConfidence']),
+      averageSalience: _doubleFromJson(json['averageSalience']),
+    );
+  }
+
+  final String kind;
+  final int count;
+  final double? averageConfidence;
+  final double? averageSalience;
+}
+
+class AssistantMemoryRecordSummary {
+  const AssistantMemoryRecordSummary({
+    required this.id,
+    required this.kind,
+    required this.content,
+    this.canonicalKey,
+    this.confidence,
+    this.salience,
+    this.decayScore,
+    this.effectivenessScore,
+    this.sourceActionId,
+    this.sourceAgentRunId,
+    this.evidenceRefs = const <String>[],
+    this.lastUsedAt,
+    this.updatedAt,
+  });
+
+  factory AssistantMemoryRecordSummary.fromJson(Map<String, dynamic> json) {
+    return AssistantMemoryRecordSummary(
+      id: json['id'] as String? ?? '',
+      kind: json['kind'] as String? ?? 'profile',
+      content: json['content'] as String? ?? '',
+      canonicalKey: json['canonicalKey'] as String?,
+      confidence: _doubleFromJson(json['confidence']),
+      salience: _doubleFromJson(json['salience']),
+      decayScore: _doubleFromJson(json['decayScore']),
+      effectivenessScore: _doubleFromJson(json['effectivenessScore']),
+      sourceActionId: json['sourceActionId'] as String?,
+      sourceAgentRunId: json['sourceAgentRunId'] as String?,
+      evidenceRefs: _stringList(json['evidenceRefs']),
+      lastUsedAt: json['lastUsedAt'] as String?,
+      updatedAt: json['updatedAt'] as String?,
+    );
+  }
+
+  final String id;
+  final String kind;
+  final String content;
+  final String? canonicalKey;
+  final double? confidence;
+  final double? salience;
+  final double? decayScore;
+  final double? effectivenessScore;
+  final String? sourceActionId;
+  final String? sourceAgentRunId;
+  final List<String> evidenceRefs;
+  final String? lastUsedAt;
+  final String? updatedAt;
+}
+
+class AssistantMemoryEffectSummary {
+  const AssistantMemoryEffectSummary({
+    required this.actionId,
+    required this.content,
+    this.effectivenessScore,
+    this.confidence,
+    this.evidenceRefs = const <String>[],
+    this.updatedAt,
+  });
+
+  factory AssistantMemoryEffectSummary.fromJson(Map<String, dynamic> json) {
+    return AssistantMemoryEffectSummary(
+      actionId: json['actionId'] as String?,
+      content: json['content'] as String? ?? '',
+      effectivenessScore: _doubleFromJson(json['effectivenessScore']),
+      confidence: _doubleFromJson(json['confidence']),
+      evidenceRefs: _stringList(json['evidenceRefs']),
+      updatedAt: json['updatedAt'] as String?,
+    );
+  }
+
+  final String? actionId;
+  final String content;
+  final double? effectivenessScore;
+  final double? confidence;
+  final List<String> evidenceRefs;
+  final String? updatedAt;
+}
+
+class AssistantMemoryContradictionGroup {
+  const AssistantMemoryContradictionGroup({
+    required this.group,
+    required this.count,
+    this.latestUpdatedAt,
+  });
+
+  factory AssistantMemoryContradictionGroup.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return AssistantMemoryContradictionGroup(
+      group: json['group'] as String? ?? '',
+      count: _intFromJson(json['count']),
+      latestUpdatedAt: json['latestUpdatedAt'] as String?,
+    );
+  }
+
+  final String group;
+  final int count;
+  final String? latestUpdatedAt;
+}
+
+class AssistantMemoryOverview {
+  const AssistantMemoryOverview({
+    required this.generatedAt,
+    required this.totalCount,
+    this.byKind = const <AssistantMemoryKindSummary>[],
+    this.recent = const <AssistantMemoryRecordSummary>[],
+    this.interventionEffects = const <AssistantMemoryEffectSummary>[],
+    this.strategyWeights = const <AssistantMemoryEffectSummary>[],
+    this.contradictionGroups = const <AssistantMemoryContradictionGroup>[],
+  });
+
+  factory AssistantMemoryOverview.fromJson(Map<String, dynamic> json) {
+    return AssistantMemoryOverview(
+      generatedAt:
+          json['generatedAt'] as String? ?? DateTime.now().toIso8601String(),
+      totalCount: _intFromJson(json['totalCount']),
+      byKind: _mapList(
+        json['byKind'],
+      ).map(AssistantMemoryKindSummary.fromJson).toList(growable: false),
+      recent: _mapList(
+        json['recent'],
+      ).map(AssistantMemoryRecordSummary.fromJson).toList(growable: false),
+      interventionEffects: _mapList(
+        json['interventionEffects'],
+      ).map(AssistantMemoryEffectSummary.fromJson).toList(growable: false),
+      strategyWeights: _mapList(
+        json['strategyWeights'],
+      ).map(AssistantMemoryEffectSummary.fromJson).toList(growable: false),
+      contradictionGroups: _mapList(
+        json['contradictionGroups'],
+      ).map(AssistantMemoryContradictionGroup.fromJson).toList(growable: false),
+    );
+  }
+
+  final String generatedAt;
+  final int totalCount;
+  final List<AssistantMemoryKindSummary> byKind;
+  final List<AssistantMemoryRecordSummary> recent;
+  final List<AssistantMemoryEffectSummary> interventionEffects;
+  final List<AssistantMemoryEffectSummary> strategyWeights;
+  final List<AssistantMemoryContradictionGroup> contradictionGroups;
+
+  bool get hasAnyMemory => totalCount > 0 || recent.isNotEmpty;
+}
+
 class AssistantReplyResult {
   const AssistantReplyResult({
     required this.reply,
@@ -246,6 +415,12 @@ abstract interface class AssistantReplyGateway {
   });
 
   Future<AssistantToolUndoResult> undoToolCall({required String toolCallId});
+
+  Future<AssistantMemoryOverview> fetchMemoryOverview({
+    int limit = 80,
+    String? query,
+    List<String> kinds = const <String>[],
+  });
 }
 
 class StubAssistantReplyGateway implements AssistantReplyGateway {
@@ -436,6 +611,49 @@ class StubAssistantReplyGateway implements AssistantReplyGateway {
   }) async {
     return AssistantToolUndoResult(status: 'applied', callId: toolCallId);
   }
+
+  @override
+  Future<AssistantMemoryOverview> fetchMemoryOverview({
+    int limit = 80,
+    String? query,
+    List<String> kinds = const <String>[],
+  }) async {
+    final String generatedAt = DateTime.now().toIso8601String();
+    return AssistantMemoryOverview(
+      generatedAt: generatedAt,
+      totalCount: 3,
+      byKind: const <AssistantMemoryKindSummary>[
+        AssistantMemoryKindSummary(kind: 'preference', count: 1),
+        AssistantMemoryKindSummary(kind: 'intervention_effect', count: 1),
+        AssistantMemoryKindSummary(kind: 'strategy_weight', count: 1),
+      ],
+      recent: const <AssistantMemoryRecordSummary>[
+        AssistantMemoryRecordSummary(
+          id: 'local-memory-preference',
+          kind: 'preference',
+          content: '用户倾向在睡前使用更安静、低刺激的建议。',
+          confidence: 0.72,
+          salience: 0.74,
+        ),
+      ],
+      interventionEffects: const <AssistantMemoryEffectSummary>[
+        AssistantMemoryEffectSummary(
+          actionId: 'local-audio',
+          content: '雨声类音频更适合当前睡前安定场景。',
+          effectivenessScore: 0.6,
+          confidence: 0.7,
+        ),
+      ],
+      strategyWeights: const <AssistantMemoryEffectSummary>[
+        AssistantMemoryEffectSummary(
+          actionId: 'local-strategy',
+          content: '优先选择降噪、放松和轻量宿舍协同。',
+          effectivenessScore: 0.3,
+          confidence: 0.68,
+        ),
+      ],
+    );
+  }
 }
 
 class CloudBaseAssistantReplyGateway implements AssistantReplyGateway {
@@ -476,6 +694,24 @@ class CloudBaseAssistantReplyGateway implements AssistantReplyGateway {
       }
       rethrow;
     }
+  }
+
+  @override
+  Future<AssistantMemoryOverview> fetchMemoryOverview({
+    int limit = 80,
+    String? query,
+    List<String> kinds = const <String>[],
+  }) async {
+    final Map<String, dynamic> body = <String, dynamic>{
+      'limit': limit,
+      if (query != null && query.trim().isNotEmpty) 'query': query.trim(),
+      if (kinds.isNotEmpty) 'kinds': kinds,
+    };
+    final Map<String, dynamic> payload = await _appApiClient.post(
+      '/api/agent/memory',
+      body: body,
+    );
+    return AssistantMemoryOverview.fromJson(payload);
   }
 
   @override
@@ -1189,6 +1425,33 @@ List<String> _stringList(dynamic value) {
     return const <String>[];
   }
   return value.map((dynamic item) => item.toString()).toList(growable: false);
+}
+
+List<Map<String, dynamic>> _mapList(dynamic value) {
+  if (value is! List) {
+    return const <Map<String, dynamic>>[];
+  }
+  return value
+      .whereType<Map>()
+      .map((Map<dynamic, dynamic> item) => Map<String, dynamic>.from(item))
+      .toList(growable: false);
+}
+
+int _intFromJson(dynamic value, {int fallback = 0}) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  return fallback;
+}
+
+double? _doubleFromJson(dynamic value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  return null;
 }
 
 SleepCaptureRecord _sleepCaptureRecordFromMap(

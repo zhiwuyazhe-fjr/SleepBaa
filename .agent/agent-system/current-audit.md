@@ -46,3 +46,4 @@
 - 第七轮后，`/api/agent/tool-calls/:id/undo` 支持对可精确恢复的工具调用执行补偿，并回写 undo 审计状态。
 - 第八轮后，Flutter 助手页可展示可撤销动作，并调用后端 undo API。
 - 第九轮后，`/api/agent/memory` 可返回长期记忆、自我进化策略权重和行动效果概览。
+- 第十轮后，Flutter 助手页头部新增“记忆与进化”入口，可直接读取并展示 `/api/agent/memory` 概览。

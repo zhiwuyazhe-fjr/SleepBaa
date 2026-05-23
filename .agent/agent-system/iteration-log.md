@@ -182,3 +182,23 @@
 
 - 小眠的长期记忆现在有后端观测面，可用于后续“记忆中心”“自我进化报告”或排查页。
 - 自我进化相关的有效/无效建议、策略权重和冲突证据可以被直接查询，不再只能从数据库集合里人工翻。
+
+## 2026-05-23 第十轮
+
+目标：把第九轮的长期记忆观测能力接入 Flutter 助手页，让用户和排查人员能从中枢入口直接查看“记忆与进化”概览。
+
+计划：
+
+- [x] `AssistantReplyGateway` 新增 `fetchMemoryOverview`，CloudBase 实现调用 `/api/agent/memory`。
+- [x] 新增 Flutter 侧 `AssistantMemoryOverview`、kind summary、recent memory、effect summary 和 contradiction group 解析模型。
+- [x] `AssistantConversationController` 新增记忆概览状态、加载状态、错误状态与 `refreshMemoryOverview`。
+- [x] 助手页头部新增“记忆与进化”图标入口，打开后展示总量、画像分布、近期记忆、行动效果、策略权重和冲突证据。
+- [x] 入口支持刷新和关闭；加载、空数据、错误状态都有明确 UI。
+- [x] 增加 Flutter 网关测试与 controller 测试，覆盖 `/api/agent/memory` 调用与概览状态落地。
+- [x] 跑 `flutter analyze` 目标文件、`flutter test test/core/backend/assistant_reply_gateway_test.dart`、`flutter test test/features/assistant/presentation/controllers/assistant_conversation_controller_test.dart`、`flutter test test/core/facades/app_facades_test.dart`、`flutter test test/widget_test.dart --name "assistant memory header opens memory overview sheet"` 与 `git diff --check`。
+
+结果：
+
+- 小眠助手页现在具备长期记忆/自我进化的前端观测入口，不再只依赖后端 API 或数据库人工排查。
+- 记忆概览已经通过统一网关接入，后续可在“我的”“报告页”或调试页复用同一模型。
+- 第十轮没有改变自动行动权限边界，只读取和展示记忆观测结果。

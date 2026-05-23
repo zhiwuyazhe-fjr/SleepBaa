@@ -191,6 +191,66 @@ void main() {
     expect(appApiClient.bootstrapCallCount, 1);
   });
 
+  test('cloudbase assistant reply gateway fetches memory overview', () async {
+    final _FakeStreamCloudBaseAppApiClient appApiClient =
+        _FakeStreamCloudBaseAppApiClient(
+          postSseBehaviors: <Future<Stream<CloudBaseSseFrame>> Function()>[],
+          postResponse: const <String, dynamic>{
+            'generatedAt': '2026-05-23T00:00:00.000Z',
+            'totalCount': 2,
+            'byKind': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'kind': 'intervention_effect',
+                'count': 1,
+                'averageConfidence': 0.9,
+              },
+              <String, dynamic>{'kind': 'strategy_weight', 'count': 1},
+            ],
+            'recent': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'id': 'memory-1',
+                'kind': 'intervention_effect',
+                'content': 'Rain audio helped.',
+                'confidence': 0.9,
+              },
+            ],
+            'interventionEffects': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'actionId': 'audio-rain',
+                'content': 'Rain audio helped.',
+                'effectivenessScore': 1,
+              },
+            ],
+            'strategyWeights': <Map<String, dynamic>>[],
+            'contradictionGroups': <Map<String, dynamic>>[],
+          },
+        );
+    final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
+      appApiClient: appApiClient,
+    );
+    final CloudBaseAssistantReplyGateway gateway =
+        CloudBaseAssistantReplyGateway(
+          appApiClient: appApiClient,
+          snapshotStore: snapshotStore,
+        );
+
+    final AssistantMemoryOverview overview = await gateway.fetchMemoryOverview(
+      limit: 20,
+      kinds: const <String>['intervention_effect'],
+    );
+
+    expect(appApiClient.lastPostPath, '/api/agent/memory');
+    expect(appApiClient.lastPostBody, containsPair('limit', 20));
+    expect(
+      appApiClient.lastPostBody,
+      containsPair('kinds', const <String>['intervention_effect']),
+    );
+    expect(overview.totalCount, 2);
+    expect(overview.byKind.first.kind, 'intervention_effect');
+    expect(overview.recent.single.content, 'Rain audio helped.');
+    expect(overview.interventionEffects.single.actionId, 'audio-rain');
+  });
+
   test(
     'cloudbase assistant reply gateway does not retry after reply delta has started',
     () async {
@@ -499,6 +559,7 @@ class _FakeStreamCloudBaseAppApiClient extends CloudBaseAppApiClient {
   int postSseCallCount = 0;
   int bootstrapCallCount = 0;
   String? lastPostPath;
+  Map<String, dynamic> lastPostBody = const <String, dynamic>{};
 
   @override
   bool get isConfigured => true;
@@ -525,6 +586,7 @@ class _FakeStreamCloudBaseAppApiClient extends CloudBaseAppApiClient {
     Map<String, dynamic> body = const <String, dynamic>{},
   }) async {
     lastPostPath = path;
+    lastPostBody = body;
     return postResponse;
   }
 }

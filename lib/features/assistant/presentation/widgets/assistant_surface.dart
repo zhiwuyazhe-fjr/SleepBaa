@@ -255,6 +255,7 @@ class AssistantShellScaffold extends StatelessWidget {
     required this.bodyBuilder,
     required this.composerBuilder,
     required this.onTapAdd,
+    required this.onTapMemory,
     required this.onTapHistory,
   });
 
@@ -272,6 +273,7 @@ class AssistantShellScaffold extends StatelessWidget {
   )
   composerBuilder;
   final VoidCallback? onTapAdd;
+  final VoidCallback? onTapMemory;
   final VoidCallback? onTapHistory;
 
   @override
@@ -325,6 +327,7 @@ class AssistantShellScaffold extends StatelessWidget {
                             metrics: metrics,
                             palette: palette,
                             onTapAdd: onTapAdd,
+                            onTapMemory: onTapMemory,
                             onTapHistory: onTapHistory,
                           ),
                         ),
@@ -365,12 +368,14 @@ class AssistantHeader extends StatelessWidget {
     required this.metrics,
     required this.palette,
     required this.onTapAdd,
+    required this.onTapMemory,
     required this.onTapHistory,
   });
 
   final AssistantSurfaceMetrics metrics;
   final AssistantSurfacePalette palette;
   final VoidCallback? onTapAdd;
+  final VoidCallback? onTapMemory;
   final VoidCallback? onTapHistory;
 
   @override
@@ -382,6 +387,7 @@ class AssistantHeader extends StatelessWidget {
           icon: Icons.add,
           size: metrics.unit(22),
           color: palette.headerIcon,
+          tooltip: '新对话',
           onTap: onTapAdd,
         ),
         Expanded(
@@ -397,10 +403,19 @@ class AssistantHeader extends StatelessWidget {
           ),
         ),
         _AssistantActionIconButton(
+          key: const ValueKey<String>('assistant-header-memory'),
+          icon: Icons.psychology_alt_outlined,
+          size: metrics.unit(21),
+          color: palette.headerIcon,
+          tooltip: '记忆与进化',
+          onTap: onTapMemory,
+        ),
+        _AssistantActionIconButton(
           key: const ValueKey<String>('assistant-header-history'),
           icon: Icons.history,
           size: metrics.unit(22),
           color: palette.headerIcon,
+          tooltip: '历史对话',
           onTap: onTapHistory,
         ),
       ],
@@ -1083,6 +1098,7 @@ class _AssistantActionIconButton extends StatelessWidget {
     required this.onTap,
     this.icon,
     this.child,
+    this.tooltip,
   });
 
   final IconData? icon;
@@ -1090,11 +1106,12 @@ class _AssistantActionIconButton extends StatelessWidget {
   final double size;
   final Color color;
   final VoidCallback? onTap;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
     final double hitSize = math.max(size * 1.56, 36);
-    return SizedBox(
+    final Widget button = SizedBox(
       width: hitSize,
       height: hitSize,
       child: IconButton(
@@ -1116,6 +1133,10 @@ class _AssistantActionIconButton extends StatelessWidget {
         icon: child ?? Icon(icon, size: size, color: color),
       ),
     );
+    if (tooltip == null || tooltip!.trim().isEmpty) {
+      return button;
+    }
+    return Tooltip(message: tooltip!, child: button);
   }
 }
 

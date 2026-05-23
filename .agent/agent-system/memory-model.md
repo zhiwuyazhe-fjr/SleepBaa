@@ -45,6 +45,13 @@
 - 排查读取时 `touchLastUsed: false`，避免单纯打开观测页改变记忆使用时间。
 - `recent` 使用 compact 形态，只输出 id、kind、content、confidence、salience、decay、effectiveness、evidence refs、source ids 和更新时间。
 
+## 第十轮前端入口
+
+- Flutter `AssistantReplyGateway.fetchMemoryOverview` 已对齐 `/api/agent/memory` 响应结构。
+- `AssistantConversationController` 维护记忆概览、加载状态和错误状态，避免 UI 直接散落调用后端。
+- 助手页“记忆与进化”入口展示总量、画像分布、近期记忆、行动效果、策略权重和冲突证据。
+- 前端入口仅做观测读取，不触发 `memory.upsert`，也不改变自动行动权限边界。
+
 ## 自我进化边界
 
 - 不做代码自修改。

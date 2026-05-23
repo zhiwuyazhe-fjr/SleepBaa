@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/backend/assistant_reply_gateway.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/controllers/assistant_conversation_controller.dart';
@@ -241,6 +243,40 @@ class _AssistantPageState extends State<AssistantPage>
     await notifyPassiveToast(
       context,
       message: applied ? '已撤销这项动作。' : '这项动作暂时不能撤销。',
+    );
+  }
+
+  Future<void> _handleMemoryOverviewTap(AppServices services) async {
+    final AssistantConversationController controller =
+        services.assistantConversationController;
+    unawaited(controller.refreshMemoryOverview());
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext sheetContext) {
+        return ListenableBuilder(
+          listenable: controller,
+          builder: (BuildContext context, Widget? child) {
+            final AssistantSurfaceMetrics metrics =
+                AssistantSurfaceMetrics.fromWidth(
+                  MediaQuery.sizeOf(context).width,
+                );
+            final AssistantSurfacePalette palette =
+                AssistantSurfacePalette.fromMood(context.nightMoodPalette);
+            return _AssistantMemoryOverviewSheet(
+              metrics: metrics,
+              palette: palette,
+              overview: controller.memoryOverview,
+              loading: controller.memoryOverviewLoading,
+              errorMessage: controller.memoryOverviewError,
+              onRefresh: () => unawaited(controller.refreshMemoryOverview()),
+              onClose: () => Navigator.of(sheetContext).pop(),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -613,6 +649,7 @@ class _AssistantPageState extends State<AssistantPage>
 
         return AssistantShellScaffold(
           onTapAdd: () => _startNewConversation(services),
+          onTapMemory: () => _handleMemoryOverviewTap(services),
           onTapHistory: () => context.push(AppRoutes.assistantHistory),
           bodyBuilder:
               (
@@ -1747,6 +1784,683 @@ double _replyFloatingDistance(
     AssistantReplyMotionLevel.medium => metrics.unit(6),
     AssistantReplyMotionLevel.high => metrics.unit(8),
   };
+}
+
+class _AssistantMemoryOverviewSheet extends StatelessWidget {
+  const _AssistantMemoryOverviewSheet({
+    required this.metrics,
+    required this.palette,
+    required this.overview,
+    required this.loading,
+    required this.errorMessage,
+    required this.onRefresh,
+    required this.onClose,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+  final AssistantMemoryOverview? overview;
+  final bool loading;
+  final String? errorMessage;
+  final VoidCallback onRefresh;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.74,
+      minChildSize: 0.44,
+      maxChildSize: 0.92,
+      builder: (BuildContext context, ScrollController scrollController) {
+        return ClipRRect(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(metrics.unit(24)),
+          ),
+          child: DecoratedBox(
+            key: const ValueKey<String>('assistant-memory-sheet'),
+            decoration: BoxDecoration(
+              color: _assistantAlpha(const Color(0xFF10151C), 0.96),
+              border: Border(
+                top: BorderSide(
+                  color: _assistantAlpha(palette.composerBorder, 0.34),
+                  width: metrics.unit(1),
+                ),
+              ),
+            ),
+            child: Column(
+              children: <Widget>[
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    metrics.unit(20),
+                    metrics.unit(14),
+                    metrics.unit(12),
+                    metrics.unit(8),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      Icon(
+                        Icons.psychology_alt_outlined,
+                        size: metrics.unit(22),
+                        color: palette.headerIcon,
+                      ),
+                      SizedBox(width: metrics.unit(10)),
+                      Expanded(
+                        child: Text(
+                          '记忆与进化',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: palette.headlineText,
+                                fontSize: metrics.unit(18),
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ),
+                      IconButton(
+                        key: const ValueKey<String>('assistant-memory-refresh'),
+                        tooltip: '刷新',
+                        onPressed: loading ? null : onRefresh,
+                        icon: Icon(
+                          Icons.refresh_rounded,
+                          size: metrics.unit(20),
+                          color: loading
+                              ? _assistantAlpha(palette.headerIcon, 0.36)
+                              : palette.headerIcon,
+                        ),
+                      ),
+                      IconButton(
+                        key: const ValueKey<String>('assistant-memory-close'),
+                        tooltip: '关闭',
+                        onPressed: onClose,
+                        icon: Icon(
+                          Icons.close_rounded,
+                          size: metrics.unit(20),
+                          color: palette.headerIcon,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (loading)
+                  LinearProgressIndicator(
+                    minHeight: metrics.unit(1.5),
+                    color: palette.composerBorder,
+                    backgroundColor: _assistantAlpha(
+                      palette.composerBorder,
+                      0.1,
+                    ),
+                  )
+                else
+                  SizedBox(height: metrics.unit(1.5)),
+                Expanded(
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    physics: const BouncingScrollPhysics(),
+                    padding: EdgeInsets.fromLTRB(
+                      metrics.unit(20),
+                      metrics.unit(16),
+                      metrics.unit(20),
+                      metrics.unit(28),
+                    ),
+                    child: _buildBody(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    final AssistantMemoryOverview? data = overview;
+    if (data == null && loading) {
+      return _AssistantMemoryEmptyState(
+        key: const ValueKey<String>('assistant-memory-loading'),
+        metrics: metrics,
+        palette: palette,
+        icon: Icons.autorenew_rounded,
+        text: '正在读取长期记忆...',
+      );
+    }
+    if (data == null) {
+      return _AssistantMemoryEmptyState(
+        key: const ValueKey<String>('assistant-memory-error'),
+        metrics: metrics,
+        palette: palette,
+        icon: Icons.error_outline,
+        text: errorMessage ?? '暂时没有读取到记忆概览',
+      );
+    }
+
+    final List<Widget> sections = <Widget>[
+      Row(
+        children: <Widget>[
+          Expanded(
+            child: _AssistantMemoryStat(
+              key: const ValueKey<String>('assistant-memory-total-count'),
+              metrics: metrics,
+              palette: palette,
+              label: '记忆',
+              value: data.totalCount.toString(),
+            ),
+          ),
+          SizedBox(width: metrics.unit(10)),
+          Expanded(
+            child: _AssistantMemoryStat(
+              metrics: metrics,
+              palette: palette,
+              label: '类型',
+              value: data.byKind.length.toString(),
+            ),
+          ),
+          SizedBox(width: metrics.unit(10)),
+          Expanded(
+            child: _AssistantMemoryStat(
+              metrics: metrics,
+              palette: palette,
+              label: '策略',
+              value: data.strategyWeights.length.toString(),
+            ),
+          ),
+        ],
+      ),
+      SizedBox(height: metrics.unit(16)),
+      _AssistantMemoryPanel(
+        metrics: metrics,
+        palette: palette,
+        title: '画像分布',
+        child: Wrap(
+          spacing: metrics.unit(8),
+          runSpacing: metrics.unit(8),
+          children: data.byKind.isEmpty
+              ? <Widget>[
+                  _AssistantMemoryChip(
+                    metrics: metrics,
+                    palette: palette,
+                    label: '暂无画像',
+                  ),
+                ]
+              : data.byKind
+                    .map(
+                      (AssistantMemoryKindSummary item) => _AssistantMemoryChip(
+                        metrics: metrics,
+                        palette: palette,
+                        label: '${_memoryKindLabel(item.kind)} ${item.count}',
+                        trailing: _scoreLabel(item.averageConfidence),
+                      ),
+                    )
+                    .toList(growable: false),
+        ),
+      ),
+    ];
+
+    sections.addAll(<Widget>[
+      SizedBox(height: metrics.unit(14)),
+      _AssistantMemoryPanel(
+        metrics: metrics,
+        palette: palette,
+        title: '近期记忆',
+        child: _AssistantMemoryRecordList(
+          metrics: metrics,
+          palette: palette,
+          records: data.recent.take(5).toList(growable: false),
+        ),
+      ),
+      SizedBox(height: metrics.unit(14)),
+      _AssistantMemoryPanel(
+        metrics: metrics,
+        palette: palette,
+        title: '行动效果',
+        child: _AssistantMemoryEffectList(
+          metrics: metrics,
+          palette: palette,
+          effects: data.interventionEffects.take(4).toList(growable: false),
+        ),
+      ),
+      SizedBox(height: metrics.unit(14)),
+      _AssistantMemoryPanel(
+        metrics: metrics,
+        palette: palette,
+        title: '策略权重',
+        child: _AssistantMemoryEffectList(
+          metrics: metrics,
+          palette: palette,
+          effects: data.strategyWeights.take(4).toList(growable: false),
+        ),
+      ),
+    ]);
+
+    if (data.contradictionGroups.isNotEmpty) {
+      sections.addAll(<Widget>[
+        SizedBox(height: metrics.unit(14)),
+        _AssistantMemoryPanel(
+          metrics: metrics,
+          palette: palette,
+          title: '冲突证据',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: data.contradictionGroups
+                .take(4)
+                .map(
+                  (AssistantMemoryContradictionGroup group) =>
+                      _AssistantMemoryLine(
+                        metrics: metrics,
+                        palette: palette,
+                        leading: '${group.count}',
+                        text: group.group,
+                      ),
+                )
+                .toList(growable: false),
+          ),
+        ),
+      ]);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: sections,
+    );
+  }
+}
+
+class _AssistantMemoryEmptyState extends StatelessWidget {
+  const _AssistantMemoryEmptyState({
+    super.key,
+    required this.metrics,
+    required this.palette,
+    required this.icon,
+    required this.text,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: metrics.unit(44)),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(icon, size: metrics.unit(28), color: palette.mutedText),
+            SizedBox(height: metrics.unit(12)),
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: palette.secondaryText,
+                fontSize: metrics.unit(14),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AssistantMemoryStat extends StatelessWidget {
+  const _AssistantMemoryStat({
+    super.key,
+    required this.metrics,
+    required this.palette,
+    required this.label,
+    required this.value,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _assistantAlpha(Colors.white, 0.045),
+        borderRadius: BorderRadius.circular(metrics.unit(12)),
+        border: Border.all(
+          color: _assistantAlpha(palette.composerBorder, 0.18),
+          width: metrics.unit(1),
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: metrics.unit(12),
+          vertical: metrics.unit(10),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: palette.headlineText,
+                fontSize: metrics.unit(18),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            SizedBox(height: metrics.unit(3)),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: palette.mutedText,
+                fontSize: metrics.unit(11),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AssistantMemoryPanel extends StatelessWidget {
+  const _AssistantMemoryPanel({
+    required this.metrics,
+    required this.palette,
+    required this.title,
+    required this.child,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          title,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: palette.headlineText,
+            fontSize: metrics.unit(13),
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        SizedBox(height: metrics.unit(10)),
+        child,
+      ],
+    );
+  }
+}
+
+class _AssistantMemoryChip extends StatelessWidget {
+  const _AssistantMemoryChip({
+    required this.metrics,
+    required this.palette,
+    required this.label,
+    this.trailing,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+  final String label;
+  final String? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _assistantAlpha(palette.composerBorder, 0.13),
+        borderRadius: BorderRadius.circular(metrics.unit(999)),
+        border: Border.all(
+          color: _assistantAlpha(palette.composerBorder, 0.22),
+          width: metrics.unit(1),
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: metrics.unit(10),
+          vertical: metrics.unit(7),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: palette.statusText,
+                fontSize: metrics.unit(11),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (trailing != null) ...<Widget>[
+              SizedBox(width: metrics.unit(6)),
+              Text(
+                trailing!,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: palette.mutedText,
+                  fontSize: metrics.unit(10),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AssistantMemoryRecordList extends StatelessWidget {
+  const _AssistantMemoryRecordList({
+    required this.metrics,
+    required this.palette,
+    required this.records,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+  final List<AssistantMemoryRecordSummary> records;
+
+  @override
+  Widget build(BuildContext context) {
+    if (records.isEmpty) {
+      return _AssistantMemoryLine(
+        metrics: metrics,
+        palette: palette,
+        leading: '0',
+        text: '暂无近期记忆',
+      );
+    }
+    return Column(
+      key: const ValueKey<String>('assistant-memory-recent-list'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: records
+          .map(
+            (AssistantMemoryRecordSummary record) => _AssistantMemoryLine(
+              metrics: metrics,
+              palette: palette,
+              leading: _memoryKindLabel(record.kind),
+              text: record.content,
+              subtext: _scoreLabel(record.confidence),
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
+class _AssistantMemoryEffectList extends StatelessWidget {
+  const _AssistantMemoryEffectList({
+    required this.metrics,
+    required this.palette,
+    required this.effects,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+  final List<AssistantMemoryEffectSummary> effects;
+
+  @override
+  Widget build(BuildContext context) {
+    if (effects.isEmpty) {
+      return _AssistantMemoryLine(
+        metrics: metrics,
+        palette: palette,
+        leading: '0',
+        text: '暂无记录',
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: effects
+          .map(
+            (AssistantMemoryEffectSummary effect) => _AssistantMemoryLine(
+              metrics: metrics,
+              palette: palette,
+              leading: _effectLabel(effect.effectivenessScore),
+              text: effect.content,
+              subtext: _scoreLabel(effect.confidence),
+              accentColor: _effectColor(effect.effectivenessScore, palette),
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
+class _AssistantMemoryLine extends StatelessWidget {
+  const _AssistantMemoryLine({
+    required this.metrics,
+    required this.palette,
+    required this.leading,
+    required this.text,
+    this.subtext,
+    this.accentColor,
+  });
+
+  final AssistantSurfaceMetrics metrics;
+  final AssistantSurfacePalette palette;
+  final String leading;
+  final String text;
+  final String? subtext;
+  final Color? accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: metrics.unit(9)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            constraints: BoxConstraints(minWidth: metrics.unit(42)),
+            padding: EdgeInsets.symmetric(
+              horizontal: metrics.unit(8),
+              vertical: metrics.unit(4),
+            ),
+            decoration: BoxDecoration(
+              color: _assistantAlpha(
+                accentColor ?? palette.composerBorder,
+                0.12,
+              ),
+              borderRadius: BorderRadius.circular(metrics.unit(999)),
+              border: Border.all(
+                color: _assistantAlpha(
+                  accentColor ?? palette.composerBorder,
+                  0.24,
+                ),
+                width: metrics.unit(1),
+              ),
+            ),
+            child: Text(
+              leading,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: accentColor ?? palette.statusText,
+                fontSize: metrics.unit(10),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          SizedBox(width: metrics.unit(10)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  text,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: palette.bodyText,
+                    fontSize: metrics.unit(13),
+                    fontWeight: FontWeight.w600,
+                    height: 1.38,
+                  ),
+                ),
+                if (subtext != null) ...<Widget>[
+                  SizedBox(height: metrics.unit(2)),
+                  Text(
+                    subtext!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: palette.mutedText,
+                      fontSize: metrics.unit(10),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _memoryKindLabel(String kind) {
+  return switch (kind) {
+    'profile' => '画像',
+    'preference' => '偏好',
+    'sleep_pattern' => '作息',
+    'dorm_context' => '宿舍',
+    'intervention_effect' => '效果',
+    'agent_action' => '动作',
+    'strategy_weight' => '策略',
+    _ => kind,
+  };
+}
+
+String _scoreLabel(double? value) {
+  if (value == null) {
+    return '未评分';
+  }
+  return '${(value.clamp(0, 1) * 100).round()}%';
+}
+
+String _effectLabel(double? score) {
+  if (score == null || score == 0) {
+    return '0';
+  }
+  return score > 0 ? '+${score.toStringAsFixed(1)}' : score.toStringAsFixed(1);
+}
+
+Color _effectColor(double? score, AssistantSurfacePalette palette) {
+  if (score == null || score == 0) {
+    return palette.composerBorder;
+  }
+  return score > 0 ? const Color(0xFF8AD8B2) : const Color(0xFFFFB38C);
 }
 
 class _AssistantArchiveStage extends StatefulWidget {

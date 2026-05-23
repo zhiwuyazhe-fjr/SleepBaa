@@ -35,6 +35,9 @@ class AssistantConversationController extends ChangeNotifier {
   final AssistantReplyGateway _assistantReplyGateway;
   final Map<String, List<String>> _updatedSurfacesByMessageId =
       <String, List<String>>{};
+  AssistantMemoryOverview? _memoryOverview;
+  bool _memoryOverviewLoading = false;
+  String? _memoryOverviewError;
 
   AssistantThread? get currentThread => _assistantRepository.currentThread;
 
@@ -56,6 +59,12 @@ class AssistantConversationController extends ChangeNotifier {
 
   bool get isBusy =>
       turnState != null && turnState!.status != AssistantThreadTurnStatus.idle;
+
+  AssistantMemoryOverview? get memoryOverview => _memoryOverview;
+
+  bool get memoryOverviewLoading => _memoryOverviewLoading;
+
+  String? get memoryOverviewError => _memoryOverviewError;
 
   List<String> updatedSurfacesForMessage(String? messageId) {
     if (messageId == null || messageId.trim().isEmpty) {
@@ -88,6 +97,31 @@ class AssistantConversationController extends ChangeNotifier {
     } catch (_) {
       _setUndoSurfaceToken(normalizedCallId, 'agent_undo_failed');
       return false;
+    }
+  }
+
+  Future<bool> refreshMemoryOverview({
+    String? query,
+    List<String> kinds = const <String>[],
+  }) async {
+    if (_memoryOverviewLoading) {
+      return false;
+    }
+    _memoryOverviewLoading = true;
+    _memoryOverviewError = null;
+    notifyListeners();
+    try {
+      _memoryOverview = await _assistantReplyGateway.fetchMemoryOverview(
+        query: query,
+        kinds: kinds,
+      );
+      return true;
+    } catch (_) {
+      _memoryOverviewError = '暂时无法读取记忆概览';
+      return false;
+    } finally {
+      _memoryOverviewLoading = false;
+      notifyListeners();
     }
   }
 

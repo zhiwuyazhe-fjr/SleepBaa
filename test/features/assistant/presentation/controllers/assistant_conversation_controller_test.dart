@@ -89,6 +89,18 @@ class _CaptureWithoutRecordGateway implements AssistantReplyGateway {
   }) async {
     return AssistantToolUndoResult(status: 'applied', callId: toolCallId);
   }
+
+  @override
+  Future<AssistantMemoryOverview> fetchMemoryOverview({
+    int limit = 80,
+    String? query,
+    List<String> kinds = const <String>[],
+  }) async {
+    return const AssistantMemoryOverview(
+      generatedAt: '2026-05-23T00:00:00.000Z',
+      totalCount: 0,
+    );
+  }
 }
 
 class _AgentUndoGateway extends StubAssistantReplyGateway {
@@ -132,6 +144,41 @@ class _AgentUndoGateway extends StubAssistantReplyGateway {
       status: 'applied',
       callId: toolCallId,
       updatedSurfaces: const <String>['home_pre_sleep'],
+    );
+  }
+}
+
+class _MemoryOverviewGateway extends StubAssistantReplyGateway {
+  int fetchCount = 0;
+
+  @override
+  Future<AssistantMemoryOverview> fetchMemoryOverview({
+    int limit = 80,
+    String? query,
+    List<String> kinds = const <String>[],
+  }) async {
+    fetchCount += 1;
+    return const AssistantMemoryOverview(
+      generatedAt: '2026-05-23T00:00:00.000Z',
+      totalCount: 2,
+      byKind: <AssistantMemoryKindSummary>[
+        AssistantMemoryKindSummary(kind: 'intervention_effect', count: 1),
+        AssistantMemoryKindSummary(kind: 'strategy_weight', count: 1),
+      ],
+      recent: <AssistantMemoryRecordSummary>[
+        AssistantMemoryRecordSummary(
+          id: 'memory-1',
+          kind: 'intervention_effect',
+          content: 'Rain audio helped.',
+        ),
+      ],
+      interventionEffects: <AssistantMemoryEffectSummary>[
+        AssistantMemoryEffectSummary(
+          actionId: 'audio-rain',
+          content: 'Rain audio helped.',
+          effectivenessScore: 1,
+        ),
+      ],
     );
   }
 }
@@ -212,6 +259,36 @@ void main() {
     expect(
       controller.updatedSurfacesForMessage(latest.id),
       contains('agent_undo_applied:call-1'),
+    );
+  });
+
+  test('refreshMemoryOverview stores self-evolution overview state', () async {
+    final InMemoryAssistantRepository assistantRepository =
+        InMemoryAssistantRepository(userId: 'assistant-user');
+    final _MemoryOverviewGateway gateway = _MemoryOverviewGateway();
+    final AssistantConversationController controller =
+        AssistantConversationController(
+          assistantRepository: assistantRepository,
+          sleepCaptureRepository: InMemorySleepCaptureRepository(),
+          sleepSessionRepository: InMemorySleepSessionRepository(
+            initialUid: 'assistant-user',
+          ),
+          dormRepository: InMemoryDormRepository(
+            currentUserId: 'assistant-user',
+          ),
+          assistantReplyGateway: gateway,
+        );
+
+    final bool loaded = await controller.refreshMemoryOverview();
+
+    expect(loaded, true);
+    expect(gateway.fetchCount, 1);
+    expect(controller.memoryOverviewLoading, false);
+    expect(controller.memoryOverviewError, isNull);
+    expect(controller.memoryOverview?.totalCount, 2);
+    expect(
+      controller.memoryOverview?.interventionEffects.single.actionId,
+      'audio-rain',
     );
   });
 
