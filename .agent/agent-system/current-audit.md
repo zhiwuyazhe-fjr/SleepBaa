@@ -38,3 +38,11 @@
 - 首页睡前页、宿舍页、睡眠模式页、睡眠报告页已提供“让小眠处理/协同/解读”入口。
 - 入口通过 `/assistant?agentPrompt=...&source=...&autoSubmit=1` 把当前页面状态带入 AgentRuntime。
 - 这些入口仍走现有 `/api/agent/run/stream`，前端可继续展示规划、工具调用、记忆更新和完成状态。
+
+## 后续轮次新增状态
+
+- 第五轮后，工具覆盖已扩展到睡眠模式进入/退出、音频推荐、报告摘要和宿舍邀请。
+- 第六轮后，所有工具执行前都会按 `inputSchema` 做基础入参校验，失败写入 `agent_tool_calls`。
+- 第七轮后，`/api/agent/tool-calls/:id/undo` 支持对可精确恢复的工具调用执行补偿，并回写 undo 审计状态。
+- 第八轮后，Flutter 助手页可展示可撤销动作，并调用后端 undo API。
+- 第九轮后，`/api/agent/memory` 可返回长期记忆、自我进化策略权重和行动效果概览。

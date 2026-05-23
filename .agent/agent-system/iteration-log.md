@@ -164,3 +164,21 @@
 - 当前助手回复能展示“可撤销一项动作”，并只对 `interference.save_tonight`、`sleep.mode.exit` 这类已支持精确撤销的动作开放按钮。
 - 撤销中、撤销成功、撤销失败都会回写到当前消息的工具状态，避免重复点击时没有反馈。
 - 前端撤销链路已经和第七轮后端审计/补偿 API 对齐。
+
+## 2026-05-23 第九轮
+
+目标：补齐长期记忆和自我进化的可观测入口，让中枢不只会写记忆，也能对外返回当前画像/策略权重概览。
+
+计划：
+
+- [x] 仓库层新增 `listAssistantMemoryItems`，支持按 query、kind、limit 检索，并可选择不刷新 `lastUsedAt`。
+- [x] 新增 `buildAgentMemoryOverview`，按 kind 聚合长期记忆，提取 intervention effect、strategy weight 和冲突组摘要。
+- [x] 新增 `/api/agent/memory`，返回 `totalCount`、`byKind`、`recent`、`interventionEffects`、`strategyWeights`、`contradictionGroups`。
+- [x] recent 记忆通过 `compactMemoryItem` 输出排查字段，避免把内部完整文档无控制暴露给前端。
+- [x] 增加后端单测和 app-api 集成测试，覆盖记忆概览聚合与 API 响应。
+- [x] 跑 `npm --prefix functions run build`、`npm --prefix functions test` 与 `git diff --check`。
+
+结果：
+
+- 小眠的长期记忆现在有后端观测面，可用于后续“记忆中心”“自我进化报告”或排查页。
+- 自我进化相关的有效/无效建议、策略权重和冲突证据可以被直接查询，不再只能从数据库集合里人工翻。

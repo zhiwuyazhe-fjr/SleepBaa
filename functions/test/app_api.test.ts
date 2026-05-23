@@ -1142,6 +1142,79 @@ test(
 );
 
 test(
+  "agent memory endpoint returns grouped self-evolution overview",
+  { concurrency: false },
+  async () => {
+    await withLocalAppApiServer(async ({ baseUrl, uid }) => {
+      const repo = createRepositoryFromEnv();
+      await repo.upsertAssistantMemoryItems(uid, [
+        {
+          id: `${uid}:intervention_effect:audio-rain`,
+          kind: "intervention_effect",
+          content: "Rain audio helped the user fall asleep.",
+          canonicalKey: "intervention_effect:audio-rain",
+          keywords: ["audio-rain", "effective"],
+          confidence: 0.9,
+          salience: 0.9,
+          decayScore: 1,
+          contradictionGroup: "intervention_effect:audio-rain",
+          evidenceRefs: ["test"],
+          sourceActionId: "audio-rain",
+          sourceAgentRunId: "run-1",
+          effectivenessScore: 1,
+          lastUsedAt: null,
+          sourceRefs: ["test"],
+          createdAt: "2026-05-23T00:00:00.000Z",
+          updatedAt: "2026-05-23T00:00:00.000Z",
+        },
+        {
+          id: `${uid}:strategy_weight:morning`,
+          kind: "strategy_weight",
+          content: "Keep audio support and down-rank bright screen advice.",
+          canonicalKey: "strategy_weight:morning",
+          keywords: ["strategy", "feedback"],
+          confidence: 0.82,
+          salience: 0.8,
+          decayScore: 1,
+          contradictionGroup: "strategy_weight:morning",
+          evidenceRefs: ["test"],
+          sourceActionId: "session-1",
+          sourceAgentRunId: null,
+          effectivenessScore: 0,
+          lastUsedAt: null,
+          sourceRefs: ["test"],
+          createdAt: "2026-05-23T00:00:01.000Z",
+          updatedAt: "2026-05-23T00:00:01.000Z",
+        },
+      ]);
+
+      const response = await fetch(`${baseUrl}/api/agent/memory`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-debug-uid": uid },
+        body: JSON.stringify({ limit: 20 }),
+      });
+
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as {
+        totalCount: number;
+        byKind: Array<Record<string, unknown>>;
+        interventionEffects: Array<Record<string, unknown>>;
+        strategyWeights: Array<Record<string, unknown>>;
+      };
+      assert.equal(payload.totalCount, 2);
+      assert.ok(
+        payload.byKind.some(
+          (item) =>
+            item.kind === "intervention_effect" && item.count === 1,
+        ),
+      );
+      assert.equal(payload.interventionEffects[0]?.actionId, "audio-rain");
+      assert.equal(payload.strategyWeights.length, 1);
+    });
+  },
+);
+
+test(
   "assistant reply stream releases the thread lease before delayed background postprocess completes",
   { concurrency: false },
   async () => {

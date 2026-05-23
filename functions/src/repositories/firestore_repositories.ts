@@ -1247,6 +1247,15 @@ export interface AssistantDataRepository {
     uid: string,
     items: AssistantMemoryItem[],
   ): Promise<void>;
+  listAssistantMemoryItems(
+    uid: string,
+    options?: {
+      limit?: number;
+      query?: string;
+      kinds?: string[];
+      touchLastUsed?: boolean;
+    },
+  ): Promise<AssistantMemoryItem[]>;
 }
 
 export class FirestoreRepository implements AssistantDataRepository {
@@ -3420,6 +3429,19 @@ export class FirestoreRepository implements AssistantDataRepository {
     }
   }
 
+  async listAssistantMemoryItems(
+    uid: string,
+    options: {
+      limit?: number;
+      query?: string;
+      kinds?: string[];
+      touchLastUsed?: boolean;
+    } = {},
+  ): Promise<AssistantMemoryItem[]> {
+    await this.ensureUserBootstrap(uid);
+    return this.listAssistantMemory(uid, options);
+  }
+
   private async transferAccountData(
     sourceUid: string,
     canonicalUid: string,
@@ -3956,6 +3978,7 @@ export class FirestoreRepository implements AssistantDataRepository {
       limit?: number;
       query?: string;
       kinds?: string[];
+      touchLastUsed?: boolean;
     } = {},
   ): Promise<AssistantMemoryItem[]> {
     const limit = options.limit ?? 20;
@@ -4045,20 +4068,22 @@ export class FirestoreRepository implements AssistantDataRepository {
     const selected = scored
       .sort((left, right) => right.score - left.score)
       .slice(0, limit);
-    const usedAt = nowIso();
-    await Promise.all(
-      selected
-        .map((entry) => entry.docId)
-        .filter(Boolean)
-        .map((docId) =>
-          this.store.merge(Collections.assistantMemoryItems, docId, {
-            lastUsedAt: usedAt,
-          }),
-        ),
-    );
+    const usedAt = options.touchLastUsed === false ? null : nowIso();
+    if (usedAt) {
+      await Promise.all(
+        selected
+          .map((entry) => entry.docId)
+          .filter(Boolean)
+          .map((docId) =>
+            this.store.merge(Collections.assistantMemoryItems, docId, {
+              lastUsedAt: usedAt,
+            }),
+          ),
+      );
+    }
     return selected.map((entry) => ({
       ...entry.item,
-      lastUsedAt: usedAt,
+      lastUsedAt: usedAt ?? entry.item.lastUsedAt,
     }));
   }
 

@@ -38,6 +38,13 @@
 - 记忆检索排序已使用衰减分、置信度和行动有效性分；被选中的记忆会刷新 `lastUsedAt`。
 - TonightPlan 的行动排序已读取 `intervention_effect` / `strategy_weight`，让有效行动升权、无效行动降权。
 
+## 第九轮观测入口
+
+- `/api/agent/memory` 返回长期记忆概览，不执行写入型业务动作。
+- 输出包含 `byKind`、`recent`、`interventionEffects`、`strategyWeights` 和 `contradictionGroups`。
+- 排查读取时 `touchLastUsed: false`，避免单纯打开观测页改变记忆使用时间。
+- `recent` 使用 compact 形态，只输出 id、kind、content、confidence、salience、decay、effectiveness、evidence refs、source ids 和更新时间。
+
 ## 自我进化边界
 
 - 不做代码自修改。

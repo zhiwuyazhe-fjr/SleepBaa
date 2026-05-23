@@ -10,6 +10,10 @@ import {
   AgentToolUndoError,
   undoAgentToolCall,
 } from "../agent/agent_undo";
+import {
+  buildAgentMemoryOverview,
+  compactMemoryItem,
+} from "../agent/agent_memory_overview";
 import { acceptDormInviteCallable } from "../callables/accept_dorm_invite";
 import { assistantCaptureCallable } from "../callables/assistant_capture";
 import { assistantReplyCallable } from "../callables/assistant_reply";
@@ -1632,6 +1636,29 @@ export function createAppApiServer() {
         }
         throw error;
       }
+    }),
+  );
+
+  app.post(
+    "/api/agent/memory",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      const body = asMap(request.body);
+      const limit = Math.max(1, Math.min(120, asNumber(body.limit, 80)));
+      const items = await repo.listAssistantMemoryItems(
+        request.authContext!.uid,
+        {
+          limit,
+          query: asString(body.query),
+          kinds: asStringArray(body.kinds),
+          touchLastUsed: false,
+        },
+      );
+      const overview = buildAgentMemoryOverview(items);
+      response.json({
+        ...overview,
+        recent: overview.recent.map(compactMemoryItem),
+      });
     }),
   );
 
