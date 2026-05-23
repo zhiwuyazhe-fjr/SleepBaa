@@ -39,3 +39,8 @@
 - 每个工具调用写 `agent_tool_calls`，包含输入、输出、状态、错误、耗时、undo payload 或补偿说明。
 - 同步写 `assistant_runs`，保证旧排查链路仍可用。
 
+## 第三轮审计接口状态
+
+- `/api/agent/runs/:id` 已返回 `run`、`plan`、`toolCalls`，可用于排查完整执行链路。
+- SSE 工具事件已带 `callId`、`undoable`、`committed`、`undoPayload`，前端可以将工具状态和后端审计记录对齐。
+- 高风险动作仍不会自动执行；被跳过的工具会写 `agent_tool_calls` 并发出 `tool_failed`，错误原因为 `hard_confirm_required`。

@@ -517,9 +517,13 @@ export async function runAgent(
       await emit(params, "tool_failed", {
         runId,
         planId: plan.id,
+        callId,
         stepId: step.id,
         toolName: step.toolName,
         toolTitle: tool.definition.title,
+        risk: step.risk,
+        undoable: tool.definition.undoable,
+        requiresHardConfirm: tool.definition.requiresHardConfirm,
         skipped: true,
         error: "hard_confirm_required",
       });
@@ -534,9 +538,12 @@ export async function runAgent(
       runId,
       planId: plan.id,
       stepId: step.id,
+      callId,
       toolName: step.toolName,
       toolTitle: tool.definition.title,
       risk: step.risk,
+      undoable: tool.definition.undoable,
+      requiresHardConfirm: tool.definition.requiresHardConfirm,
     });
 
     try {
@@ -563,26 +570,34 @@ export async function runAgent(
         runId,
         planId: plan.id,
         stepId: step.id,
+        callId,
         toolName: step.toolName,
         toolTitle: tool.definition.title,
         output: result.output,
         updatedSurfaces: result.updatedSurfaces ?? [],
+        committed: result.committed ?? false,
+        undoable: tool.definition.undoable,
+        undoPayload: result.undoPayload ?? null,
       });
       if (result.committed) {
         await emit(params, "action_committed", {
           runId,
           planId: plan.id,
           stepId: step.id,
+          callId,
           toolName: step.toolName,
           toolTitle: tool.definition.title,
           updatedSurfaces: result.updatedSurfaces ?? [],
+          undoable: tool.definition.undoable,
+          undoPayload: result.undoPayload ?? null,
         });
       }
       if ((result.memorySyncedCount ?? 0) > 0) {
         await emit(params, "memory_updated", {
-          runId,
-          count: result.memorySyncedCount,
-        });
+        runId,
+        count: result.memorySyncedCount,
+        callId,
+      });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -602,8 +617,11 @@ export async function runAgent(
         runId,
         planId: plan.id,
         stepId: step.id,
+        callId,
         toolName: step.toolName,
         toolTitle: tool.definition.title,
+        risk: step.risk,
+        undoable: tool.definition.undoable,
         error: message,
       });
     }

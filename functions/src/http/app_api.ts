@@ -1596,7 +1596,13 @@ export function createAppApiServer() {
         });
         return;
       }
-      response.json({ run });
+      const [plan, toolCalls] = await Promise.all([
+        run.planId
+          ? repo.getAgentPlan(request.authContext!.uid, run.planId)
+          : null,
+        repo.listAgentToolCalls(request.authContext!.uid, run.id),
+      ]);
+      response.json({ run, plan, toolCalls });
     }),
   );
 

@@ -1164,6 +1164,8 @@ export interface AssistantDataRepository {
   ): Promise<void>;
   writeAgentRun(uid: string, runId: string, run: AgentRunDoc): Promise<void>;
   getAgentRun(uid: string, runId: string): Promise<AgentRunDoc | null>;
+  getAgentPlan(uid: string, planId: string): Promise<AgentPlanDoc | null>;
+  listAgentToolCalls(uid: string, runId: string): Promise<AgentToolCallDoc[]>;
   writeAgentPlan(
     uid: string,
     planId: string,
@@ -2802,6 +2804,33 @@ export class FirestoreRepository implements AssistantDataRepository {
     await this.ensureUserBootstrap(uid);
     const doc = await this.store.get(Collections.agentRuns, `${uid}:${runId}`);
     return doc ? (withoutMeta(doc) as unknown as AgentRunDoc) : null;
+  }
+
+  async getAgentPlan(uid: string, planId: string): Promise<AgentPlanDoc | null> {
+    await this.ensureUserBootstrap(uid);
+    const doc = await this.store.get(Collections.agentPlans, `${uid}:${planId}`);
+    return doc ? (withoutMeta(doc) as unknown as AgentPlanDoc) : null;
+  }
+
+  async listAgentToolCalls(
+    uid: string,
+    runId: string,
+  ): Promise<AgentToolCallDoc[]> {
+    await this.ensureUserBootstrap(uid);
+    const docs = await this.store.query(Collections.agentToolCalls, {
+      filters: { userId: uid, runId },
+      limit: 100,
+    });
+    return docs
+      .map((doc) => withoutMeta(doc) as unknown as AgentToolCallDoc)
+      .sort((left, right) => {
+        const leftStarted = Date.parse(left.startedAt);
+        const rightStarted = Date.parse(right.startedAt);
+        return (
+          (Number.isNaN(leftStarted) ? 0 : leftStarted) -
+          (Number.isNaN(rightStarted) ? 0 : rightStarted)
+        );
+      });
   }
 
   async writeAgentPlan(

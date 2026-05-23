@@ -129,6 +129,10 @@ class AssistantStreamEvent {
     this.toolName,
     this.toolTitle,
     this.toolStatus,
+    this.toolCallId,
+    this.undoable,
+    this.committed,
+    this.undoPayload,
     this.assistantMessageId,
     this.errorMessage,
     this.errorCode,
@@ -152,6 +156,10 @@ class AssistantStreamEvent {
   final String? toolName;
   final String? toolTitle;
   final String? toolStatus;
+  final String? toolCallId;
+  final bool? undoable;
+  final bool? committed;
+  final Map<String, dynamic>? undoPayload;
   final String? assistantMessageId;
   final String? errorMessage;
   final String? errorCode;
@@ -860,9 +868,11 @@ AssistantStreamEvent _assistantEventFromFrame(
         type: AssistantStreamEventType.toolStarted,
         runId: data['runId'] as String?,
         planId: data['planId'] as String?,
+        toolCallId: data['callId'] as String?,
         toolName: toolName,
         toolTitle: data['toolTitle'] as String?,
         toolStatus: 'running',
+        undoable: data['undoable'] as bool?,
         updatedSurfaces: _agentToolSurfaceIds(toolName),
       );
     case 'tool_completed':
@@ -871,9 +881,15 @@ AssistantStreamEvent _assistantEventFromFrame(
         type: AssistantStreamEventType.toolCompleted,
         runId: data['runId'] as String?,
         planId: data['planId'] as String?,
+        toolCallId: data['callId'] as String?,
         toolName: toolName,
         toolTitle: data['toolTitle'] as String?,
         toolStatus: 'success',
+        undoable: data['undoable'] as bool?,
+        committed: data['committed'] as bool?,
+        undoPayload: data['undoPayload'] == null
+            ? null
+            : _mapOf(data['undoPayload']),
         updatedSurfaces: <String>[
           ..._stringList(data['updatedSurfaces']),
           ..._agentToolSurfaceIds(toolName),
@@ -885,9 +901,11 @@ AssistantStreamEvent _assistantEventFromFrame(
         type: AssistantStreamEventType.toolFailed,
         runId: data['runId'] as String?,
         planId: data['planId'] as String?,
+        toolCallId: data['callId'] as String?,
         toolName: toolName,
         toolTitle: data['toolTitle'] as String?,
         toolStatus: data['skipped'] == true ? 'skipped' : 'failed',
+        undoable: data['undoable'] as bool?,
         errorMessage: data['error'] as String?,
         updatedSurfaces: <String>[
           'agent_tool_failed',
@@ -900,9 +918,15 @@ AssistantStreamEvent _assistantEventFromFrame(
         type: AssistantStreamEventType.actionCommitted,
         runId: data['runId'] as String?,
         planId: data['planId'] as String?,
+        toolCallId: data['callId'] as String?,
         toolName: toolName,
         toolTitle: data['toolTitle'] as String?,
         toolStatus: 'committed',
+        undoable: data['undoable'] as bool?,
+        committed: true,
+        undoPayload: data['undoPayload'] == null
+            ? null
+            : _mapOf(data['undoPayload']),
         updatedSurfaces: <String>[
           ..._stringList(data['updatedSurfaces']),
           ..._agentToolSurfaceIds(toolName),
@@ -912,6 +936,7 @@ AssistantStreamEvent _assistantEventFromFrame(
       return AssistantStreamEvent(
         type: AssistantStreamEventType.memoryUpdated,
         runId: data['runId'] as String?,
+        toolCallId: data['callId'] as String?,
         count: (data['count'] as num?)?.toInt(),
         updatedSurfaces: const <String>['agent_memory'],
       );

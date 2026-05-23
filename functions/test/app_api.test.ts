@@ -1029,12 +1029,19 @@ test(
       assert.ok(toolNames.includes("plan.generate_tonight"));
       assert.ok(toolNames.includes("memory.upsert"));
 
+      const createDormResponse = await fetch(`${baseUrl}/api/dorm/create`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ name: "Agent audit dorm" }),
+      });
+      assert.equal(createDormResponse.status, 200);
+
       const response = await fetch(`${baseUrl}/api/agent/run/stream`, {
         method: "POST",
         headers,
         body: JSON.stringify({
           threadId: `${uid}-agent-thread`,
-          prompt: "帮我规划今晚",
+          prompt: "My roommate is noisy; help me handle tonight.",
           clientUserMessageId: `${uid}-agent-user`,
           clientAssistantMessageId: `${uid}-agent-assistant`,
         }),
@@ -1047,11 +1054,45 @@ test(
       assert.ok(events.some((item) => item.event === "tool_started"));
       assert.ok(events.some((item) => item.event === "tool_completed"));
       assert.ok(events.some((item) => item.event === "agent_done"));
+      const completedTool = events.find(
+        (item) =>
+          item.event === "tool_completed" &&
+          item.data.toolName === "dorm.status.update",
+      );
+      assert.ok(completedTool);
+      assert.equal(typeof completedTool.data.callId, "string");
+      assert.equal(completedTool.data.committed, true);
+      assert.equal(completedTool.data.undoable, true);
       const completed = events.find(
         (item) => item.event === "message_completed",
       );
       assert.ok(completed);
       assert.equal(completed.data.assistantMessageId, `${uid}-agent-assistant`);
+      const agentDone = events.find((item) => item.event === "agent_done");
+      assert.ok(agentDone);
+      const runId = String(agentDone.data.runId);
+      const runResponse = await fetch(`${baseUrl}/api/agent/runs/${runId}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({}),
+      });
+      assert.equal(runResponse.status, 200);
+      const runPayload = (await runResponse.json()) as {
+        run: Record<string, unknown>;
+        plan: { steps?: Array<Record<string, unknown>> } | null;
+        toolCalls: Array<Record<string, unknown>>;
+      };
+      assert.equal(runPayload.run.id, runId);
+      assert.ok((runPayload.plan?.steps ?? []).length > 0);
+      assert.ok(runPayload.toolCalls.length > 0);
+      assert.ok(
+        runPayload.toolCalls.some(
+          (call) =>
+            call.toolName === "dorm.status.update" &&
+            call.status === "success" &&
+            Boolean(call.undoPayload),
+        ),
+      );
       assert.equal(events[events.length - 1]?.event, "done");
     });
   },

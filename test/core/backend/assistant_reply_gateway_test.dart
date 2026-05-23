@@ -94,7 +94,7 @@ void main() {
           CloudBaseSseFrame(
             event: 'tool_completed',
             data:
-                '{"runId":"run-1","planId":"plan-1","toolName":"plan.generate_tonight","toolTitle":"生成今晚计划","updatedSurfaces":["home_pre_sleep"]}',
+                '{"runId":"run-1","planId":"plan-1","callId":"call-1","toolName":"plan.generate_tonight","toolTitle":"生成今晚计划","updatedSurfaces":["home_pre_sleep"],"committed":true,"undoable":true,"undoPayload":{"previousUnknown":true}}',
           ),
           CloudBaseSseFrame(
             event: 'memory_updated',
@@ -142,16 +142,23 @@ void main() {
         AssistantStreamEventType.agentDone,
       ]),
     );
+    final AssistantStreamEvent completed = events
+        .where(
+          (AssistantStreamEvent event) =>
+              event.type == AssistantStreamEventType.toolCompleted,
+        )
+        .single;
     expect(
-      events
-          .where(
-            (AssistantStreamEvent event) =>
-                event.type == AssistantStreamEventType.toolCompleted,
-          )
-          .single
-          .updatedSurfaces,
-      containsAll(<String>['home_pre_sleep', 'agent_tool_plan_generate_tonight']),
+      completed.updatedSurfaces,
+      containsAll(<String>[
+        'home_pre_sleep',
+        'agent_tool_plan_generate_tonight',
+      ]),
     );
+    expect(completed.toolCallId, 'call-1');
+    expect(completed.committed, true);
+    expect(completed.undoable, true);
+    expect(completed.undoPayload, containsPair('previousUnknown', true));
   });
 
   test(
