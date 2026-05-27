@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -11,6 +12,7 @@ class MicroInterventionTaskPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppBar(title: const Text('全部今晚建议')),
       body: ListenableBuilder(
@@ -44,12 +46,12 @@ class MicroInterventionTaskPage extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       '这些建议来自昨晚环境、宿舍状态和你最近的反馈。',
-                      style: Theme.of(context).textTheme.titleMedium,
+                      style: AppTypography.panelTitle(textTheme),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       '已采纳 $selectedCount / ${recommendations.length} 条，点击卡片右侧按钮即可立即执行或切换状态。',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                      style: AppTypography.body(textTheme),
                     ),
                   ],
                 ),

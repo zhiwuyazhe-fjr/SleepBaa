@@ -4,6 +4,7 @@ import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -33,7 +34,8 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
       if (!mounted) {
         return;
       }
-      context.appServices.interferenceProbeController.ensureFreshForDetailPage();
+      context.appServices.interferenceProbeController
+          .ensureFreshForDetailPage();
     });
   }
 
@@ -45,6 +47,7 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     final NightMoodPalette palette = context.nightMoodPalette;
+    final TextTheme textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
       appBar: AppBar(title: const Text('干扰因子分析')),
@@ -71,15 +74,14 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
                     children: <Widget>[
                       Text(
                         '今晚先一起看看，哪些细小因素正在悄悄影响你的安睡。',
-                        style: Theme.of(context).textTheme.headlineSmall,
+                        style: AppTypography.sectionTitle(textTheme),
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       Text(
                         '进入后小眠已经再次帮你检测啦',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
-                          height: 1.55,
-                        ),
+                        style: AppTypography.bodyMuted(
+                          textTheme,
+                        ).copyWith(color: AppColors.textSecondary),
                       ),
                     ],
                   ),
@@ -88,6 +90,10 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
                 SectionTitle(
                   title: '今晚的四个观察点',
                   actionLabel: '回到首页',
+                  titleStyle: AppTypography.sectionTitle(textTheme),
+                  actionStyle: AppTypography.meta(
+                    textTheme,
+                  ).copyWith(color: AppColors.textSecondary),
                   onAction: () => context.pop(),
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -111,15 +117,14 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
                     children: <Widget>[
                       Text(
                         '和小眠说一说，看看还有哪些因素影响了今晚的安睡……',
-                        style: Theme.of(context).textTheme.titleMedium,
+                        style: AppTypography.panelTitle(textTheme),
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       Text(
                         '如果你觉得这些结果还不够完整，可以把当下的感受、舍友动态，或者刚刚发生的小插曲告诉小眠，它会继续帮你一起梳理。',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
-                          height: 1.55,
-                        ),
+                        style: AppTypography.body(
+                          textTheme,
+                        ).copyWith(color: AppColors.textSecondary),
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       PrimaryButton(
@@ -140,10 +145,7 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
 }
 
 class _FactorDetailCard extends StatelessWidget {
-  const _FactorDetailCard({
-    required this.factor,
-    required this.onRetest,
-  });
+  const _FactorDetailCard({required this.factor, required this.onRetest});
 
   final InterferenceFactorSnapshot factor;
   final VoidCallback? onRetest;
@@ -151,6 +153,7 @@ class _FactorDetailCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     final _FactorVisual visual = _visualOf(factor.type, palette);
     final bool isWorking = factor.status == InterferenceFactorStatus.measuring;
 
@@ -176,15 +179,14 @@ class _FactorDetailCard extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       factor.title,
-                      style: Theme.of(context).textTheme.titleLarge,
+                      style: AppTypography.cardTitle(textTheme),
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
                       _headlineFor(factor),
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
-                        height: 1.45,
-                      ),
+                      style: AppTypography.bodyMuted(
+                        textTheme,
+                      ).copyWith(color: AppColors.textSecondary),
                     ),
                   ],
                 ),
@@ -201,8 +203,9 @@ class _FactorDetailCard extends StatelessWidget {
                 ),
                 child: Text(
                   factor.gradeLabel,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  style: AppTypography.chip(textTheme).copyWith(
                     color: visual.badgeForeground,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -213,14 +216,8 @@ class _FactorDetailCard extends StatelessWidget {
             spacing: AppSpacing.sm,
             runSpacing: AppSpacing.sm,
             children: <Widget>[
-              _MetaChip(
-                label: '当前值',
-                value: factor.value,
-              ),
-              _MetaChip(
-                label: '状态',
-                value: _statusLabelOf(factor.status),
-              ),
+              _MetaChip(label: '当前值', value: factor.value),
+              _MetaChip(label: '状态', value: _statusLabelOf(factor.status)),
               _MetaChip(
                 label: '最近检测',
                 value: _measuredAtLabel(factor.measuredAt),
@@ -228,12 +225,7 @@ class _FactorDetailCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          Text(
-            factor.detail,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              height: 1.55,
-            ),
-          ),
+          Text(factor.detail, style: AppTypography.body(textTheme)),
           if (isWorking) ...<Widget>[
             const SizedBox(height: AppSpacing.md),
             const LinearProgressIndicator(minHeight: 6),
@@ -266,16 +258,14 @@ class _FactorDetailCard extends StatelessWidget {
 }
 
 class _MetaChip extends StatelessWidget {
-  const _MetaChip({
-    required this.label,
-    required this.value,
-  });
+  const _MetaChip({required this.label, required this.value});
 
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
@@ -285,10 +275,7 @@ class _MetaChip extends StatelessWidget {
         color: AppColors.surfaceMuted,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(
-        '$label  $value',
-        style: Theme.of(context).textTheme.labelMedium,
-      ),
+      child: Text('$label  $value', style: AppTypography.chip(textTheme)),
     );
   }
 }
@@ -307,10 +294,7 @@ class _FactorVisual {
   final Color borderColor;
 }
 
-_FactorVisual _visualOf(
-  InterferenceFactorType type,
-  NightMoodPalette palette,
-) {
+_FactorVisual _visualOf(InterferenceFactorType type, NightMoodPalette palette) {
   return switch (type) {
     InterferenceFactorType.noise => _FactorVisual(
       icon: Icons.volume_up_outlined,

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/app_brand.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_text_styles.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -88,31 +89,32 @@ class _SleepDormAppState extends State<SleepDormApp> {
 
   ThemeData _buildTheme(NightMood? mood) {
     final NightMoodPalette palette = NightMoodPalette.fromMood(mood);
+    final AppSemanticColors appColors = AppSemanticColors.light(palette);
     final ColorScheme colorScheme = const ColorScheme.light().copyWith(
-      primary: palette.primary,
-      onPrimary: AppColors.onDark,
-      secondary: palette.primarySoft,
-      surface: AppColors.surface,
-      onSurface: AppColors.textPrimary,
-      outline: AppColors.surfaceBorder,
+      primary: appColors.accent,
+      onPrimary: appColors.textOnAccent,
+      secondary: appColors.accentSoft,
+      surface: appColors.surface,
+      onSurface: appColors.textPrimary,
+      outline: appColors.borderSubtle,
     );
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: AppColors.background,
+      scaffoldBackgroundColor: appColors.pageBackground,
       textTheme: AppTextStyles.buildTextTheme(),
       fontFamilyFallback: AppTextStyles.cjkFallbackFonts,
-      extensions: <ThemeExtension<dynamic>>[palette],
-      appBarTheme: const AppBarTheme(
+      extensions: <ThemeExtension<dynamic>>[palette, appColors],
+      appBarTheme: AppBarTheme(
         centerTitle: false,
         elevation: 0,
-        backgroundColor: AppColors.background,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: appColors.pageBackground,
+        foregroundColor: appColors.textPrimary,
         surfaceTintColor: Colors.transparent,
       ),
-      dividerColor: AppColors.divider,
-      splashColor: palette.primarySoft.withAlpha(38),
+      dividerColor: appColors.borderSubtle,
+      splashColor: appColors.accentSoft.withAlpha(38),
       highlightColor: Colors.transparent,
     );
   }

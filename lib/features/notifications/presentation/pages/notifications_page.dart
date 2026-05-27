@@ -5,6 +5,7 @@ import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -101,6 +102,7 @@ class _NotificationSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
     if (items.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -112,10 +114,7 @@ class _NotificationSection extends StatelessWidget {
         children: <Widget>[
           SectionTitle(
             title: title,
-            titleStyle: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-            ),
+            titleStyle: AppTypography.sectionTitle(textTheme),
           ),
           const SizedBox(height: AppSpacing.xs),
           ...items.map(
@@ -155,18 +154,14 @@ class _NotificationSection extends StatelessWidget {
                         children: <Widget>[
                           Text(
                             _localizedTitle(item),
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
+                            style: AppTypography.cardTitle(textTheme),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             _localizedBody(item),
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  fontSize: 12,
-                                  color: const Color(0xFF888888),
-                                  fontWeight: FontWeight.w400,
-                                ),
+                            style: AppTypography.bodyMuted(
+                              textTheme,
+                            ).copyWith(color: AppColors.textSecondary),
                           ),
                         ],
                       ),
@@ -233,6 +228,7 @@ class _NotificationOverviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.sm),
       borderRadius: AppRadius.compactCard,
@@ -260,18 +256,14 @@ class _NotificationOverviewCard extends StatelessWidget {
               children: <Widget>[
                 Text(
                   unreadCount > 0 ? '有 $unreadCount 条待处理消息' : '消息都已处理',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: AppTypography.panelTitle(textTheme),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   unreadCount > 0 ? '建议先查看「待处理」分组' : '今晚可以专注休息了',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 12,
-                    color: const Color(0xFF888888),
-                    fontWeight: FontWeight.w400,
-                  ),
+                  style: AppTypography.bodyMuted(
+                    textTheme,
+                  ).copyWith(color: AppColors.textSecondary),
                 ),
               ],
             ),

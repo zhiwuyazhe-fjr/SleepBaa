@@ -4,6 +4,7 @@ import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -174,9 +175,8 @@ class _HomeQuickActionsEditPageState extends State<HomeQuickActionsEditPage> {
                   Text(
                     '请选择 4 个快捷功能',
                     textAlign: TextAlign.center,
-                    style: textTheme.bodySmall?.copyWith(
+                    style: AppTypography.meta(textTheme).copyWith(
                       color: context.nightMoodPalette.welcomeAccentColor,
-                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
@@ -202,20 +202,16 @@ class _EditorSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Row(
       children: <Widget>[
-        Text(
-          title,
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-        ),
+        Text(title, style: AppTypography.sectionTitle(textTheme)),
         const Spacer(),
         Text(
           detail,
-          style: Theme.of(
-            context,
-          ).textTheme.labelLarge?.copyWith(color: AppColors.textSecondary),
+          style: AppTypography.meta(
+            textTheme,
+          ).copyWith(color: AppColors.textSecondary),
         ),
       ],
     );
@@ -321,6 +317,7 @@ class _QuickActionStripTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       padding: EdgeInsets.zero,
       borderRadius: AppRadius.compactCard,
@@ -333,10 +330,9 @@ class _QuickActionStripTile extends StatelessWidget {
         icon: action.icon,
         iconColor: iconColor,
         leadingWidth: AppSpacing.xxl,
-        titleStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
-          color: titleColor,
-          fontWeight: FontWeight.w600,
-        ),
+        titleStyle: AppTypography.cardTitle(
+          textTheme,
+        ).copyWith(color: titleColor, fontWeight: FontWeight.w600),
         trailing: trailing,
       ),
     );

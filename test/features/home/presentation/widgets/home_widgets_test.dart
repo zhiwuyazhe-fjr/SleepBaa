@@ -1,9 +1,135 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/home_metric_card.dart';
+import 'package:sleep_dorm_app/core/widgets/quick_action_icon_button.dart';
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.dart';
 
 void main() {
+  testWidgets('sleep risk card uses semantic hero gradient tokens', (
+    WidgetTester tester,
+  ) async {
+    final NightMoodPalette palette = NightMoodPalette.fromMood(null);
+    final AppSemanticColors tokens = AppSemanticColors.light(palette).copyWith(
+      heroStart: const Color(0xFFE7BFA8),
+      heroMid: const Color(0xFFE9D8C9),
+      heroEnd: const Color(0xFF8E6C5B),
+      accentDeep: const Color(0xFF5E5149),
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        const SleepRiskCard(riskLabel: '偏低', primaryValue: '35 dB'),
+        tokens: tokens,
+      ),
+    );
+
+    final Container hero = tester
+        .widgetList<Container>(
+          find.descendant(
+            of: find.byType(SleepRiskCard),
+            matching: find.byType(Container),
+          ),
+        )
+        .firstWhere((Container container) {
+          final Decoration? decoration = container.decoration;
+          return decoration is BoxDecoration && decoration.gradient != null;
+        });
+    final BoxDecoration decoration = hero.decoration! as BoxDecoration;
+    final LinearGradient gradient = decoration.gradient! as LinearGradient;
+    expect(gradient.colors, <Color>[
+      tokens.heroStart,
+      tokens.heroMid,
+      tokens.heroEnd,
+    ]);
+  });
+
+  testWidgets('home quick action uses semantic accent tokens', (
+    WidgetTester tester,
+  ) async {
+    final NightMoodPalette palette = NightMoodPalette.fromMood(null);
+    final AppSemanticColors tokens = AppSemanticColors.light(palette).copyWith(
+      accentSoft: const Color(0xFFEAE2D5),
+      accentDeep: const Color(0xFF5C5449),
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        QuickActionIconButton(
+          icon: Icons.bedtime_rounded,
+          label: '助眠',
+          onTap: () {},
+        ),
+        tokens: tokens,
+      ),
+    );
+
+    final Container iconContainer = tester.widget<Container>(
+      find
+          .descendant(
+            of: find.byType(QuickActionIconButton),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    final BoxDecoration decoration = iconContainer.decoration! as BoxDecoration;
+    expect(decoration.color, tokens.accentSoft);
+
+    final Icon icon = tester.widget<Icon>(
+      find.descendant(
+        of: find.byType(QuickActionIconButton),
+        matching: find.byIcon(Icons.bedtime_rounded),
+      ),
+    );
+    expect(icon.color, tokens.accentDeep);
+  });
+
+  testWidgets('home metric card uses semantic surface and text tokens', (
+    WidgetTester tester,
+  ) async {
+    final NightMoodPalette palette = NightMoodPalette.fromMood(null);
+    final AppSemanticColors tokens = AppSemanticColors.light(palette).copyWith(
+      surface: const Color(0xFFF1EEE7),
+      textPrimary: const Color(0xFF302A22),
+      textSecondary: const Color(0xFF70675C),
+      accentDeep: const Color(0xFF5C5449),
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        HomeMetricCard(
+          icon: Icons.lightbulb_outline_rounded,
+          label: '灯光环境',
+          value: '适中',
+          onTap: () {},
+        ),
+        tokens: tokens,
+      ),
+    );
+
+    final Container card = tester.widget<Container>(
+      find
+          .descendant(
+            of: find.byType(HomeMetricCard),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    final BoxDecoration decoration = card.decoration! as BoxDecoration;
+    expect(decoration.color, tokens.surface);
+
+    final Icon icon = tester.widget<Icon>(
+      find.descendant(
+        of: find.byType(HomeMetricCard),
+        matching: find.byIcon(Icons.lightbulb_outline_rounded),
+      ),
+    );
+    expect(icon.color, tokens.accentDeep);
+  });
+
   testWidgets('support tool card only renders icon and title', (
     WidgetTester tester,
   ) async {
@@ -92,6 +218,82 @@ void main() {
     expect(find.byIcon(Icons.skip_next_rounded), findsNothing);
   });
 
+  testWidgets('home audio action card keeps the same border as other actions', (
+    WidgetTester tester,
+  ) async {
+    final NightMoodPalette palette = NightMoodPalette.fromMood(null);
+    final AppSemanticColors tokens = AppSemanticColors.light(
+      palette,
+    ).copyWith(borderSubtle: const Color(0xFFD8CEC3));
+
+    await tester.pumpWidget(
+      _wrap(
+        HomeActionCard(
+          recommendation: _audioRecommendation(
+            executionState: RecommendationExecutionState.idle,
+          ),
+          onTap: () {},
+        ),
+        tokens: tokens,
+      ),
+    );
+
+    final AppCard card = tester.widget<AppCard>(
+      find.ancestor(of: find.text('睡前放松音频'), matching: find.byType(AppCard)),
+    );
+    expect(card.border, Border.all(color: tokens.borderSubtle));
+  });
+
+  testWidgets('home action card title is lower than section title', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        HomeActionCard(
+          recommendation: _audioRecommendation(
+            executionState: RecommendationExecutionState.idle,
+          ),
+          onTap: () {},
+        ),
+      ),
+    );
+
+    final Text title = tester.widget<Text>(find.text('睡前放松音频'));
+    expect(title.style?.fontSize, 15);
+    expect(title.style?.fontWeight, FontWeight.w700);
+  });
+
+  testWidgets('home metric and quick action use compact typography roles', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        Column(
+          children: <Widget>[
+            QuickActionIconButton(
+              icon: Icons.bedtime_rounded,
+              label: '助眠',
+              onTap: () {},
+            ),
+            HomeMetricCard(
+              icon: Icons.lightbulb_outline_rounded,
+              label: '灯光环境',
+              value: '适中',
+            ),
+          ],
+        ),
+      ),
+    );
+
+    expect(tester.widget<Text>(find.text('助眠')).style?.fontSize, 12);
+    expect(
+      tester.widget<Text>(find.text('助眠')).style?.fontWeight,
+      FontWeight.w600,
+    );
+    expect(tester.widget<Text>(find.text('适中')).style?.fontSize, 16);
+    expect(tester.widget<Text>(find.text('灯光环境')).style?.fontSize, 13);
+  });
+
   testWidgets('session audio card hides cloud subtitle and exposes transport', (
     WidgetTester tester,
   ) async {
@@ -131,9 +333,16 @@ void main() {
   });
 }
 
-Widget _wrap(Widget child, {bool dark = false}) {
+Widget _wrap(Widget child, {bool dark = false, AppSemanticColors? tokens}) {
+  final NightMoodPalette palette = NightMoodPalette.fromMood(null);
   return MaterialApp(
-    theme: ThemeData(useMaterial3: true),
+    theme: ThemeData(
+      useMaterial3: true,
+      extensions: <ThemeExtension<dynamic>>[
+        palette,
+        tokens ?? AppSemanticColors.light(palette),
+      ],
+    ),
     home: Scaffold(
       backgroundColor: dark ? const Color(0xFF111111) : Colors.white,
       body: Center(child: SizedBox(width: 420, child: child)),

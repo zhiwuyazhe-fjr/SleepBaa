@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
-import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 
 class QuickActionIconButton extends StatelessWidget {
   const QuickActionIconButton({
@@ -17,7 +17,8 @@ class QuickActionIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
@@ -27,11 +28,11 @@ class QuickActionIconButton extends StatelessWidget {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: palette.primaryHighlight,
+              color: appColors.accentSoft,
               borderRadius: BorderRadius.circular(20),
             ),
             alignment: Alignment.center,
-            child: Icon(icon, size: 24, color: palette.primary),
+            child: Icon(icon, size: 24, color: appColors.accentDeep),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
@@ -39,10 +40,9 @@ class QuickActionIconButton extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w600,
-            ),
+            style: AppTypography.meta(
+              textTheme,
+            ).copyWith(color: appColors.textPrimary),
           ),
         ],
       ),

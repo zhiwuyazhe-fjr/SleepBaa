@@ -15,7 +15,10 @@ import 'package:sleep_dorm_app/main.dart' as app_main;
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_text_styles.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
@@ -119,6 +122,54 @@ void main() {
       }
     },
   );
+
+  test('app semantic colors expose tokenized home palette values', () {
+    final NightMoodPalette calm = NightMoodPalette.fromMood(NightMood.calm);
+
+    final AppSemanticColors light = AppSemanticColors.light(calm);
+    expect(light.pageBackground, AppColors.background);
+    expect(light.surface, AppColors.surface);
+    expect(light.surfaceMuted, AppColors.surfaceMuted);
+    expect(light.textPrimary, AppColors.textPrimary);
+    expect(light.textSecondary, AppColors.textSecondary);
+    expect(light.accent, calm.welcomeAccentColor);
+    expect(light.textOnAccent, calm.welcomeTextOnAccent);
+    expect(light.accentDeep, const Color(0xFF516B64));
+    expect(light.heroStart, calm.heroGradientStart);
+    expect(light.heroMid, calm.heroGradientMid);
+    expect(light.heroEnd, calm.heroGradientEnd);
+
+    final AppSemanticColors dark = AppSemanticColors.dark(calm);
+    expect(dark.pageBackground, const Color(0xFF161A1E));
+    expect(dark.surface, const Color(0xFF20262B));
+    expect(dark.surfaceRaised, const Color(0xFF242A30));
+    expect(dark.textPrimary, AppColors.onDark);
+    expect(dark.textSecondary, AppColors.onDark.withAlpha(180));
+    expect(dark.accent, const Color(0xFF7FB8AA));
+    expect(dark.textOnAccent, const Color(0xFF102B28));
+    expect(dark.accentSoft, const Color(0xFF243531));
+  });
+
+  test('app typography exposes approved home font roles', () {
+    final TextTheme textTheme = AppTextStyles.buildTextTheme();
+
+    expect(AppTypography.heroTitle(textTheme).fontSize, 24);
+    expect(AppTypography.heroTitle(textTheme).fontWeight, FontWeight.w800);
+    expect(AppTypography.sectionTitle(textTheme).fontSize, 18);
+    expect(AppTypography.sectionTitle(textTheme).fontWeight, FontWeight.w800);
+    expect(AppTypography.panelTitle(textTheme).fontSize, 16);
+    expect(AppTypography.panelTitle(textTheme).fontWeight, FontWeight.w700);
+    expect(AppTypography.cardTitle(textTheme).fontSize, 15);
+    expect(AppTypography.cardTitle(textTheme).fontWeight, FontWeight.w700);
+    expect(AppTypography.body(textTheme).fontSize, 14);
+    expect(AppTypography.body(textTheme).fontWeight, FontWeight.w500);
+    expect(AppTypography.bodyMuted(textTheme).fontSize, 13);
+    expect(AppTypography.bodyMuted(textTheme).fontWeight, FontWeight.w400);
+    expect(AppTypography.meta(textTheme).fontSize, 12);
+    expect(AppTypography.meta(textTheme).fontWeight, FontWeight.w600);
+    expect(AppTypography.chip(textTheme).fontSize, 11);
+    expect(AppTypography.chip(textTheme).fontWeight, FontWeight.w500);
+  });
 
   test('cloudbase auth gate only blocks before bootstrap completes', () {
     expect(
@@ -240,11 +291,11 @@ void main() {
 
     final Finder editFinder = find.text('编辑').first;
     final BuildContext editContext = tester.element(editFinder);
-    final NightMoodPalette palette = editContext.nightMoodPalette;
+    final AppSemanticColors appColors = editContext.appColors;
     final Text editText = tester.widget<Text>(editFinder);
     expect(editText.style?.fontSize, 12);
-    expect(editText.style?.fontWeight, FontWeight.w700);
-    expect(editText.style?.color, palette.welcomeAccentColor);
+    expect(editText.style?.fontWeight, FontWeight.w600);
+    expect(editText.style?.color, appColors.accentDeep);
 
     final Finder editButton = find
         .ancestor(of: editFinder, matching: find.byType(TextButton))
@@ -258,6 +309,7 @@ void main() {
           .first,
     );
     expect(editChevron.size, 16);
+    expect(editChevron.color, appColors.accentDeep);
   });
 
   testWidgets('home quick action editor saves a selected four item set', (
@@ -384,6 +436,32 @@ void main() {
       expect(844 - buttonBottom, closeTo(16, 0.1));
     },
   );
+
+  testWidgets('home quick action editor uses approved typography roles', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homeQuickActionsEdit,
+      clock: _dayClock,
+    );
+
+    expect(tester.widget<Text>(find.text('已选择')).style?.fontSize, 18);
+    expect(
+      tester.widget<Text>(find.text('已选择')).style?.fontWeight,
+      FontWeight.w800,
+    );
+    expect(tester.widget<Text>(find.text('4/4')).style?.fontSize, 12);
+    expect(
+      tester.widget<Text>(find.text('4/4')).style?.fontWeight,
+      FontWeight.w600,
+    );
+    expect(tester.widget<Text>(find.text('梦记一则')).style?.fontSize, 15);
+    expect(
+      tester.widget<Text>(find.text('梦记一则')).style?.fontWeight,
+      FontWeight.w600,
+    );
+  });
 
   testWidgets('night entry from /home opens the welcome flow first', (
     WidgetTester tester,
@@ -3043,6 +3121,79 @@ void main() {
     expect(find.byType(NotificationsPage), findsOneWidget);
   });
 
+  testWidgets('intervention task page uses home typography roles', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.interventionTask,
+      clock: _dayClock,
+    );
+
+    final Text introTitle = tester.widget<Text>(
+      find.text('这些建议来自昨晚环境、宿舍状态和你最近的反馈。'),
+    );
+    expect(introTitle.style?.fontSize, 16);
+    expect(introTitle.style?.fontWeight, FontWeight.w700);
+
+    final Text actionTitle = tester.widget<Text>(find.text('睡前放松音频'));
+    expect(actionTitle.style?.fontSize, 15);
+    expect(actionTitle.style?.fontWeight, FontWeight.w700);
+  });
+
+  testWidgets('interference detail page uses home typography roles', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.analysisInterferenceFactors,
+      clock: _dayClock,
+    );
+
+    final Text sectionTitle = tester.widget<Text>(find.text('今晚的四个观察点'));
+    expect(sectionTitle.style?.fontSize, 18);
+    expect(sectionTitle.style?.fontWeight, FontWeight.w800);
+
+    final Text noiseTitle = tester.widget<Text>(find.text('宿舍噪声'));
+    expect(noiseTitle.style?.fontSize, 15);
+    expect(noiseTitle.style?.fontWeight, FontWeight.w700);
+
+    final Text statusChip = tester.widget<Text>(
+      find.textContaining('状态').first,
+    );
+    expect(statusChip.style?.fontSize, 11);
+  });
+
+  testWidgets('notification center uses home typography roles', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.notifications,
+      clock: _dayClock,
+    );
+
+    final Text overviewTitle = tester.widget<Text>(
+      find.textContaining('待处理消息').first,
+    );
+    expect(overviewTitle.style?.fontSize, 16);
+    expect(overviewTitle.style?.fontWeight, FontWeight.w700);
+
+    final Text sectionTitle = tester.widget<Text>(find.text('待处理'));
+    expect(sectionTitle.style?.fontSize, 18);
+    expect(sectionTitle.style?.fontWeight, FontWeight.w800);
+
+    final Text notificationTitle = tester.widget<Text>(
+      find.text('宿舍环境保持安静').first,
+    );
+    expect(notificationTitle.style?.fontSize, 15);
+    expect(notificationTitle.style?.fontWeight, FontWeight.w700);
+
+    final Text overviewBody = tester.widget<Text>(find.text('建议先查看「待处理」分组'));
+    expect(overviewBody.style?.fontSize, 13);
+    expect(overviewBody.style?.fontWeight, FontWeight.w400);
+  });
+
   testWidgets(
     'dorm notification opens dorm tab and keeps tab switching stable',
     (WidgetTester tester) async {
@@ -4855,7 +5006,7 @@ DateTime _dayClock() => DateTime(2026, 4, 5, 14);
 
 DateTime _feedbackClock() => DateTime(2026, 4, 18, 7);
 
-DateTime _freshSleepClock() => DateTime(2026, 5, 17, 14);
+DateTime _freshSleepClock() => DateTime(2030, 5, 17, 14);
 
 DateTime _nightClock() => DateTime(2026, 4, 5, 22);
 

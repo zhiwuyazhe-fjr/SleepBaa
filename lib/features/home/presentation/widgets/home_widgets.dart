@@ -4,7 +4,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
@@ -23,7 +25,7 @@ class SleepRiskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       padding: EdgeInsets.zero,
@@ -37,9 +39,9 @@ class SleepRiskCard extends StatelessWidget {
             begin: Alignment.bottomCenter,
             end: Alignment.topCenter,
             colors: <Color>[
-              palette.welcomeAccentColor,
-              palette.primarySoft,
-              palette.primary,
+              appColors.heroStart,
+              appColors.heroMid,
+              appColors.heroEnd,
             ],
           ),
         ),
@@ -50,23 +52,26 @@ class SleepRiskCard extends StatelessWidget {
           children: <Widget>[
             Text(
               '睡眠风险',
-              style: textTheme.titleLarge?.copyWith(
-                color: AppColors.onDark,
-                fontWeight: FontWeight.w700,
-              ),
+              style: AppTypography.panelTitle(
+                textTheme,
+              ).copyWith(color: AppColors.onDark),
             ),
             Row(
               children: <Widget>[
-                _CardMetaPill(
-                  label: riskLabel,
-                  backgroundColor: palette.primaryDeep,
-                  foregroundColor: AppColors.onDark,
+                Flexible(
+                  child: _CardMetaPill(
+                    label: riskLabel,
+                    backgroundColor: appColors.accentDeep,
+                    foregroundColor: AppColors.onDark,
+                  ),
                 ),
                 const SizedBox(width: AppSpacing.xs),
-                _CardMetaPill(
-                  label: primaryValue,
-                  backgroundColor: palette.primaryDeep,
-                  foregroundColor: AppColors.onDark,
+                Flexible(
+                  child: _CardMetaPill(
+                    label: primaryValue,
+                    backgroundColor: appColors.accentDeep,
+                    foregroundColor: AppColors.onDark,
+                  ),
                 ),
               ],
             ),
@@ -89,12 +94,13 @@ class StartSleepModeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       padding: EdgeInsets.zero,
       borderRadius: AppRadius.surfacePrimary,
-      border: Border.all(color: AppColors.cardBorderSubtle),
+      color: appColors.surface,
+      border: Border.all(color: appColors.borderSubtle),
       boxShadow: AppColors.cardShadow,
       onTap: onTap,
       child: Container(
@@ -108,10 +114,9 @@ class StartSleepModeCard extends StatelessWidget {
               '开启睡眠模式',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: textTheme.titleLarge?.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w700,
-              ),
+              style: AppTypography.panelTitle(
+                textTheme,
+              ).copyWith(color: appColors.textPrimary),
             ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -123,14 +128,14 @@ class StartSleepModeCard extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceSubtle,
+                    color: appColors.surfaceMuted,
                     borderRadius: AppRadius.surfaceSecondary,
                   ),
                   child: Text(
                     isAudioReady ? '音频已同步' : '轻触进入',
-                    style: textTheme.labelSmall?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                    style: AppTypography.chip(
+                      textTheme,
+                    ).copyWith(color: appColors.textSecondary),
                   ),
                 ),
                 Container(
@@ -138,12 +143,12 @@ class StartSleepModeCard extends StatelessWidget {
                   height: 40,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: palette.welcomeAccentColor,
+                    color: appColors.accent,
                   ),
                   alignment: Alignment.center,
                   child: Icon(
                     Icons.dark_mode_rounded,
-                    color: palette.welcomeTextOnAccent,
+                    color: appColors.textOnAccent,
                     size: 20,
                   ),
                 ),
@@ -182,10 +187,9 @@ class _CardMetaPill extends StatelessWidget {
         label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: foregroundColor,
-          fontWeight: FontWeight.w400,
-        ),
+        style: AppTypography.chip(
+          Theme.of(context).textTheme,
+        ).copyWith(color: foregroundColor),
       ),
     );
   }
@@ -215,25 +219,24 @@ class HomeActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     final bool selected =
         recommendation.executionState != RecommendationExecutionState.idle;
     final bool highlight = selected;
-    final Color cardColor = highlight
-        ? palette.welcomeAccentColor
-        : AppColors.surface;
+    final Color cardColor = highlight ? appColors.accent : appColors.surface;
     final Color foreground = highlight
-        ? palette.welcomeTextOnAccent
-        : AppColors.textPrimary;
+        ? appColors.textOnAccent
+        : appColors.textPrimary;
     final Color borderColor = highlight
-        ? palette.primary.withAlpha(84)
-        : AppColors.divider;
+        ? appColors.accent.withAlpha(84)
+        : appColors.borderSubtle;
     final Color chipBackground = highlight
         ? Colors.white.withAlpha(170)
-        : AppColors.background;
+        : appColors.pageBackground;
     final Color chipForeground = highlight
-        ? palette.welcomeTextOnAccent
-        : AppColors.textSecondary;
+        ? appColors.textOnAccent
+        : appColors.textSecondary;
     final String title = displayTitle?.trim().isNotEmpty ?? false
         ? displayTitle!.trim()
         : recommendation.title;
@@ -246,7 +249,7 @@ class HomeActionCard extends StatelessWidget {
       padding: EdgeInsets.zero,
       borderRadius: AppRadius.stripCard,
       color: cardColor,
-      border: _isAudio ? null : Border.all(color: borderColor),
+      border: Border.all(color: borderColor),
       onTap: _isAudio ? null : onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -265,7 +268,7 @@ class HomeActionCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: highlight
                             ? Colors.white.withAlpha(208)
-                            : AppColors.background,
+                            : appColors.pageBackground,
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
@@ -273,8 +276,8 @@ class HomeActionCard extends StatelessWidget {
                         recommendation.icon,
                         size: 20,
                         color: highlight
-                            ? palette.welcomeTextOnAccent
-                            : palette.primary,
+                            ? appColors.textOnAccent
+                            : appColors.accentDeep,
                       ),
                     ),
                     const SizedBox(width: AppSpacing.md),
@@ -285,24 +288,21 @@ class HomeActionCard extends StatelessWidget {
                         children: <Widget>[
                           Builder(
                             builder: (BuildContext context) {
-                              final TextStyle? style = Theme.of(context)
-                                  .textTheme
-                                  .titleLarge
-                                  ?.copyWith(
-                                    color: foreground,
-                                    fontWeight: FontWeight.w700,
-                                  );
+                              final TextStyle titleStyle =
+                                  AppTypography.cardTitle(
+                                    textTheme,
+                                  ).copyWith(color: foreground);
                               if (showTransportControls) {
                                 return _AutoScrollingText(
                                   text: title,
-                                  style: style,
+                                  style: titleStyle,
                                 );
                               }
                               return Text(
                                 title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: style,
+                                style: titleStyle,
                               );
                             },
                           ),
@@ -329,8 +329,8 @@ class HomeActionCard extends StatelessWidget {
                     icon: Icons.skip_previous_rounded,
                     onTap: onPreviousAudio,
                     color: highlight
-                        ? palette.welcomeTextOnAccent
-                        : palette.primary,
+                        ? appColors.textOnAccent
+                        : appColors.accentDeep,
                   ),
                 InkWell(
                   onTap: onPlayToggle ?? onTap,
@@ -341,12 +341,12 @@ class HomeActionCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: highlight
                           ? Colors.white.withAlpha(220)
-                          : AppColors.background,
+                          : appColors.pageBackground,
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: highlight
-                            ? palette.primary
-                            : AppColors.surfaceBorder,
+                            ? appColors.accentDeep
+                            : appColors.borderSubtle,
                       ),
                     ),
                     alignment: Alignment.center,
@@ -354,8 +354,8 @@ class HomeActionCard extends StatelessWidget {
                       _trailingIcon(selected),
                       size: 22,
                       color: highlight
-                          ? palette.welcomeTextOnAccent
-                          : palette.primary,
+                          ? appColors.textOnAccent
+                          : appColors.accentDeep,
                     ),
                   ),
                 ),
@@ -364,8 +364,8 @@ class HomeActionCard extends StatelessWidget {
                     icon: Icons.skip_next_rounded,
                     onTap: onNextAudio,
                     color: highlight
-                        ? palette.welcomeTextOnAccent
-                        : palette.primary,
+                        ? appColors.textOnAccent
+                        : appColors.accentDeep,
                   ),
               ],
             ),
@@ -452,10 +452,9 @@ class _RecommendationTagChip extends StatelessWidget {
         tag,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: foregroundColor,
-          fontWeight: FontWeight.w400,
-        ),
+        style: AppTypography.chip(
+          Theme.of(context).textTheme,
+        ).copyWith(color: foregroundColor),
       ),
     );
   }
