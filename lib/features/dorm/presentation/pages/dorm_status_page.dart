@@ -3,6 +3,7 @@ import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -223,6 +224,7 @@ class _DormStatusHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Row(
       children: <Widget>[
         IconButton(
@@ -237,10 +239,9 @@ class _DormStatusHeader extends StatelessWidget {
         const SizedBox(width: AppSpacing.xs),
         Text(
           '寝室状态记录',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w800,
-          ),
+          style: AppTypography.sectionTitle(
+            textTheme,
+          ).copyWith(color: AppColors.textPrimary),
         ),
       ],
     );
@@ -280,6 +281,7 @@ class _DormStatusReadTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -297,7 +299,7 @@ class _DormStatusReadTabs extends StatelessWidget {
                   backgroundColor: appColors.surfaceMuted,
                   side: BorderSide.none,
                   shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
-                  labelStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  labelStyle: AppTypography.meta(textTheme).copyWith(
                     color: selected
                         ? appColors.textOnAccent
                         : appColors.textSecondary,
@@ -347,9 +349,9 @@ class _DormStatusGroupedList extends StatelessWidget {
     if (records.isEmpty) {
       return Text(
         '这一组暂时没有状态',
-        style: Theme.of(
-          context,
-        ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+        style: AppTypography.body(
+          Theme.of(context).textTheme,
+        ).copyWith(color: appColors.textSecondary),
       );
     }
     final int firstUnreadIndex = records.indexWhere(
@@ -364,8 +366,8 @@ class _DormStatusGroupedList extends StatelessWidget {
       children: <Widget>[
         Text(
           label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: AppColors.textSecondary,
+          style: AppTypography.meta(Theme.of(context).textTheme).copyWith(
+            color: appColors.textSecondary,
             fontWeight: FontWeight.w700,
           ),
         ),

@@ -1763,6 +1763,39 @@ void main() {
       expect(find.text('请使用耳机，避免外放声音'), findsNothing);
       expect(find.text('请使用台灯或小夜灯'), findsNothing);
       expect(find.text('每天至少开窗通风30分钟'), findsNothing);
+
+      final TextTheme rulesTextTheme = Theme.of(
+        tester.element(find.byType(DormRulesPage)),
+      ).textTheme;
+      final Text displayHeaderTitle = tester.widget<Text>(
+        find.text('宿舍公约').first,
+      );
+      expect(
+        displayHeaderTitle.style?.fontSize,
+        AppTypography.sectionTitle(rulesTextTheme).fontSize,
+      );
+      expect(
+        displayHeaderTitle.style?.fontWeight,
+        AppTypography.sectionTitle(rulesTextTheme).fontWeight,
+      );
+      final Text displayIntroTitle = tester.widget<Text>(
+        find.text('共同维护良好宿舍环境'),
+      );
+      expect(
+        displayIntroTitle.style?.fontSize,
+        AppTypography.sectionTitle(rulesTextTheme).fontSize,
+      );
+      expect(
+        displayIntroTitle.style?.fontWeight,
+        AppTypography.sectionTitle(rulesTextTheme).fontWeight,
+      );
+      final AppSettingsItem displayBasicGroup = tester.widget<AppSettingsItem>(
+        find.byKey(const ValueKey<String>('dorm-rules-display-group-basic')),
+      );
+      expect(
+        displayBasicGroup.titleStyle?.fontSize,
+        AppTypography.body(rulesTextTheme).fontSize,
+      );
       expect(
         find.byKey(const ValueKey<String>('dorm-rules-display-group-basic')),
         findsOneWidget,
@@ -1847,6 +1880,24 @@ void main() {
       expect(find.text('编辑宿舍公约'), findsOneWidget);
       expect(find.text('修改后需要室友确认'), findsOneWidget);
       expect(find.text('本页保存的是调整草案，不会立即覆盖当前正式公约。'), findsOneWidget);
+      final Text editHeaderTitle = tester.widget<Text>(find.text('编辑宿舍公约'));
+      expect(
+        editHeaderTitle.style?.fontSize,
+        AppTypography.sectionTitle(rulesTextTheme).fontSize,
+      );
+      expect(
+        editHeaderTitle.style?.fontWeight,
+        AppTypography.sectionTitle(rulesTextTheme).fontWeight,
+      );
+      final Text editIntroTitle = tester.widget<Text>(find.text('修改后需要室友确认'));
+      expect(
+        editIntroTitle.style?.fontSize,
+        AppTypography.cardTitle(rulesTextTheme).fontSize,
+      );
+      expect(
+        editIntroTitle.style?.fontWeight,
+        AppTypography.cardTitle(rulesTextTheme).fontWeight,
+      );
       expect(find.byType(AppSettingsGroup), findsNWidgets(4));
       expect(
         find.byKey(const ValueKey<String>('dorm-rules-edit-intro-icon')),
@@ -2487,6 +2538,78 @@ void main() {
     expect(AppColors.primary, const Color(0xFF8EDDF2));
   });
 
+  testWidgets(
+    'message record cards default to semantic typography and accents',
+    (WidgetTester tester) async {
+      final NightMoodPalette palette = NightMoodPalette.fromMood(
+        NightMood.calm,
+      );
+      final AppSemanticColors appColors = AppSemanticColors.light(palette);
+      final TextTheme textTheme = AppTextStyles.buildTextTheme();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(
+            useMaterial3: true,
+            textTheme: textTheme,
+            extensions: <ThemeExtension<dynamic>>[palette, appColors],
+          ),
+          home: const Scaffold(
+            body: AppMessageRecordCard(
+              icon: Icons.nightlight_round,
+              title: '记录标题',
+              detail: '记录说明',
+              timeLabel: '刚刚',
+            ),
+          ),
+        ),
+      );
+
+      final Icon recordIcon = tester.widget<Icon>(
+        find.byIcon(Icons.nightlight_round),
+      );
+      expect(recordIcon.color, appColors.accentDeep);
+      final Container iconContainer = tester.widget<Container>(
+        find
+            .ancestor(
+              of: find.byIcon(Icons.nightlight_round),
+              matching: find.byType(Container),
+            )
+            .first,
+      );
+      final BoxDecoration iconDecoration =
+          iconContainer.decoration! as BoxDecoration;
+      expect(iconDecoration.color, appColors.accentSoft);
+
+      final Text title = tester.widget<Text>(find.text('记录标题'));
+      expect(
+        title.style?.fontSize,
+        AppTypography.cardTitle(textTheme).fontSize,
+      );
+      expect(
+        title.style?.fontWeight,
+        AppTypography.cardTitle(textTheme).fontWeight,
+      );
+      expect(title.style?.color, appColors.textPrimary);
+
+      final Text detail = tester.widget<Text>(find.text('记录说明'));
+      expect(
+        detail.style?.fontSize,
+        AppTypography.bodyMuted(textTheme).fontSize,
+      );
+      expect(
+        detail.style?.fontWeight,
+        AppTypography.bodyMuted(textTheme).fontWeight,
+      );
+      expect(detail.style?.color, appColors.textSecondary);
+
+      final Text time = tester.widget<Text>(find.text('刚刚'));
+      expect(time.style?.fontSize, AppTypography.chip(textTheme).fontSize);
+      expect(time.style?.fontWeight, AppTypography.chip(textTheme).fontWeight);
+      expect(time.style?.color, appColors.textSecondary);
+    },
+  );
+
   testWidgets('dorm member detail uses the shared status record style', (
     WidgetTester tester,
   ) async {
@@ -2515,19 +2638,65 @@ void main() {
         .first;
     expect(latestRecord.iconBackgroundColor, appColors.accentSoft);
     expect(latestRecord.iconColor, appColors.accentDeep);
+
+    final Text memberName = tester.widget<Text>(find.text('林淯').first);
+    expect(
+      memberName.style?.fontSize,
+      AppTypography.sectionTitle(
+        Theme.of(tester.element(find.text('林淯').first)).textTheme,
+      ).fontSize,
+    );
+    expect(memberName.style?.color, appColors.textPrimary);
+
+    final Text recentTitle = tester.widget<Text>(find.text('最近动态'));
+    expect(
+      recentTitle.style?.fontSize,
+      AppTypography.sectionTitle(
+        Theme.of(tester.element(find.text('最近动态'))).textTheme,
+      ).fontSize,
+    );
+    expect(recentTitle.style?.color, appColors.textPrimary);
   });
 
   testWidgets('dorm management route remains available', (
     WidgetTester tester,
   ) async {
+    const NightMood mood = NightMood.calm;
+    final AppSemanticColors appColors = AppSemanticColors.light(
+      NightMoodPalette.fromMood(mood),
+    );
+
     await _pumpApp(
       tester,
       initialLocation: AppRoutes.profileAccountDorm,
       clock: _dayClock,
+      initialSettings: _settingsWithMood(mood),
     );
 
     expect(find.byType(DormManagementPage), findsOneWidget);
     expect(find.text('寝室管理'), findsWidgets);
+
+    final AppSettingsItem inviteItem = tester.widget<AppSettingsItem>(
+      find.widgetWithText(AppSettingsItem, '邀请舍友'),
+    );
+    expect(inviteItem.iconColor, appColors.accentDeep);
+    expect(inviteItem.iconBackgroundColor, appColors.surfaceMuted);
+    expect(
+      inviteItem.titleStyle?.fontSize,
+      AppTypography.body(
+        Theme.of(
+          tester.element(find.widgetWithText(AppSettingsItem, '邀请舍友')),
+        ).textTheme,
+      ).fontSize,
+    );
+
+    final Text currentMembers = tester.widget<Text>(find.text('当前成员'));
+    expect(
+      currentMembers.style?.fontSize,
+      AppTypography.panelTitle(
+        Theme.of(tester.element(find.text('当前成员'))).textTheme,
+      ).fontSize,
+    );
   });
 
   testWidgets('dorm page shows roommate avatar shells and badge chips', (
@@ -2558,7 +2727,17 @@ void main() {
   testWidgets('dorm gentle reminder opens the shared rich action sheet', (
     WidgetTester tester,
   ) async {
-    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+    const NightMood mood = NightMood.calm;
+    final AppSemanticColors appColors = AppSemanticColors.light(
+      NightMoodPalette.fromMood(mood),
+    );
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dorm,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(mood),
+    );
 
     final Finder reminderEntry = find.text('委婉提醒');
     await tester.scrollUntilVisible(
@@ -2579,6 +2758,24 @@ void main() {
       find.byKey(const ValueKey<String>('gentle-reminder-content')),
       findsOneWidget,
     );
+
+    final Text sheetTitle = tester.widget<Text>(find.text('委婉提醒').last);
+    expect(
+      sheetTitle.style?.fontSize,
+      AppTypography.sectionTitle(
+        Theme.of(tester.element(find.text('委婉提醒').last)).textTheme,
+      ).fontSize,
+    );
+    final Text contentTab = tester.widget<Text>(find.text('内容'));
+    expect(contentTab.style?.color, appColors.textOnAccent);
+    final Text contentHeading = tester.widget<Text>(find.text('选择提醒内容'));
+    expect(
+      contentHeading.style?.fontSize,
+      AppTypography.panelTitle(
+        Theme.of(tester.element(find.text('选择提醒内容'))).textTheme,
+      ).fontSize,
+    );
+    expect(contentHeading.style?.color, appColors.textPrimary);
   });
 
   testWidgets('dorm gentle reminder sheet stays above the shell tab bar', (
@@ -2934,10 +3131,16 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(430, 932));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
+    const NightMood mood = NightMood.calm;
+    final AppSemanticColors appColors = AppSemanticColors.light(
+      NightMoodPalette.fromMood(mood),
+    );
+
     await _pumpApp(
       tester,
       initialLocation: AppRoutes.profileBadges,
       clock: _dayClock,
+      initialSettings: _settingsWithMood(mood),
     );
 
     expect(
@@ -2978,6 +3181,42 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('寝室脉搏勋章显示'), findsNothing);
+
+    final TextTheme textTheme = Theme.of(
+      tester.element(
+        find.byKey(const ValueKey<String>('badge-catalog-title-dorm')),
+      ),
+    ).textTheme;
+    final Text dormCatalogTitle = tester.widget<Text>(
+      find.byKey(const ValueKey<String>('badge-catalog-title-dorm')),
+    );
+    expect(
+      dormCatalogTitle.style?.fontSize,
+      AppTypography.heroTitle(textTheme).fontSize,
+    );
+    expect(dormCatalogTitle.style?.color, appColors.accentDeep);
+
+    final Text summaryTitle = tester.widget<Text>(find.text('当前展示：不醒人室'));
+    expect(
+      summaryTitle.style?.fontSize,
+      AppTypography.sectionTitle(textTheme).fontSize,
+    );
+    expect(summaryTitle.style?.color, appColors.textPrimary);
+
+    final AppSettingsItem visibilityItem = tester.widget<AppSettingsItem>(
+      find.byKey(const ValueKey<String>('dorm-badge-visibility-item')),
+    );
+    expect(visibilityItem.iconColor, appColors.accentDeep);
+    expect(
+      visibilityItem.titleStyle?.fontSize,
+      AppTypography.body(textTheme).fontSize,
+    );
+
+    final Text dormBadgeTileTitle = tester.widget<Text>(find.text('不醒人室'));
+    expect(
+      dormBadgeTileTitle.style?.fontSize,
+      AppTypography.meta(textTheme).fontSize,
+    );
   });
 
   testWidgets('profile badge preview sheet stays above the shell tab bar', (

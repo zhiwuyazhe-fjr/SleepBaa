@@ -5,6 +5,7 @@ import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -149,8 +150,13 @@ class DormMemberDetailPage extends StatelessWidget {
                               const SizedBox(height: AppSpacing.xl),
                               Text(
                                 '最近动态',
-                                style: Theme.of(context).textTheme.titleLarge
-                                    ?.copyWith(fontWeight: FontWeight.w800),
+                                style:
+                                    AppTypography.sectionTitle(
+                                      Theme.of(context).textTheme,
+                                    ).copyWith(
+                                      color: appColors.textPrimary,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                               ),
                               const SizedBox(height: AppSpacing.sm),
                               ...memberEvents.asMap().entries.map(
@@ -195,6 +201,7 @@ class _DormDetailHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Row(
       children: <Widget>[
         Material(
@@ -211,10 +218,9 @@ class _DormDetailHeader extends StatelessWidget {
         const SizedBox(width: AppSpacing.xs),
         Text(
           title,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w800,
-          ),
+          style: AppTypography.sectionTitle(
+            textTheme,
+          ).copyWith(color: AppColors.textPrimary),
         ),
       ],
     );
@@ -239,6 +245,7 @@ class _DormMemberProfileHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     final Color accentColor = dormPresenceSleepColor(
       member,
       showPresence: showPresence,
@@ -262,10 +269,9 @@ class _DormMemberProfileHero extends StatelessWidget {
         const SizedBox(height: AppSpacing.sm),
         Text(
           member.name,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w800,
-          ),
+          style: AppTypography.sectionTitle(
+            textTheme,
+          ).copyWith(color: appColors.textPrimary, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: AppSpacing.xs),
         Container(
@@ -284,15 +290,15 @@ class _DormMemberProfileHero extends StatelessWidget {
               Container(
                 width: 8,
                 height: 8,
-                decoration: const BoxDecoration(
-                  color: AppColors.textStrong,
+                decoration: BoxDecoration(
+                  color: appColors.textOnAccent,
                   shape: BoxShape.circle,
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
               Text(
                 dormPresenceSleepLabel(member, showPresence: showPresence),
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                style: AppTypography.meta(textTheme).copyWith(
                   color: appColors.textOnAccent,
                   fontWeight: FontWeight.w800,
                 ),
@@ -313,6 +319,7 @@ class _DormMemberStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
@@ -326,7 +333,7 @@ class _DormMemberStatCard extends StatelessWidget {
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            style: AppTypography.panelTitle(textTheme).copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w800,
             ),
@@ -336,7 +343,7 @@ class _DormMemberStatCard extends StatelessWidget {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            style: AppTypography.chip(textTheme).copyWith(
               color: AppColors.textSecondary,
               fontWeight: FontWeight.w600,
             ),

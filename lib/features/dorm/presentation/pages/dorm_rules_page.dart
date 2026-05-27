@@ -3,6 +3,7 @@ import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -865,6 +866,7 @@ class _DormRulesDisplayHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
@@ -878,10 +880,9 @@ class _DormRulesDisplayHeader extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Text(
             '宿舍公约',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w700,
-            ),
+            style: AppTypography.sectionTitle(
+              textTheme,
+            ).copyWith(color: AppColors.textPrimary),
           ),
           const Spacer(),
           if (canReviewProposal)
@@ -912,6 +913,7 @@ class _DormRulesEditHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
@@ -925,10 +927,9 @@ class _DormRulesEditHeader extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Text(
             '编辑宿舍公约',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w800,
-            ),
+            style: AppTypography.sectionTitle(
+              textTheme,
+            ).copyWith(color: AppColors.textPrimary),
           ),
         ],
       ),
@@ -1037,6 +1038,7 @@ class _DormRulesIntroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       borderRadius: AppRadius.card,
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -1064,18 +1066,16 @@ class _DormRulesIntroCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           Text(
             '共同维护良好宿舍环境',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: appColors.accentDeep,
-              fontWeight: FontWeight.w700,
-            ),
+            style: AppTypography.sectionTitle(
+              textTheme,
+            ).copyWith(color: appColors.accentDeep),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
             '以下是大家共同制定的宿舍公约，请每位成员认真遵守。',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: appColors.accentDeep,
-              height: 1.5,
-            ),
+            style: AppTypography.body(
+              textTheme,
+            ).copyWith(color: appColors.accentDeep),
           ),
         ],
       ),
@@ -1099,6 +1099,7 @@ class _DormRulesDisplayGroupCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       borderRadius: AppRadius.compactCard,
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
@@ -1115,6 +1116,10 @@ class _DormRulesDisplayGroupCard extends StatelessWidget {
             iconContainerSize: AppSpacing.xxxl,
             iconSize: AppSpacing.lg,
             leadingWidth: AppSpacing.xxxl,
+            titleStyle: AppTypography.body(textTheme).copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.md,
               vertical: AppSpacing.sm,
@@ -1124,7 +1129,7 @@ class _DormRulesDisplayGroupCard extends StatelessWidget {
               children: <Widget>[
                 Text(
                   data.summary,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  style: AppTypography.bodyMuted(textTheme).copyWith(
                     color: AppColors.textSecondary,
                     fontWeight: FontWeight.w500,
                   ),
@@ -1209,6 +1214,7 @@ class _DormRulesGroupRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
@@ -1240,7 +1246,7 @@ class _DormRulesGroupRow extends StatelessWidget {
               children: <Widget>[
                 Text(
                   data.title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  style: AppTypography.cardTitle(textTheme).copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,
                   ),
@@ -1248,9 +1254,9 @@ class _DormRulesGroupRow extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xxs),
                 Text(
                   data.description,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+                  style: AppTypography.bodyMuted(
+                    textTheme,
+                  ).copyWith(color: AppColors.textSecondary),
                 ),
               ],
             ),
@@ -1294,6 +1300,7 @@ class _DormRulesPendingSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.xl,
@@ -1306,7 +1313,7 @@ class _DormRulesPendingSection extends StatelessWidget {
         children: <Widget>[
           Text(
             '待确认规则',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            style: AppTypography.meta(textTheme).copyWith(
               color: AppColors.textSecondary,
               fontWeight: FontWeight.w600,
             ),
@@ -1345,18 +1352,17 @@ class _DormRulesPendingSection extends StatelessWidget {
                           currentSettings,
                           proposal.proposedSettings,
                         ),
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w600,
-                            ),
+                        style: AppTypography.cardTitle(textTheme).copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.xxs),
                       Text(
                         _pendingRuleSummary(proposal, currentSettings),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
+                        style: AppTypography.bodyMuted(
+                          textTheme,
+                        ).copyWith(color: AppColors.textSecondary),
                       ),
                     ],
                   ),
@@ -1382,11 +1388,10 @@ class _DormRulesPendingSection extends StatelessWidget {
                           ),
                           child: Text(
                             '确认',
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: appColors.textOnAccent,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                            style: AppTypography.chip(textTheme).copyWith(
+                              color: appColors.textOnAccent,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),
@@ -1511,8 +1516,10 @@ class _DormRulesEditBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppSemanticColors appColors = context.appColors;
-    final TextStyle? groupTitleStyle = Theme.of(context).textTheme.labelLarge
-        ?.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w700);
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final TextStyle groupTitleStyle = AppTypography.meta(
+      textTheme,
+    ).copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w700);
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
@@ -1570,20 +1577,16 @@ class _DormRulesEditBody extends StatelessWidget {
                         children: <Widget>[
                           Text(
                             '修改后需要室友确认',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: appColors.accentDeep,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                            style: AppTypography.cardTitle(
+                              textTheme,
+                            ).copyWith(color: appColors.accentDeep),
                           ),
                           const SizedBox(height: AppSpacing.xxs),
                           Text(
                             '本页保存的是调整草案，不会立即覆盖当前正式公约。',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: appColors.accentDeep,
-                                  height: 1.45,
-                                ),
+                            style: AppTypography.bodyMuted(
+                              textTheme,
+                            ).copyWith(color: appColors.accentDeep),
                           ),
                         ],
                       ),
@@ -1795,10 +1798,9 @@ const EdgeInsetsGeometry _dormRulesEditItemPadding = EdgeInsets.symmetric(
 );
 
 TextStyle? _dormRulesEditItemTitleStyle(BuildContext context) {
-  return Theme.of(context).textTheme.bodyMedium?.copyWith(
-    color: AppColors.textPrimary,
-    fontWeight: FontWeight.w600,
-  );
+  return AppTypography.body(
+    Theme.of(context).textTheme,
+  ).copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600);
 }
 
 class _DormRulesEditableQuietHoursCard extends StatelessWidget {
@@ -1870,7 +1872,7 @@ class _DormRulesSheetTextField extends StatelessWidget {
         children: <Widget>[
           Text(
             label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            style: AppTypography.chip(Theme.of(context).textTheme).copyWith(
               color: AppColors.textSecondary,
               fontWeight: FontWeight.w600,
             ),
@@ -1879,7 +1881,7 @@ class _DormRulesSheetTextField extends StatelessWidget {
           TextField(
             controller: controller,
             keyboardType: keyboardType,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            style: AppTypography.body(Theme.of(context).textTheme).copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
             ),
@@ -2072,8 +2074,10 @@ class _DormRulesInlineSlider extends StatelessWidget {
                             alignment: Alignment.centerRight,
                             child: Text(
                               valueLabel,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
+                              style:
+                                  AppTypography.bodyMuted(
+                                    Theme.of(context).textTheme,
+                                  ).copyWith(
                                     color: AppColors.textSecondary,
                                     fontWeight: FontWeight.w500,
                                   ),

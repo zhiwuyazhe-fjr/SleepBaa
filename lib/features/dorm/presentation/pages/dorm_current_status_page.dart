@@ -3,6 +3,7 @@ import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_message_record_card.dart';
@@ -142,6 +143,7 @@ class _CurrentStatusHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Row(
       children: <Widget>[
         Material(
@@ -158,10 +160,9 @@ class _CurrentStatusHeader extends StatelessWidget {
         const SizedBox(width: AppSpacing.xs),
         Text(
           '当前室友状态',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w800,
-          ),
+          style: AppTypography.sectionTitle(
+            textTheme,
+          ).copyWith(color: AppColors.textPrimary),
         ),
       ],
     );
@@ -202,6 +203,7 @@ class _CurrentStatusFilters extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -219,7 +221,7 @@ class _CurrentStatusFilters extends StatelessWidget {
                   backgroundColor: appColors.surfaceMuted,
                   side: BorderSide.none,
                   shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
-                  labelStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  labelStyle: AppTypography.meta(textTheme).copyWith(
                     color: selected
                         ? appColors.textOnAccent
                         : appColors.textSecondary,
@@ -328,6 +330,7 @@ class _StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
@@ -339,7 +342,7 @@ class _StatusPill extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        style: AppTypography.chip(textTheme).copyWith(
           color: emphasized ? appColors.textOnAccent : appColors.textSecondary,
           fontWeight: FontWeight.w800,
         ),

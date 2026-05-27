@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -428,6 +430,8 @@ Future<void> showDormBadgeDetailsSheet(
       final bool selected = displayedBadgeId == badge.id;
       final bool explicitlySelected = selectedDormBadgeId == badge.id;
       final NightMoodPalette palette = sheetContext.nightMoodPalette;
+      final AppSemanticColors appColors = sheetContext.appColors;
+      final TextTheme textTheme = Theme.of(sheetContext).textTheme;
       final String statusLabel = !unlocked
           ? '未获得'
           : explicitlySelected
@@ -488,7 +492,7 @@ Future<void> showDormBadgeDetailsSheet(
                 bottomPadding,
               ),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: appColors.surface,
                 borderRadius: BorderRadius.vertical(
                   top: Radius.circular(topRadius),
                 ),
@@ -524,11 +528,9 @@ Future<void> showDormBadgeDetailsSheet(
                           children: <Widget>[
                             Text(
                               badge.label,
-                              style: Theme.of(sheetContext)
-                                  .textTheme
-                                  .headlineSmall
-                                  ?.copyWith(
-                                    color: AppColors.textPrimary,
+                              style: AppTypography.sectionTitle(textTheme)
+                                  .copyWith(
+                                    color: appColors.textPrimary,
                                     fontWeight: FontWeight.w800,
                                   ),
                             ),
@@ -540,21 +542,18 @@ Future<void> showDormBadgeDetailsSheet(
                               ),
                               decoration: BoxDecoration(
                                 color: unlocked
-                                    ? palette.primaryHighlight
+                                    ? appColors.accentSoft
                                     : AppColors.surfaceSoft,
                                 borderRadius: AppRadius.pill,
                               ),
                               child: Text(
                                 statusLabel,
-                                style: Theme.of(sheetContext)
-                                    .textTheme
-                                    .labelLarge
-                                    ?.copyWith(
-                                      color: unlocked
-                                          ? palette.primaryDeep
-                                          : AppColors.textSecondary,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                style: AppTypography.meta(textTheme).copyWith(
+                                  color: unlocked
+                                      ? appColors.accentDeep
+                                      : appColors.textSecondary,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                           ],
@@ -567,16 +566,14 @@ Future<void> showDormBadgeDetailsSheet(
                     width: double.infinity,
                     padding: EdgeInsets.all(constraints.maxWidth * 0.04),
                     decoration: BoxDecoration(
-                      color: palette.primaryHighlight,
+                      color: appColors.accentSoft,
                       borderRadius: AppRadius.card,
                     ),
                     child: Text(
                       badge.meaning,
-                      style: Theme.of(sheetContext).textTheme.bodyLarge
-                          ?.copyWith(
-                            color: AppColors.textSecondary,
-                            height: 1.65,
-                          ),
+                      style: AppTypography.body(
+                        textTheme,
+                      ).copyWith(color: appColors.textSecondary),
                     ),
                   ),
                   SizedBox(height: blockGap * 0.8),
@@ -592,11 +589,10 @@ Future<void> showDormBadgeDetailsSheet(
                       children: <Widget>[
                         Text(
                           infoTitle,
-                          style: Theme.of(sheetContext).textTheme.titleMedium
-                              ?.copyWith(
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.w800,
-                              ),
+                          style: AppTypography.panelTitle(textTheme).copyWith(
+                            color: appColors.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                         SizedBox(height: blockGap * 0.5),
                         Container(
@@ -606,29 +602,26 @@ Future<void> showDormBadgeDetailsSheet(
                           ),
                           decoration: BoxDecoration(
                             color: unlocked
-                                ? palette.primary.withAlpha(36)
-                                : AppColors.surface,
+                                ? appColors.accent.withAlpha(36)
+                                : appColors.surface,
                             borderRadius: AppRadius.pill,
                           ),
                           child: Text(
                             infoChipLabel,
-                            style: Theme.of(sheetContext).textTheme.labelMedium
-                                ?.copyWith(
-                                  color: unlocked
-                                      ? palette.primaryDeep
-                                      : AppColors.textSecondary,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                            style: AppTypography.meta(textTheme).copyWith(
+                              color: unlocked
+                                  ? appColors.accentDeep
+                                  : appColors.textSecondary,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                         SizedBox(height: blockGap * 0.5),
                         Text(
                           infoBody,
-                          style: Theme.of(sheetContext).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: AppColors.textSecondary,
-                                height: 1.55,
-                              ),
+                          style: AppTypography.body(
+                            textTheme,
+                          ).copyWith(color: appColors.textSecondary),
                         ),
                       ],
                     ),
@@ -648,11 +641,12 @@ Future<void> showDormBadgeDetailsSheet(
                                 }
                               },
                         style: FilledButton.styleFrom(
-                          backgroundColor: palette.welcomeAccentColor,
-                          foregroundColor: palette.welcomeTextOnAccent,
-                          disabledBackgroundColor: palette.welcomeAccentColor
-                              .withAlpha(110),
-                          disabledForegroundColor: palette.welcomeTextOnAccent
+                          backgroundColor: appColors.accent,
+                          foregroundColor: appColors.textOnAccent,
+                          disabledBackgroundColor: appColors.accent.withAlpha(
+                            110,
+                          ),
+                          disabledForegroundColor: appColors.textOnAccent
                               .withAlpha(140),
                           elevation: 0,
                           shadowColor: Colors.transparent,
@@ -660,10 +654,9 @@ Future<void> showDormBadgeDetailsSheet(
                           shape: RoundedRectangleBorder(
                             borderRadius: AppRadius.pill,
                           ),
-                          textStyle: Theme.of(sheetContext)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w800),
+                          textStyle: AppTypography.panelTitle(
+                            textTheme,
+                          ).copyWith(fontWeight: FontWeight.w800),
                         ),
                         child: Text(selected ? statusLabel : '展示这枚勋章'),
                       ),
@@ -681,7 +674,7 @@ Future<void> showDormBadgeDetailsSheet(
                             }
                           },
                           style: TextButton.styleFrom(
-                            foregroundColor: palette.primaryDeep,
+                            foregroundColor: appColors.accentDeep,
                           ),
                           child: const Text('恢复最新获得'),
                         ),
@@ -713,6 +706,7 @@ class _SheetBadgeVisual extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final double borderWidth = size * 0.025;
 
     return Container(
@@ -720,9 +714,9 @@ class _SheetBadgeVisual extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: unlocked ? palette.primaryHighlight : AppColors.surfaceSoft,
+        color: unlocked ? appColors.accentSoft : AppColors.surfaceSoft,
         border: Border.all(
-          color: unlocked ? palette.primarySoft : AppColors.surfaceBorder,
+          color: unlocked ? appColors.accent : appColors.borderSubtle,
           width: borderWidth,
         ),
       ),
@@ -730,7 +724,7 @@ class _SheetBadgeVisual extends StatelessWidget {
       child: Icon(
         unlocked ? badge.icon : Icons.lock_rounded,
         size: size * 0.4,
-        color: unlocked ? palette.primaryDeep : AppColors.textHint,
+        color: unlocked ? appColors.accentDeep : AppColors.textHint,
       ),
     );
   }
@@ -751,6 +745,7 @@ class _DormSheetBadgeVisual extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final double borderWidth = size * 0.025;
 
     return Container(
@@ -758,9 +753,9 @@ class _DormSheetBadgeVisual extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: unlocked ? palette.primaryHighlight : AppColors.surfaceSoft,
+        color: unlocked ? appColors.accentSoft : AppColors.surfaceSoft,
         border: Border.all(
-          color: unlocked ? palette.primarySoft : AppColors.surfaceBorder,
+          color: unlocked ? appColors.accent : appColors.borderSubtle,
           width: borderWidth,
         ),
       ),
@@ -768,7 +763,7 @@ class _DormSheetBadgeVisual extends StatelessWidget {
       child: Icon(
         unlocked ? badge.icon : Icons.lock_rounded,
         size: size * 0.4,
-        color: unlocked ? palette.primaryDeep : AppColors.textHint,
+        color: unlocked ? appColors.accentDeep : AppColors.textHint,
       ),
     );
   }

@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -41,10 +43,7 @@ extension _BadgeCatalogModeCopy on BadgeCatalogMode {
 }
 
 class ProfileBadgesPage extends StatefulWidget {
-  const ProfileBadgesPage({
-    super.key,
-    this.mode = BadgeCatalogMode.profile,
-  });
+  const ProfileBadgesPage({super.key, this.mode = BadgeCatalogMode.profile});
 
   final BadgeCatalogMode mode;
 
@@ -134,9 +133,10 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
       ]),
       builder: (BuildContext context, Widget? child) {
         final NightMoodPalette palette = context.nightMoodPalette;
+        final AppSemanticColors appColors = context.appColors;
         final Color pageBackground = Color.alphaBlend(
-          palette.primaryHighlight.withAlpha(24),
-          AppColors.background,
+          appColors.accentSoft.withAlpha(24),
+          appColors.pageBackground,
         );
         final UserProfile profile = services.authRepository.currentUser;
         final Dorm dorm = services.dormRepository.currentDorm;
@@ -193,24 +193,24 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                           ? '自动同步最新'
                           : '手动佩戴中';
 
-                      countLabel = '$unlockedCount / ${kHonorBadgeCatalog.length}';
+                      countLabel =
+                          '$unlockedCount / ${kHonorBadgeCatalog.length}';
                       catalogChildren = <Widget>[
                         _CatalogSummaryCard(
-                          key: const ValueKey<String>('profile-badge-summary-card'),
+                          key: const ValueKey<String>(
+                            'profile-badge-summary-card',
+                          ),
                           iconData: activeBadge?.icon,
                           title: '当前佩戴：$currentBadgeLabel',
                           description: currentBadgeDescription,
                           modeLabel: summaryModeLabel,
-                          actionLabel: showingLatestEarned
-                              ? '已同步最新'
-                              : '恢复默认最新',
+                          actionLabel: showingLatestEarned ? '已同步最新' : '恢复默认最新',
                           palette: palette,
                           onActionPressed: showingLatestEarned
                               ? null
                               : () async {
-                                  await services.profileFacade.saveEquippedBadge(
-                                    null,
-                                  );
+                                  await services.profileFacade
+                                      .saveEquippedBadge(null);
                                 },
                         ),
                         SizedBox(height: sectionSpacing),
@@ -218,9 +218,7 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                           title: '全部勋章',
                           detail: '${kHonorBadgeCatalog.length} 枚全部可查看',
                         ),
-                        SizedBox(
-                          height: viewportConstraints.maxWidth * 0.04,
-                        ),
+                        SizedBox(height: viewportConstraints.maxWidth * 0.04),
                         GridView.builder(
                           shrinkWrap: true,
                           primary: false,
@@ -261,8 +259,8 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                           );
                       final String? normalizedSelectedDormBadgeId =
                           _normalizeBadgeId(preferredDormBadgeId);
-                      final DormHonorBadge? activeBadge = resolvedDormBadgeId ==
-                              null
+                      final DormHonorBadge? activeBadge =
+                          resolvedDormBadgeId == null
                           ? null
                           : dormHonorBadgeById(resolvedDormBadgeId);
                       final List<DormBadgeStatusData> badges =
@@ -280,8 +278,7 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                       final String currentBadgeLabel =
                           activeBadge?.label ?? '暂无勋章';
                       final String currentBadgeDescription =
-                          activeBadge?.meaning ??
-                          '寝室获得勋章后，最新一枚会自动展示在这里。';
+                          activeBadge?.meaning ?? '寝室获得勋章后，最新一枚会自动展示在这里。';
                       final String summaryModeLabel = showingLatestEarned
                           ? '自动同步最新'
                           : '手动切换中';
@@ -290,14 +287,14 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                           '$unlockedCount / ${kDormHonorBadgeCatalog.length}';
                       catalogChildren = <Widget>[
                         _CatalogSummaryCard(
-                          key: const ValueKey<String>('dorm-badge-summary-card'),
+                          key: const ValueKey<String>(
+                            'dorm-badge-summary-card',
+                          ),
                           iconData: activeBadge?.icon,
                           title: '当前展示：$currentBadgeLabel',
                           description: currentBadgeDescription,
                           modeLabel: summaryModeLabel,
-                          actionLabel: showingLatestEarned
-                              ? '已同步最新'
-                              : '恢复默认最新',
+                          actionLabel: showingLatestEarned ? '已同步最新' : '恢复默认最新',
                           palette: palette,
                           onActionPressed: showingLatestEarned
                               ? null
@@ -315,9 +312,7 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                           title: '全部勋章',
                           detail: '${kDormHonorBadgeCatalog.length} 枚全部可查看',
                         ),
-                        SizedBox(
-                          height: viewportConstraints.maxWidth * 0.04,
-                        ),
+                        SizedBox(height: viewportConstraints.maxWidth * 0.04),
                         GridView.builder(
                           shrinkWrap: true,
                           primary: false,
@@ -360,12 +355,10 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                             titleKeySuffix: widget.mode.keySuffix,
                             countLabel: countLabel,
                             onBack: () => Navigator.of(context).maybePop(),
-                            palette: palette,
                           ),
                           SizedBox(height: sectionSpacing * 0.8),
                           _BadgeCatalogModeSwitch(
                             activeMode: widget.mode,
-                            palette: palette,
                             onModeSelected: _switchMode,
                           ),
                           SizedBox(height: sectionSpacing),
@@ -388,17 +381,17 @@ class _BadgeCatalogHeader extends StatelessWidget {
     required this.titleKeySuffix,
     required this.countLabel,
     required this.onBack,
-    required this.palette,
   });
 
   final String title;
   final String titleKeySuffix;
   final String countLabel;
   final VoidCallback onBack;
-  final NightMoodPalette palette;
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double iconTapSize = constraints.maxWidth * 0.09;
@@ -420,7 +413,7 @@ class _BadgeCatalogHeader extends StatelessWidget {
                     child: Icon(
                       Icons.arrow_back_rounded,
                       size: iconSize,
-                      color: palette.primaryDeep,
+                      color: appColors.accentDeep,
                     ),
                   ),
                 ),
@@ -431,10 +424,9 @@ class _BadgeCatalogHeader extends StatelessWidget {
               child: Text(
                 title,
                 key: ValueKey<String>('badge-catalog-title-$titleKeySuffix'),
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: palette.primaryDeep,
-                  fontWeight: FontWeight.w800,
-                ),
+                style: AppTypography.heroTitle(
+                  textTheme,
+                ).copyWith(color: appColors.accentDeep),
               ),
             ),
             Container(
@@ -443,13 +435,13 @@ class _BadgeCatalogHeader extends StatelessWidget {
                 vertical: constraints.maxWidth * 0.02,
               ),
               decoration: BoxDecoration(
-                color: palette.primaryHighlight,
+                color: appColors.accentSoft,
                 borderRadius: AppRadius.pill,
               ),
               child: Text(
                 countLabel,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: palette.primaryDeep,
+                style: AppTypography.meta(textTheme).copyWith(
+                  color: appColors.accentDeep,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -464,21 +456,20 @@ class _BadgeCatalogHeader extends StatelessWidget {
 class _BadgeCatalogModeSwitch extends StatelessWidget {
   const _BadgeCatalogModeSwitch({
     required this.activeMode,
-    required this.palette,
     required this.onModeSelected,
   });
 
   final BadgeCatalogMode activeMode;
-  final NightMoodPalette palette;
   final ValueChanged<BadgeCatalogMode> onModeSelected;
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: AppRadius.pill,
-        border: Border.all(color: palette.primarySoft.withAlpha(150)),
+        border: Border.all(color: appColors.accentSoft.withAlpha(150)),
       ),
       padding: const EdgeInsets.all(4),
       child: Row(
@@ -488,7 +479,6 @@ class _BadgeCatalogModeSwitch extends StatelessWidget {
                 child: _BadgeCatalogModeButton(
                   mode: mode,
                   selected: mode == activeMode,
-                  palette: palette,
                   onTap: () => onModeSelected(mode),
                 ),
               ),
@@ -503,17 +493,17 @@ class _BadgeCatalogModeButton extends StatelessWidget {
   const _BadgeCatalogModeButton({
     required this.mode,
     required this.selected,
-    required this.palette,
     required this.onTap,
   });
 
   final BadgeCatalogMode mode;
   final bool selected;
-  final NightMoodPalette palette;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -525,18 +515,16 @@ class _BadgeCatalogModeButton extends StatelessWidget {
           curve: Curves.easeOut,
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: selected
-                ? palette.welcomeAccentColor
-                : Colors.transparent,
+            color: selected ? appColors.accent : Colors.transparent,
             borderRadius: AppRadius.pill,
           ),
           alignment: Alignment.center,
           child: Text(
             mode.title,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            style: AppTypography.meta(textTheme).copyWith(
               color: selected
-                  ? palette.welcomeTextOnAccent
-                  : AppColors.textSecondary,
+                  ? appColors.textOnAccent
+                  : appColors.textSecondary,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -570,22 +558,16 @@ class _CatalogSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
+        final AppSemanticColors appColors = context.appColors;
+        final TextTheme textTheme = Theme.of(context).textTheme;
         final double horizontalPadding = constraints.maxWidth * 0.06;
         final double verticalPadding = constraints.maxWidth * 0.075;
         final double badgeSize = constraints.maxWidth * 0.22;
         final double rowGap = constraints.maxWidth * 0.04;
         final double contentActionGap = constraints.maxWidth * 0.075;
-        final double scale = (constraints.maxWidth / 360).clamp(0.92, 1.08);
         final double actionHeight = constraints.maxWidth * 0.108;
         final double chipHorizontalPadding = constraints.maxWidth * 0.026;
         final double buttonHorizontalPadding = constraints.maxWidth * 0.038;
-        final double titleFontSize =
-            ((Theme.of(context).textTheme.headlineSmall?.fontSize ?? 24) *
-                    scale)
-                .toDouble();
-        final double bodyFontSize =
-            ((Theme.of(context).textTheme.bodyLarge?.fontSize ?? 16) * scale)
-                .toDouble();
 
         return Container(
           padding: EdgeInsets.symmetric(
@@ -595,7 +577,7 @@ class _CatalogSummaryCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: palette.primarySoft.withAlpha(150)),
+            border: Border.all(color: appColors.accentSoft.withAlpha(150)),
             boxShadow: AppColors.cardShadow,
           ),
           child: Column(
@@ -619,22 +601,17 @@ class _CatalogSummaryCard extends StatelessWidget {
                       children: <Widget>[
                         Text(
                           title,
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(
-                                fontSize: titleFontSize,
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.w800,
-                              ),
+                          style: AppTypography.sectionTitle(textTheme).copyWith(
+                            color: appColors.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                         SizedBox(height: rowGap * 0.72),
                         Text(
                           description,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                fontSize: bodyFontSize,
-                                color: AppColors.textSecondary,
-                                height: 1.55,
-                              ),
+                          style: AppTypography.body(
+                            textTheme,
+                          ).copyWith(color: appColors.textSecondary),
                         ),
                       ],
                     ),
@@ -662,8 +639,8 @@ class _CatalogSummaryCard extends StatelessWidget {
                         child: _SummaryActionButton(
                           label: actionLabel,
                           onPressed: onActionPressed,
-                          backgroundColor: palette.welcomeAccentColor,
-                          foregroundColor: palette.welcomeTextOnAccent,
+                          backgroundColor: appColors.accent,
+                          foregroundColor: appColors.textOnAccent,
                           horizontalPadding: buttonHorizontalPadding,
                           height: actionHeight,
                         ),
@@ -693,6 +670,7 @@ class _SummaryBadgeVisual extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final bool hasBadge = iconData != null;
     final double borderWidth = size * 0.025;
 
@@ -701,15 +679,15 @@ class _SummaryBadgeVisual extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: hasBadge ? palette.primaryHighlight : AppColors.surface,
+        color: hasBadge ? appColors.accentSoft : appColors.surface,
         border: Border.all(
-          color: hasBadge ? palette.primarySoft : AppColors.surfaceBorder,
+          color: hasBadge ? appColors.accent : appColors.borderSubtle,
           width: borderWidth,
         ),
         boxShadow: hasBadge
             ? <BoxShadow>[
                 BoxShadow(
-                  color: palette.primary.withAlpha(28),
+                  color: appColors.accent.withAlpha(28),
                   blurRadius: size * 0.18,
                   offset: Offset(0, size * 0.05),
                 ),
@@ -720,7 +698,7 @@ class _SummaryBadgeVisual extends StatelessWidget {
       child: Icon(
         hasBadge ? iconData! : Icons.emoji_events_outlined,
         size: size * 0.44,
-        color: hasBadge ? palette.primaryDeep : AppColors.textHint,
+        color: hasBadge ? appColors.accentDeep : AppColors.textHint,
       ),
     );
   }
@@ -739,6 +717,7 @@ class _SummaryModeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Container(
       height: height,
       padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
@@ -750,10 +729,9 @@ class _SummaryModeChip extends StatelessWidget {
       child: Text(
         modeLabel,
         textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: AppColors.textSecondary,
-          fontWeight: FontWeight.w700,
-        ),
+        style: AppTypography.meta(
+          Theme.of(context).textTheme,
+        ).copyWith(color: appColors.textSecondary, fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -790,9 +768,9 @@ class _SummaryActionButton extends StatelessWidget {
         minimumSize: Size(0, height),
         padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
         shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
-        textStyle: Theme.of(
-          context,
-        ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+        textStyle: AppTypography.meta(
+          Theme.of(context).textTheme,
+        ).copyWith(fontWeight: FontWeight.w700),
       ),
       child: Text(label),
     );
@@ -807,20 +785,21 @@ class _BadgeSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Row(
       children: <Widget>[
         Text(
           title,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w800,
-          ),
+          style: AppTypography.sectionTitle(
+            textTheme,
+          ).copyWith(color: appColors.textPrimary, fontWeight: FontWeight.w800),
         ),
         const Spacer(),
         Text(
           detail,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: AppColors.textSecondary,
+          style: AppTypography.meta(textTheme).copyWith(
+            color: appColors.textSecondary,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -842,14 +821,20 @@ class _DormPulseBadgeVisibilityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return AppSettingsGroup(
       key: const ValueKey<String>('dorm-badge-visibility-group'),
       children: <Widget>[
         AppSettingsItem(
           key: const ValueKey<String>('dorm-badge-visibility-item'),
           icon: Icons.graphic_eq_rounded,
-          iconColor: palette.primaryDeep,
+          iconColor: appColors.accentDeep,
+          iconBackgroundColor: appColors.surfaceMuted,
           title: '寝室脉搏显示当前勋章',
+          titleStyle: AppTypography.body(
+            textTheme,
+          ).copyWith(color: appColors.textPrimary, fontWeight: FontWeight.w600),
           trailing: _DormBadgeVisibilityToggle(value: value, palette: palette),
           onTap: () => onChanged(!value),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
@@ -870,6 +855,7 @@ class _DormBadgeVisibilityToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Semantics(
       toggled: value,
       child: AnimatedContainer(
@@ -878,12 +864,12 @@ class _DormBadgeVisibilityToggle extends StatelessWidget {
         height: 26,
         padding: const EdgeInsets.all(2),
         decoration: BoxDecoration(
-          color: value ? palette.primarySoft : AppColors.surfaceMuted,
+          color: value ? appColors.accentSoft : appColors.surfaceMuted,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: value
-                ? palette.primary.withValues(alpha: 0.28)
-                : AppColors.surfaceBorder,
+                ? appColors.accent.withValues(alpha: 0.28)
+                : appColors.borderSubtle,
           ),
         ),
         child: AnimatedAlign(
@@ -895,7 +881,7 @@ class _DormBadgeVisibilityToggle extends StatelessWidget {
             height: 22,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: value ? palette.primary : AppColors.surface,
+              color: value ? appColors.accent : appColors.surface,
               boxShadow: const <BoxShadow>[
                 BoxShadow(
                   color: Color(0x1A000000),
@@ -924,6 +910,8 @@ class _ProfileBadgeGridTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Tooltip(
       message: badge.badge.description,
       child: Material(
@@ -949,13 +937,12 @@ class _ProfileBadgeGridTile extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontSize: 12,
+                      style: AppTypography.meta(textTheme).copyWith(
                         height: 1.18,
                         fontWeight: FontWeight.w800,
                         color: badge.unlocked
-                            ? AppColors.textPrimary
-                            : AppColors.textSecondary,
+                            ? appColors.textPrimary
+                            : appColors.textSecondary,
                       ),
                     ),
                     SizedBox(height: labelGap * 0.35),
@@ -964,14 +951,13 @@ class _ProfileBadgeGridTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      style: AppTypography.chip(textTheme).copyWith(
                         color: badge.selected
-                            ? palette.primaryDeep
+                            ? appColors.accentDeep
                             : badge.unlocked
-                            ? AppColors.textSecondary
+                            ? appColors.textSecondary
                             : AppColors.textSubtle,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: 0,
                       ),
                     ),
                   ],
@@ -993,27 +979,28 @@ class _ProfileBadgeTileVisual extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final bool isDisplayed = badge.selected;
     final Color surfaceColor = badge.unlocked
         ? isDisplayed
-              ? palette.primary
-              : palette.primaryHighlight
-        : AppColors.surface;
+              ? appColors.accent
+              : appColors.accentSoft
+        : appColors.surface;
     final Border? outerBorder = !badge.unlocked
-        ? Border.all(color: AppColors.divider)
+        ? Border.all(color: appColors.borderSubtle)
         : null;
     final Color ringColor = isDisplayed
-        ? palette.primarySoft.withAlpha(210)
+        ? appColors.accentSoft.withAlpha(210)
         : badge.unlocked
-        ? palette.primarySoft
-        : AppColors.surfaceBorder;
+        ? appColors.accentSoft
+        : appColors.borderSubtle;
     final IconData iconData = badge.unlocked
         ? badge.badge.icon
         : Icons.lock_rounded;
     final Color iconColor = isDisplayed
-        ? AppColors.onDark
+        ? appColors.textOnAccent
         : badge.unlocked
-        ? palette.primary
+        ? appColors.accentDeep
         : AppColors.textHint;
 
     return LayoutBuilder(
@@ -1073,6 +1060,8 @@ class _DormBadgeGridTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Tooltip(
       message: badge.badge.meaning,
       child: Material(
@@ -1098,13 +1087,12 @@ class _DormBadgeGridTile extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontSize: 12,
+                      style: AppTypography.meta(textTheme).copyWith(
                         height: 1.18,
                         fontWeight: FontWeight.w800,
                         color: badge.unlocked
-                            ? AppColors.textPrimary
-                            : AppColors.textSecondary,
+                            ? appColors.textPrimary
+                            : appColors.textSecondary,
                       ),
                     ),
                     SizedBox(height: labelGap * 0.35),
@@ -1113,14 +1101,13 @@ class _DormBadgeGridTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      style: AppTypography.chip(textTheme).copyWith(
                         color: badge.selected
-                            ? palette.primaryDeep
+                            ? appColors.accentDeep
                             : badge.unlocked
-                            ? AppColors.textSecondary
+                            ? appColors.textSecondary
                             : AppColors.textSubtle,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: 0,
                       ),
                     ),
                   ],
@@ -1142,27 +1129,28 @@ class _DormBadgeTileVisual extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final bool isDisplayed = badge.selected;
     final Color surfaceColor = badge.unlocked
         ? isDisplayed
-              ? palette.primary
-              : palette.primaryHighlight
-        : AppColors.surface;
+              ? appColors.accent
+              : appColors.accentSoft
+        : appColors.surface;
     final Border? outerBorder = !badge.unlocked
-        ? Border.all(color: AppColors.divider)
+        ? Border.all(color: appColors.borderSubtle)
         : null;
     final Color ringColor = isDisplayed
-        ? palette.primarySoft.withAlpha(210)
+        ? appColors.accentSoft.withAlpha(210)
         : badge.unlocked
-        ? palette.primarySoft
-        : AppColors.surfaceBorder;
+        ? appColors.accentSoft
+        : appColors.borderSubtle;
     final IconData iconData = badge.unlocked
         ? badge.badge.icon
         : Icons.lock_rounded;
     final Color iconColor = isDisplayed
-        ? AppColors.onDark
+        ? appColors.textOnAccent
         : badge.unlocked
-        ? palette.primary
+        ? appColors.accentDeep
         : AppColors.textHint;
 
     return LayoutBuilder(
