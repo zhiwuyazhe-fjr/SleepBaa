@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -253,15 +254,15 @@ class _DormStatusOverview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     return AppMessageRecordCard(
       key: DormStatusPage.unreadOverviewKey,
       icon: Icons.notifications_active_rounded,
       title: unreadCount > 0 ? '有 $unreadCount 条待处理状态' : '状态都已处理',
       detail: unreadCount > 0 ? '点击状态卡片后会标记为已读' : '今天的寝室状态已经看完',
       highlighted: false,
-      iconBackgroundColor: palette.primaryHighlight,
-      iconColor: AppColors.textStrong,
+      iconBackgroundColor: appColors.accentSoft,
+      iconColor: appColors.accentDeep,
     );
   }
 }
@@ -278,7 +279,7 @@ class _DormStatusReadTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -291,15 +292,15 @@ class _DormStatusReadTabs extends StatelessWidget {
                   selected: selected,
                   showCheckmark: false,
                   label: Text(_tabLabel(filter)),
-                  color: _dormStatusChipColor(palette),
-                  selectedColor: palette.welcomeAccentColor,
-                  backgroundColor: AppColors.surfaceMuted,
+                  color: _dormStatusChipColor(appColors),
+                  selectedColor: appColors.accent,
+                  backgroundColor: appColors.surfaceMuted,
                   side: BorderSide.none,
                   shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
                   labelStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: selected
-                        ? AppColors.textStrong
-                        : AppColors.textSecondary,
+                        ? appColors.textOnAccent
+                        : appColors.textSecondary,
                     fontWeight: FontWeight.w800,
                   ),
                   onSelected: (_) => onChanged(filter),
@@ -320,12 +321,12 @@ class _DormStatusReadTabs extends StatelessWidget {
   }
 }
 
-WidgetStateProperty<Color?> _dormStatusChipColor(NightMoodPalette palette) {
+WidgetStateProperty<Color?> _dormStatusChipColor(AppSemanticColors appColors) {
   return WidgetStateProperty.resolveWith((Set<WidgetState> states) {
     if (states.contains(WidgetState.selected)) {
-      return palette.welcomeAccentColor;
+      return appColors.accent;
     }
-    return AppColors.surfaceMuted;
+    return appColors.surfaceMuted;
   });
 }
 
@@ -342,7 +343,7 @@ class _DormStatusGroupedList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     if (records.isEmpty) {
       return Text(
         '这一组暂时没有状态',
@@ -388,9 +389,9 @@ class _DormStatusGroupedList extends StatelessWidget {
               highlighted: !record.isRead,
               onTap: () => onTap(record),
               iconBackgroundColor: !record.isRead
-                  ? palette.primaryHighlight
-                  : AppColors.surfaceMuted,
-              iconColor: AppColors.textStrong,
+                  ? appColors.accentSoft
+                  : appColors.surfaceMuted,
+              iconColor: appColors.accentDeep,
             ),
           );
         }),

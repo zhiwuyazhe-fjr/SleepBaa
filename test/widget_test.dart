@@ -461,6 +461,20 @@ void main() {
       tester.widget<Text>(find.text('梦记一则')).style?.fontWeight,
       FontWeight.w600,
     );
+
+    final BuildContext context = tester.element(find.text('梦记一则'));
+    final AppSemanticColors appColors = context.appColors;
+    final Icon dreamIcon = tester.widget<Icon>(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey<String>(
+            'home-quick-action-selected-${HomeQuickActionIds.dreamJournal}',
+          ),
+        ),
+        matching: find.byIcon(Icons.auto_stories_rounded),
+      ),
+    );
+    expect(dreamIcon.color, appColors.accentDeep);
   });
 
   testWidgets('night entry from /home opens the welcome flow first', (
@@ -1666,10 +1680,61 @@ void main() {
     final BoxDecoration decoration = heroContainer.decoration! as BoxDecoration;
     final LinearGradient gradient = decoration.gradient! as LinearGradient;
     final NightMoodPalette palette = NightMoodPalette.fromMood(NightMood.calm);
+    final AppSemanticColors appColors = AppSemanticColors.light(palette);
 
-    expect(gradient.colors.first, palette.heroGradientStart);
-    expect(gradient.colors[1], palette.heroGradientMid);
-    expect(gradient.colors.last, palette.heroGradientEnd);
+    expect(gradient.colors.first, appColors.heroStart);
+    expect(gradient.colors[1], appColors.heroMid);
+    expect(gradient.colors.last, appColors.heroEnd);
+
+    final Finder dormHubCard = find
+        .ancestor(of: find.text('宿舍公约'), matching: find.byType(AppCard))
+        .first;
+    final Icon dormHubIcon = tester.widget<Icon>(
+      find
+          .descendant(
+            of: dormHubCard,
+            matching: find.byIcon(Icons.calendar_today_rounded),
+          )
+          .first,
+    );
+    expect(dormHubIcon.color, appColors.accentDeep);
+  });
+
+  testWidgets('dorm routed intro surfaces use semantic accent tokens', (
+    WidgetTester tester,
+  ) async {
+    const NightMood mood = NightMood.calm;
+    final NightMoodPalette palette = NightMoodPalette.fromMood(mood);
+    final AppSemanticColors appColors = AppSemanticColors.light(palette);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormInvite,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(mood),
+    );
+
+    final Finder inviteTitle = find.text('梅苑 2 栋 204').first;
+    final Text inviteTitleText = tester.widget<Text>(inviteTitle);
+    expect(inviteTitleText.style?.color, appColors.accentDeep);
+    final AppCard inviteIntroCard = tester.widget<AppCard>(
+      find.ancestor(of: inviteTitle, matching: find.byType(AppCard)).first,
+    );
+    expect(inviteIntroCard.color, appColors.accentSoft);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormRules,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(mood),
+    );
+
+    final Text rulesTitle = tester.widget<Text>(find.text('共同维护良好宿舍环境'));
+    expect(rulesTitle.style?.color, appColors.accentDeep);
+    final Icon rulesIntroIcon = tester.widget<Icon>(
+      find.byIcon(Icons.shield_outlined),
+    );
+    expect(rulesIntroIcon.color, appColors.accentDeep);
   });
 
   testWidgets(
@@ -2296,6 +2361,11 @@ void main() {
     tester.widget<TextButton>(find.byKey(DormPage.eventMoreKey)).onPressed!();
     await tester.pumpAndSettle();
 
+    final AppMessageRecordCard activeRecord = tester
+        .widget<AppMessageRecordCard>(
+          find.byKey(DormStatusPage.activeRecordKey),
+        );
+    final String markedTitle = activeRecord.title;
     await tester.tap(find.byKey(DormStatusPage.activeRecordKey));
     await tester.pumpAndSettle();
 
@@ -2312,14 +2382,15 @@ void main() {
     await tester.tap(find.text('更早').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('宿舍环境保持安静'), findsOneWidget);
+    expect(find.text(markedTitle), findsOneWidget);
   });
 
-  testWidgets('dorm status pages use mood palette accents', (
+  testWidgets('dorm status pages use semantic color accents', (
     WidgetTester tester,
   ) async {
     const NightMood mood = NightMood.calm;
     final NightMoodPalette palette = NightMoodPalette.fromMood(mood);
+    final AppSemanticColors appColors = AppSemanticColors.light(palette);
 
     await _pumpApp(
       tester,
@@ -2331,26 +2402,27 @@ void main() {
     final ChoiceChip statusTab = tester.widget<ChoiceChip>(
       find.widgetWithText(ChoiceChip, '待处理').first,
     );
-    expect(statusTab.selectedColor, palette.welcomeAccentColor);
+    expect(statusTab.selectedColor, appColors.accent);
     expect(
       statusTab.color?.resolve(<WidgetState>{
         WidgetState.selected,
         WidgetState.pressed,
       }),
-      palette.welcomeAccentColor,
+      appColors.accent,
     );
     final ChoiceChip todayTab = tester.widget<ChoiceChip>(
       find.widgetWithText(ChoiceChip, '今天').first,
     );
     expect(
       todayTab.color?.resolve(<WidgetState>{WidgetState.pressed}),
-      AppColors.surfaceMuted,
+      appColors.surfaceMuted,
     );
     final AppMessageRecordCard statusOverview = tester
         .widget<AppMessageRecordCard>(
           find.byKey(DormStatusPage.unreadOverviewKey),
         );
-    expect(statusOverview.iconBackgroundColor, palette.primaryHighlight);
+    expect(statusOverview.iconBackgroundColor, appColors.accentSoft);
+    expect(statusOverview.iconColor, appColors.accentDeep);
 
     await _pumpApp(
       tester,
@@ -2362,18 +2434,19 @@ void main() {
     final ChoiceChip currentStatusTab = tester.widget<ChoiceChip>(
       find.widgetWithText(ChoiceChip, '全部').first,
     );
-    expect(currentStatusTab.selectedColor, palette.welcomeAccentColor);
+    expect(currentStatusTab.selectedColor, appColors.accent);
     expect(
       currentStatusTab.color?.resolve(<WidgetState>{
         WidgetState.selected,
         WidgetState.pressed,
       }),
-      palette.welcomeAccentColor,
+      appColors.accent,
     );
     final AppMessageRecordCard currentStatusOverview = tester
         .widgetList<AppMessageRecordCard>(find.byType(AppMessageRecordCard))
         .first;
-    expect(currentStatusOverview.iconBackgroundColor, palette.primaryHighlight);
+    expect(currentStatusOverview.iconBackgroundColor, appColors.accentSoft);
+    expect(currentStatusOverview.iconColor, appColors.accentDeep);
   });
 
   testWidgets('dorm home event time labels are not rendered as action pills', (
@@ -2417,10 +2490,16 @@ void main() {
   testWidgets('dorm member detail uses the shared status record style', (
     WidgetTester tester,
   ) async {
+    const NightMood mood = NightMood.calm;
+    final AppSemanticColors appColors = AppSemanticColors.light(
+      NightMoodPalette.fromMood(mood),
+    );
+
     await _pumpApp(
       tester,
       initialLocation: AppRoutes.dormMemberLocation('roommate-a'),
       clock: _dayClock,
+      initialSettings: _settingsWithMood(mood),
     );
 
     expect(find.byType(DormMemberDetailPage), findsOneWidget);
@@ -2431,6 +2510,11 @@ void main() {
     expect(find.text('林淯已切换到睡眠模式'), findsOneWidget);
     expect(find.text('宿舍环境保持安静'), findsNothing);
     expect(find.byType(AppMessageRecordCard), findsWidgets);
+    final AppMessageRecordCard latestRecord = tester
+        .widgetList<AppMessageRecordCard>(find.byType(AppMessageRecordCard))
+        .first;
+    expect(latestRecord.iconBackgroundColor, appColors.accentSoft);
+    expect(latestRecord.iconColor, appColors.accentDeep);
   });
 
   testWidgets('dorm management route remains available', (

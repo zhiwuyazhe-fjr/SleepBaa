@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
-import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -571,9 +571,9 @@ class _DormInviteIntroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     return AppCard(
-      color: palette.primaryHighlight,
+      color: appColors.accentSoft,
       padding: const EdgeInsets.all(AppSpacing.lg),
       borderRadius: AppRadius.card,
       boxShadow: const <BoxShadow>[],
@@ -583,7 +583,7 @@ class _DormInviteIntroCard extends StatelessWidget {
           Text(
             mode == _DormInviteMode.manage ? dorm.name : '邀请舍友一起协作',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: palette.primaryDeep,
+              color: appColors.accentDeep,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -595,7 +595,7 @@ class _DormInviteIntroCard extends StatelessWidget {
                       : dorm.overview)
                 : '先决定创建宿舍或通过邀请码加入，之后会同步宿舍成员、规则和室友动态。',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: palette.primaryDeep,
+              color: appColors.accentDeep,
               height: 1.4,
             ),
           ),

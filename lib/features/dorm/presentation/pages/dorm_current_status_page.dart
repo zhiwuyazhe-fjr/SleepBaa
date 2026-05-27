@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
-import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_message_record_card.dart';
@@ -176,7 +176,7 @@ class _CurrentStatusOverviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     final int onlineCount = dormAppOnlineMemberCount(dorm.members, now: now);
     final int quietCount = dorm.members
         .where((DormMember member) => member.status != DormMemberStatus.active)
@@ -187,8 +187,8 @@ class _CurrentStatusOverviewCard extends StatelessWidget {
       title: '今晚 ${dorm.members.length} 位室友有状态',
       detail: '$onlineCount 位在线 · $quietCount 位安静中 · $pendingCount 位待确认',
       highlighted: false,
-      iconBackgroundColor: palette.primaryHighlight,
-      iconColor: AppColors.textStrong,
+      iconBackgroundColor: appColors.accentSoft,
+      iconColor: appColors.accentDeep,
     );
   }
 }
@@ -201,7 +201,7 @@ class _CurrentStatusFilters extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -214,15 +214,15 @@ class _CurrentStatusFilters extends StatelessWidget {
                   selected: selected,
                   showCheckmark: false,
                   label: Text(_filterLabel(filter)),
-                  color: _currentStatusChipColor(palette),
-                  selectedColor: palette.welcomeAccentColor,
-                  backgroundColor: AppColors.surfaceMuted,
+                  color: _currentStatusChipColor(appColors),
+                  selectedColor: appColors.accent,
+                  backgroundColor: appColors.surfaceMuted,
                   side: BorderSide.none,
                   shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
                   labelStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: selected
-                        ? AppColors.textStrong
-                        : AppColors.textSecondary,
+                        ? appColors.textOnAccent
+                        : appColors.textSecondary,
                     fontWeight: FontWeight.w800,
                   ),
                   onSelected: (_) => onChanged(filter),
@@ -243,12 +243,14 @@ class _CurrentStatusFilters extends StatelessWidget {
   }
 }
 
-WidgetStateProperty<Color?> _currentStatusChipColor(NightMoodPalette palette) {
+WidgetStateProperty<Color?> _currentStatusChipColor(
+  AppSemanticColors appColors,
+) {
   return WidgetStateProperty.resolveWith((Set<WidgetState> states) {
     if (states.contains(WidgetState.selected)) {
-      return palette.welcomeAccentColor;
+      return appColors.accent;
     }
-    return AppColors.surfaceMuted;
+    return appColors.surfaceMuted;
   });
 }
 
@@ -291,6 +293,7 @@ class _CurrentStatusMemberCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final String presenceLabel = dormPresenceSleepLabel(
       member,
       showPresence: showPresence,
@@ -304,6 +307,10 @@ class _CurrentStatusMemberCard extends StatelessWidget {
       title: member.name,
       detail: '${member.note} · $presenceLabel',
       highlighted: needsConfirmation,
+      iconBackgroundColor: needsConfirmation
+          ? appColors.accentSoft
+          : appColors.surfaceMuted,
+      iconColor: appColors.accentDeep,
       trailing: _StatusPill(
         label: needsConfirmation ? '待确认' : activityLabel,
         emphasized: needsConfirmation,
@@ -320,20 +327,20 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: emphasized ? palette.welcomeAccentColor : AppColors.surfaceMuted,
+        color: emphasized ? appColors.accent : appColors.surfaceMuted,
         borderRadius: AppRadius.pill,
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: emphasized ? AppColors.textStrong : AppColors.textSecondary,
+          color: emphasized ? appColors.textOnAccent : appColors.textSecondary,
           fontWeight: FontWeight.w800,
         ),
       ),
@@ -346,10 +353,13 @@ class _CurrentStatusEmpty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const AppMessageRecordCard(
+    final AppSemanticColors appColors = context.appColors;
+    return AppMessageRecordCard(
       icon: Icons.people_alt_outlined,
       title: '暂无符合条件的室友状态',
       detail: '切换其他筛选看看室友的当前状态',
+      iconBackgroundColor: appColors.surfaceMuted,
+      iconColor: appColors.accentDeep,
     );
   }
 }

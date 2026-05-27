@@ -119,25 +119,29 @@ class StartSleepModeCard extends StatelessWidget {
               ).copyWith(color: appColors.textPrimary),
             ),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: appColors.surfaceMuted,
-                    borderRadius: AppRadius.surfaceSecondary,
-                  ),
-                  child: Text(
-                    isAudioReady ? '音频已同步' : '轻触进入',
-                    style: AppTypography.chip(
-                      textTheme,
-                    ).copyWith(color: appColors.textSecondary),
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: appColors.surfaceMuted,
+                      borderRadius: AppRadius.surfaceSecondary,
+                    ),
+                    child: Text(
+                      isAudioReady ? '音频已同步' : '轻触进入',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.chip(
+                        textTheme,
+                      ).copyWith(color: appColors.textSecondary),
+                    ),
                   ),
                 ),
+                const SizedBox(width: AppSpacing.sm),
                 Container(
                   width: 40,
                   height: 40,
@@ -148,7 +152,7 @@ class StartSleepModeCard extends StatelessWidget {
                   alignment: Alignment.center,
                   child: Icon(
                     Icons.dark_mode_rounded,
-                    color: appColors.textOnAccent,
+                    color: appColors.accentDeep,
                     size: 20,
                   ),
                 ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -355,16 +356,16 @@ class _DormRulesPageState extends State<DormRulesPage> {
                       children: const <String>['考试周', '夜猫子', '早起党']
                           .map((String option) {
                             final bool selected = draftTags.contains(option);
+                            final AppSemanticColors appColors =
+                                context.appColors;
                             return FilterChip(
                               selected: selected,
                               label: Text(option),
-                              selectedColor:
-                                  context.nightMoodPalette.welcomeAccentColor,
+                              selectedColor: appColors.accent,
                               backgroundColor: AppColors.surfaceMuted,
                               side: BorderSide(
                                 color: selected
-                                    ? context.nightMoodPalette.primaryDeep
-                                          .withAlpha(80)
+                                    ? appColors.accentDeep.withAlpha(80)
                                     : AppColors.surfaceBorder,
                               ),
                               onSelected: (_) {
@@ -1035,10 +1036,11 @@ class _DormRulesIntroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return AppCard(
       borderRadius: AppRadius.card,
       padding: const EdgeInsets.all(AppSpacing.lg),
-      color: _rulesIntroFill(palette),
+      color: _rulesIntroFill(appColors),
       boxShadow: const <BoxShadow>[],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1056,14 +1058,14 @@ class _DormRulesIntroCard extends StatelessWidget {
             child: Icon(
               Icons.shield_outlined,
               size: AppSpacing.lg,
-              color: palette.primaryDeep,
+              color: appColors.accentDeep,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
             '共同维护良好宿舍环境',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: palette.primaryDeep,
+              color: appColors.accentDeep,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -1071,7 +1073,7 @@ class _DormRulesIntroCard extends StatelessWidget {
           Text(
             '以下是大家共同制定的宿舍公约，请每位成员认真遵守。',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: palette.primaryDeep,
+              color: appColors.accentDeep,
               height: 1.5,
             ),
           ),
@@ -1096,6 +1098,7 @@ class _DormRulesDisplayGroupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return AppCard(
       borderRadius: AppRadius.compactCard,
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
@@ -1107,7 +1110,7 @@ class _DormRulesDisplayGroupCard extends StatelessWidget {
             key: ValueKey<String>('dorm-rules-display-group-${data.keySuffix}'),
             title: data.title,
             icon: data.icon,
-            iconColor: palette.primaryDeep,
+            iconColor: appColors.accentDeep,
             iconBackgroundColor: AppColors.surfaceMuted,
             iconContainerSize: AppSpacing.xxxl,
             iconSize: AppSpacing.lg,
@@ -1173,8 +1176,8 @@ class _DormRulesDisplayGroupCard extends StatelessWidget {
                                 data: data.rows[index],
                                 palette: palette,
                                 iconFill: index.isEven
-                                    ? _rulesMutedIconFill(palette)
-                                    : _rulesAccentIconFill(palette),
+                                    ? _rulesMutedIconFill(appColors)
+                                    : _rulesAccentIconFill(appColors),
                               ),
                               if (index != data.rows.length - 1)
                                 const SizedBox(height: AppSpacing.xxs),
@@ -1205,6 +1208,7 @@ class _DormRulesGroupRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
@@ -1226,7 +1230,7 @@ class _DormRulesGroupRow extends StatelessWidget {
             child: Icon(
               data.icon,
               size: AppSpacing.lg,
-              color: palette.primaryDeep,
+              color: appColors.accentDeep,
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
@@ -1258,14 +1262,14 @@ class _DormRulesGroupRow extends StatelessWidget {
               height: AppSpacing.xl,
             ),
             decoration: BoxDecoration(
-              color: palette.welcomeAccentColor,
+              color: appColors.accent,
               borderRadius: AppRadius.pill,
             ),
             alignment: Alignment.center,
             child: Icon(
               Icons.check_rounded,
               size: AppSpacing.md,
-              color: palette.welcomeTextOnAccent,
+              color: appColors.textOnAccent,
             ),
           ),
         ],
@@ -1289,6 +1293,7 @@ class _DormRulesPendingSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.xl,
@@ -1320,14 +1325,14 @@ class _DormRulesPendingSection extends StatelessWidget {
                     height: AppSpacing.xxxl,
                   ),
                   decoration: BoxDecoration(
-                    color: _rulesMutedIconFill(palette),
+                    color: _rulesMutedIconFill(appColors),
                     borderRadius: BorderRadius.circular(AppSpacing.md),
                   ),
                   alignment: Alignment.center,
                   child: Icon(
                     Icons.timer_outlined,
                     size: 20,
-                    color: palette.primaryDeep,
+                    color: appColors.accentDeep,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -1372,14 +1377,14 @@ class _DormRulesPendingSection extends StatelessWidget {
                             vertical: AppSpacing.xs,
                           ),
                           decoration: BoxDecoration(
-                            color: palette.welcomeAccentColor,
+                            color: appColors.accent,
                             borderRadius: BorderRadius.circular(AppSpacing.sm),
                           ),
                           child: Text(
                             '确认',
                             style: Theme.of(context).textTheme.labelSmall
                                 ?.copyWith(
-                                  color: palette.primaryDeep,
+                                  color: appColors.textOnAccent,
                                   fontWeight: FontWeight.w600,
                                 ),
                           ),
@@ -1410,6 +1415,7 @@ class _DormRulesDisplayBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.xl,
@@ -1421,8 +1427,8 @@ class _DormRulesDisplayBottomBar extends StatelessWidget {
         label: '我同意遵守以上公约',
         icon: Icons.check_circle_outline_rounded,
         size: PrimaryButtonSize.compact,
-        backgroundColor: palette.welcomeAccentColor,
-        foregroundColor: palette.primaryDeep,
+        backgroundColor: appColors.accent,
+        foregroundColor: appColors.textOnAccent,
         onPressed: enabled ? onPressed : null,
       ),
     );
@@ -1504,6 +1510,7 @@ class _DormRulesEditBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final TextStyle? groupTitleStyle = Theme.of(context).textTheme.labelLarge
         ?.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w700);
 
@@ -1534,7 +1541,7 @@ class _DormRulesEditBody extends StatelessWidget {
                   horizontal: AppSpacing.md,
                   vertical: AppSpacing.sm,
                 ),
-                color: palette.primaryHighlight,
+                color: appColors.accentSoft,
                 boxShadow: const <BoxShadow>[],
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1553,7 +1560,7 @@ class _DormRulesEditBody extends StatelessWidget {
                       child: Icon(
                         Icons.verified_user_outlined,
                         size: AppSpacing.lg,
-                        color: palette.primaryDeep,
+                        color: appColors.accentDeep,
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
@@ -1565,7 +1572,7 @@ class _DormRulesEditBody extends StatelessWidget {
                             '修改后需要室友确认',
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
-                                  color: palette.primaryDeep,
+                                  color: appColors.accentDeep,
                                   fontWeight: FontWeight.w800,
                                 ),
                           ),
@@ -1574,7 +1581,7 @@ class _DormRulesEditBody extends StatelessWidget {
                             '本页保存的是调整草案，不会立即覆盖当前正式公约。',
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
-                                  color: palette.primaryDeep,
+                                  color: appColors.accentDeep,
                                   height: 1.45,
                                 ),
                           ),
@@ -1809,10 +1816,11 @@ class _DormRulesEditableQuietHoursCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return AppSettingsItem(
       title: '安静时段',
       icon: Icons.volume_off_rounded,
-      iconColor: palette.primaryDeep,
+      iconColor: appColors.accentDeep,
       iconBackgroundColor: AppColors.surfaceMuted,
       iconContainerSize: AppSpacing.xxxl,
       iconSize: AppSpacing.lg,
@@ -1901,10 +1909,11 @@ class _DormRulesEditableLightsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return AppSettingsItem(
       title: '熄灯提醒',
       icon: Icons.lightbulb_outline_rounded,
-      iconColor: palette.primaryDeep,
+      iconColor: appColors.accentDeep,
       iconBackgroundColor: AppColors.surfaceMuted,
       iconContainerSize: AppSpacing.xxxl,
       iconSize: AppSpacing.lg,
@@ -1964,10 +1973,11 @@ class _DormRulesCompactValueCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return AppSettingsItem(
       title: title,
       icon: icon,
-      iconColor: palette.primaryDeep,
+      iconColor: appColors.accentDeep,
       iconBackgroundColor: AppColors.surfaceMuted,
       iconContainerSize: AppSpacing.xxxl,
       iconSize: AppSpacing.lg,
@@ -2009,7 +2019,7 @@ class _DormRulesInlineSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     return KeyedSubtree(
       key: expanderKey,
       child: AnimatedSize(
@@ -2040,9 +2050,9 @@ class _DormRulesInlineSlider extends StatelessWidget {
                         SliderTheme(
                           data: SliderTheme.of(context).copyWith(
                             trackHeight: AppSpacing.xxs,
-                            activeTrackColor: palette.primarySoft,
+                            activeTrackColor: appColors.accent,
                             inactiveTrackColor: AppColors.surfaceSoft,
-                            thumbColor: palette.primary,
+                            thumbColor: appColors.accentDeep,
                             overlayShape: SliderComponentShape.noOverlay,
                             thumbShape: const RoundSliderThumbShape(
                               enabledThumbRadius: AppSpacing.xs,
@@ -2100,10 +2110,11 @@ class _DormRulesToggleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return AppSettingsItem(
       title: title,
       icon: icon,
-      iconColor: palette.primaryDeep,
+      iconColor: appColors.accentDeep,
       iconBackgroundColor: AppColors.surfaceMuted,
       iconContainerSize: AppSpacing.xxxl,
       iconSize: AppSpacing.lg,
@@ -2194,6 +2205,7 @@ class _DormRulesReviewOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Material(
       color: Colors.transparent,
       child: AppCard(
@@ -2206,8 +2218,8 @@ class _DormRulesReviewOverlay extends StatelessWidget {
             PrimaryButton(
               label: '同意',
               size: PrimaryButtonSize.compact,
-              backgroundColor: palette.welcomeAccentColor,
-              foregroundColor: palette.primaryDeep,
+              backgroundColor: appColors.accent,
+              foregroundColor: appColors.textOnAccent,
               onPressed: onApprove,
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -2479,16 +2491,16 @@ double _rulesPageWidthFactor(double maxWidth) {
   return 1;
 }
 
-Color _rulesIntroFill(NightMoodPalette palette) {
-  return Color.lerp(palette.welcomeAccentColor, Colors.white, 0.28)!;
+Color _rulesIntroFill(AppSemanticColors appColors) {
+  return Color.lerp(appColors.accent, Colors.white, 0.28)!;
 }
 
-Color _rulesAccentIconFill(NightMoodPalette palette) {
-  return Color.lerp(palette.welcomeAccentColor, Colors.white, 0.12)!;
+Color _rulesAccentIconFill(AppSemanticColors appColors) {
+  return Color.lerp(appColors.accent, Colors.white, 0.12)!;
 }
 
-Color _rulesMutedIconFill(NightMoodPalette palette) {
-  return Color.lerp(_rulesAccentIconFill(palette), Colors.white, 0.62)!;
+Color _rulesMutedIconFill(AppSemanticColors appColors) {
+  return Color.lerp(_rulesAccentIconFill(appColors), Colors.white, 0.62)!;
 }
 
 String _pendingRuleTitle(

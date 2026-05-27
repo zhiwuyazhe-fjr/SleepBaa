@@ -294,6 +294,32 @@ void main() {
     expect(tester.widget<Text>(find.text('灯光环境')).style?.fontSize, 13);
   });
 
+  testWidgets('start sleep card separates audio status from moon action', (
+    WidgetTester tester,
+  ) async {
+    final NightMoodPalette palette = NightMoodPalette.fromMood(null);
+    final AppSemanticColors tokens = AppSemanticColors.light(palette).copyWith(
+      accent: const Color(0xFFE8C9B3),
+      accentDeep: const Color(0xFF5F4B40),
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        StartSleepModeCard(onTap: () {}, isAudioReady: true),
+        tokens: tokens,
+      ),
+    );
+
+    final Finder status = find.text('音频已同步');
+    final Finder moon = find.byIcon(Icons.dark_mode_rounded);
+    expect(tester.getTopRight(status).dx, lessThan(tester.getTopLeft(moon).dx));
+    expect(
+      tester.getTopLeft(moon).dx - tester.getTopRight(status).dx,
+      greaterThanOrEqualTo(8),
+    );
+    expect(tester.widget<Icon>(moon).color, tokens.accentDeep);
+  });
+
   testWidgets('session audio card hides cloud subtitle and exposes transport', (
     WidgetTester tester,
   ) async {

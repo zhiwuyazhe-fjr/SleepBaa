@@ -3,9 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
-import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -175,9 +175,9 @@ class _HomeQuickActionsEditPageState extends State<HomeQuickActionsEditPage> {
                   Text(
                     '请选择 4 个快捷功能',
                     textAlign: TextAlign.center,
-                    style: AppTypography.meta(textTheme).copyWith(
-                      color: context.nightMoodPalette.welcomeAccentColor,
-                    ),
+                    style: AppTypography.meta(
+                      textTheme,
+                    ).copyWith(color: context.appColors.accentDeep),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                 ],
@@ -231,7 +231,7 @@ class _SelectedQuickActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color iconColor = context.nightMoodPalette.primaryDeep;
+    final Color iconColor = context.appColors.accentDeep;
     return _QuickActionStripTile(
       action: action,
       enabled: true,
@@ -279,7 +279,7 @@ class _AvailableQuickActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color iconColor = enabled
-        ? context.nightMoodPalette.primaryDeep
+        ? context.appColors.accentDeep
         : AppColors.textHint;
     return _QuickActionStripTile(
       key: ValueKey<String>('home-quick-action-add-${action.id}'),

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -35,6 +36,7 @@ class DormMemberDetailPage extends StatelessWidget {
             services.notificationRepository,
           ]),
           builder: (BuildContext context, Widget? child) {
+            final AppSemanticColors appColors = context.appColors;
             final Dorm dorm = services.dormRepository.currentDorm;
             final DormMember member = dorm.members.firstWhere(
               (DormMember item) => item.uid == memberUid,
@@ -163,6 +165,9 @@ class DormMemberDetailPage extends StatelessWidget {
                                         detail: entry.value.detail,
                                         timeLabel: entry.value.timeLabel,
                                         highlighted: entry.key == 0,
+                                        iconBackgroundColor:
+                                            appColors.accentSoft,
+                                        iconColor: appColors.accentDeep,
                                       ),
                                     ),
                               ),
@@ -233,7 +238,7 @@ class _DormMemberProfileHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     final Color accentColor = dormPresenceSleepColor(
       member,
       showPresence: showPresence,
@@ -270,7 +275,7 @@ class _DormMemberProfileHero extends StatelessWidget {
             vertical: AppSpacing.xs,
           ),
           decoration: BoxDecoration(
-            color: palette.welcomeAccentColor,
+            color: appColors.accent,
             borderRadius: AppRadius.pill,
           ),
           child: Row(
@@ -288,7 +293,7 @@ class _DormMemberProfileHero extends StatelessWidget {
               Text(
                 dormPresenceSleepLabel(member, showPresence: showPresence),
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: AppColors.textStrong,
+                  color: appColors.textOnAccent,
                   fontWeight: FontWeight.w800,
                 ),
               ),

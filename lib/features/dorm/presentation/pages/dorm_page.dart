@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -294,6 +295,7 @@ class _DormPencilScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return SafeArea(
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
@@ -305,9 +307,9 @@ class _DormPencilScaffold extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: <Color>[
-                  palette.primarySoft.withAlpha(18),
-                  AppColors.background,
-                  AppColors.background,
+                  appColors.accentSoft.withAlpha(18),
+                  appColors.pageBackground,
+                  appColors.pageBackground,
                 ],
               ),
             ),
@@ -547,6 +549,7 @@ class _DormHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return AppCard(
       padding: EdgeInsets.zero,
       boxShadow: AppColors.floatingShadow,
@@ -562,9 +565,9 @@ class _DormHeroCard extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: <Color>[
-              palette.heroGradientStart,
-              palette.heroGradientMid,
-              palette.heroGradientEnd,
+              appColors.heroStart,
+              appColors.heroMid,
+              appColors.heroEnd,
             ],
           ),
         ),
@@ -644,7 +647,7 @@ class _DormPulseBadgePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
@@ -657,7 +660,7 @@ class _DormPulseBadgePill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(badge.icon, size: 16, color: palette.welcomeAccentColor),
+          Icon(badge.icon, size: 16, color: appColors.accent),
           const SizedBox(width: AppSpacing.xs),
           Text(
             badge.label,
@@ -749,7 +752,7 @@ class _HeroRatingPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
@@ -777,7 +780,7 @@ class _HeroRatingPill extends StatelessWidget {
               child: Icon(
                 Icons.star_rounded,
                 size: 16,
-                color: palette.welcomeAccentColor,
+                color: appColors.accent,
               ),
             ),
           ),
@@ -805,6 +808,7 @@ class _DormMemberCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     final Color accentColor = _memberColor(member.status, palette);
     final String? resolvedBadgeId = isCurrentUser
         ? currentUserProfile?.displayBadgeId ?? member.displayBadgeId
@@ -865,7 +869,7 @@ class _DormMemberCard extends StatelessWidget {
                           width: 18,
                           height: 18,
                           decoration: BoxDecoration(
-                            color: palette.welcomeAccentColor,
+                            color: appColors.accent,
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: AppColors.surface,
@@ -925,6 +929,7 @@ class _DormHubCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return AppCard(
       onTap: action.onTap,
       padding: const EdgeInsets.fromLTRB(
@@ -946,10 +951,10 @@ class _DormHubCard extends StatelessWidget {
                 height: 32,
                 decoration: BoxDecoration(
                   borderRadius: AppRadius.iconContainer,
-                  color: palette.primaryHighlight,
+                  color: appColors.accentSoft,
                 ),
                 alignment: Alignment.center,
-                child: Icon(action.icon, color: AppColors.textStrong, size: 18),
+                child: Icon(action.icon, color: appColors.accentDeep, size: 18),
               ),
               const Spacer(),
               if (action.showDot)
