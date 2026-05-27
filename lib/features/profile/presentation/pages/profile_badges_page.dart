@@ -4,6 +4,7 @@ import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -149,11 +150,20 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                   (BuildContext context, BoxConstraints viewportConstraints) {
                     final Size screenSize = MediaQuery.sizeOf(context);
                     final double horizontalPadding =
-                        viewportConstraints.maxWidth * 0.06;
+                        (viewportConstraints.maxWidth * 0.055).clamp(
+                          AppSpacing.lg,
+                          AppSpacing.xxl,
+                        );
                     final double sectionSpacing =
-                        viewportConstraints.maxWidth * 0.06;
+                        (viewportConstraints.maxWidth * 0.046).clamp(
+                          AppSpacing.md,
+                          AppSpacing.xl,
+                        );
                     final double gridSpacing =
-                        viewportConstraints.maxWidth * 0.03;
+                        (viewportConstraints.maxWidth * 0.026).clamp(
+                          AppSpacing.xs,
+                          AppSpacing.md,
+                        );
                     final double screenRatio =
                         screenSize.width / screenSize.height;
                     final int crossAxisCount = screenRatio > 0.72
@@ -161,9 +171,10 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                         : screenRatio < 0.42
                         ? 2
                         : 3;
-                    final double tileAspectRatio = crossAxisCount == 4
-                        ? 0.74
-                        : 0.66;
+                    final double tileAspectRatio =
+                        widget.mode == BadgeCatalogMode.dorm
+                        ? (crossAxisCount == 4 ? 0.88 : 0.78)
+                        : (crossAxisCount == 4 ? 0.8 : 0.7);
 
                     late final String countLabel;
                     late final List<Widget> catalogChildren;
@@ -218,7 +229,12 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                           title: '全部勋章',
                           detail: '${kHonorBadgeCatalog.length} 枚全部可查看',
                         ),
-                        SizedBox(height: viewportConstraints.maxWidth * 0.04),
+                        SizedBox(
+                          height: (viewportConstraints.maxWidth * 0.035).clamp(
+                            AppSpacing.sm,
+                            AppSpacing.lg,
+                          ),
+                        ),
                         GridView.builder(
                           shrinkWrap: true,
                           primary: false,
@@ -312,7 +328,12 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                           title: '全部勋章',
                           detail: '${kDormHonorBadgeCatalog.length} 枚全部可查看',
                         ),
-                        SizedBox(height: viewportConstraints.maxWidth * 0.04),
+                        SizedBox(
+                          height: (viewportConstraints.maxWidth * 0.035).clamp(
+                            AppSpacing.sm,
+                            AppSpacing.lg,
+                          ),
+                        ),
                         GridView.builder(
                           shrinkWrap: true,
                           primary: false,
@@ -560,14 +581,31 @@ class _CatalogSummaryCard extends StatelessWidget {
       builder: (BuildContext context, BoxConstraints constraints) {
         final AppSemanticColors appColors = context.appColors;
         final TextTheme textTheme = Theme.of(context).textTheme;
-        final double horizontalPadding = constraints.maxWidth * 0.06;
-        final double verticalPadding = constraints.maxWidth * 0.075;
-        final double badgeSize = constraints.maxWidth * 0.22;
-        final double rowGap = constraints.maxWidth * 0.04;
-        final double contentActionGap = constraints.maxWidth * 0.075;
-        final double actionHeight = constraints.maxWidth * 0.108;
-        final double chipHorizontalPadding = constraints.maxWidth * 0.026;
-        final double buttonHorizontalPadding = constraints.maxWidth * 0.038;
+        final double horizontalPadding = (constraints.maxWidth * 0.045).clamp(
+          AppSpacing.md,
+          AppSpacing.xl,
+        );
+        final double verticalPadding = (constraints.maxWidth * 0.028).clamp(
+          AppSpacing.sm,
+          AppSpacing.lg,
+        );
+        final double badgeSize = (constraints.maxWidth * 0.13).clamp(64, 82);
+        final double rowGap = (constraints.maxWidth * 0.03).clamp(
+          AppSpacing.sm,
+          AppSpacing.lg,
+        );
+        final double actionGap = (constraints.maxWidth * 0.02).clamp(
+          AppSpacing.xs,
+          AppSpacing.sm,
+        );
+        final double actionHeight = (constraints.maxWidth * 0.052).clamp(
+          32,
+          38,
+        );
+        final double chipHorizontalPadding = (constraints.maxWidth * 0.024)
+            .clamp(AppSpacing.xs, AppSpacing.sm);
+        final double buttonHorizontalPadding = (constraints.maxWidth * 0.03)
+            .clamp(AppSpacing.sm, AppSpacing.md);
 
         return Container(
           padding: EdgeInsets.symmetric(
@@ -580,74 +618,70 @@ class _CatalogSummaryCard extends StatelessWidget {
             border: Border.all(color: appColors.accentSoft.withAlpha(150)),
             boxShadow: AppColors.cardShadow,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  SizedBox.square(
-                    dimension: badgeSize,
-                    child: _SummaryBadgeVisual(
-                      iconData: iconData,
-                      palette: palette,
-                      size: badgeSize,
-                    ),
-                  ),
-                  SizedBox(width: rowGap),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          title,
-                          style: AppTypography.sectionTitle(textTheme).copyWith(
-                            color: appColors.textPrimary,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        SizedBox(height: rowGap * 0.72),
-                        Text(
-                          description,
-                          style: AppTypography.body(
-                            textTheme,
-                          ).copyWith(color: appColors.textSecondary),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              SizedBox.square(
+                dimension: badgeSize,
+                child: _SummaryBadgeVisual(
+                  iconData: iconData,
+                  palette: palette,
+                  size: badgeSize,
+                ),
               ),
-              SizedBox(height: contentActionGap),
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: _SummaryModeChip(
-                        modeLabel: modeLabel,
-                        horizontalPadding: chipHorizontalPadding,
+              SizedBox(width: rowGap),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.sectionTitle(textTheme).copyWith(
+                        color: appColors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: rowGap * 0.48),
+                    Text(
+                      description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.body(
+                        textTheme,
+                      ).copyWith(color: appColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: rowGap),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 116),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    _SummaryModeChip(
+                      modeLabel: modeLabel,
+                      horizontalPadding: chipHorizontalPadding,
+                      height: actionHeight,
+                    ),
+                    SizedBox(height: actionGap),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: _SummaryActionButton(
+                        label: actionLabel,
+                        onPressed: onActionPressed,
+                        backgroundColor: appColors.accent,
+                        foregroundColor: appColors.textOnAccent,
+                        horizontalPadding: buttonHorizontalPadding,
                         height: actionHeight,
                       ),
                     ),
-                  ),
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: _SummaryActionButton(
-                          label: actionLabel,
-                          onPressed: onActionPressed,
-                          backgroundColor: appColors.accent,
-                          foregroundColor: appColors.textOnAccent,
-                          horizontalPadding: buttonHorizontalPadding,
-                          height: actionHeight,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -931,7 +965,7 @@ class _ProfileBadgeGridTile extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     _ProfileBadgeTileVisual(badge: badge, palette: palette),
-                    SizedBox(height: labelGap),
+                    SizedBox(height: labelGap * 0.75),
                     Text(
                       badge.badge.label,
                       maxLines: 2,
@@ -945,7 +979,7 @@ class _ProfileBadgeGridTile extends StatelessWidget {
                             : appColors.textSecondary,
                       ),
                     ),
-                    SizedBox(height: labelGap * 0.35),
+                    SizedBox(height: labelGap * 0.24),
                     Text(
                       badge.statusLabel,
                       maxLines: 1,
@@ -998,7 +1032,7 @@ class _ProfileBadgeTileVisual extends StatelessWidget {
         ? badge.badge.icon
         : Icons.lock_rounded;
     final Color iconColor = isDisplayed
-        ? appColors.textOnAccent
+        ? appColors.accentDeep
         : badge.unlocked
         ? appColors.accentDeep
         : AppColors.textHint;
@@ -1006,7 +1040,7 @@ class _ProfileBadgeTileVisual extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double tileSize = constraints.maxWidth;
-        final double visualSize = tileSize * 0.84;
+        final double visualSize = tileSize * 0.76;
         final double ringSize = visualSize * 0.61;
         final double ringStroke = visualSize * (isDisplayed ? 0.022 : 0.017);
 
@@ -1081,7 +1115,7 @@ class _DormBadgeGridTile extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     _DormBadgeTileVisual(badge: badge, palette: palette),
-                    SizedBox(height: labelGap),
+                    SizedBox(height: labelGap * 0.75),
                     Text(
                       badge.badge.label,
                       maxLines: 2,
@@ -1095,7 +1129,7 @@ class _DormBadgeGridTile extends StatelessWidget {
                             : appColors.textSecondary,
                       ),
                     ),
-                    SizedBox(height: labelGap * 0.35),
+                    SizedBox(height: labelGap * 0.24),
                     Text(
                       badge.statusLabel,
                       maxLines: 1,
@@ -1148,7 +1182,7 @@ class _DormBadgeTileVisual extends StatelessWidget {
         ? badge.badge.icon
         : Icons.lock_rounded;
     final Color iconColor = isDisplayed
-        ? appColors.textOnAccent
+        ? appColors.accentDeep
         : badge.unlocked
         ? appColors.accentDeep
         : AppColors.textHint;
@@ -1156,7 +1190,7 @@ class _DormBadgeTileVisual extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double tileSize = constraints.maxWidth;
-        final double visualSize = tileSize * 0.84;
+        final double visualSize = tileSize * 0.72;
         final double ringSize = visualSize * 0.61;
         final double ringStroke = visualSize * (isDisplayed ? 0.022 : 0.017);
 

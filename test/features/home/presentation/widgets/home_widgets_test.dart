@@ -45,6 +45,10 @@ void main() {
       tokens.heroMid,
       tokens.heroEnd,
     ]);
+    expect(
+      find.byKey(const ValueKey<String>('home-sleep-risk-feedback-surface')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('home quick action uses semantic accent tokens', (
@@ -319,6 +323,19 @@ void main() {
     );
     expect(tester.widget<Icon>(moon).color, tokens.accentDeep);
   });
+
+  testWidgets(
+    'start sleep card keeps the moon action without idle helper text',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        _wrap(StartSleepModeCard(onTap: () {}, isAudioReady: false)),
+      );
+
+      expect(find.text('开启睡眠模式'), findsOneWidget);
+      expect(find.text('轻触进入'), findsNothing);
+      expect(find.byIcon(Icons.dark_mode_rounded), findsOneWidget);
+    },
+  );
 
   testWidgets('session audio card hides cloud subtitle and exposes transport', (
     WidgetTester tester,

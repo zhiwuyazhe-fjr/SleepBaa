@@ -13,69 +13,127 @@ import 'package:sleep_dorm_app/core/utils/formatters.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/icon_badge.dart';
 
-class SleepRiskCard extends StatelessWidget {
+class SleepRiskCard extends StatefulWidget {
   const SleepRiskCard({
     super.key,
     required this.riskLabel,
     required this.primaryValue,
+    this.onTap,
   });
 
   final String riskLabel;
   final String primaryValue;
+  final VoidCallback? onTap;
+
+  @override
+  State<SleepRiskCard> createState() => _SleepRiskCardState();
+}
+
+class _SleepRiskCardState extends State<SleepRiskCard> {
+  bool _pressed = false;
+  bool _longPressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value) {
+      return;
+    }
+    setState(() {
+      _pressed = value;
+    });
+  }
+
+  void _setLongPressed(bool value) {
+    if (_longPressed == value) {
+      return;
+    }
+    setState(() {
+      _longPressed = value;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
-    return AppCard(
-      padding: EdgeInsets.zero,
-      borderRadius: AppRadius.surfacePrimary,
-      boxShadow: AppColors.floatingShadow,
-      child: Container(
-        height: 120,
-        decoration: BoxDecoration(
+    final double scale = _longPressed
+        ? 1.025
+        : _pressed
+        ? 0.975
+        : 1;
+    return GestureDetector(
+      key: const ValueKey<String>('home-sleep-risk-feedback-surface'),
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      onTapDown: (_) => _setPressed(true),
+      onTapCancel: () => _setPressed(false),
+      onTapUp: (_) => _setPressed(false),
+      onLongPressStart: (_) {
+        _setPressed(false);
+        _setLongPressed(true);
+      },
+      onLongPressEnd: (_) => _setLongPressed(false),
+      child: AnimatedScale(
+        scale: scale,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOutCubic,
+        child: AppCard(
+          padding: EdgeInsets.zero,
           borderRadius: AppRadius.surfacePrimary,
-          gradient: LinearGradient(
-            begin: Alignment.bottomCenter,
-            end: Alignment.topCenter,
-            colors: <Color>[
-              appColors.heroStart,
-              appColors.heroMid,
-              appColors.heroEnd,
-            ],
+          boxShadow: _pressed || _longPressed
+              ? AppColors.floatingShadow
+              : AppColors.cardShadow,
+          child: AnimatedOpacity(
+            opacity: _pressed ? 0.94 : 1,
+            duration: const Duration(milliseconds: 120),
+            curve: Curves.easeOutCubic,
+            child: Container(
+              height: 120,
+              decoration: BoxDecoration(
+                borderRadius: AppRadius.surfacePrimary,
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: <Color>[
+                    appColors.heroStart,
+                    appColors.heroMid,
+                    appColors.heroEnd,
+                  ],
+                ),
+              ),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: <Widget>[
+                  Text(
+                    '睡眠风险',
+                    style: AppTypography.panelTitle(
+                      textTheme,
+                    ).copyWith(color: AppColors.onDark),
+                  ),
+                  Row(
+                    children: <Widget>[
+                      Flexible(
+                        child: _CardMetaPill(
+                          label: widget.riskLabel,
+                          backgroundColor: appColors.accentDeep,
+                          foregroundColor: AppColors.onDark,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Flexible(
+                        child: _CardMetaPill(
+                          label: widget.primaryValue,
+                          backgroundColor: appColors.accentDeep,
+                          foregroundColor: AppColors.onDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: <Widget>[
-            Text(
-              '睡眠风险',
-              style: AppTypography.panelTitle(
-                textTheme,
-              ).copyWith(color: AppColors.onDark),
-            ),
-            Row(
-              children: <Widget>[
-                Flexible(
-                  child: _CardMetaPill(
-                    label: riskLabel,
-                    backgroundColor: appColors.accentDeep,
-                    foregroundColor: AppColors.onDark,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Flexible(
-                  child: _CardMetaPill(
-                    label: primaryValue,
-                    backgroundColor: appColors.accentDeep,
-                    foregroundColor: AppColors.onDark,
-                  ),
-                ),
-              ],
-            ),
-          ],
         ),
       ),
     );
@@ -121,27 +179,30 @@ class StartSleepModeCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
-                Flexible(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
+                if (isAudioReady)
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: appColors.surfaceMuted,
+                        borderRadius: AppRadius.surfaceSecondary,
+                      ),
+                      child: Text(
+                        '音频已同步',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.chip(
+                          textTheme,
+                        ).copyWith(color: appColors.textSecondary),
+                      ),
                     ),
-                    decoration: BoxDecoration(
-                      color: appColors.surfaceMuted,
-                      borderRadius: AppRadius.surfaceSecondary,
-                    ),
-                    child: Text(
-                      isAudioReady ? '音频已同步' : '轻触进入',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.chip(
-                        textTheme,
-                      ).copyWith(color: appColors.textSecondary),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
+                  )
+                else
+                  const Spacer(),
+                if (isAudioReady) const SizedBox(width: AppSpacing.sm),
                 Container(
                   width: 40,
                   height: 40,

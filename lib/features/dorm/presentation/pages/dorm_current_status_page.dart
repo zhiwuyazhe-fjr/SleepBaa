@@ -209,25 +209,15 @@ class _CurrentStatusFilters extends StatelessWidget {
       child: Row(
         children: _CurrentStatusFilter.values
             .map((_CurrentStatusFilter filter) {
-              final bool selected = value == filter;
               return Padding(
                 padding: const EdgeInsets.only(right: AppSpacing.xs),
-                child: ChoiceChip(
-                  selected: selected,
-                  showCheckmark: false,
-                  label: Text(_filterLabel(filter)),
-                  color: _currentStatusChipColor(appColors),
-                  selectedColor: appColors.accent,
-                  backgroundColor: appColors.surfaceMuted,
-                  side: BorderSide.none,
-                  shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
-                  labelStyle: AppTypography.meta(textTheme).copyWith(
-                    color: selected
-                        ? appColors.textOnAccent
-                        : appColors.textSecondary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                  onSelected: (_) => onChanged(filter),
+                child: _FeedbackFilterPill(
+                  key: ValueKey<String>(_filterKey(filter)),
+                  label: _filterLabel(filter),
+                  selected: value == filter,
+                  appColors: appColors,
+                  textTheme: textTheme,
+                  onTap: () => onChanged(filter),
                 ),
               );
             })
@@ -243,17 +233,125 @@ class _CurrentStatusFilters extends StatelessWidget {
       _CurrentStatusFilter.pending => '待确认',
     };
   }
+
+  String _filterKey(_CurrentStatusFilter filter) {
+    final String suffix = switch (filter) {
+      _CurrentStatusFilter.all => 'all',
+      _CurrentStatusFilter.quiet => 'quiet',
+      _CurrentStatusFilter.pending => 'pending',
+    };
+    return 'dorm-current-status-filter-$suffix';
+  }
 }
 
-WidgetStateProperty<Color?> _currentStatusChipColor(
-  AppSemanticColors appColors,
-) {
-  return WidgetStateProperty.resolveWith((Set<WidgetState> states) {
-    if (states.contains(WidgetState.selected)) {
-      return appColors.accent;
-    }
-    return appColors.surfaceMuted;
+class _FeedbackFilterPill extends StatefulWidget {
+  const _FeedbackFilterPill({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.appColors,
+    required this.textTheme,
+    required this.onTap,
   });
+
+  final String label;
+  final bool selected;
+  final AppSemanticColors appColors;
+  final TextTheme textTheme;
+  final VoidCallback onTap;
+
+  @override
+  State<_FeedbackFilterPill> createState() => _FeedbackFilterPillState();
+}
+
+class _FeedbackFilterPillState extends State<_FeedbackFilterPill> {
+  bool _pressed = false;
+  bool _longPressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value) {
+      return;
+    }
+    setState(() {
+      _pressed = value;
+    });
+  }
+
+  void _setLongPressed(bool value) {
+    if (_longPressed == value) {
+      return;
+    }
+    setState(() {
+      _longPressed = value;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppSemanticColors appColors = widget.appColors;
+    final double scale = _longPressed
+        ? 1.025
+        : _pressed
+        ? 0.98
+        : 1;
+    final Color backgroundColor = widget.selected
+        ? appColors.accent
+        : appColors.surfaceMuted;
+    final Color foregroundColor = widget.selected
+        ? appColors.textOnAccent
+        : appColors.textSecondary;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      onTapDown: (_) => _setPressed(true),
+      onTapCancel: () => _setPressed(false),
+      onTapUp: (_) => _setPressed(false),
+      onLongPressStart: (_) {
+        _setPressed(false);
+        _setLongPressed(true);
+      },
+      onLongPressEnd: (_) => _setLongPressed(false),
+      child: AnimatedScale(
+        scale: scale,
+        duration: const Duration(milliseconds: 110),
+        curve: Curves.easeOutCubic,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOutCubic,
+          constraints: const BoxConstraints(minHeight: 36),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.xs,
+          ),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: AppRadius.pill,
+            boxShadow: _longPressed
+                ? <BoxShadow>[
+                    BoxShadow(
+                      color: appColors.accent.withAlpha(
+                        widget.selected ? 52 : 30,
+                      ),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ]
+                : const <BoxShadow>[],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            widget.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.meta(
+              widget.textTheme,
+            ).copyWith(color: foregroundColor, fontWeight: FontWeight.w800),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _CurrentStatusList extends StatelessWidget {

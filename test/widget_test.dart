@@ -2231,6 +2231,18 @@ void main() {
     expect(find.byType(DormCurrentStatusPage), findsOneWidget);
     expect(find.text('当前室友状态'), findsWidgets);
     expect(find.text('按室友查看'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('dorm-current-status-filter-all')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('dorm-current-status-filter-quiet')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('dorm-current-status-filter-pending')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('dorm current status overview has no fake view action', (
@@ -2482,17 +2494,26 @@ void main() {
       initialSettings: _settingsWithMood(mood),
     );
 
-    final ChoiceChip currentStatusTab = tester.widget<ChoiceChip>(
-      find.widgetWithText(ChoiceChip, '全部').first,
+    final Finder currentStatusTab = find.byKey(
+      const ValueKey<String>('dorm-current-status-filter-all'),
     );
-    expect(currentStatusTab.selectedColor, appColors.accent);
-    expect(
-      currentStatusTab.color?.resolve(<WidgetState>{
-        WidgetState.selected,
-        WidgetState.pressed,
-      }),
-      appColors.accent,
+    final Container currentStatusTabSurface = tester
+        .widgetList<Container>(
+          find.descendant(
+            of: currentStatusTab,
+            matching: find.byType(Container),
+          ),
+        )
+        .firstWhere((Container container) {
+          return container.decoration is BoxDecoration;
+        });
+    final BoxDecoration currentStatusDecoration =
+        currentStatusTabSurface.decoration! as BoxDecoration;
+    expect(currentStatusDecoration.color, appColors.accent);
+    final Text currentStatusLabel = tester.widget<Text>(
+      find.descendant(of: currentStatusTab, matching: find.text('全部')),
     );
+    expect(currentStatusLabel.style?.color, appColors.textOnAccent);
     final AppMessageRecordCard currentStatusOverview = tester
         .widgetList<AppMessageRecordCard>(find.byType(AppMessageRecordCard))
         .first;
@@ -3217,6 +3238,36 @@ void main() {
       dormBadgeTileTitle.style?.fontSize,
       AppTypography.meta(textTheme).fontSize,
     );
+
+    final Finder summaryCard = find.byKey(
+      const ValueKey<String>('dorm-badge-summary-card'),
+    );
+    final Size summarySize = tester.getSize(summaryCard);
+    expect(summarySize.height, lessThan(170));
+    final Rect summaryRect = tester.getRect(summaryCard);
+    final Rect summaryTitleRect = tester.getRect(find.text('当前展示：不醒人室'));
+    final Rect summaryDescriptionRect = tester.getRect(
+      find.text('宿舍成员整体睡眠时间长，睡眠状态良好'),
+    );
+    expect(
+      (summaryTitleRect.center.dy + summaryDescriptionRect.center.dy) / 2,
+      closeTo(summaryRect.center.dy, 18),
+    );
+
+    final Finder selectedDormBadge = find.byKey(
+      const ValueKey<String>('dorm-badge-grid-no-wake-room'),
+    );
+    expect(tester.getSize(selectedDormBadge).height, lessThan(150));
+    final Icon selectedDormBadgeIcon = tester.widget<Icon>(
+      find
+          .descendant(
+            of: selectedDormBadge,
+            matching: find.byIcon(Icons.bedtime_rounded),
+          )
+          .first,
+    );
+    expect(selectedDormBadgeIcon.color, isNot(AppColors.textStrong));
+    expect(selectedDormBadgeIcon.color, appColors.accentDeep);
   });
 
   testWidgets('profile badge preview sheet stays above the shell tab bar', (
@@ -3974,8 +4025,9 @@ void main() {
     );
 
     expect(find.text('开启睡眠模式'), findsOneWidget);
-    expect(find.text('轻触进入'), findsOneWidget);
+    expect(find.text('轻触进入'), findsNothing);
     expect(find.text('音频已同步'), findsNothing);
+    expect(find.byIcon(Icons.dark_mode_rounded), findsOneWidget);
   });
   testWidgets('entering sleep mode shows the ongoing sleep notification', (
     WidgetTester tester,
