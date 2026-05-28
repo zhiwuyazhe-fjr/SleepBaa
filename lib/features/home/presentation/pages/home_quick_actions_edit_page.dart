@@ -7,6 +7,7 @@ import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
@@ -360,7 +361,7 @@ class _StripActionButton extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: AppRadius.control,
-          onTap: onTap,
+          onTap: AppHaptics.tapHandler(onTap),
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.xs),
             child: Icon(

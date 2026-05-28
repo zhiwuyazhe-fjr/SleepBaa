@@ -10,6 +10,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -716,7 +717,7 @@ class _HeroActionPill extends StatelessWidget {
       borderRadius: AppRadius.pill,
       child: InkWell(
         borderRadius: AppRadius.pill,
-        onTap: onTap,
+        onTap: AppHaptics.navigationHandler(onTap),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.xs,
@@ -833,7 +834,7 @@ class _DormMemberCard extends StatelessWidget {
       label: '${member.name}舍友详情',
       child: InkWell(
         borderRadius: AppRadius.control,
-        onTap: onTap,
+        onTap: AppHaptics.navigationHandler(onTap),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
           child: SizedBox(
@@ -1184,7 +1185,9 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
     final AppSemanticColors appColors = context.appColors;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _activeTab = tab),
+        onTap: AppHaptics.selectionHandler(
+          () => setState(() => _activeTab = tab),
+        ),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
@@ -1232,7 +1235,7 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
         ..._gentleReminderPresets.map(
           (String message) => InkWell(
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            onTap: () => _selectPreset(message),
+            onTap: AppHaptics.selectionHandler(() => _selectPreset(message)),
             child: Container(
               margin: const EdgeInsets.only(bottom: AppSpacing.sm),
               padding: const EdgeInsets.all(AppSpacing.md),
@@ -1344,7 +1347,9 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
         ...widget.members.map(
           (DormMember member) => InkWell(
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            onTap: () => setState(() => _selectedUid = member.uid),
+            onTap: AppHaptics.selectionHandler(
+              () => setState(() => _selectedUid = member.uid),
+            ),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(

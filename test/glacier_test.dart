@@ -12,8 +12,10 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
+import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/widgets/assistant_surface.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/settings_page.dart';
 
@@ -246,6 +248,59 @@ void main() {
       expect(toggleSize.height, 26, reason: title);
       expect(toggleSize.height, lessThan(rowSize.height), reason: title);
     }
+  });
+
+  testWidgets('shared app card tap emits light haptic feedback', (
+    WidgetTester tester,
+  ) async {
+    int taps = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: AppCard(
+              onTap: () {
+                taps += 1;
+              },
+              child: const Text('打开详情'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('打开详情'));
+    await tester.pump();
+
+    expect(taps, 1);
+    expect(_platformHapticTypes, contains('HapticFeedbackType.lightImpact'));
+  });
+
+  testWidgets('section title action emits navigation haptic feedback', (
+    WidgetTester tester,
+  ) async {
+    int taps = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SectionTitle(
+              title: '今晚行动建议',
+              actionLabel: '查看全部',
+              onAction: () {
+                taps += 1;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('查看全部'));
+    await tester.pump();
+
+    expect(taps, 1);
+    expect(_platformHapticTypes, contains('HapticFeedbackType.lightImpact'));
   });
 
   testWidgets('settings page exposes assistant reply motion entry', (
@@ -1180,6 +1235,10 @@ Future<dynamic> _handlePlatformCall(MethodCall call) async {
   _platformMethodCalls.add(call);
   return null;
 }
+
+Iterable<String?> get _platformHapticTypes => _platformMethodCalls
+    .where((MethodCall call) => call.method == 'HapticFeedback.vibrate')
+    .map((MethodCall call) => call.arguments as String?);
 
 DateTime _dayClock() => DateTime(2026, 4, 5, 14);
 

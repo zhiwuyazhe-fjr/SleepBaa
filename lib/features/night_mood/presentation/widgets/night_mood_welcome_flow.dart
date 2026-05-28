@@ -12,11 +12,13 @@ class NightMoodWelcomeFlow extends StatefulWidget {
   const NightMoodWelcomeFlow({
     super.key,
     this.initialMood,
+    this.completeButtonLabel = '进入今晚首页',
     required this.onSkip,
     required this.onComplete,
   });
 
   final NightMood? initialMood;
+  final String completeButtonLabel;
   final AsyncVoidCallback onSkip;
   final AsyncValueCallback<NightMood> onComplete;
 
@@ -121,6 +123,7 @@ class _NightMoodWelcomeFlowState extends State<NightMoodWelcomeFlow> {
             metrics: metrics,
             selectedReasons: _selectedReasons.toList(growable: false),
             isSubmitting: _isSubmitting,
+            completeButtonLabel: widget.completeButtonLabel,
             onBack: () {
               setState(() {
                 _isForward = false;
@@ -532,6 +535,7 @@ class _WelcomeStep extends StatelessWidget {
     required this.metrics,
     required this.selectedReasons,
     required this.isSubmitting,
+    required this.completeButtonLabel,
     required this.onBack,
     required this.onEnter,
   });
@@ -541,6 +545,7 @@ class _WelcomeStep extends StatelessWidget {
   final _WelcomeLayoutMetrics metrics;
   final List<String> selectedReasons;
   final bool isSubmitting;
+  final String completeButtonLabel;
   final VoidCallback onBack;
   final AsyncVoidCallback onEnter;
 
@@ -615,7 +620,7 @@ class _WelcomeStep extends StatelessWidget {
             ),
             const Spacer(),
             _BottomActionBar(
-              primaryLabel: '进入今晚首页',
+              primaryLabel: completeButtonLabel,
               primaryBackgroundColor: Colors.white,
               primaryTextColor: Colors.black,
               onPrimaryPressed: isSubmitting ? null : () => onEnter(),

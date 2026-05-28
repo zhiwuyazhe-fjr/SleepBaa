@@ -20,6 +20,7 @@ import 'package:sleep_dorm_app/features/home/presentation/pages/home_quick_actio
 import 'package:sleep_dorm_app/features/home/presentation/pages/home_post_sleep_page.dart';
 import 'package:sleep_dorm_app/features/intervention/presentation/pages/micro_intervention_task_page.dart';
 import 'package:sleep_dorm_app/features/logs/presentation/pages/night_awakening_log_page.dart';
+import 'package:sleep_dorm_app/features/night_mood/presentation/pages/manual_night_mood_page.dart';
 import 'package:sleep_dorm_app/features/night_mood/presentation/pages/night_welcome_gate_page.dart';
 import 'package:sleep_dorm_app/features/notifications/presentation/pages/notifications_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/calendar_checkin_page.dart';
@@ -46,6 +47,7 @@ abstract final class AppRoutes {
   static const String homePreSleep = '/home/pre_sleep';
   static const String homePostSleep = '/home/post_sleep';
   static const String homeQuickActionsEdit = '/home/quick_actions/edit';
+  static const String manualNightMood = '/night_mood/select';
   static const String feedbackReceivedNotice = 'feedback_received';
   static const String feedbackSubmittedNotice = 'feedback_submitted';
   static const String analysisInterferenceFactors =
@@ -265,6 +267,11 @@ GoRouter createRouter({
         path: AppRoutes.homeQuickActionsEdit,
         builder: (BuildContext context, GoRouterState state) =>
             const HomeQuickActionsEditPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.manualNightMood,
+        builder: (BuildContext context, GoRouterState state) =>
+            const ManualNightMoodPage(),
       ),
       GoRoute(
         path: AppRoutes.analysisInterferenceFactors,

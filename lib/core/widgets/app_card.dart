@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 
 class AppCard extends StatelessWidget {
   const AppCard({
@@ -53,7 +54,7 @@ class AppCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: effectiveRadius,
-        onTap: onTap,
+        onTap: AppHaptics.tapHandler(onTap),
         child: ClipRRect(
           borderRadius: effectiveRadius,
           clipBehavior: clipBehavior,

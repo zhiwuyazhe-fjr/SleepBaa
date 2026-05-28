@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal_spec.dart';
 
 Future<T?> showAppBottomSheet<T>(
@@ -46,7 +47,9 @@ Future<T?> showAppBottomSheet<T>(
                   trailing: option.value == spec.selectedValue
                       ? const Icon(Icons.check_rounded)
                       : null,
-                  onTap: () => Navigator.of(sheetContext).pop(option.value),
+                  onTap: AppHaptics.selectionHandler(
+                    () => Navigator.of(sheetContext).pop(option.value),
+                  ),
                 ),
             ],
           ),

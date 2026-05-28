@@ -48,6 +48,7 @@ import 'package:sleep_dorm_app/features/home/presentation/pages/home_post_sleep_
 import 'package:sleep_dorm_app/features/home/presentation/pages/home_pre_sleep_page.dart';
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.dart';
 import 'package:sleep_dorm_app/features/intervention/presentation/pages/micro_intervention_task_page.dart';
+import 'package:sleep_dorm_app/features/night_mood/presentation/widgets/night_mood_welcome_flow.dart';
 import 'package:sleep_dorm_app/features/notifications/presentation/pages/notifications_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/calendar_checkin_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_page.dart';
@@ -271,16 +272,24 @@ void main() {
   testWidgets('settings switch shows home quick actions when enabled', (
     WidgetTester tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await _pumpApp(
       tester,
       initialLocation: AppRoutes.profileSettings,
       clock: _dayClock,
     );
 
-    expect(find.text('首页显示'), findsOneWidget);
+    expect(find.text('显示与首页'), findsOneWidget);
+    expect(find.text('首页显示'), findsNothing);
     expect(find.text('快捷功能'), findsOneWidget);
 
-    await tester.tap(find.text('快捷功能'));
+    final Finder quickActionsToggle = find.byKey(
+      const ValueKey<String>('settings-toggle-快捷功能'),
+    );
+    await tester.ensureVisible(quickActionsToggle);
+    await tester.tap(quickActionsToggle);
     await tester.pump();
 
     final AppServices services = AppScope.of(
@@ -303,6 +312,62 @@ void main() {
     expect(find.text('梦记一则'), findsOneWidget);
     expect(find.text('打卡日历'), findsOneWidget);
     expect(find.text('思绪清理'), findsOneWidget);
+  });
+
+  testWidgets('settings can open manual night mood flow during daytime', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileSettings,
+      clock: _dayClock,
+    );
+
+    expect(find.text('显示与首页'), findsOneWidget);
+    expect(find.text('打开心情选择流程'), findsOneWidget);
+
+    await tester.tap(find.text('打开心情选择流程'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NightMoodWelcomeFlow), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('night-mood-top-card')),
+      findsOneWidget,
+    );
+    expect(find.byKey(BottomNavShell.navBarKey), findsNothing);
+  });
+
+  testWidgets('manual night mood flow saves mood and returns to settings', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.manualNightMood,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(NightMood.calm),
+    );
+
+    await tester.tap(find.text('开心'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '下一步'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '继续'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(FilledButton, '保存心情主题'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, '进入今晚首页'), findsNothing);
+
+    await tester.tap(find.widgetWithText(FilledButton, '保存心情主题'));
+    await tester.pumpAndSettle();
+
+    final AppServices services = AppScope.of(
+      tester.element(find.byType(SettingsPage)),
+    );
+    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(
+      services.settingsRepository.currentSettings.selectedNightMood,
+      NightMood.happy,
+    );
   });
 
   testWidgets(
@@ -781,19 +846,42 @@ void main() {
   testWidgets('bottom navigation switches between shell tabs', (
     WidgetTester tester,
   ) async {
+    final List<MethodCall> platformCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall call,
+        ) async {
+          platformCalls.add(call);
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
     await _pumpApp(
       tester,
       initialLocation: AppRoutes.homePreSleep,
       clock: _dayClock,
     );
+    platformCalls.clear();
 
     await tester.tap(find.byIcon(Icons.night_shelter_rounded));
     await tester.pumpAndSettle();
     expect(find.byType(DormPage), findsOneWidget);
+    expect(
+      _hapticTypesFrom(platformCalls),
+      contains('HapticFeedbackType.selectionClick'),
+    );
+    platformCalls.clear();
 
     await tester.tap(find.byIcon(Icons.person_rounded).last);
     await tester.pumpAndSettle();
     expect(find.byType(ProfilePage), findsOneWidget);
+    expect(
+      _hapticTypesFrom(platformCalls),
+      contains('HapticFeedbackType.selectionClick'),
+    );
   });
 
   testWidgets('bottom navigation stays fixed when the keyboard appears', (
@@ -6450,6 +6538,10 @@ Future<void> _seedRegisteredPhoneUser(
   );
   await services.authRepository.signOut();
 }
+
+Iterable<String?> _hapticTypesFrom(List<MethodCall> calls) => calls
+    .where((MethodCall call) => call.method == 'HapticFeedback.vibrate')
+    .map((MethodCall call) => call.arguments as String?);
 
 void _seedExpiredCloudBaseSession() {
   const String deviceId = 'cb-device-test';

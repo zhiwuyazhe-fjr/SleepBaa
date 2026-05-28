@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/widgets/mood_avatar.dart';
 
 /// Same visual as the floating assistant FAB for a fixed [palette].
@@ -174,7 +175,10 @@ class _AssistantFabState extends State<AssistantFab> {
       button: true,
       label: 'Open assistant',
       child: GestureDetector(
-        onTap: () => context.push(AppRoutes.assistant),
+        onTap: () {
+          AppHaptics.navigation();
+          context.push(AppRoutes.assistant);
+        },
         child: AssistantFabVisual(palette: context.nightMoodPalette),
       ),
     );

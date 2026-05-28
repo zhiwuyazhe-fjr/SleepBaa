@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 
 class AppSettingsGroup extends StatelessWidget {
@@ -151,10 +151,7 @@ class AppSettingsItem extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: borderRadius ?? AppRadius.control,
-        onTap: () {
-          HapticFeedback.lightImpact();
-          onTap!();
-        },
+        onTap: AppHaptics.tapHandler(onTap),
         child: row,
       ),
     );

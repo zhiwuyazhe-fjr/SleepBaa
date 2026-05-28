@@ -5,6 +5,7 @@ import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_message_record_card.dart';
@@ -282,7 +283,7 @@ class _FeedbackFilterPillState extends State<_FeedbackFilterPill> {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: widget.onTap,
+      onTap: AppHaptics.selectionHandler(widget.onTap),
       onTapDown: (_) => _setPressed(true),
       onTapCancel: () => _setPressed(false),
       onTapUp: (_) => _setPressed(false),

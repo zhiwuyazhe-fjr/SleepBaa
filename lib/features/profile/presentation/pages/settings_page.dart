@@ -357,8 +357,18 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 AppSettingsGroup(
-                  title: '首页显示',
+                  title: '显示与首页',
                   children: <Widget>[
+                    AppSettingsItem(
+                      icon: Icons.nightlight_round,
+                      iconColor: context.nightMoodPalette.primaryDeep,
+                      iconBackgroundColor: AppColors.surfaceMuted,
+                      title: '打开心情选择流程',
+                      titleStyle: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      onTap: () => context.push(AppRoutes.manualNightMood),
+                    ),
                     _SettingsSwitchRow(
                       icon: Icons.grid_view_rounded,
                       title: '快捷功能',

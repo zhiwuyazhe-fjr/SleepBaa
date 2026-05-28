@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 
 class QuickActionIconButton extends StatelessWidget {
   const QuickActionIconButton({
@@ -20,7 +21,7 @@ class QuickActionIconButton extends StatelessWidget {
     final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return InkWell(
-      onTap: onTap,
+      onTap: AppHaptics.tapHandler(onTap),
       borderRadius: BorderRadius.circular(20),
       child: Column(
         children: <Widget>[

@@ -8,6 +8,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
@@ -503,7 +504,7 @@ class _BadgeCatalogModeButton extends StatelessWidget {
       child: InkWell(
         key: ValueKey<String>('badge-catalog-mode-${mode.keySuffix}'),
         borderRadius: AppRadius.pill,
-        onTap: selected ? null : onTap,
+        onTap: selected ? null : AppHaptics.selectionHandler(onTap),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
@@ -584,7 +585,7 @@ class _CatalogSummaryCard extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            onTap: onTap,
+            onTap: AppHaptics.navigationHandler(onTap),
             child: Container(
               padding: EdgeInsets.symmetric(
                 horizontal: horizontalPadding,
@@ -781,7 +782,7 @@ class _SummaryActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FilledButton(
-      onPressed: onPressed,
+      onPressed: AppHaptics.confirmHandler(onPressed),
       style: FilledButton.styleFrom(
         backgroundColor: backgroundColor,
         foregroundColor: foregroundColor,
@@ -887,7 +888,7 @@ class _ProfileBadgeGridTile extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           key: ValueKey<String>('profile-badge-grid-${badge.badge.id}'),
-          onTap: onTap,
+          onTap: AppHaptics.navigationHandler(onTap),
           borderRadius: AppRadius.card,
           child: LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
@@ -1037,7 +1038,7 @@ class _DormBadgeGridTile extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           key: ValueKey<String>('dorm-badge-grid-${badge.badge.id}'),
-          onTap: onTap,
+          onTap: AppHaptics.navigationHandler(onTap),
           borderRadius: AppRadius.card,
           child: LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {

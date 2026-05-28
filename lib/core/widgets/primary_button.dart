@@ -1,9 +1,9 @@
-import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 
 enum PrimaryButtonVariant { filled, soft, ghost }
 
@@ -44,10 +44,7 @@ class PrimaryButton extends StatelessWidget {
     final NightMoodPalette palette = context.nightMoodPalette;
     final VoidCallback? resolvedOnPressed = onPressed == null || isLoading
         ? null
-        : () {
-            HapticFeedback.lightImpact();
-            onPressed!();
-          };
+        : AppHaptics.confirmHandler(onPressed);
     final TextStyle? buttonTextStyle = Theme.of(context).textTheme.labelLarge
         ?.copyWith(
           fontSize: size == PrimaryButtonSize.regular ? 15 : 14,

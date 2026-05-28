@@ -4,6 +4,7 @@ import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
@@ -68,7 +69,9 @@ class _BottomNavShellState extends State<BottomNavShell> {
             services.nightWelcomeController.shouldShowWelcome(
               homeMode: HomeMode.preSleep,
               persistedEveningWelcomePeriodKey: services
-                  .settingsRepository.currentSettings.eveningEncouragementPeriodKey,
+                  .settingsRepository
+                  .currentSettings
+                  .eveningEncouragementPeriodKey,
             );
 
         return Scaffold(
@@ -196,7 +199,7 @@ class _NavPillButton extends StatelessWidget {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
+        onTap: AppHaptics.selectionHandler(onTap),
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: selected ? 22 : 16,

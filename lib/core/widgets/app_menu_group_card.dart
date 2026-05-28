@@ -1,8 +1,8 @@
-import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 
 class AppMenuGroupCardItem {
@@ -78,15 +78,10 @@ class _AppMenuGroupRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    void handleTap() {
-      HapticFeedback.lightImpact();
-      item.onTap();
-    }
-
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: handleTap,
+        onTap: AppHaptics.navigationHandler(item.onTap),
         borderRadius: AppRadius.control,
         child: Padding(
           padding: padding,

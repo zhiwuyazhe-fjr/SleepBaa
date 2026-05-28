@@ -3,6 +3,7 @@ import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 
 enum SectionTitleVariant { standard, dorm }
 
@@ -54,7 +55,7 @@ class SectionTitle extends StatelessWidget {
         if (actionLabel != null)
           TextButton.icon(
             key: actionKey,
-            onPressed: onAction,
+            onPressed: AppHaptics.navigationHandler(onAction),
             style: TextButton.styleFrom(
               foregroundColor: actionColor,
               padding: useDormStyle

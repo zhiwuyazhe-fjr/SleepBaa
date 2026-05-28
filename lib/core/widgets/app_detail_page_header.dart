@@ -4,6 +4,7 @@ import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 
 class AppDetailPageHeader extends StatelessWidget {
   const AppDetailPageHeader({
@@ -30,7 +31,7 @@ class AppDetailPageHeader extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             borderRadius: AppRadius.button,
-            onTap: onBack,
+            onTap: AppHaptics.navigationHandler(onBack),
             child: SizedBox.square(
               dimension: AppSpacing.xxxl,
               child: Icon(

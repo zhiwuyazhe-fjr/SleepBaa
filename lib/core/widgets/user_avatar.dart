@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 
 class UserAvatar extends StatelessWidget {
@@ -71,7 +72,7 @@ class UserAvatar extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTap: AppHaptics.navigationHandler(onTap),
         borderRadius: BorderRadius.circular(size),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xs),

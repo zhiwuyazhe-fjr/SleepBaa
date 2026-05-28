@@ -8,6 +8,7 @@ import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -107,7 +108,7 @@ class _SleepRiskCardState extends State<SleepRiskCard> {
         onPointerCancel: _handlePointerCancel,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: widget.onTap,
+          onTap: AppHaptics.tapHandler(widget.onTap),
           child: AnimatedScale(
             scale: scale,
             duration: Duration(
@@ -374,7 +375,7 @@ class HomeActionCard extends StatelessWidget {
             Expanded(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: _isAudio ? onTap : null,
+                onTap: _isAudio ? AppHaptics.tapHandler(onTap) : null,
                 child: Row(
                   children: <Widget>[
                     Container(
@@ -448,7 +449,7 @@ class HomeActionCard extends StatelessWidget {
                         : appColors.accentDeep,
                   ),
                 InkWell(
-                  onTap: onPlayToggle ?? onTap,
+                  onTap: AppHaptics.tapHandler(onPlayToggle ?? onTap),
                   borderRadius: BorderRadius.circular(999),
                   child: Container(
                     width: 48,
@@ -592,7 +593,7 @@ class _AudioTransportIcon extends StatelessWidget {
       constraints: const BoxConstraints.tightFor(width: 36, height: 36),
       padding: EdgeInsets.zero,
       visualDensity: VisualDensity.compact,
-      onPressed: onTap,
+      onPressed: AppHaptics.tapHandler(onTap),
       icon: Icon(icon, size: 22, color: color),
     );
   }
@@ -841,7 +842,7 @@ class SessionAudioCard extends StatelessWidget {
               children: <Widget>[
                 IconButton(
                   tooltip: '上一首',
-                  onPressed: onPrevious,
+                  onPressed: AppHaptics.tapHandler(onPrevious),
                   icon: Icon(
                     Icons.skip_previous_rounded,
                     color: palette.primarySoft,
@@ -849,7 +850,7 @@ class SessionAudioCard extends StatelessWidget {
                 ),
                 IconButton(
                   tooltip: playbackState == PlaybackState.playing ? '暂停' : '播放',
-                  onPressed: onToggle,
+                  onPressed: AppHaptics.tapHandler(onToggle),
                   icon: Icon(
                     playbackState == PlaybackState.playing
                         ? Icons.pause_circle_filled_rounded
@@ -860,7 +861,7 @@ class SessionAudioCard extends StatelessWidget {
                 ),
                 IconButton(
                   tooltip: '下一首',
-                  onPressed: onNext,
+                  onPressed: AppHaptics.tapHandler(onNext),
                   icon: Icon(
                     Icons.skip_next_rounded,
                     color: palette.primarySoft,
