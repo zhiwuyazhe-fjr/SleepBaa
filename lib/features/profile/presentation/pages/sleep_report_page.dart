@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -28,34 +30,42 @@ class SleepReportPage extends StatelessWidget {
           ]),
           builder: (BuildContext context, Widget? child) {
             final NightMoodPalette palette = context.nightMoodPalette;
+            final TextTheme textTheme = Theme.of(context).textTheme;
             final SleepReport report = services.insightsFacade.currentReport;
             final List<SleepSession> recent = services.sleepFacade
                 .recentSessions();
 
             return ListView(
-              padding: const EdgeInsets.all(AppSpacing.xl),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
+                AppSpacing.md,
+                AppSpacing.xl,
+                120,
+              ),
               children: <Widget>[
                 AppCard(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  borderRadius: AppRadius.surfacePrimary,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
                         report.title,
-                        style: Theme.of(context).textTheme.headlineSmall,
+                        style: AppTypography.panelTitle(textTheme),
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       Text(
                         '生成时间 ${report.generatedAt.month}/${report.generatedAt.day} '
                         '${report.generatedAt.hour.toString().padLeft(2, '0')}:'
                         '${report.generatedAt.minute.toString().padLeft(2, '0')}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
+                        style: AppTypography.chip(
+                          textTheme,
+                        ).copyWith(color: AppColors.textSecondary),
                       ),
-                      const SizedBox(height: AppSpacing.lg),
+                      const SizedBox(height: AppSpacing.sm),
                       Wrap(
-                        spacing: AppSpacing.sm,
-                        runSpacing: AppSpacing.sm,
+                        spacing: AppSpacing.xs,
+                        runSpacing: AppSpacing.xs,
                         children: <Widget>[
                           _MetricChip(
                             label: '平均睡眠',
@@ -90,22 +100,21 @@ class SleepReportPage extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xl),
+                const SizedBox(height: AppSpacing.md),
                 AppCard(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  borderRadius: AppRadius.surfacePrimary,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(
-                        '本轮观察亮点',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
+                      Text('本轮观察亮点', style: AppTypography.cardTitle(textTheme)),
                       const SizedBox(height: AppSpacing.md),
                       if (report.highlights.isEmpty)
                         Text(
                           '继续记录更多夜晚后，这里会总结你的睡眠节律、梦境趋势和晨间恢复状态。',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodyMedium?.copyWith(height: 1.5),
+                          style: AppTypography.bodyMuted(
+                            textTheme,
+                          ).copyWith(height: 1.5),
                         )
                       else
                         ...report.highlights.map(
@@ -118,17 +127,17 @@ class SleepReportPage extends StatelessWidget {
                               children: <Widget>[
                                 Text(
                                   '•',
-                                  style: Theme.of(context).textTheme.bodyLarge
-                                      ?.copyWith(color: palette.primary),
+                                  style: AppTypography.body(
+                                    textTheme,
+                                  ).copyWith(color: palette.primary),
                                 ),
                                 const SizedBox(width: AppSpacing.sm),
                                 Expanded(
                                   child: Text(
                                     item,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(height: 1.5),
+                                    style: AppTypography.bodyMuted(
+                                      textTheme,
+                                    ).copyWith(height: 1.5),
                                   ),
                                 ),
                               ],
@@ -138,20 +147,19 @@ class SleepReportPage extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xl),
+                const SizedBox(height: AppSpacing.md),
                 AppCard(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  borderRadius: AppRadius.surfacePrimary,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(
-                        '最近记录',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
+                      Text('最近记录', style: AppTypography.cardTitle(textTheme)),
                       const SizedBox(height: AppSpacing.md),
                       if (recent.isEmpty)
                         Text(
                           '还没有新的睡眠记录。',
-                          style: Theme.of(context).textTheme.bodyMedium,
+                          style: AppTypography.bodyMuted(textTheme),
                         )
                       else
                         ...recent
@@ -191,8 +199,8 @@ class _MetricChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
+        horizontal: AppSpacing.xs,
+        vertical: AppSpacing.xxs,
       ),
       decoration: BoxDecoration(
         color: color.withAlpha(18),
@@ -200,10 +208,9 @@ class _MetricChip extends StatelessWidget {
       ),
       child: Text(
         '$label  $value',
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w700,
-        ),
+        style: AppTypography.chip(
+          Theme.of(context).textTheme,
+        ).copyWith(color: color, fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -241,11 +248,11 @@ class _RecentSessionTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
-          vertical: AppSpacing.md,
+          vertical: AppSpacing.sm,
         ),
         decoration: BoxDecoration(
           color: AppColors.surfaceMuted,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: AppRadius.compactCard,
         ),
         child: Row(
           children: <Widget>[
@@ -257,22 +264,22 @@ class _RecentSessionTile extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     '${session.sleepDayDate.month}/${session.sleepDayDate.day}',
-                    style: Theme.of(context).textTheme.titleMedium,
+                    style: AppTypography.cardTitle(Theme.of(context).textTheme),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                    style: AppTypography.bodyMuted(
+                      Theme.of(context).textTheme,
+                    ).copyWith(color: AppColors.textSecondary),
                   ),
                 ],
               ),
             ),
             Container(
               padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.sm,
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
               ),
               decoration: BoxDecoration(
                 color: badgeColor.withAlpha(18),
@@ -280,10 +287,9 @@ class _RecentSessionTile extends StatelessWidget {
               ),
               child: Text(
                 pending ? '待补全' : '已完成',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: badgeColor,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: AppTypography.chip(
+                  Theme.of(context).textTheme,
+                ).copyWith(color: badgeColor, fontWeight: FontWeight.w700),
               ),
             ),
           ],

@@ -54,6 +54,8 @@ import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_page.
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_account_pages.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/settings_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/sleep_report_page.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/thought_note_detail_page.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/thought_vault_page.dart';
 import 'package:sleep_dorm_app/features/sleep/presentation/pages/cant_sleep_page.dart';
 
 void main() {
@@ -3534,8 +3536,74 @@ void main() {
     final AppCard entryCard = tester.widget<AppCard>(
       find.ancestor(of: find.text('漂浮柑橘岛'), matching: find.byType(AppCard)),
     );
+    final AppCard highlightCard = tester.widget<AppCard>(
+      find.ancestor(
+        of: find.text('这一周的梦开始有规律了'),
+        matching: find.byType(AppCard),
+      ),
+    );
+    final TextTheme textTheme = Theme.of(
+      tester.element(find.byType(DreamJournalPage)),
+    ).textTheme;
+    final Text sectionTitle = tester.widget<Text>(find.text('最近梦境'));
+    final Text highlightTitle = tester.widget<Text>(find.text('这一周的梦开始有规律了'));
+    final Text entryTitle = tester.widget<Text>(find.text('漂浮柑橘岛'));
 
     expect(entryCard.borderRadius, AppRadius.compactCard);
+    expect(highlightCard.padding, const EdgeInsets.all(AppSpacing.lg));
+    expect(tester.getSize(find.byWidget(highlightCard)).height, lessThan(236));
+    expect(
+      sectionTitle.style?.fontSize,
+      AppTypography.sectionTitle(textTheme).fontSize,
+    );
+    expect(
+      highlightTitle.style?.fontSize,
+      AppTypography.panelTitle(textTheme).fontSize,
+    );
+    expect(
+      entryTitle.style?.fontSize,
+      AppTypography.cardTitle(textTheme).fontSize,
+    );
+    expect(entryCard.padding, const EdgeInsets.all(AppSpacing.md));
+  });
+
+  testWidgets('dream mapping tab uses compact visual hierarchy', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dreamJournal,
+      clock: _dayClock,
+    );
+
+    await tester.tap(find.text('映射'));
+    await tester.pumpAndSettle();
+
+    final TextTheme textTheme = Theme.of(
+      tester.element(find.byType(DreamJournalPage)),
+    ).textTheme;
+    final Finder mappingCardFinder = find.ancestor(
+      of: find.text('学会梦的语言，解锁梦的启示'),
+      matching: find.byType(AppCard),
+    );
+    final AppCard mappingCard = tester.widget<AppCard>(mappingCardFinder);
+    final Text mappingTitle = tester.widget<Text>(find.text('学会梦的语言，解锁梦的启示'));
+
+    expect(mappingCard.padding, const EdgeInsets.all(AppSpacing.lg));
+    expect(
+      mappingTitle.style?.fontSize,
+      AppTypography.panelTitle(textTheme).fontSize,
+    );
+    expect(
+      tester.getSize(
+        find.byKey(const ValueKey<String>('dream-mapping-hero-image')),
+      ),
+      const Size(88, 88),
+    );
+    expect(tester.getSize(mappingCardFinder).height, lessThan(236));
   });
 
   testWidgets(
@@ -3610,6 +3678,72 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(CalendarCheckinPage), findsOneWidget);
+  });
+
+  testWidgets('thought vault uses compact profile typography', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileThoughtVault,
+      clock: _dayClock,
+    );
+
+    expect(find.byType(ThoughtVaultPage), findsOneWidget);
+
+    final Finder entryCardFinder = find.ancestor(
+      of: find.text('事记 22:48 · 睡前收口'),
+      matching: find.byType(AppCard),
+    );
+    final AppCard entryCard = tester.widget<AppCard>(entryCardFinder);
+    final TextTheme textTheme = Theme.of(
+      tester.element(find.byType(ThoughtVaultPage)),
+    ).textTheme;
+    final Text entryTitle = tester.widget<Text>(find.text('事记 22:48 · 睡前收口'));
+    final Text timePill = tester.widget<Text>(
+      find
+          .descendant(
+            of: entryCardFinder,
+            matching: find.byWidgetPredicate(
+              (Widget widget) =>
+                  widget is Text &&
+                  widget.data != null &&
+                  RegExp(r'^\d{2}/\d{2} \d{2}:\d{2}$').hasMatch(widget.data!),
+            ),
+          )
+          .first,
+    );
+
+    expect(entryCard.borderRadius, AppRadius.compactCard);
+    expect(entryCard.padding, const EdgeInsets.all(AppSpacing.md));
+    expect(
+      entryTitle.style?.fontSize,
+      AppTypography.cardTitle(textTheme).fontSize,
+    );
+    expect(
+      entryTitle.style?.fontWeight,
+      AppTypography.cardTitle(textTheme).fontWeight,
+    );
+    expect(timePill.style?.fontSize, AppTypography.chip(textTheme).fontSize);
+    expect(tester.getSize(entryCardFinder).height, lessThan(136));
+
+    await tester.tap(find.text('事记 22:48 · 睡前收口'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ThoughtNoteDetailPage), findsOneWidget);
+    final AppCard detailCard = tester.widget<AppCard>(
+      find.ancestor(of: find.text('AI整理提要'), matching: find.byType(AppCard)),
+    );
+    final Text detailTitle = tester.widget<Text>(find.text('AI整理提要'));
+    expect(detailCard.borderRadius, AppRadius.surfacePrimary);
+    expect(detailCard.padding, const EdgeInsets.all(AppSpacing.md));
+    expect(
+      detailTitle.style?.fontSize,
+      AppTypography.cardTitle(textTheme).fontSize,
+    );
   });
 
   testWidgets('profile badge card opens overview and badge sheet', (
@@ -4150,6 +4284,52 @@ void main() {
     expect(find.text('最近记录'), findsOneWidget);
   });
 
+  testWidgets('sleep report page uses compact report typography', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileReport,
+      clock: _dayClock,
+    );
+
+    final TextTheme textTheme = Theme.of(
+      tester.element(find.byType(SleepReportPage)),
+    ).textTheme;
+    final Finder summaryCardFinder = find.byType(AppCard).first;
+    final AppCard summaryCard = tester.widget<AppCard>(summaryCardFinder);
+    final Finder highlightsCardFinder = find.ancestor(
+      of: find.text('本轮观察亮点'),
+      matching: find.byType(AppCard),
+    );
+    final AppCard highlightsCard = tester.widget<AppCard>(highlightsCardFinder);
+    final Text reportTitle = tester.widget<Text>(
+      find.descendant(of: summaryCardFinder, matching: find.byType(Text)).first,
+    );
+    final Text highlightsTitle = tester.widget<Text>(find.text('本轮观察亮点'));
+    final Text recentTitle = tester.widget<Text>(find.text('最近记录'));
+
+    expect(summaryCard.padding, const EdgeInsets.all(AppSpacing.md));
+    expect(summaryCard.borderRadius, AppRadius.surfacePrimary);
+    expect(highlightsCard.padding, const EdgeInsets.all(AppSpacing.md));
+    expect(
+      reportTitle.style?.fontSize,
+      AppTypography.panelTitle(textTheme).fontSize,
+    );
+    expect(
+      highlightsTitle.style?.fontSize,
+      AppTypography.cardTitle(textTheme).fontSize,
+    );
+    expect(
+      recentTitle.style?.fontSize,
+      AppTypography.cardTitle(textTheme).fontSize,
+    );
+    expect(tester.getSize(summaryCardFinder).height, lessThan(176));
+  });
+
   testWidgets('post sleep page hides shell navigation', (
     WidgetTester tester,
   ) async {
@@ -4221,6 +4401,15 @@ void main() {
     );
     expect(introTitle.style?.fontSize, 16);
     expect(introTitle.style?.fontWeight, FontWeight.w700);
+    final Finder interventionIntroCard = find.ancestor(
+      of: find.text('这些建议来自昨晚环境、宿舍状态和你最近的反馈。'),
+      matching: find.byType(AppCard),
+    );
+    final AppCard interventionIntro = tester.widget<AppCard>(
+      interventionIntroCard,
+    );
+    expect(interventionIntro.borderRadius, AppRadius.surfacePrimary);
+    expect(tester.getSize(interventionIntroCard).height, lessThan(116));
 
     final Text actionTitle = tester.widget<Text>(find.text('睡前放松音频'));
     expect(actionTitle.style?.fontSize, 15);
@@ -4270,6 +4459,22 @@ void main() {
       find.textContaining('状态').first,
     );
     expect(statusChip.style?.fontSize, 11);
+
+    final Finder introCard = find.ancestor(
+      of: find.text('今晚先一起看看，哪些细小因素正在悄悄影响你的安睡。'),
+      matching: find.byType(AppCard),
+    );
+    final AppCard intro = tester.widget<AppCard>(introCard);
+    expect(intro.borderRadius, AppRadius.surfacePrimary);
+    expect(tester.getSize(introCard).height, lessThan(112));
+
+    final Finder noiseCard = find.ancestor(
+      of: find.text('宿舍噪声'),
+      matching: find.byType(AppCard),
+    );
+    final AppCard noise = tester.widget<AppCard>(noiseCard);
+    expect(noise.borderRadius, AppRadius.surfacePrimary);
+    expect(tester.getSize(noiseCard).height, lessThan(230));
   });
 
   testWidgets('notification center uses home typography roles', (
@@ -4719,6 +4924,9 @@ void main() {
   );
 
   testWidgets('calendar page renders month view', (WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await _pumpApp(
       tester,
       initialLocation: AppRoutes.profileCalendar,
@@ -4727,6 +4935,45 @@ void main() {
 
     expect(find.byType(CalendarCheckinPage), findsOneWidget);
     expect(find.textContaining('202'), findsWidgets);
+
+    final Text monthTitle = tester.widget<Text>(
+      find.textContaining('202').first,
+    );
+    final TextTheme textTheme = Theme.of(
+      tester.element(find.byType(CalendarCheckinPage)),
+    ).textTheme;
+    expect(
+      monthTitle.style?.fontSize,
+      AppTypography.panelTitle(textTheme).fontSize,
+    );
+    expect(
+      monthTitle.style?.fontWeight,
+      AppTypography.panelTitle(textTheme).fontWeight,
+    );
+
+    final Finder calendarCard = find.ancestor(
+      of: find.byType(GridView),
+      matching: find.byType(AppCard),
+    );
+    final AppCard calendarAppCard = tester.widget<AppCard>(calendarCard);
+    expect(calendarAppCard.borderRadius, AppRadius.surfacePrimary);
+    expect(tester.getSize(calendarCard).height, lessThan(390));
+
+    final Rect dayRect = tester.getRect(
+      find.byKey(const ValueKey<String>('calendar-day-cell-1')),
+    );
+    expect((dayRect.width - dayRect.height).abs(), lessThan(6));
+
+    final Text streakTitle = tester.widget<Text>(find.text('连续记录'));
+    expect(
+      streakTitle.style?.fontSize,
+      AppTypography.cardTitle(textTheme).fontSize,
+    );
+    final Text streakValue = tester.widget<Text>(find.textContaining('天连续打卡'));
+    expect(
+      streakValue.style?.fontSize,
+      AppTypography.panelTitle(textTheme).fontSize,
+    );
   });
 
   testWidgets('home recommendation section opens all recommendations page', (

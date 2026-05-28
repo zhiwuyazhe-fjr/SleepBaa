@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 
 class ThoughtNoteDetailPage extends StatelessWidget {
@@ -11,6 +14,7 @@ class ThoughtNoteDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppDetailPageAppBar(
@@ -25,57 +29,35 @@ class ThoughtNoteDetailPage extends StatelessWidget {
           120,
         ),
         children: <Widget>[
-          Text(
-            record.title,
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-          ),
+          Text(record.title, style: AppTypography.panelTitle(textTheme)),
           const SizedBox(height: AppSpacing.sm),
           Text(
             '记录于 ${_formatRecordTime(record.createdAt)}',
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(color: AppColors.textSecondary),
+            style: AppTypography.meta(
+              textTheme,
+            ).copyWith(color: AppColors.textSecondary),
           ),
-          const SizedBox(height: AppSpacing.xl),
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: AppColors.cardShadow,
-            ),
+          const SizedBox(height: AppSpacing.md),
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            borderRadius: AppRadius.surfacePrimary,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
-                  'AI整理提要',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                Text('AI整理提要', style: AppTypography.cardTitle(textTheme)),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   record.outline,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                    height: 1.5,
-                  ),
+                  style: AppTypography.bodyMuted(
+                    textTheme,
+                  ).copyWith(color: AppColors.textSecondary, height: 1.5),
                 ),
-                const SizedBox(height: AppSpacing.xl),
-                Text(
-                  '原文内容',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                const SizedBox(height: AppSpacing.md),
+                Text('原文内容', style: AppTypography.cardTitle(textTheme)),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   record.content,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyLarge?.copyWith(height: 1.7),
+                  style: AppTypography.body(textTheme).copyWith(height: 1.7),
                 ),
               ],
             ),

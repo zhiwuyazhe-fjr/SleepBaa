@@ -4,6 +4,8 @@ import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
+import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -15,6 +17,8 @@ class ThoughtVaultPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    final NightMoodPalette palette = context.nightMoodPalette;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppDetailPageAppBar(
@@ -33,9 +37,9 @@ class ThoughtVaultPage extends StatelessWidget {
                 padding: const EdgeInsets.all(AppSpacing.xl),
                 child: Text(
                   '睡眠模式里记下的事，会在这里慢慢收成卡片。',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+                  style: AppTypography.body(
+                    textTheme,
+                  ).copyWith(color: AppColors.textSecondary),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -52,7 +56,8 @@ class ThoughtVaultPage extends StatelessWidget {
             itemBuilder: (BuildContext context, int index) {
               final SleepCaptureRecord record = records[index];
               return AppCard(
-                borderRadius: AppRadius.cardLarge,
+                padding: const EdgeInsets.all(AppSpacing.md),
+                borderRadius: AppRadius.compactCard,
                 onTap: () =>
                     context.push(AppRoutes.profileThoughtDetail, extra: record),
                 child: Column(
@@ -63,39 +68,38 @@ class ThoughtVaultPage extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: AppSpacing.sm,
-                            vertical: 6,
+                            vertical: AppSpacing.xxs,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.primaryHighlight,
+                            color: palette.primaryHighlight,
                             borderRadius: AppRadius.pill,
                           ),
                           child: Text(
                             _formatRecordTime(record.createdAt),
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(color: AppColors.primaryDeep),
+                            style: AppTypography.chip(
+                              textTheme,
+                            ).copyWith(color: palette.primaryDeep),
                           ),
                         ),
                         const Spacer(),
-                        const Icon(
+                        Icon(
                           Icons.east_rounded,
-                          color: AppColors.textSecondary,
+                          color: palette.primaryDeep.withAlpha(150),
+                          size: 20,
                         ),
                       ],
                     ),
-                    const SizedBox(height: AppSpacing.md),
-                    Text(
-                      record.title,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
+                      record.title,
+                      style: AppTypography.cardTitle(textTheme),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
                       record.outline,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
-                        height: 1.5,
-                      ),
+                      style: AppTypography.bodyMuted(
+                        textTheme,
+                      ).copyWith(color: AppColors.textSecondary, height: 1.5),
                     ),
                   ],
                 ),

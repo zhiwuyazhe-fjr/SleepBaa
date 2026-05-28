@@ -72,7 +72,8 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
                 ),
                 const SizedBox(height: AppSpacing.md),
                 AppCard(
-                  borderRadius: AppRadius.cardLarge,
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  borderRadius: AppRadius.surfacePrimary,
                   border: Border.all(color: palette.primarySoft.withAlpha(90)),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -115,7 +116,8 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 AppCard(
-                  borderRadius: AppRadius.cardLarge,
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  borderRadius: AppRadius.surfacePrimary,
                   color: AppColors.surfaceMuted,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -127,14 +129,15 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
                       const SizedBox(height: AppSpacing.sm),
                       Text(
                         '如果你觉得这些结果还不够完整，可以把当下的感受、舍友动态，或者刚刚发生的小插曲告诉小眠，它会继续帮你一起梳理。',
-                        style: AppTypography.body(
+                        style: AppTypography.bodyMuted(
                           textTheme,
                         ).copyWith(color: AppColors.textSecondary),
                       ),
-                      const SizedBox(height: AppSpacing.lg),
+                      const SizedBox(height: AppSpacing.md),
                       PrimaryButton(
                         label: '和小眠聊一聊',
                         icon: Icons.auto_awesome_rounded,
+                        size: PrimaryButtonSize.compact,
                         onPressed: () => context.push(AppRoutes.assistant),
                       ),
                     ],
@@ -163,7 +166,8 @@ class _FactorDetailCard extends StatelessWidget {
     final bool isWorking = factor.status == InterferenceFactorStatus.measuring;
 
     return AppCard(
-      borderRadius: AppRadius.cardLarge,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      borderRadius: AppRadius.surfacePrimary,
       border: Border.all(color: visual.borderColor),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,8 +203,8 @@ class _FactorDetailCard extends StatelessWidget {
               const SizedBox(width: AppSpacing.md),
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.sm,
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
                 ),
                 decoration: BoxDecoration(
                   color: visual.badgeBackground,
@@ -216,7 +220,7 @@ class _FactorDetailCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
           Wrap(
             spacing: AppSpacing.sm,
             runSpacing: AppSpacing.sm,
@@ -229,18 +233,19 @@ class _FactorDetailCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
           Text(factor.detail, style: AppTypography.body(textTheme)),
           if (isWorking) ...<Widget>[
             const SizedBox(height: AppSpacing.md),
             const LinearProgressIndicator(minHeight: 6),
           ],
           if (onRetest != null) ...<Widget>[
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.md),
             PrimaryButton(
               label: isWorking ? '检测中...' : '再次检测',
               icon: Icons.refresh_rounded,
               variant: PrimaryButtonVariant.soft,
+              size: PrimaryButtonSize.compact,
               onPressed: isWorking ? null : onRetest,
             ),
           ],
@@ -273,8 +278,8 @@ class _MetaChip extends StatelessWidget {
     final TextTheme textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
         color: AppColors.surfaceMuted,

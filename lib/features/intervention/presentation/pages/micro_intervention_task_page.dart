@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -48,6 +49,8 @@ class MicroInterventionTaskPage extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.md),
                 AppCard(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  borderRadius: AppRadius.surfacePrimary,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -58,7 +61,7 @@ class MicroInterventionTaskPage extends StatelessWidget {
                       const SizedBox(height: AppSpacing.sm),
                       Text(
                         '已采纳 $selectedCount / ${recommendations.length} 条，点击卡片右侧按钮即可立即执行或切换状态。',
-                        style: AppTypography.body(textTheme),
+                        style: AppTypography.bodyMuted(textTheme),
                       ),
                     ],
                   ),

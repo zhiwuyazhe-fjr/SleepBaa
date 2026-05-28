@@ -7,6 +7,7 @@ import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -188,6 +189,7 @@ class _DreamCreateTabState extends State<_DreamCreateTab> {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = widget.palette;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -265,18 +267,15 @@ class _DreamCreateTabState extends State<_DreamCreateTab> {
                 Text(
                   '把梦先轻轻记下来',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: AppTypography.panelTitle(textTheme),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   '不用一次写完整，先把还记得的画面、人物、颜色或一句话留住就好。',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                    height: 1.5,
-                  ),
+                  style: AppTypography.bodyMuted(
+                    textTheme,
+                  ).copyWith(color: AppColors.textSecondary, height: 1.5),
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 AppCard(
@@ -289,10 +288,9 @@ class _DreamCreateTabState extends State<_DreamCreateTab> {
                   border: _dreamCardBorder(palette, alpha: 110),
                   child: Text(
                     '如果刚醒来还模糊，可以先从“我看到了什么”“我当时什么感觉”“有没有一句特别清楚的话”开始写，我会帮你把梦记轻轻收好。',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: palette.primaryDeep,
-                      height: 1.55,
-                    ),
+                    style: AppTypography.body(
+                      textTheme,
+                    ).copyWith(color: palette.primaryDeep, height: 1.55),
                   ),
                 ),
                 if (_entries.isNotEmpty) ...<Widget>[
@@ -331,12 +329,9 @@ class _DreamCreateTabState extends State<_DreamCreateTab> {
                           ),
                           child: Text(
                             entry,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: Colors.white,
-                                  height: 1.55,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                            style: AppTypography.body(
+                              textTheme,
+                            ).copyWith(color: Colors.white, height: 1.55),
                           ),
                         ),
                       ),
@@ -432,9 +427,9 @@ class _DreamComposer extends StatelessWidget {
                   ),
                   border: InputBorder.none,
                 ),
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(height: 1.55),
+                style: AppTypography.body(
+                  Theme.of(context).textTheme,
+                ).copyWith(height: 1.55),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -482,6 +477,7 @@ class _DreamListTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return ListenableBuilder(
       listenable: services.sleepCaptureRepository,
       builder: (BuildContext context, Widget? child) {
@@ -503,12 +499,7 @@ class _DreamListTab extends StatelessWidget {
           children: <Widget>[
             _HighlightCard(palette: palette),
             const SizedBox(height: AppSpacing.xl),
-            Text(
-              '最近梦境',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-            ),
+            Text('最近梦境', style: AppTypography.sectionTitle(textTheme)),
             const SizedBox(height: AppSpacing.sm),
             ...allEntries.asMap().entries.map(
               (MapEntry<int, DreamEntryData> item) => Padding(
@@ -528,9 +519,9 @@ class _DreamListTab extends StatelessWidget {
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     '继续记录，梦里的线索会更清楚',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                    style: AppTypography.bodyMuted(
+                      textTheme,
+                    ).copyWith(color: AppColors.textSecondary),
                   ),
                 ],
               ),
@@ -563,6 +554,7 @@ class _DreamMappingTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return ListenableBuilder(
       listenable: services.sleepCaptureRepository,
       builder: (BuildContext context, Widget? child) {
@@ -576,14 +568,15 @@ class _DreamMappingTab extends StatelessWidget {
           ),
           children: <Widget>[
             AppCard(
-              padding: const EdgeInsets.all(AppSpacing.xl),
+              padding: const EdgeInsets.all(AppSpacing.lg),
               borderRadius: AppRadius.compactCard,
               border: _dreamCardBorder(palette),
               child: Column(
                 children: <Widget>[
                   Container(
-                    width: 116,
-                    height: 116,
+                    key: const ValueKey<String>('dream-mapping-hero-image'),
+                    width: 88,
+                    height: 88,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: palette.primaryHighlight.withAlpha(180),
@@ -602,18 +595,16 @@ class _DreamMappingTab extends StatelessWidget {
                   const SizedBox(height: AppSpacing.lg),
                   Text(
                     analysis.mappingTitle,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                    style: AppTypography.panelTitle(textTheme),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     analysis.mappingDescription,
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                    style: AppTypography.bodyMuted(
+                      textTheme,
+                    ).copyWith(color: AppColors.textSecondary),
                   ),
                 ],
               ),
@@ -636,8 +627,8 @@ class _DreamMappingTab extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Container(
-                        width: 44,
-                        height: 44,
+                        width: 40,
+                        height: 40,
                         decoration: BoxDecoration(
                           color: palette.primaryHighlight.withAlpha(150),
                           borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -651,14 +642,14 @@ class _DreamMappingTab extends StatelessWidget {
                           children: <Widget>[
                             Text(
                               insight.title,
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w700),
+                              style: AppTypography.cardTitle(textTheme),
                             ),
                             const SizedBox(height: AppSpacing.xs),
                             Text(
                               insight.summary,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: AppColors.textSecondary),
+                              style: AppTypography.bodyMuted(
+                                textTheme,
+                              ).copyWith(color: AppColors.textSecondary),
                             ),
                             const SizedBox(height: AppSpacing.md),
                             ...insight.points.map(
@@ -681,10 +672,10 @@ class _DreamMappingTab extends StatelessWidget {
                                     Expanded(
                                       child: Text(
                                         point,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(
+                                        style:
+                                            AppTypography.bodyMuted(
+                                              textTheme,
+                                            ).copyWith(
                                               color: AppColors.textSecondary,
                                               height: 1.45,
                                             ),
@@ -717,6 +708,7 @@ class _HighlightCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return ListenableBuilder(
       listenable: services.sleepCaptureRepository,
       builder: (BuildContext context, Widget? child) {
@@ -724,7 +716,7 @@ class _HighlightCard extends StatelessWidget {
           services.sleepCaptureRepository.recordsByType(SleepCaptureType.dream),
         );
         return AppCard(
-          padding: const EdgeInsets.all(AppSpacing.xl),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           borderRadius: AppRadius.compactCard,
           border: _dreamCardBorder(palette),
           child: Column(
@@ -746,7 +738,7 @@ class _HighlightCard extends StatelessWidget {
                     ),
                     child: Text(
                       analysis.highlight.chipLabel,
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      style: AppTypography.chip(textTheme).copyWith(
                         color: palette.primaryDeep,
                         fontWeight: FontWeight.w700,
                       ),
@@ -755,21 +747,19 @@ class _HighlightCard extends StatelessWidget {
                   Icon(Icons.auto_awesome_rounded, color: palette.primary),
                 ],
               ),
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: AppSpacing.md),
               Text(
                 analysis.highlight.title,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+                style: AppTypography.panelTitle(textTheme),
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 analysis.highlight.description,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
+                style: AppTypography.bodyMuted(
+                  textTheme,
+                ).copyWith(color: AppColors.textSecondary),
               ),
-              const SizedBox(height: AppSpacing.xl),
+              const SizedBox(height: AppSpacing.md),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: analysis.patterns.map((DreamPatternData pattern) {
@@ -785,7 +775,7 @@ class _HighlightCard extends StatelessWidget {
                           AnimatedContainer(
                             duration: const Duration(milliseconds: 500),
                             curve: Curves.easeOutCubic,
-                            height: 28 + (pattern.value * 80),
+                            height: 16 + (pattern.value * 40),
                             decoration: BoxDecoration(
                               color: barColor,
                               borderRadius: BorderRadius.vertical(
@@ -796,8 +786,9 @@ class _HighlightCard extends StatelessWidget {
                           const SizedBox(height: AppSpacing.xs),
                           Text(
                             pattern.label,
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(color: AppColors.textSecondary),
+                            style: AppTypography.chip(
+                              textTheme,
+                            ).copyWith(color: AppColors.textSecondary),
                           ),
                         ],
                       ),
@@ -839,8 +830,9 @@ class _PatternBreakdownCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.xl),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       borderRadius: AppRadius.compactCard,
       border: _dreamCardBorder(palette),
       child: Column(
@@ -851,9 +843,7 @@ class _PatternBreakdownCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   '梦境类型分布',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                  style: AppTypography.panelTitle(textTheme),
                 ),
               ),
               Container(
@@ -867,7 +857,7 @@ class _PatternBreakdownCard extends StatelessWidget {
                 ),
                 child: Text(
                   badgeLabel,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  style: AppTypography.chip(textTheme).copyWith(
                     color: palette.primaryDeep,
                     fontWeight: FontWeight.w700,
                   ),
@@ -916,10 +906,7 @@ class _PatternBreakdownCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        pattern.label,
-                        style: Theme.of(context).textTheme.labelMedium,
-                      ),
+                      Text(pattern.label, style: AppTypography.chip(textTheme)),
                     ],
                   ),
                 ),
@@ -1081,11 +1068,12 @@ class _DreamEntryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       onTap: () => context.push(AppRoutes.dreamDetail),
       borderRadius: AppRadius.compactCard,
       border: _dreamCardBorder(palette, alpha: 100),
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -1106,7 +1094,7 @@ class _DreamEntryCard extends StatelessWidget {
                     ),
                     child: Text(
                       tag,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      style: AppTypography.chip(textTheme).copyWith(
                         color: palette.primaryDeep,
                         fontWeight: FontWeight.w700,
                       ),
@@ -1117,26 +1105,20 @@ class _DreamEntryCard extends StatelessWidget {
               const Spacer(),
               Text(
                 entry.timeLabel,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
+                style: AppTypography.chip(
+                  textTheme,
+                ).copyWith(color: AppColors.textSecondary),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          Text(
-            entry.title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-          ),
+          Text(entry.title, style: AppTypography.cardTitle(textTheme)),
           const SizedBox(height: AppSpacing.sm),
           Text(
             entry.summary,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSecondary,
-              height: 1.45,
-            ),
+            style: AppTypography.bodyMuted(
+              textTheme,
+            ).copyWith(color: AppColors.textSecondary, height: 1.45),
           ),
           const SizedBox(height: AppSpacing.md),
           Row(
@@ -1153,9 +1135,9 @@ class _DreamEntryCard extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               Text(
                 '醒来情绪：${entry.moodLabel}',
-                style: Theme.of(
-                  context,
-                ).textTheme.labelLarge?.copyWith(color: palette.primaryDeep),
+                style: AppTypography.meta(
+                  textTheme,
+                ).copyWith(color: palette.primaryDeep),
               ),
               const Spacer(),
               const Icon(Icons.east_rounded, color: AppColors.textSecondary),
