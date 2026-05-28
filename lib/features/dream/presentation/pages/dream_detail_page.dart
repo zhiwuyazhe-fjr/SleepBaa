@@ -4,6 +4,7 @@ import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/dream_content.dart';
 
 class DreamDetailPage extends StatelessWidget {
@@ -36,22 +37,7 @@ class DreamDetailPage extends StatelessWidget {
               AppSpacing.xxl,
             ),
             children: <Widget>[
-              Row(
-                children: <Widget>[
-                  IconButton(
-                    onPressed: () => context.pop(),
-                    icon: const Icon(Icons.arrow_back_rounded),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Expanded(
-                    child: Text(
-                      '梦境详情',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                ],
-              ),
+              AppDetailPageHeader(title: '梦境详情', onBack: () => context.pop()),
               const SizedBox(height: AppSpacing.lg),
               Container(
                 padding: const EdgeInsets.all(AppSpacing.xl),
@@ -102,14 +88,15 @@ class DreamDetailPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
-                    Row(
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.xs,
                       children: <Widget>[
                         _MetaChip(
                           label: entry.timeLabel,
                           icon: Icons.schedule_rounded,
                           palette: palette,
                         ),
-                        const SizedBox(width: AppSpacing.sm),
                         _MetaChip(
                           label: '情绪 ${entry.moodLabel}',
                           icon: Icons.favorite_rounded,

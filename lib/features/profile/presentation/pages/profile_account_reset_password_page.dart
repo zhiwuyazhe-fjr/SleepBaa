@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 
 enum _AccountResetStep { verify, password, success }
 
@@ -326,24 +327,10 @@ class _AccountResetPasswordPageState extends State<AccountResetPasswordPage> {
     return _AccountPencilSplitPage(
       unit: unit,
       bodyChildren: <Widget>[
-        _AccountPencilTopSquare(
-          icon: Icons.chevron_left_rounded,
-          iconSize: 24 * unit,
-          size: 48 * unit,
-          radius: 14 * unit,
-          backgroundColor: _accentBlue,
-          iconColor: _accentBlueDeep,
-          onTap: _handleBack,
-        ),
-        SizedBox(height: 24 * unit),
-        Text(
-          '找回密码',
-          style: _textStyle(
-            context,
-            size: 32 * unit,
-            weight: FontWeight.w700,
-            color: _textPrimary,
-          ),
+        AppDetailPageHeader(
+          title: '找回密码',
+          foregroundColor: _textPrimary,
+          onBack: _handleBack,
         ),
         SizedBox(height: 10 * unit),
         Text(
@@ -424,24 +411,10 @@ class _AccountResetPasswordPageState extends State<AccountResetPasswordPage> {
     return _AccountPencilSplitPage(
       unit: unit,
       bodyChildren: <Widget>[
-        _AccountPencilTopSquare(
-          icon: Icons.chevron_left_rounded,
-          iconSize: 24 * unit,
-          size: 48 * unit,
-          radius: 14 * unit,
-          backgroundColor: _accentBlue,
-          iconColor: _accentBlueDeep,
-          onTap: _handleBack,
-        ),
-        SizedBox(height: 24 * unit),
-        Text(
-          '重置密码',
-          style: _textStyle(
-            context,
-            size: 32 * unit,
-            weight: FontWeight.w700,
-            color: _textPrimary,
-          ),
+        AppDetailPageHeader(
+          title: '重置密码',
+          foregroundColor: _textPrimary,
+          onBack: _handleBack,
         ),
         SizedBox(height: 10 * unit),
         Text(
@@ -732,60 +705,6 @@ class _AccountPencilSplitPage extends StatelessWidget {
         ),
         footer,
       ],
-    );
-  }
-}
-
-class _AccountPencilTopSquare extends StatelessWidget {
-  const _AccountPencilTopSquare({
-    required this.icon,
-    required this.iconSize,
-    required this.size,
-    required this.radius,
-    required this.backgroundColor,
-    required this.iconColor,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final double iconSize;
-  final double size;
-  final double radius;
-  final Color backgroundColor;
-  final Color iconColor;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final Widget iconWidget = Icon(icon, size: iconSize, color: iconColor);
-    if (onTap == null) {
-      return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(radius),
-        ),
-        alignment: Alignment.center,
-        child: iconWidget,
-      );
-    }
-
-    return Material(
-      color: backgroundColor,
-      borderRadius: BorderRadius.circular(radius),
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.lightImpact();
-          onTap!();
-        },
-        borderRadius: BorderRadius.circular(radius),
-        child: SizedBox(
-          width: size,
-          height: size,
-          child: Center(child: iconWidget),
-        ),
-      ),
     );
   }
 }

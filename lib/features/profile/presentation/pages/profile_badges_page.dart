@@ -9,6 +9,7 @@ import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/widgets/profile_badge_support.dart';
 
@@ -212,7 +213,7 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                             'profile-badge-summary-card',
                           ),
                           iconData: activeBadge?.icon,
-                          title: '当前佩戴：$currentBadgeLabel',
+                          title: currentBadgeLabel,
                           description: currentBadgeDescription,
                           modeLabel: summaryModeLabel,
                           actionLabel: showingLatestEarned ? '已同步最新' : '恢复默认最新',
@@ -307,7 +308,7 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                             'dorm-badge-summary-card',
                           ),
                           iconData: activeBadge?.icon,
-                          title: '当前展示：$currentBadgeLabel',
+                          title: currentBadgeLabel,
                           description: currentBadgeDescription,
                           modeLabel: summaryModeLabel,
                           actionLabel: showingLatestEarned ? '已同步最新' : '恢复默认最新',
@@ -415,59 +416,27 @@ class _BadgeCatalogHeader extends StatelessWidget {
     final TextTheme textTheme = Theme.of(context).textTheme;
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final double iconTapSize = constraints.maxWidth * 0.09;
-        final double iconSize = iconTapSize * 0.7;
-
-        return Row(
-          children: <Widget>[
-            SizedBox(
-              width: iconTapSize,
-              height: iconTapSize,
-              child: Material(
-                color: Colors.transparent,
-                child: InkResponse(
-                  onTap: onBack,
-                  radius: iconTapSize * 0.5,
-                  containedInkWell: false,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Icon(
-                      Icons.arrow_back_rounded,
-                      size: iconSize,
-                      color: appColors.accentDeep,
-                    ),
-                  ),
-                ),
+        return AppDetailPageHeader(
+          title: title,
+          titleKey: ValueKey<String>('badge-catalog-title-$titleKeySuffix'),
+          onBack: onBack,
+          trailing: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: constraints.maxWidth * 0.03,
+              vertical: constraints.maxWidth * 0.02,
+            ),
+            decoration: BoxDecoration(
+              color: appColors.accentSoft,
+              borderRadius: AppRadius.pill,
+            ),
+            child: Text(
+              countLabel,
+              style: AppTypography.meta(textTheme).copyWith(
+                color: appColors.accentDeep,
+                fontWeight: FontWeight.w800,
               ),
             ),
-            SizedBox(width: constraints.maxWidth * 0.02),
-            Expanded(
-              child: Text(
-                title,
-                key: ValueKey<String>('badge-catalog-title-$titleKeySuffix'),
-                style: AppTypography.heroTitle(
-                  textTheme,
-                ).copyWith(color: appColors.accentDeep),
-              ),
-            ),
-            Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: constraints.maxWidth * 0.03,
-                vertical: constraints.maxWidth * 0.02,
-              ),
-              decoration: BoxDecoration(
-                color: appColors.accentSoft,
-                borderRadius: AppRadius.pill,
-              ),
-              child: Text(
-                countLabel,
-                style: AppTypography.meta(textTheme).copyWith(
-                  color: appColors.accentDeep,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ],
+          ),
         );
       },
     );
@@ -635,13 +604,17 @@ class _CatalogSummaryCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.sectionTitle(textTheme).copyWith(
-                        color: appColors.textPrimary,
-                        fontWeight: FontWeight.w800,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.clip,
+                        style: AppTypography.sectionTitle(textTheme).copyWith(
+                          color: appColors.textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                     SizedBox(height: rowGap * 0.48),
@@ -658,19 +631,24 @@ class _CatalogSummaryCard extends StatelessWidget {
               ),
               SizedBox(width: rowGap),
               ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 116),
+                constraints: const BoxConstraints(minWidth: 112, maxWidth: 112),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
                     _SummaryModeChip(
+                      key: const ValueKey<String>('badge-summary-mode-chip'),
                       modeLabel: modeLabel,
                       horizontalPadding: chipHorizontalPadding,
                       height: actionHeight,
                     ),
                     SizedBox(height: actionGap),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
+                    SizedBox(
+                      key: const ValueKey<String>(
+                        'badge-summary-action-button',
+                      ),
+                      height: actionHeight,
+                      width: double.infinity,
                       child: _SummaryActionButton(
                         label: actionLabel,
                         onPressed: onActionPressed,
@@ -740,6 +718,7 @@ class _SummaryBadgeVisual extends StatelessWidget {
 
 class _SummaryModeChip extends StatelessWidget {
   const _SummaryModeChip({
+    super.key,
     required this.modeLabel,
     required this.horizontalPadding,
     required this.height,
@@ -799,7 +778,7 @@ class _SummaryActionButton extends StatelessWidget {
         disabledForegroundColor: foregroundColor.withAlpha(140),
         elevation: 0,
         shadowColor: Colors.transparent,
-        minimumSize: Size(0, height),
+        minimumSize: Size.fromHeight(height),
         padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
         shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
         textStyle: AppTypography.meta(

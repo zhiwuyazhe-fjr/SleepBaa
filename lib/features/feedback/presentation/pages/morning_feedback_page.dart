@@ -11,6 +11,7 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
@@ -136,18 +137,15 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
             _triggerReturnToSleep();
           },
           child: Scaffold(
-            appBar: AppBar(
-              title: const Text('晨间反馈'),
-              leading: usesReturnFlow
-                  ? IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                      onPressed: _isReturningToSleep
-                          ? null
-                          : isLiveMode
-                          ? _triggerDiscardLiveFeedback
-                          : _triggerReturnToSleep,
-                    )
-                  : null,
+            appBar: AppDetailPageAppBar(
+              title: '晨间反馈',
+              onBack: _isReturningToSleep
+                  ? () {}
+                  : usesReturnFlow
+                  ? isLiveMode
+                        ? _triggerDiscardLiveFeedback
+                        : _triggerReturnToSleep
+                  : () => Navigator.of(context).maybePop(),
             ),
             body: _buildBody(
               context,

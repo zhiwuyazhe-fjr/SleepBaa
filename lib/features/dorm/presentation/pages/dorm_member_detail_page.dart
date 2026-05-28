@@ -10,6 +10,7 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_message_record_card.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_member_status_presenter.dart';
@@ -201,29 +202,7 @@ class _DormDetailHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextTheme textTheme = Theme.of(context).textTheme;
-    return Row(
-      children: <Widget>[
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: AppRadius.button,
-            onTap: onBack,
-            child: const SizedBox.square(
-              dimension: 40,
-              child: Icon(Icons.chevron_left_rounded),
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        Text(
-          title,
-          style: AppTypography.sectionTitle(
-            textTheme,
-          ).copyWith(color: AppColors.textPrimary),
-        ),
-      ],
-    );
+    return AppDetailPageHeader(title: title, onBack: onBack);
   }
 }
 

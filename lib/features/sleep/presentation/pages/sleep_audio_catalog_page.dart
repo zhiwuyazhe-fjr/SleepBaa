@@ -10,6 +10,7 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 
 class SleepAudioCatalogPage extends StatefulWidget {
   const SleepAudioCatalogPage({super.key});
@@ -58,39 +59,23 @@ class _SleepAudioCatalogPageState extends State<SleepAudioCatalogPage> {
                 AppSpacing.xxl,
               ),
               children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    IconButton(
-                      tooltip: '返回',
-                      onPressed: () => context.pop(),
-                      icon: const Icon(
-                        Icons.arrow_back_ios_new_rounded,
-                        color: AppColors.onDark,
-                      ),
+                AppDetailPageHeader(
+                  title: '睡前放松音频',
+                  foregroundColor: AppColors.onDark,
+                  onBack: () => context.pop(),
+                  trailing: IconButton(
+                    tooltip: '刷新',
+                    onPressed: () async {
+                      await services.recommendationRepository
+                          .refreshAudioCatalog();
+                    },
+                    icon: Icon(
+                      Icons.refresh_rounded,
+                      color: palette.primarySoft,
                     ),
-                    const Spacer(),
-                    IconButton(
-                      tooltip: '刷新',
-                      onPressed: () async {
-                        await services.recommendationRepository
-                            .refreshAudioCatalog();
-                      },
-                      icon: Icon(
-                        Icons.refresh_rounded,
-                        color: palette.primarySoft,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                Text(
-                  '睡前放松音频',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: AppColors.onDark,
-                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.sm),
+                const SizedBox(height: AppSpacing.lg),
                 Text(
                   '选择今晚想听的声音。',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(

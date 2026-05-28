@@ -22,9 +22,11 @@ import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
+import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_message_record_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
@@ -475,6 +477,101 @@ void main() {
       ),
     );
     expect(dreamIcon.color, appColors.accentDeep);
+  });
+
+  testWidgets('routed detail pages share the same back title header', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormStatus,
+      clock: _dayClock,
+    );
+    final double baselineGap =
+        tester.getTopLeft(find.text('寝室状态记录')).dx -
+        tester.getTopRight(find.byIcon(Icons.chevron_left_rounded).first).dx;
+
+    Future<void> expectHeaderForRoute(
+      String route,
+      String title, {
+      Color expectedColor = AppColors.textPrimary,
+    }) async {
+      await _pumpApp(tester, initialLocation: route, clock: _dayClock);
+      expect(tester.takeException(), isNull, reason: route);
+
+      expect(find.byType(AppDetailPageHeader), findsOneWidget);
+      final Finder titleFinder = find.text(title).first;
+      final Text titleText = tester.widget<Text>(titleFinder);
+      final TextTheme textTheme = Theme.of(
+        tester.element(titleFinder),
+      ).textTheme;
+      expect(
+        titleText.style?.fontSize,
+        AppTypography.sectionTitle(textTheme).fontSize,
+      );
+      expect(
+        titleText.style?.fontWeight,
+        AppTypography.sectionTitle(textTheme).fontWeight,
+      );
+      expect(titleText.style?.color, expectedColor);
+
+      final double gap =
+          tester.getTopLeft(titleFinder).dx -
+          tester.getTopRight(find.byIcon(Icons.chevron_left_rounded).first).dx;
+      expect(gap, closeTo(baselineGap, 0.1), reason: title);
+    }
+
+    await expectHeaderForRoute(AppRoutes.homeQuickActionsEdit, '编辑快捷功能');
+    await expectHeaderForRoute(AppRoutes.dormRules, '宿舍公约');
+    await expectHeaderForRoute(AppRoutes.dormCurrentStatus, '当前室友状态');
+    await expectHeaderForRoute(
+      AppRoutes.dormMemberLocation('roommate-a'),
+      '舍友详情',
+    );
+    await expectHeaderForRoute(AppRoutes.dormInvite, '邀请舍友');
+    await expectHeaderForRoute(AppRoutes.profileAccountPassword, '找回密码');
+    await expectHeaderForRoute(AppRoutes.dreamJournal, '梦记');
+    await expectHeaderForRoute(AppRoutes.dreamDetail, '梦境详情');
+    await expectHeaderForRoute(
+      AppRoutes.sleepAudioCatalog,
+      '睡前放松音频',
+      expectedColor: AppColors.onDark,
+    );
+    await expectHeaderForRoute(
+      AppRoutes.sleepCantSleep,
+      '难以入睡',
+      expectedColor: AppColors.onDark,
+    );
+    await expectHeaderForRoute(
+      AppRoutes.logNightAwakening,
+      '记录夜醒',
+      expectedColor: AppColors.onDark,
+    );
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormRules,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(NightMood.calm),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('dorm-rules-edit-entry')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppDetailPageHeader), findsOneWidget);
+    final Text editTitle = tester.widget<Text>(find.text('编辑宿舍公约'));
+    final TextTheme editTheme = Theme.of(
+      tester.element(find.text('编辑宿舍公约')),
+    ).textTheme;
+    expect(
+      editTitle.style?.fontSize,
+      AppTypography.sectionTitle(editTheme).fontSize,
+    );
+    expect(editTitle.style?.color, AppColors.textPrimary);
   });
 
   testWidgets('night entry from /home opens the welcome flow first', (
@@ -980,6 +1077,7 @@ void main() {
         find.byKey(const ValueKey<String>('auth-reset-phone-0')),
         findsOneWidget,
       );
+      expect(find.byType(AppDetailPageHeader), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('auth-reset-verify')),
         findsOneWidget,
@@ -1002,6 +1100,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('重置密码'), findsOneWidget);
+      expect(find.byType(AppDetailPageHeader), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('auth-reset-password-0')),
         findsOneWidget,
@@ -3112,16 +3211,26 @@ void main() {
       find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
       findsOneWidget,
     );
-    expect(find.text('当前佩戴：安睡大师'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('profile-badge-summary-card')),
+        matching: find.text('安睡大师'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('当前佩戴：安睡大师'), findsNothing);
     expect(find.text('当前展示：安睡大师'), findsNothing);
     expect(find.text('点击任意勋章可查看说明，并把已获得勋章切换为当前展示。'), findsNothing);
     expect(find.widgetWithText(FilledButton, '已同步最新'), findsOneWidget);
     expect(find.text('佩戴最新获得'), findsNothing);
-    expect(find.text('3 / 10'), findsOneWidget);
+    final UserProfile defaultProfile = buildDefaultUserProfile();
+    final String countLabel =
+        '${defaultProfile.earnedBadgeIds.length} / ${kHonorBadgeCatalog.length}';
+    expect(find.text(countLabel), findsOneWidget);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey<String>('profile-badge-summary-card')),
-        matching: find.text('3 / 10'),
+        matching: find.text(countLabel),
       ),
       findsNothing,
     );
@@ -3213,16 +3322,33 @@ void main() {
     );
     expect(
       dormCatalogTitle.style?.fontSize,
-      AppTypography.heroTitle(textTheme).fontSize,
+      AppTypography.sectionTitle(textTheme).fontSize,
     );
-    expect(dormCatalogTitle.style?.color, appColors.accentDeep);
+    expect(dormCatalogTitle.style?.color, AppColors.textPrimary);
 
-    final Text summaryTitle = tester.widget<Text>(find.text('当前展示：不醒人室'));
+    final Finder dormSummaryCard = find.byKey(
+      const ValueKey<String>('dorm-badge-summary-card'),
+    );
+    expect(
+      find.descendant(of: dormSummaryCard, matching: find.text('不醒人室')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: dormSummaryCard,
+        matching: find.textContaining('当前展示'),
+      ),
+      findsNothing,
+    );
+    final Text summaryTitle = tester.widget<Text>(
+      find.descendant(of: dormSummaryCard, matching: find.text('不醒人室')),
+    );
     expect(
       summaryTitle.style?.fontSize,
       AppTypography.sectionTitle(textTheme).fontSize,
     );
     expect(summaryTitle.style?.color, appColors.textPrimary);
+    expect(summaryTitle.overflow, isNot(TextOverflow.ellipsis));
 
     final AppSettingsItem visibilityItem = tester.widget<AppSettingsItem>(
       find.byKey(const ValueKey<String>('dorm-badge-visibility-item')),
@@ -3233,19 +3359,23 @@ void main() {
       AppTypography.body(textTheme).fontSize,
     );
 
-    final Text dormBadgeTileTitle = tester.widget<Text>(find.text('不醒人室'));
+    final Finder selectedDormBadge = find.byKey(
+      const ValueKey<String>('dorm-badge-grid-no-wake-room'),
+    );
+    final Text dormBadgeTileTitle = tester.widget<Text>(
+      find.descendant(of: selectedDormBadge, matching: find.text('不醒人室')),
+    );
     expect(
       dormBadgeTileTitle.style?.fontSize,
       AppTypography.meta(textTheme).fontSize,
     );
 
-    final Finder summaryCard = find.byKey(
-      const ValueKey<String>('dorm-badge-summary-card'),
-    );
-    final Size summarySize = tester.getSize(summaryCard);
+    final Size summarySize = tester.getSize(dormSummaryCard);
     expect(summarySize.height, lessThan(170));
-    final Rect summaryRect = tester.getRect(summaryCard);
-    final Rect summaryTitleRect = tester.getRect(find.text('当前展示：不醒人室'));
+    final Rect summaryRect = tester.getRect(dormSummaryCard);
+    final Rect summaryTitleRect = tester.getRect(
+      find.descendant(of: dormSummaryCard, matching: find.text('不醒人室')),
+    );
     final Rect summaryDescriptionRect = tester.getRect(
       find.text('宿舍成员整体睡眠时间长，睡眠状态良好'),
     );
@@ -3254,9 +3384,6 @@ void main() {
       closeTo(summaryRect.center.dy, 18),
     );
 
-    final Finder selectedDormBadge = find.byKey(
-      const ValueKey<String>('dorm-badge-grid-no-wake-room'),
-    );
     expect(tester.getSize(selectedDormBadge).height, lessThan(150));
     final Icon selectedDormBadgeIcon = tester.widget<Icon>(
       find
@@ -3268,6 +3395,55 @@ void main() {
     );
     expect(selectedDormBadgeIcon.color, isNot(AppColors.textStrong));
     expect(selectedDormBadgeIcon.color, appColors.accentDeep);
+  });
+
+  testWidgets('badge header follows detail page title rhythm', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileBadges,
+      clock: _dayClock,
+    );
+
+    final TextTheme textTheme = Theme.of(
+      tester.element(
+        find.byKey(const ValueKey<String>('badge-catalog-title-profile')),
+      ),
+    ).textTheme;
+    final Text profileTitle = tester.widget<Text>(
+      find.byKey(const ValueKey<String>('badge-catalog-title-profile')),
+    );
+    expect(
+      profileTitle.style?.fontSize,
+      AppTypography.sectionTitle(textTheme).fontSize,
+    );
+    expect(
+      profileTitle.style?.fontWeight,
+      AppTypography.sectionTitle(textTheme).fontWeight,
+    );
+    expect(profileTitle.style?.color, AppColors.textPrimary);
+
+    final double badgeHeaderGap =
+        tester
+            .getTopLeft(
+              find.byKey(const ValueKey<String>('badge-catalog-title-profile')),
+            )
+            .dx -
+        tester.getTopRight(find.byIcon(Icons.chevron_left_rounded).first).dx;
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormStatus,
+      clock: _dayClock,
+    );
+    final double dormHeaderGap =
+        tester.getTopLeft(find.text('寝室状态记录')).dx -
+        tester.getTopRight(find.byIcon(Icons.chevron_left_rounded).first).dx;
+    expect(badgeHeaderGap, closeTo(dormHeaderGap, 0.1));
   });
 
   testWidgets('profile badge preview sheet stays above the shell tab bar', (
@@ -3328,7 +3504,14 @@ void main() {
       find.byKey(const ValueKey<String>('profile-badge-summary-card')),
       findsOneWidget,
     );
-    expect(find.text('当前佩戴：安睡大师'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('profile-badge-summary-card')),
+        matching: find.text('安睡大师'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('当前佩戴：安睡大师'), findsNothing);
     expect(find.text('自动同步最新'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, '已同步最新'), findsOneWidget);
     expect(find.text('当前展示：安睡大师'), findsNothing);
@@ -3372,12 +3555,33 @@ void main() {
       await tester.tap(equipButton);
       await tester.pumpAndSettle();
 
-      expect(find.text('当前佩戴：早睡先锋'), findsOneWidget);
+      final Finder manualSummary = find.byKey(
+        const ValueKey<String>('profile-badge-summary-card'),
+      );
+      expect(
+        find.descendant(of: manualSummary, matching: find.text('早睡先锋')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: manualSummary,
+          matching: find.textContaining('当前佩戴'),
+        ),
+        findsNothing,
+      );
       expect(find.text('手动佩戴中'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, '恢复默认最新'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, '已同步最新'), findsNothing);
+      expect(
+        tester.getSize(
+          find.byKey(const ValueKey<String>('badge-summary-mode-chip')),
+        ),
+        tester.getSize(
+          find.byKey(const ValueKey<String>('badge-summary-action-button')),
+        ),
+      );
 
-      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+      await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
       await tester.pumpAndSettle();
 
       expect(
@@ -3401,12 +3605,12 @@ void main() {
       await tester.tap(restoreLatestButton);
       await tester.pumpAndSettle();
 
-      expect(find.text('当前佩戴：安睡大师'), findsOneWidget);
+      expect(find.text('安睡大师'), findsWidgets);
       expect(find.text('自动同步最新'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, '已同步最新'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, '恢复默认最新'), findsNothing);
 
-      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+      await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
       await tester.pumpAndSettle();
       expect(
         find.descendant(
@@ -3504,6 +3708,35 @@ void main() {
       clock: _dayClock,
     );
 
+    expect(find.byType(AppDetailPageHeader), findsOneWidget);
+    final Text headerTitle = tester.widget<Text>(find.text('全部今晚建议'));
+    final TextTheme textTheme = Theme.of(
+      tester.element(find.text('全部今晚建议')),
+    ).textTheme;
+    expect(
+      headerTitle.style?.fontSize,
+      AppTypography.sectionTitle(textTheme).fontSize,
+    );
+    final double interventionHeaderGap =
+        tester.getTopLeft(find.text('全部今晚建议')).dx -
+        tester.getTopRight(find.byIcon(Icons.chevron_left_rounded).first).dx;
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormStatus,
+      clock: _dayClock,
+    );
+    final double dormHeaderGap =
+        tester.getTopLeft(find.text('寝室状态记录')).dx -
+        tester.getTopRight(find.byIcon(Icons.chevron_left_rounded).first).dx;
+    expect(interventionHeaderGap, closeTo(dormHeaderGap, 0.1));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.interventionTask,
+      clock: _dayClock,
+    );
+
     final Text introTitle = tester.widget<Text>(
       find.text('这些建议来自昨晚环境、宿舍状态和你最近的反馈。'),
     );
@@ -3518,6 +3751,28 @@ void main() {
   testWidgets('interference detail page uses home typography roles', (
     WidgetTester tester,
   ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.analysisInterferenceFactors,
+      clock: _dayClock,
+    );
+
+    expect(find.byType(AppDetailPageHeader), findsOneWidget);
+    expect(find.text('今晚影响因素'), findsOneWidget);
+    final double interferenceHeaderGap =
+        tester.getTopLeft(find.text('今晚影响因素')).dx -
+        tester.getTopRight(find.byIcon(Icons.chevron_left_rounded).first).dx;
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormStatus,
+      clock: _dayClock,
+    );
+    final double dormHeaderGap =
+        tester.getTopLeft(find.text('寝室状态记录')).dx -
+        tester.getTopRight(find.byIcon(Icons.chevron_left_rounded).first).dx;
+    expect(interferenceHeaderGap, closeTo(dormHeaderGap, 0.1));
+
     await _pumpApp(
       tester,
       initialLocation: AppRoutes.analysisInterferenceFactors,

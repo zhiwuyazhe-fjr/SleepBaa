@@ -8,6 +8,7 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 class CalendarCheckinPage extends StatefulWidget {
@@ -38,7 +39,10 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
     final AppServices services = context.appServices;
     final NightMoodPalette palette = context.nightMoodPalette;
     return Scaffold(
-      appBar: AppBar(title: const Text('睡眠打卡日历')),
+      appBar: AppDetailPageAppBar(
+        title: '睡眠打卡日历',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: ListenableBuilder(
         listenable: Listenable.merge(<Listenable>[
           services.sleepSessionRepository,

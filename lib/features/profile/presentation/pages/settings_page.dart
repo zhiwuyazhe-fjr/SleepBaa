@@ -14,6 +14,7 @@ import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/mood_avatar.dart';
@@ -213,7 +214,10 @@ class _SettingsPageState extends State<SettingsPage> {
     final AppServices services = context.appServices;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('设置')),
+      appBar: AppDetailPageAppBar(
+        title: '设置',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: SafeArea(
         child: ListenableBuilder(
           listenable: Listenable.merge(<Listenable>[
@@ -587,48 +591,6 @@ class _SettingsSwitchRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
         vertical: 11,
-      ),
-    );
-  }
-}
-
-class _SettingsToggle extends StatelessWidget {
-  const _SettingsToggle({super.key, required this.value});
-
-  final bool value;
-
-  @override
-  Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
-    return Semantics(
-      toggled: value,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        width: 52,
-        height: 26,
-        padding: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-          color: value ? palette.primarySoft : AppColors.surfaceMuted,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: value
-                ? palette.primary.withValues(alpha: 0.28)
-                : AppColors.surfaceBorder,
-          ),
-        ),
-        child: AnimatedAlign(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOutCubic,
-          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-          child: Container(
-            width: 22,
-            height: 22,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: value ? palette.primary : AppColors.textHint,
-            ),
-          ),
-        ),
       ),
     );
   }

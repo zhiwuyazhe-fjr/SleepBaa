@@ -6,6 +6,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 
@@ -36,7 +37,10 @@ class PlaceholderPageScaffold extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: Text(title)),
+      appBar: AppDetailPageAppBar(
+        title: title,
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: AppPageInsets.floatingPage(top: AppSpacing.sm, bottom: 96),

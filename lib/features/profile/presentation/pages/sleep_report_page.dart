@@ -7,6 +7,7 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 
 class SleepReportPage extends StatelessWidget {
   const SleepReportPage({super.key});
@@ -15,7 +16,10 @@ class SleepReportPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     return Scaffold(
-      appBar: AppBar(title: const Text('睡眠报告')),
+      appBar: AppDetailPageAppBar(
+        title: '睡眠报告',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: SafeArea(
         child: ListenableBuilder(
           listenable: Listenable.merge(<Listenable>[

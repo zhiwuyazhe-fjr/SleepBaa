@@ -9,6 +9,7 @@ import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_quick_actions.dart';
@@ -96,7 +97,7 @@ class _HomeQuickActionsEditPageState extends State<HomeQuickActionsEditPage> {
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('编辑快捷功能')),
+      appBar: AppDetailPageAppBar(title: '编辑快捷功能', onBack: () => context.pop()),
       body: Column(
         children: <Widget>[
           Expanded(

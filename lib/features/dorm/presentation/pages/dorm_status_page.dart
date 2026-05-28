@@ -7,6 +7,7 @@ import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_message_record_card.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_live_status_scope.dart';
@@ -224,27 +225,7 @@ class _DormStatusHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextTheme textTheme = Theme.of(context).textTheme;
-    return Row(
-      children: <Widget>[
-        IconButton(
-          onPressed: onBack,
-          icon: const Icon(Icons.chevron_left_rounded),
-          color: AppColors.textPrimary,
-          style: IconButton.styleFrom(
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            visualDensity: VisualDensity.compact,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        Text(
-          '寝室状态记录',
-          style: AppTypography.sectionTitle(
-            textTheme,
-          ).copyWith(color: AppColors.textPrimary),
-        ),
-      ],
-    );
+    return AppDetailPageHeader(title: '寝室状态记录', onBack: onBack);
   }
 }
 

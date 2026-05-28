@@ -7,6 +7,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 
 class ThoughtVaultPage extends StatelessWidget {
   const ThoughtVaultPage({super.key});
@@ -16,11 +17,15 @@ class ThoughtVaultPage extends StatelessWidget {
     final AppServices services = context.appServices;
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('事记仓库')),
+      appBar: AppDetailPageAppBar(
+        title: '事记仓库',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: ListenableBuilder(
         listenable: services.sleepCaptureRepository,
         builder: (BuildContext context, Widget? child) {
-          final List<SleepCaptureRecord> records = services.sleepCaptureRepository
+          final List<SleepCaptureRecord> records = services
+              .sleepCaptureRepository
               .recordsByType(SleepCaptureType.memo);
           if (records.isEmpty) {
             return Center(
@@ -48,10 +53,8 @@ class ThoughtVaultPage extends StatelessWidget {
               final SleepCaptureRecord record = records[index];
               return AppCard(
                 borderRadius: AppRadius.cardLarge,
-                onTap: () => context.push(
-                  AppRoutes.profileThoughtDetail,
-                  extra: record,
-                ),
+                onTap: () =>
+                    context.push(AppRoutes.profileThoughtDetail, extra: record),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[

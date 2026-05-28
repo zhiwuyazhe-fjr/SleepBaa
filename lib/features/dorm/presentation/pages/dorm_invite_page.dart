@@ -8,6 +8,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 enum _DormInviteMode { choose, create, join, manage }
@@ -537,29 +538,7 @@ class _DormInviteHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: AppRadius.button,
-            onTap: onBack,
-            child: const SizedBox.square(
-              dimension: 40,
-              child: Icon(Icons.chevron_left_rounded),
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        Text(
-          '邀请舍友',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
-    );
+    return AppDetailPageHeader(title: '邀请舍友', onBack: onBack);
   }
 }
 

@@ -14,6 +14,7 @@ import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/utils/avatar_picker.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/core/widgets/app_strip_card.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
@@ -32,7 +33,10 @@ class AccountManagementPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
     return Scaffold(
-      appBar: AppBar(title: const Text('账号管理')),
+      appBar: AppDetailPageAppBar(
+        title: '账号管理',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: SafeArea(
         child: ListView(
           padding: _accountPagePadding,
@@ -83,7 +87,10 @@ class AccountProfilePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     return Scaffold(
-      appBar: AppBar(title: const Text('个人资料')),
+      appBar: AppDetailPageAppBar(
+        title: '个人资料',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: SafeArea(
         child: ListenableBuilder(
           listenable: Listenable.merge(<Listenable>[
@@ -190,7 +197,10 @@ class LoginManagementPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     return Scaffold(
-      appBar: AppBar(title: const Text('登录管理')),
+      appBar: AppDetailPageAppBar(
+        title: '登录管理',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: SafeArea(
         child: ListenableBuilder(
           listenable: services.authRepository,
@@ -384,7 +394,10 @@ class _DormManagementPageState extends State<DormManagementPage> {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     return Scaffold(
-      appBar: AppBar(title: const Text('寝室管理')),
+      appBar: AppDetailPageAppBar(
+        title: '寝室管理',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: SafeArea(
         child: ListenableBuilder(
           listenable: services.dormRepository,

@@ -10,6 +10,7 @@ import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/utils/avatar_picker.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/core/widgets/user_avatar.dart';
 
@@ -112,7 +113,10 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       return const Scaffold(body: SizedBox.shrink());
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('编辑个人资料')),
+      appBar: AppDetailPageAppBar(
+        title: '编辑个人资料',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: SafeArea(
         child: ListView(
           padding: AppPageInsets.page(bottom: AppSpacing.lg),

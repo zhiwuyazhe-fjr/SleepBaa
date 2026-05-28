@@ -4,6 +4,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/home_metric_card.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 
@@ -20,7 +21,10 @@ class ProfileFaqPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('常见问题')),
+      appBar: AppDetailPageAppBar(
+        title: '常见问题',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.md,

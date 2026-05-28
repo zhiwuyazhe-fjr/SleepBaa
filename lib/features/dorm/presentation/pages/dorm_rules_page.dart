@@ -9,6 +9,7 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
@@ -866,7 +867,6 @@ class _DormRulesDisplayHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextTheme textTheme = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
@@ -874,33 +874,25 @@ class _DormRulesDisplayHeader extends StatelessWidget {
         AppSpacing.md,
         AppSpacing.md,
       ),
-      child: Row(
-        children: <Widget>[
-          _DormRulesBackButton(onPressed: onBack),
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            '宿舍公约',
-            style: AppTypography.sectionTitle(
-              textTheme,
-            ).copyWith(color: AppColors.textPrimary),
-          ),
-          const Spacer(),
-          if (canReviewProposal)
-            _DormRulesHeaderPill(
-              label: '待确认',
-              icon: Icons.mark_chat_unread_rounded,
-              palette: palette,
-              onPressed: onReview,
-            )
-          else if (!hasPendingProposal)
-            _DormRulesHeaderPill(
-              key: const ValueKey<String>('dorm-rules-edit-entry'),
-              label: '编辑',
-              icon: Icons.edit_outlined,
-              palette: palette,
-              onPressed: onEdit,
-            ),
-        ],
+      child: AppDetailPageHeader(
+        title: '宿舍公约',
+        onBack: onBack,
+        trailing: canReviewProposal
+            ? _DormRulesHeaderPill(
+                label: '待确认',
+                icon: Icons.mark_chat_unread_rounded,
+                palette: palette,
+                onPressed: onReview,
+              )
+            : !hasPendingProposal
+            ? _DormRulesHeaderPill(
+                key: const ValueKey<String>('dorm-rules-edit-entry'),
+                label: '编辑',
+                icon: Icons.edit_outlined,
+                palette: palette,
+                onPressed: onEdit,
+              )
+            : null,
       ),
     );
   }
@@ -913,7 +905,6 @@ class _DormRulesEditHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextTheme textTheme = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
@@ -921,43 +912,7 @@ class _DormRulesEditHeader extends StatelessWidget {
         AppSpacing.md,
         AppSpacing.md,
       ),
-      child: Row(
-        children: <Widget>[
-          _DormRulesBackButton(onPressed: onBack),
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            '编辑宿舍公约',
-            style: AppTypography.sectionTitle(
-              textTheme,
-            ).copyWith(color: AppColors.textPrimary),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DormRulesBackButton extends StatelessWidget {
-  const _DormRulesBackButton({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: AppRadius.button,
-        onTap: onPressed,
-        child: const SizedBox.square(
-          dimension: AppSpacing.xxxl,
-          child: Icon(
-            Icons.chevron_left_rounded,
-            size: AppSpacing.lg,
-            color: AppColors.textPrimary,
-          ),
-        ),
-      ),
+      child: AppDetailPageHeader(title: '编辑宿舍公约', onBack: onBack),
     );
   }
 }

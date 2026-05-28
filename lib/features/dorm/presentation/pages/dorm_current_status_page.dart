@@ -6,6 +6,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_message_record_card.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_live_status_scope.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_member_status_presenter.dart';
@@ -143,29 +144,7 @@ class _CurrentStatusHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextTheme textTheme = Theme.of(context).textTheme;
-    return Row(
-      children: <Widget>[
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: AppRadius.button,
-            onTap: onBack,
-            child: const SizedBox.square(
-              dimension: AppSpacing.xxxl,
-              child: Icon(Icons.chevron_left_rounded),
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        Text(
-          '当前室友状态',
-          style: AppTypography.sectionTitle(
-            textTheme,
-          ).copyWith(color: AppColors.textPrimary),
-        ),
-      ],
-    );
+    return AppDetailPageHeader(title: '当前室友状态', onBack: onBack);
   }
 }
 

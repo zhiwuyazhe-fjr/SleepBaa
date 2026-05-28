@@ -12,6 +12,7 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/dream_content.dart';
 
 class DreamJournalPage extends StatelessWidget {
@@ -49,24 +50,16 @@ class DreamJournalPage extends StatelessWidget {
                         innerBoxIsScrolled ? 248 : 224,
                       ),
                       surfaceTintColor: Colors.transparent,
-                      leading: IconButton(
-                        onPressed: () => context.pop(),
-                        icon: const Icon(Icons.arrow_back_rounded),
-                      ),
-                      title: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            '梦记',
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w800),
-                          ),
-                          Text(
-                            '记录梦境，再看见它和情绪的连接',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: AppColors.textSecondary),
-                          ),
-                        ],
+                      automaticallyImplyLeading: false,
+                      titleSpacing: 0,
+                      title: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.xl,
+                        ),
+                        child: AppDetailPageHeader(
+                          title: '梦记',
+                          onBack: () => context.pop(),
+                        ),
                       ),
                       bottom: PreferredSize(
                         preferredSize: const Size.fromHeight(76),

@@ -9,6 +9,7 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/icon_badge.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
@@ -50,7 +51,6 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
     final TextTheme textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('干扰因子分析')),
       body: SafeArea(
         child: ListenableBuilder(
           listenable: services.interferenceProbeController,
@@ -66,6 +66,11 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
                 140,
               ),
               children: <Widget>[
+                AppDetailPageHeader(
+                  title: '今晚影响因素',
+                  onBack: () => context.pop(),
+                ),
+                const SizedBox(height: AppSpacing.md),
                 AppCard(
                   borderRadius: AppRadius.cardLarge,
                   border: Border.all(color: palette.primarySoft.withAlpha(90)),

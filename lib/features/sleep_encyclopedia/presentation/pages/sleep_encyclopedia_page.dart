@@ -4,6 +4,7 @@ import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/features/sleep_encyclopedia/data/sleep_encyclopedia_content.dart';
 import 'package:sleep_dorm_app/features/sleep_encyclopedia/presentation/sleep_encyclopedia_text.dart';
@@ -18,7 +19,10 @@ class SleepEncyclopediaPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('睡眠百科')),
+      appBar: AppDetailPageAppBar(
+        title: '睡眠百科',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.md,

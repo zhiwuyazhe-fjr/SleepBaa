@@ -5,6 +5,7 @@ import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/features/sleep_encyclopedia/data/sleep_encyclopedia_content.dart';
 import 'package:sleep_dorm_app/features/sleep_encyclopedia/presentation/sleep_encyclopedia_text.dart';
 
@@ -48,23 +49,7 @@ class SleepEncyclopediaTopicPage extends StatelessWidget {
               AppSpacing.xxl,
             ),
             children: <Widget>[
-              Row(
-                children: <Widget>[
-                  IconButton(
-                    onPressed: () => context.pop(),
-                    icon: const Icon(Icons.arrow_back_rounded),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Expanded(
-                    child: Text(
-                      '睡眠百科',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              AppDetailPageHeader(title: '睡眠百科', onBack: () => context.pop()),
               const SizedBox(height: AppSpacing.sm),
               AppCard(
                 padding: EdgeInsets.zero,
@@ -434,7 +419,10 @@ class _TopicNotFoundPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('未找到该话题')),
+      appBar: AppDetailPageAppBar(
+        title: '未找到该话题',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 
 class ThoughtNoteDetailPage extends StatelessWidget {
   const ThoughtNoteDetailPage({super.key, required this.record});
@@ -12,7 +13,10 @@ class ThoughtNoteDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('事记详情')),
+      appBar: AppDetailPageAppBar(
+        title: '事记详情',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.xl,
@@ -30,9 +34,9 @@ class ThoughtNoteDetailPage extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           Text(
             '记录于 ${_formatRecordTime(record.createdAt)}',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: AppColors.textSecondary,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: AppSpacing.xl),
           Container(
@@ -69,9 +73,9 @@ class ThoughtNoteDetailPage extends StatelessWidget {
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   record.content,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    height: 1.7,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(height: 1.7),
                 ),
               ],
             ),
