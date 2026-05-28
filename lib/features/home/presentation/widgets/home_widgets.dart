@@ -31,7 +31,11 @@ class SleepRiskCard extends StatefulWidget {
 
 class _SleepRiskCardState extends State<SleepRiskCard> {
   bool _pressed = false;
-  bool _holdingLongPress = false;
+  bool _minimumPressElapsed = false;
+  Timer? _minimumPressTimer;
+  Timer? _releaseFeedbackTimer;
+
+  static const Duration _releaseFeedbackDuration = Duration(milliseconds: 140);
 
   void _setPressed(bool value) {
     if (_pressed == value) {
@@ -42,90 +46,126 @@ class _SleepRiskCardState extends State<SleepRiskCard> {
     });
   }
 
-  void _setHoldingLongPress(bool value) {
-    if (_holdingLongPress == value) {
+  void _handlePointerDown(PointerDownEvent event) {
+    _minimumPressTimer?.cancel();
+    _releaseFeedbackTimer?.cancel();
+    _releaseFeedbackTimer = null;
+    _minimumPressElapsed = false;
+    _minimumPressTimer = Timer(_releaseFeedbackDuration, () {
+      _minimumPressElapsed = true;
+    });
+    _setPressed(true);
+  }
+
+  void _handlePointerUp(PointerUpEvent event) {
+    _holdFeedbackAfterRelease();
+  }
+
+  void _handlePointerCancel(PointerCancelEvent event) {
+    _holdFeedbackAfterRelease();
+  }
+
+  void _holdFeedbackAfterRelease() {
+    _minimumPressTimer?.cancel();
+    _releaseFeedbackTimer?.cancel();
+    if (_minimumPressElapsed) {
+      _setPressed(false);
       return;
     }
-    setState(() {
-      _holdingLongPress = value;
+    _releaseFeedbackTimer = Timer(_releaseFeedbackDuration, () {
+      if (mounted) {
+        _setPressed(false);
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    _minimumPressTimer?.cancel();
+    _releaseFeedbackTimer?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
-    final bool isActive = _pressed || _holdingLongPress;
+    final bool isActive = _pressed;
     final double scale = isActive ? 0.93 : 1;
-    return GestureDetector(
-      key: const ValueKey<String>('home-sleep-risk-feedback-surface'),
-      behavior: HitTestBehavior.opaque,
+    return Semantics(
+      button: true,
+      label: '睡眠风险',
       onTap: widget.onTap,
-      onTapDown: (_) => _setPressed(true),
-      onTapCancel: () => _setPressed(false),
-      onTapUp: (_) => _setPressed(false),
-      onLongPressStart: (_) {
-        _setPressed(false);
-        _setHoldingLongPress(true);
-      },
-      onLongPressEnd: (_) => _setHoldingLongPress(false),
-      child: AnimatedScale(
-        scale: scale,
-        duration: Duration(milliseconds: isActive ? 120 : 260),
-        curve: isActive ? Curves.easeOutBack : Curves.elasticOut,
-        child: AppCard(
-          padding: EdgeInsets.zero,
-          borderRadius: AppRadius.surfacePrimary,
-          boxShadow: isActive ? AppColors.floatingShadow : AppColors.cardShadow,
-          child: AnimatedOpacity(
-            opacity: isActive ? 0.9 : 1,
-            duration: Duration(milliseconds: isActive ? 90 : 180),
-            curve: Curves.easeOutCubic,
-            child: Container(
-              height: 120,
-              decoration: BoxDecoration(
-                borderRadius: AppRadius.surfacePrimary,
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: <Color>[
-                    appColors.heroStart,
-                    appColors.heroMid,
-                    appColors.heroEnd,
-                  ],
-                ),
-              ),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  Text(
-                    '睡眠风险',
-                    style: AppTypography.panelTitle(
-                      textTheme,
-                    ).copyWith(color: AppColors.onDark),
+      child: Listener(
+        key: const ValueKey<String>('home-sleep-risk-feedback-surface'),
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: _handlePointerDown,
+        onPointerUp: _handlePointerUp,
+        onPointerCancel: _handlePointerCancel,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          child: AnimatedScale(
+            scale: scale,
+            duration: Duration(milliseconds: isActive ? 90 : 280),
+            curve: isActive ? Curves.easeOutBack : Curves.elasticOut,
+            child: AppCard(
+              padding: EdgeInsets.zero,
+              borderRadius: AppRadius.surfacePrimary,
+              boxShadow: isActive
+                  ? AppColors.floatingShadow
+                  : AppColors.cardShadow,
+              child: AnimatedOpacity(
+                opacity: isActive ? 0.9 : 1,
+                duration: Duration(milliseconds: isActive ? 70 : 180),
+                curve: Curves.easeOutCubic,
+                child: Container(
+                  height: 120,
+                  decoration: BoxDecoration(
+                    borderRadius: AppRadius.surfacePrimary,
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: <Color>[
+                        appColors.heroStart,
+                        appColors.heroMid,
+                        appColors.heroEnd,
+                      ],
+                    ),
                   ),
-                  Row(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: <Widget>[
-                      Flexible(
-                        child: _CardMetaPill(
-                          label: widget.riskLabel,
-                          backgroundColor: appColors.accentDeep,
-                          foregroundColor: AppColors.onDark,
-                        ),
+                      Text(
+                        '睡眠风险',
+                        style: AppTypography.panelTitle(
+                          textTheme,
+                        ).copyWith(color: AppColors.onDark),
                       ),
-                      const SizedBox(width: AppSpacing.xs),
-                      Flexible(
-                        child: _CardMetaPill(
-                          label: widget.primaryValue,
-                          backgroundColor: appColors.accentDeep,
-                          foregroundColor: AppColors.onDark,
-                        ),
+                      Row(
+                        children: <Widget>[
+                          Flexible(
+                            child: _CardMetaPill(
+                              label: widget.riskLabel,
+                              backgroundColor: appColors.accentDeep,
+                              foregroundColor: AppColors.onDark,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Flexible(
+                            child: _CardMetaPill(
+                              label: widget.primaryValue,
+                              backgroundColor: appColors.accentDeep,
+                              foregroundColor: AppColors.onDark,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
             ),
           ),

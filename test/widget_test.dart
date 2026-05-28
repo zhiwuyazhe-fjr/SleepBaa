@@ -4484,7 +4484,7 @@ void main() {
     );
   });
 
-  testWidgets('sleep risk card keeps a springy pressed state until release', (
+  testWidgets('sleep risk card behaves like a responsive button', (
     WidgetTester tester,
   ) async {
     await _pumpApp(
@@ -4507,19 +4507,28 @@ void main() {
 
     expect(riskScale().scale, 1);
 
-    final TestGesture tapGesture = await tester.startGesture(
+    final TestGesture quickTapGesture = await tester.startGesture(
       tester.getCenter(feedbackSurface),
     );
+    await tester.pump();
+    expect(riskScale().scale, closeTo(0.93, 0.001));
+
+    await quickTapGesture.up();
+    await tester.pump();
+    expect(riskScale().scale, closeTo(0.93, 0.001));
+
     await tester.pump(const Duration(milliseconds: 120));
     expect(riskScale().scale, closeTo(0.93, 0.001));
 
-    await tapGesture.up();
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 260));
     expect(riskScale().scale, 1);
 
     final TestGesture longPressGesture = await tester.startGesture(
       tester.getCenter(feedbackSurface),
     );
+    await tester.pump();
+    expect(riskScale().scale, closeTo(0.93, 0.001));
+
     await tester.pump(const Duration(milliseconds: 640));
     expect(riskScale().scale, closeTo(0.93, 0.001));
 
