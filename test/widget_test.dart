@@ -274,11 +274,7 @@ void main() {
     expect(find.text('快捷功能'), findsOneWidget);
 
     await tester.tap(find.text('快捷功能'));
-    final Finder saveButton = find.widgetWithText(FilledButton, '保存睡眠设置');
-    await tester.drag(find.byType(ListView), const Offset(0, -640));
-    await tester.pumpAndSettle();
-    await tester.tap(saveButton);
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     final AppServices services = AppScope.of(
       tester.element(find.byType(SettingsPage)),

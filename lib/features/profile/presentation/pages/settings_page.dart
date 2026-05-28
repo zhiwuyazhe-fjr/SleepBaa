@@ -33,7 +33,6 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _boundSettingsSignature;
   bool _isSavingSettings = false;
   bool _isApplyingNightMood = false;
-  bool _isSavingAssistantMotion = false;
   bool _isSleepGoalExpanded = false;
   double _sleepGoalHours = 7.5;
   bool _bedtimeReminderEnabled = true;
@@ -67,35 +66,17 @@ class _SettingsPageState extends State<SettingsPage> {
     AppServices services,
     AssistantReplyMotionLevel level,
   ) async {
-    if (_isSavingAssistantMotion || level == _assistantReplyMotionLevel) {
+    if (level == _assistantReplyMotionLevel) {
       return;
     }
+    final UserSettings nextSettings = services.profileFacade.currentSettings
+        .copyWith(assistantReplyMotionLevel: level);
     setState(() {
       _assistantReplyMotionLevel = level;
-      _isSavingAssistantMotion = true;
     });
-    try {
-      final UserSettings nextSettings = services.profileFacade.currentSettings
-          .copyWith(assistantReplyMotionLevel: level);
-      await services.settingsRepository.saveSettings(nextSettings);
-      if (!mounted) {
-        return;
-      }
-      await notifyPassiveToast(context, message: '回复动效已更新。');
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _assistantReplyMotionLevel =
-            services.profileFacade.currentSettings.assistantReplyMotionLevel;
-      });
-      await notifyPassiveToast(context, message: '保存失败：$error');
-    } finally {
-      if (mounted) {
-        setState(() => _isSavingAssistantMotion = false);
-      }
-    }
+    services.settingsRepository.replaceLocalSettings(nextSettings);
+    unawaited(_saveSettingsInBackground(services, nextSettings));
+    unawaited(notifyPassiveToast(context, message: '回复动效已更新。'));
   }
 
   Future<void> _showAssistantMotionSheet(AppServices services) async {
@@ -126,33 +107,50 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _saveSleepSettings(AppServices services) async {
+    if (_isSavingSettings) {
+      return;
+    }
+    final UserSettings nextSettings = services.profileFacade.currentSettings
+        .copyWith(
+          sleepGoalHours: _sleepGoalHours,
+          bedtimeReminderEnabled: _bedtimeReminderEnabled,
+          morningReminderEnabled: _morningReminderEnabled,
+          dormAlertsEnabled: _dormAlertsEnabled,
+          smartSuggestionsEnabled: _smartSuggestionsEnabled,
+          bedtimeReminder: _bedtimeReminder,
+        );
     setState(() => _isSavingSettings = true);
+    services.settingsRepository.replaceLocalSettings(nextSettings);
+    unawaited(_saveSettingsInBackground(services, nextSettings));
+    if (!mounted) {
+      return;
+    }
+    setState(() => _isSavingSettings = false);
+    await notifyPassiveToast(context, message: '睡眠设置已更新。');
+  }
+
+  void _changeHomeQuickActionsVisibility(AppServices services, bool visible) {
+    if (visible == _showHomeQuickActions) {
+      return;
+    }
+    final UserSettings nextSettings = services.profileFacade.currentSettings
+        .copyWith(showHomeQuickActions: visible);
+    setState(() => _showHomeQuickActions = visible);
+    services.settingsRepository.replaceLocalSettings(nextSettings);
+    unawaited(_saveSettingsInBackground(services, nextSettings));
+  }
+
+  Future<void> _saveSettingsInBackground(
+    AppServices services,
+    UserSettings settings,
+  ) async {
     try {
-      final UserSettings nextSettings = services.profileFacade.currentSettings
-          .copyWith(
-            sleepGoalHours: _sleepGoalHours,
-            bedtimeReminderEnabled: _bedtimeReminderEnabled,
-            morningReminderEnabled: _morningReminderEnabled,
-            dormAlertsEnabled: _dormAlertsEnabled,
-            smartSuggestionsEnabled: _smartSuggestionsEnabled,
-            showHomeQuickActions: _showHomeQuickActions,
-            bedtimeReminder: _bedtimeReminder,
-            assistantReplyMotionLevel: _assistantReplyMotionLevel,
-          );
-      await services.settingsRepository.saveSettings(nextSettings);
-      if (!mounted) {
-        return;
-      }
-      await notifyPassiveToast(context, message: '睡眠设置已保存。');
+      await services.settingsRepository.saveSettings(settings);
     } catch (error) {
       if (!mounted) {
         return;
       }
       await notifyPassiveToast(context, message: '保存失败：$error');
-    } finally {
-      if (mounted) {
-        setState(() => _isSavingSettings = false);
-      }
     }
   }
 
@@ -349,15 +347,11 @@ class _SettingsPageState extends State<SettingsPage> {
                       iconColor: context.nightMoodPalette.primaryDeep,
                       iconBackgroundColor: AppColors.surfaceMuted,
                       trailing: _SettingsValueTrailing(
-                        value: _isSavingAssistantMotion
-                            ? '保存中...'
-                            : _assistantReplyMotionTitle(
-                                _assistantReplyMotionLevel,
-                              ),
+                        value: _assistantReplyMotionTitle(
+                          _assistantReplyMotionLevel,
+                        ),
                       ),
-                      onTap: _isSavingAssistantMotion
-                          ? null
-                          : () => _showAssistantMotionSheet(services),
+                      onTap: () => _showAssistantMotionSheet(services),
                     ),
                   ],
                 ),
@@ -369,9 +363,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       icon: Icons.grid_view_rounded,
                       title: '快捷功能',
                       value: _showHomeQuickActions,
-                      onChanged: (bool value) {
-                        setState(() => _showHomeQuickActions = value);
-                      },
+                      onChanged: (bool value) =>
+                          _changeHomeQuickActionsVisibility(services, value),
                     ),
                   ],
                 ),
