@@ -4492,7 +4492,7 @@ void main() {
     );
   });
 
-  testWidgets('sleep risk card responds like a natural pressable button', (
+  testWidgets('sleep risk card separates tap and long press feedback', (
     WidgetTester tester,
   ) async {
     await _pumpApp(
@@ -4519,7 +4519,7 @@ void main() {
       tester.getCenter(feedbackSurface),
     );
     await tester.pump();
-    expect(riskScale().scale, closeTo(0.93, 0.001));
+    expect(riskScale().scale, closeTo(0.965, 0.001));
 
     await quickTapGesture.up();
     await tester.pump();
@@ -4532,10 +4532,10 @@ void main() {
       tester.getCenter(feedbackSurface),
     );
     await tester.pump();
-    expect(riskScale().scale, closeTo(0.93, 0.001));
+    expect(riskScale().scale, closeTo(0.965, 0.001));
 
-    await tester.pump(const Duration(milliseconds: 640));
-    expect(riskScale().scale, closeTo(0.93, 0.001));
+    await tester.pump(const Duration(milliseconds: 320));
+    expect(riskScale().scale, closeTo(0.935, 0.001));
 
     await longPressGesture.up();
     await tester.pump();

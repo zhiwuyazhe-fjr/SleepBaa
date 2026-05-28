@@ -31,6 +31,10 @@ class SleepRiskCard extends StatefulWidget {
 
 class _SleepRiskCardState extends State<SleepRiskCard> {
   bool _pressed = false;
+  bool _longPressed = false;
+  Timer? _longPressTimer;
+
+  static const Duration _longPressThreshold = Duration(milliseconds: 280);
 
   void _setPressed(bool value) {
     if (_pressed == value) {
@@ -41,16 +45,44 @@ class _SleepRiskCardState extends State<SleepRiskCard> {
     });
   }
 
+  void _setLongPressed(bool value) {
+    if (_longPressed == value) {
+      return;
+    }
+    setState(() {
+      _longPressed = value;
+    });
+  }
+
   void _handlePointerDown(PointerDownEvent event) {
+    _longPressTimer?.cancel();
+    _setLongPressed(false);
     _setPressed(true);
+    _longPressTimer = Timer(_longPressThreshold, () {
+      if (mounted && _pressed) {
+        _setLongPressed(true);
+      }
+    });
   }
 
   void _handlePointerUp(PointerUpEvent event) {
-    _setPressed(false);
+    _releasePress();
   }
 
   void _handlePointerCancel(PointerCancelEvent event) {
+    _releasePress();
+  }
+
+  void _releasePress() {
+    _longPressTimer?.cancel();
+    _setLongPressed(false);
     _setPressed(false);
+  }
+
+  @override
+  void dispose() {
+    _longPressTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -58,7 +90,11 @@ class _SleepRiskCardState extends State<SleepRiskCard> {
     final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
     final bool isActive = _pressed;
-    final double scale = isActive ? 0.93 : 1;
+    final double scale = _longPressed
+        ? 0.935
+        : isActive
+        ? 0.965
+        : 1;
     return Semantics(
       button: true,
       label: '睡眠风险',
@@ -74,17 +110,29 @@ class _SleepRiskCardState extends State<SleepRiskCard> {
           onTap: widget.onTap,
           child: AnimatedScale(
             scale: scale,
-            duration: Duration(milliseconds: isActive ? 90 : 280),
-            curve: isActive ? Curves.easeOutBack : Curves.elasticOut,
+            duration: Duration(
+              milliseconds: _longPressed
+                  ? 120
+                  : isActive
+                  ? 70
+                  : 180,
+            ),
+            curve: isActive ? Curves.easeOutCubic : Curves.easeOutBack,
             child: AppCard(
               padding: EdgeInsets.zero,
               borderRadius: AppRadius.surfacePrimary,
               boxShadow: isActive
-                  ? AppColors.floatingShadow
+                  ? (_longPressed
+                        ? AppColors.floatingShadow
+                        : AppColors.cardShadow)
                   : AppColors.cardShadow,
               child: AnimatedOpacity(
-                opacity: isActive ? 0.9 : 1,
-                duration: Duration(milliseconds: isActive ? 70 : 180),
+                opacity: _longPressed
+                    ? 0.9
+                    : isActive
+                    ? 0.96
+                    : 1,
+                duration: Duration(milliseconds: _longPressed ? 120 : 90),
                 curve: Curves.easeOutCubic,
                 child: Container(
                   height: 120,
