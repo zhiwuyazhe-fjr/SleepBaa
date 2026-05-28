@@ -3099,6 +3099,40 @@ void main() {
     expect(find.text('常见问题'), findsOneWidget);
   });
 
+  testWidgets(
+    'profile header opens account profile without avatar camera affordance',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profile,
+        clock: _dayClock,
+      );
+
+      expect(find.byIcon(Icons.photo_camera_rounded), findsNothing);
+
+      final Rect headerRect = tester.getRect(
+        find.byKey(const ValueKey<String>('profile-header-section')),
+      );
+      await tester.tapAt(Offset(headerRect.left + 34, headerRect.center.dy));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AccountProfilePage), findsOneWidget);
+      expect(find.text('个人资料'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Paul（本地演示）'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AccountProfilePage), findsOneWidget);
+      expect(find.text('个人资料'), findsOneWidget);
+    },
+  );
+
   testWidgets('profile carousel reveals duration and heatmap cards', (
     WidgetTester tester,
   ) async {
@@ -3185,6 +3219,69 @@ void main() {
       expect((reportWidth - sideWidth).abs(), lessThan(28));
     },
   );
+
+  testWidgets('profile layout uses compact header, quote and carousel density', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    final Size headerSize = tester.getSize(
+      find.byKey(const ValueKey<String>('profile-header-section')),
+    );
+    final Size quoteSize = tester.getSize(
+      find.ancestor(
+        of: find.text('完成今晚心情选择，解锁一句陪伴语'),
+        matching: find.byType(AppCard),
+      ),
+    );
+    final Size carouselSize = tester.getSize(
+      find.byKey(const ValueKey<String>('profile-data-carousel')),
+    );
+
+    expect(headerSize.height, lessThan(150));
+    expect(quoteSize.height, lessThan(84));
+    expect(carouselSize.height, lessThan(220));
+  });
+
+  testWidgets('profile heatmap preview uses equal square cells', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    await tester.drag(find.text('睡眠质量(分)'), const Offset(-560, 0));
+    await tester.pumpAndSettle();
+
+    final Iterable<Size> cellSizes = tester
+        .widgetList<SizedBox>(
+          find.byWidgetPredicate((Widget widget) {
+            final Key? key = widget.key;
+            return widget is SizedBox &&
+                key is ValueKey<String> &&
+                key.value.startsWith('profile-heatmap-cell-');
+          }),
+        )
+        .map((SizedBox box) => Size(box.width!, box.height!));
+
+    expect(cellSizes, isNotEmpty);
+    for (final Size size in cellSizes) {
+      expect((size.width - size.height).abs(), lessThan(0.01));
+      expect((size.width - cellSizes.first.width).abs(), lessThan(0.01));
+    }
+  });
 
   testWidgets('home and profile cards use a unified rectangular radius', (
     WidgetTester tester,

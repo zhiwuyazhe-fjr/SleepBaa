@@ -6,7 +6,6 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/evening_period.dart';
-import 'package:sleep_dorm_app/core/utils/avatar_picker.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/widgets/profile_badge_support.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/widgets/profile_page_sections.dart';
 
@@ -59,15 +58,16 @@ class ProfilePage extends StatelessWidget {
                     ),
                     child: ProfileHeaderSection(
                       profile: profile,
-                      onAvatarTap: () => pickAndSaveAvatar(context),
+                      onProfileTap: () =>
+                          context.push(AppRoutes.profileAccountProfile),
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.xl),
+                  const SizedBox(height: AppSpacing.md),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
                     child: ProfileQuoteCard(quote: encouragementQuote),
                   ),
-                  const SizedBox(height: AppSpacing.xl),
+                  const SizedBox(height: AppSpacing.md),
                   ProfileDataCarousel(
                     durationTrend: durationTrend,
                     qualityTrend: qualityTrend,

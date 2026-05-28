@@ -3,7 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -15,58 +17,102 @@ class ProfileHeaderSection extends StatelessWidget {
   const ProfileHeaderSection({
     super.key,
     required this.profile,
-    required this.onAvatarTap,
+    required this.onProfileTap,
   });
 
   final UserProfile profile;
-  final VoidCallback onAvatarTap;
+  final VoidCallback onProfileTap;
 
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
 
-    return Column(
-      children: <Widget>[
-        UserAvatar(
-          profile: profile,
-          size: 96,
-          editable: true,
-          onTap: onAvatarTap,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          profile.displayName,
-          textAlign: TextAlign.center,
-          style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          profile.tagline,
-          textAlign: TextAlign.center,
-          style: textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-        ),
-        if (profile.role.isNotEmpty) ...<Widget>[
-          const SizedBox(height: AppSpacing.sm),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: AppSpacing.xs,
-            ),
-            decoration: BoxDecoration(
-              color: palette.primaryHighlight,
-              borderRadius: AppRadius.pill,
-            ),
-            child: Text(
-              profile.role,
-              style: textTheme.labelMedium?.copyWith(
-                color: palette.primary,
-                fontWeight: FontWeight.w600,
+    return Material(
+      key: const ValueKey<String>('profile-header-section'),
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: AppRadius.surfacePrimary,
+        onTap: onProfileTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+          child: Row(
+            children: <Widget>[
+              UserAvatar(profile: profile, size: 68),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      profile.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.sectionTitle(textTheme).copyWith(
+                        color: appColors.textPrimary,
+                      ),
+                    ),
+                    if (profile.tagline.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(
+                        profile.tagline,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodyMuted(textTheme).copyWith(
+                          color: appColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                    if (profile.role.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: AppSpacing.xs),
+                      _ProfileRoleChip(role: profile.role),
+                    ],
+                  ],
+                ),
               ),
-            ),
+              const SizedBox(width: AppSpacing.sm),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: appColors.textSecondary.withAlpha(150),
+              ),
+            ],
           ),
-        ],
-      ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileRoleChip extends StatelessWidget {
+  const _ProfileRoleChip({required this.role});
+
+  final String role;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 230),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xxs,
+      ),
+      decoration: BoxDecoration(
+        color: appColors.accentSoft,
+        borderRadius: AppRadius.pill,
+      ),
+      child: Text(
+        role,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.chip(textTheme).copyWith(
+          color: appColors.accentDeep,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 }
@@ -78,32 +124,41 @@ class ProfileQuoteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
     return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
       borderRadius: AppRadius.surfacePrimary,
-      color: palette.primarySoft,
+      color: appColors.accentSoft,
+      boxShadow: const <BoxShadow>[],
       child: Row(
         children: <Widget>[
           Container(
-            width: 48,
-            height: 48,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-              color: palette.primaryDeep,
+              color: appColors.accentDeep,
               borderRadius: AppRadius.iconContainer,
             ),
             child: Icon(
               Icons.format_quote_rounded,
-              color: palette.primaryHighlight,
+              size: 20,
+              color: appColors.surface,
             ),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Text(
               quote,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.copyWith(color: palette.primaryDeep),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.body(textTheme).copyWith(
+                color: appColors.accentDeep,
+                height: 1.35,
+              ),
             ),
           ),
         ],
@@ -154,7 +209,7 @@ class _ProfileDataCarouselState extends State<ProfileDataCarousel> {
       children: <Widget>[
         AspectRatio(
           key: const ValueKey<String>('profile-data-carousel'),
-          aspectRatio: 1.62,
+          aspectRatio: 1.82,
           child: PageView(
             clipBehavior: Clip.none,
             controller: _controller,
@@ -340,6 +395,8 @@ class _SleepQualityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
     final List<_ChartPoint> points = series.points
         .map(
           (SleepTrendPoint point) => _ChartPoint(
@@ -365,9 +422,9 @@ class _SleepQualityCard extends StatelessWidget {
         children: <Widget>[
           Text(
             '睡眠质量(分)',
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(color: AppColors.textSecondary),
+            style: AppTypography.meta(
+              textTheme,
+            ).copyWith(color: appColors.textSecondary),
           ),
           const SizedBox(height: AppSpacing.sm),
           Expanded(
@@ -445,10 +502,12 @@ class _SleepQualityCard extends StatelessWidget {
                                   .map(
                                     (SleepTrendPoint point) => Text(
                                       point.weekdayLabel,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelSmall
-                                          ?.copyWith(color: AppColors.textHint),
+                                      style: AppTypography.chip(
+                                        textTheme,
+                                      ).copyWith(
+                                        color: appColors.textSecondary
+                                            .withAlpha(150),
+                                      ),
                                     ),
                                   )
                                   .toList(),
@@ -475,6 +534,8 @@ class _SleepDurationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
     final List<double> hours = series.points
         .map((SleepTrendPoint point) => point.value ?? 0)
         .where((double value) => value > 0)
@@ -499,9 +560,9 @@ class _SleepDurationCard extends StatelessWidget {
         children: <Widget>[
           Text(
             '睡眠时长(小时)',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            style: AppTypography.meta(
+              textTheme,
+            ).copyWith(color: appColors.textSecondary),
           ),
           const SizedBox(height: AppSpacing.sm),
           Expanded(
@@ -546,6 +607,8 @@ class _CheckInHeatmapCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
     final List<int> cells = heatmapValues;
     final int rowCount = math.max(1, (cells.length / 7).ceil());
 
@@ -561,14 +624,14 @@ class _CheckInHeatmapCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   '本月打卡热力',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                  style: AppTypography.meta(
+                    textTheme,
+                  ).copyWith(color: appColors.textSecondary),
                 ),
               ),
-              const Icon(
+              Icon(
                 Icons.chevron_right_rounded,
-                color: AppColors.textHint,
+                color: appColors.textSecondary.withAlpha(150),
               ),
             ],
           ),
@@ -587,25 +650,40 @@ class _CheckInHeatmapCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xs),
           Expanded(
-            child: Column(
-              children: <Widget>[
-                for (int row = 0; row < rowCount; row++) ...<Widget>[
-                  Expanded(
-                    child: Row(
+            child: LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                const double gap = AppSpacing.xs / 2;
+                final double cellSize = math.max(
+                  4,
+                  math.min(
+                    (constraints.maxWidth - gap * 6) / 7,
+                    (constraints.maxHeight - gap * (rowCount - 1)) / rowCount,
+                  ),
+                );
+                final double gridWidth = cellSize * 7 + gap * 6;
+                final double gridHeight = cellSize * rowCount +
+                    gap * math.max(0, rowCount - 1);
+
+                return Align(
+                  alignment: Alignment.topCenter,
+                  child: SizedBox(
+                    width: gridWidth,
+                    height: gridHeight,
+                    child: Wrap(
+                      spacing: gap,
+                      runSpacing: gap,
                       children: <Widget>[
-                        for (int column = 0; column < 7; column++) ...<Widget>[
-                          Expanded(
-                            child: Container(
-                              margin: EdgeInsets.only(
-                                right: column == 6 ? 0 : AppSpacing.xs / 2,
-                                bottom: row == rowCount - 1
-                                    ? 0
-                                    : AppSpacing.xs / 2,
-                              ),
+                        for (int index = 0; index < cells.length; index++)
+                          SizedBox.square(
+                            key: ValueKey<String>(
+                              'profile-heatmap-cell-$index',
+                            ),
+                            dimension: cellSize,
+                            child: DecoratedBox(
                               decoration: BoxDecoration(
                                 color: _heatColor(
                                   context.nightMoodPalette,
-                                  cells[row * 7 + column],
+                                  cells[index],
                                 ),
                                 borderRadius: BorderRadius.circular(
                                   AppRadius.xs,
@@ -613,14 +691,11 @@ class _CheckInHeatmapCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                        ],
                       ],
                     ),
                   ),
-                  if (row != rowCount - 1)
-                    const SizedBox(height: AppSpacing.xs / 2),
-                ],
-              ],
+                );
+              },
             ),
           ),
         ],
