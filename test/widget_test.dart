@@ -80,13 +80,17 @@ void main() {
     'night mood palette uses new hero gradients and neutral dark surface',
     () {
       expect(AppColors.darkCard, const Color(0xFF1A1A1A));
+      expect(AppColors.primary, const Color(0xFF357E92));
+      expect(AppColors.primarySoft, const Color(0xFF8EDDF2));
+      expect(AppColors.primaryDeep, const Color(0xFF3F5962));
+      expect(AppColors.primary, isNot(AppColors.primarySoft));
 
       final Map<NightMood?, List<Color>> expectedHeroGradients =
           <NightMood?, List<Color>>{
             null: const <Color>[
               Color(0xFF8EDDF2),
               Color(0xFF8EDDF2),
-              Color(0xFF8EDDF2),
+              Color(0xFF357E92),
             ],
             NightMood.happy: const <Color>[
               Color(0xFFFFA6C9),
@@ -2864,7 +2868,9 @@ void main() {
   testWidgets('dorm primary color uses the approved CTA token', (
     WidgetTester tester,
   ) async {
-    expect(AppColors.primary, const Color(0xFF8EDDF2));
+    expect(AppColors.primary, const Color(0xFF357E92));
+    expect(AppColors.primarySoft, const Color(0xFF8EDDF2));
+    expect(AppColors.primary, isNot(AppColors.primarySoft));
   });
 
   testWidgets(
