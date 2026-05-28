@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -3161,7 +3162,7 @@ void main() {
   });
 
   testWidgets(
-    'profile header opens account profile without avatar camera affordance',
+    'profile header opens account management without avatar camera affordance',
     (WidgetTester tester) async {
       await tester.binding.setSurfaceSize(const Size(390, 844));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -3180,7 +3181,8 @@ void main() {
       await tester.tapAt(Offset(headerRect.left + 34, headerRect.center.dy));
       await tester.pumpAndSettle();
 
-      expect(find.byType(AccountProfilePage), findsOneWidget);
+      expect(find.byType(AccountManagementPage), findsOneWidget);
+      expect(find.text('账号管理'), findsOneWidget);
       expect(find.text('个人资料'), findsOneWidget);
 
       await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
@@ -3189,8 +3191,8 @@ void main() {
       await tester.tap(find.text('Paul（本地演示）'));
       await tester.pumpAndSettle();
 
-      expect(find.byType(AccountProfilePage), findsOneWidget);
-      expect(find.text('个人资料'), findsOneWidget);
+      expect(find.byType(AccountManagementPage), findsOneWidget);
+      expect(find.text('账号管理'), findsOneWidget);
     },
   );
 
@@ -3281,7 +3283,38 @@ void main() {
     },
   );
 
-  testWidgets('profile layout uses compact header, quote and carousel density', (
+  testWidgets(
+    'profile layout uses compact header, quote and carousel density',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profile,
+        clock: _dayClock,
+      );
+
+      final Size headerSize = tester.getSize(
+        find.byKey(const ValueKey<String>('profile-header-section')),
+      );
+      final Size quoteSize = tester.getSize(
+        find.ancestor(
+          of: find.text('完成今晚心情选择，解锁一句陪伴语'),
+          matching: find.byType(AppCard),
+        ),
+      );
+      final Size carouselSize = tester.getSize(
+        find.byKey(const ValueKey<String>('profile-data-carousel')),
+      );
+
+      expect(headerSize.height, lessThan(150));
+      expect(quoteSize.height, lessThan(84));
+      expect(carouselSize.height, lessThan(220));
+    },
+  );
+
+  testWidgets('profile data card titles share the same vertical inset', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -3293,25 +3326,28 @@ void main() {
       clock: _dayClock,
     );
 
-    final Size headerSize = tester.getSize(
-      find.byKey(const ValueKey<String>('profile-header-section')),
-    );
-    final Size quoteSize = tester.getSize(
-      find.ancestor(
-        of: find.text('完成今晚心情选择，解锁一句陪伴语'),
+    double titleTopInset(String title) {
+      final Finder titleFinder = find.text(title);
+      final Finder cardFinder = find.ancestor(
+        of: titleFinder,
         matching: find.byType(AppCard),
-      ),
-    );
-    final Size carouselSize = tester.getSize(
-      find.byKey(const ValueKey<String>('profile-data-carousel')),
-    );
+      );
+      return tester.getTopLeft(titleFinder).dy -
+          tester.getTopLeft(cardFinder).dy;
+    }
 
-    expect(headerSize.height, lessThan(150));
-    expect(quoteSize.height, lessThan(84));
-    expect(carouselSize.height, lessThan(220));
+    expect(titleTopInset('睡眠质量(分)'), AppSpacing.md);
+
+    await tester.drag(find.text('睡眠质量(分)'), const Offset(-280, 0));
+    await tester.pumpAndSettle();
+    expect(titleTopInset('睡眠时长(小时)'), AppSpacing.md);
+
+    await tester.drag(find.text('睡眠时长(小时)'), const Offset(-280, 0));
+    await tester.pumpAndSettle();
+    expect(titleTopInset('本月打卡热力'), AppSpacing.md);
   });
 
-  testWidgets('profile heatmap preview uses equal square cells', (
+  testWidgets('profile heatmap preview fills its grid area', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -3326,22 +3362,100 @@ void main() {
     await tester.drag(find.text('睡眠质量(分)'), const Offset(-560, 0));
     await tester.pumpAndSettle();
 
-    final Iterable<Size> cellSizes = tester
-        .widgetList<SizedBox>(
-          find.byWidgetPredicate((Widget widget) {
-            final Key? key = widget.key;
-            return widget is SizedBox &&
-                key is ValueKey<String> &&
-                key.value.startsWith('profile-heatmap-cell-');
-          }),
-        )
-        .map((SizedBox box) => Size(box.width!, box.height!));
+    final Finder gridFinder = find.byKey(
+      const ValueKey<String>('profile-heatmap-grid'),
+    );
+    final Finder cellFinder = find.byWidgetPredicate((Widget widget) {
+      final Key? key = widget.key;
+      return key is ValueKey<String> &&
+          key.value.startsWith('profile-heatmap-cell-');
+    });
+    final Rect gridRect = tester.getRect(gridFinder);
+    final List<Rect> cellRects = cellFinder
+        .evaluate()
+        .map((Element element) => tester.getRect(find.byWidget(element.widget)))
+        .toList(growable: false);
 
-    expect(cellSizes, isNotEmpty);
-    for (final Size size in cellSizes) {
-      expect((size.width - size.height).abs(), lessThan(0.01));
-      expect((size.width - cellSizes.first.width).abs(), lessThan(0.01));
+    expect(cellRects, isNotEmpty);
+    expect(
+      (cellRects.map((Rect rect) => rect.left).reduce(math.min) - gridRect.left)
+          .abs(),
+      lessThan(0.01),
+    );
+    expect(
+      (cellRects.map((Rect rect) => rect.right).reduce(math.max) -
+              gridRect.right)
+          .abs(),
+      lessThan(0.01),
+    );
+    expect(
+      (cellRects.map((Rect rect) => rect.top).reduce(math.min) - gridRect.top)
+          .abs(),
+      lessThan(0.01),
+    );
+    expect(
+      (cellRects.map((Rect rect) => rect.bottom).reduce(math.max) -
+              gridRect.bottom)
+          .abs(),
+      lessThan(0.01),
+    );
+    for (final Rect rect in cellRects) {
+      expect((rect.width - cellRects.first.width).abs(), lessThan(0.01));
+      expect((rect.height - cellRects.first.height).abs(), lessThan(0.01));
     }
+  });
+
+  testWidgets('profile quote card uses the active primary green', (
+    WidgetTester tester,
+  ) async {
+    const NightMood mood = NightMood.calm;
+    final NightMoodPalette palette = NightMoodPalette.fromMood(mood);
+
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(mood),
+    );
+
+    final Finder quoteText = find.text('完成今晚心情选择，解锁一句陪伴语');
+    final AppCard quoteCard = tester.widget<AppCard>(
+      find.ancestor(of: quoteText, matching: find.byType(AppCard)),
+    );
+    final Text quote = tester.widget<Text>(quoteText);
+
+    expect(quoteCard.color, palette.primary);
+    expect(quote.style?.color, AppColors.surface);
+  });
+
+  testWidgets('profile insight subtitles use one typography token', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    await tester.ensureVisible(find.text('实验报告'));
+    final Text reportSubtitle = tester.widget<Text>(
+      find.textContaining('本周平均睡眠时长').first,
+    );
+    final Text dreamSubtitle = tester.widget<Text>(find.text('记录片段'));
+    final Text vaultSubtitle = tester.widget<Text>(find.text('灵感待办'));
+
+    expect(dreamSubtitle.style?.fontSize, reportSubtitle.style?.fontSize);
+    expect(vaultSubtitle.style?.fontSize, reportSubtitle.style?.fontSize);
+    expect(dreamSubtitle.style?.fontWeight, reportSubtitle.style?.fontWeight);
+    expect(vaultSubtitle.style?.fontWeight, reportSubtitle.style?.fontWeight);
+    expect(dreamSubtitle.style?.color, reportSubtitle.style?.color);
+    expect(vaultSubtitle.style?.color, reportSubtitle.style?.color);
   });
 
   testWidgets('home and profile cards use a unified rectangular radius', (

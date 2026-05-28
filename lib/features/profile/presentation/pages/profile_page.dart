@@ -24,14 +24,15 @@ class ProfilePage extends StatelessWidget {
       ]),
       builder: (BuildContext context, Widget? child) {
         final UserProfile profile = services.authRepository.currentUser;
-        final UserSettings settings = services.settingsRepository.currentSettings;
+        final UserSettings settings =
+            services.settingsRepository.currentSettings;
         final String currentPeriodKey = eveningPeriodKey(DateTime.now());
         final String encouragementQuote =
             settings.eveningEncouragementPeriodKey == currentPeriodKey &&
-                    settings.eveningEncouragementLine != null &&
-                    settings.eveningEncouragementLine!.isNotEmpty
-                ? settings.eveningEncouragementLine!
-                : '完成今晚心情选择，解锁一句陪伴语';
+                settings.eveningEncouragementLine != null &&
+                settings.eveningEncouragementLine!.isNotEmpty
+            ? settings.eveningEncouragementLine!
+            : '完成今晚心情选择，解锁一句陪伴语';
         final DateTime now = DateTime.now();
         final DateTime currentMonth = DateTime(now.year, now.month);
         final List<SleepSession> monthSessions = services.sleepSessionRepository
@@ -59,12 +60,14 @@ class ProfilePage extends StatelessWidget {
                     child: ProfileHeaderSection(
                       profile: profile,
                       onProfileTap: () =>
-                          context.push(AppRoutes.profileAccountProfile),
+                          context.push(AppRoutes.profileAccountCenter),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.xl,
+                    ),
                     child: ProfileQuoteCard(quote: encouragementQuote),
                   ),
                   const SizedBox(height: AppSpacing.md),

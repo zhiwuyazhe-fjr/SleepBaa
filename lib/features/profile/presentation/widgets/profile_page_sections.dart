@@ -49,9 +49,9 @@ class ProfileHeaderSection extends StatelessWidget {
                       profile.displayName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTypography.sectionTitle(textTheme).copyWith(
-                        color: appColors.textPrimary,
-                      ),
+                      style: AppTypography.sectionTitle(
+                        textTheme,
+                      ).copyWith(color: appColors.textPrimary),
                     ),
                     if (profile.tagline.isNotEmpty) ...<Widget>[
                       const SizedBox(height: AppSpacing.xxs),
@@ -59,9 +59,9 @@ class ProfileHeaderSection extends StatelessWidget {
                         profile.tagline,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTypography.bodyMuted(textTheme).copyWith(
-                          color: appColors.textSecondary,
-                        ),
+                        style: AppTypography.bodyMuted(
+                          textTheme,
+                        ).copyWith(color: appColors.textSecondary),
                       ),
                     ],
                     if (profile.role.isNotEmpty) ...<Widget>[
@@ -108,10 +108,9 @@ class _ProfileRoleChip extends StatelessWidget {
         role,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: AppTypography.chip(textTheme).copyWith(
-          color: appColors.accentDeep,
-          fontWeight: FontWeight.w600,
-        ),
+        style: AppTypography.chip(
+          textTheme,
+        ).copyWith(color: appColors.accentDeep, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -125,14 +124,14 @@ class ProfileQuoteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
-    final AppSemanticColors appColors = context.appColors;
+    final NightMoodPalette palette = context.nightMoodPalette;
     return AppCard(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
         vertical: AppSpacing.sm,
       ),
       borderRadius: AppRadius.surfacePrimary,
-      color: appColors.accentSoft,
+      color: palette.primary,
       boxShadow: const <BoxShadow>[],
       child: Row(
         children: <Widget>[
@@ -140,13 +139,13 @@ class ProfileQuoteCard extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: appColors.accentDeep,
+              color: AppColors.surface.withAlpha(48),
               borderRadius: AppRadius.iconContainer,
             ),
             child: Icon(
               Icons.format_quote_rounded,
               size: 20,
-              color: appColors.surface,
+              color: AppColors.surface,
             ),
           ),
           const SizedBox(width: AppSpacing.md),
@@ -156,8 +155,9 @@ class ProfileQuoteCard extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: AppTypography.body(textTheme).copyWith(
-                color: appColors.accentDeep,
+                color: AppColors.surface,
                 height: 1.35,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -502,12 +502,11 @@ class _SleepQualityCard extends StatelessWidget {
                                   .map(
                                     (SleepTrendPoint point) => Text(
                                       point.weekdayLabel,
-                                      style: AppTypography.chip(
-                                        textTheme,
-                                      ).copyWith(
-                                        color: appColors.textSecondary
-                                            .withAlpha(150),
-                                      ),
+                                      style: AppTypography.chip(textTheme)
+                                          .copyWith(
+                                            color: appColors.textSecondary
+                                                .withAlpha(150),
+                                          ),
                                     ),
                                   )
                                   .toList(),
@@ -550,7 +549,7 @@ class _SleepDurationCard extends StatelessWidget {
     return AppCard(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
-        AppSpacing.sm,
+        AppSpacing.md,
         AppSpacing.md,
         AppSpacing.sm,
       ),
@@ -620,6 +619,7 @@ class _CheckInHeatmapCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Expanded(
                 child: Text(
@@ -631,6 +631,7 @@ class _CheckInHeatmapCard extends StatelessWidget {
               ),
               Icon(
                 Icons.chevron_right_rounded,
+                size: AppSpacing.md,
                 color: appColors.textSecondary.withAlpha(150),
               ),
             ],
@@ -653,46 +654,33 @@ class _CheckInHeatmapCard extends StatelessWidget {
             child: LayoutBuilder(
               builder: (BuildContext context, BoxConstraints constraints) {
                 const double gap = AppSpacing.xs / 2;
-                final double cellSize = math.max(
-                  4,
-                  math.min(
-                    (constraints.maxWidth - gap * 6) / 7,
-                    (constraints.maxHeight - gap * (rowCount - 1)) / rowCount,
-                  ),
-                );
-                final double gridWidth = cellSize * 7 + gap * 6;
-                final double gridHeight = cellSize * rowCount +
-                    gap * math.max(0, rowCount - 1);
+                final double cellWidth = (constraints.maxWidth - gap * 6) / 7;
+                final double cellHeight =
+                    (constraints.maxHeight - gap * math.max(0, rowCount - 1)) /
+                    rowCount;
 
-                return Align(
-                  alignment: Alignment.topCenter,
-                  child: SizedBox(
-                    width: gridWidth,
-                    height: gridHeight,
-                    child: Wrap(
-                      spacing: gap,
-                      runSpacing: gap,
-                      children: <Widget>[
-                        for (int index = 0; index < cells.length; index++)
-                          SizedBox.square(
-                            key: ValueKey<String>(
-                              'profile-heatmap-cell-$index',
-                            ),
-                            dimension: cellSize,
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: _heatColor(
-                                  context.nightMoodPalette,
-                                  cells[index],
-                                ),
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.xs,
-                                ),
+                return SizedBox.expand(
+                  key: const ValueKey<String>('profile-heatmap-grid'),
+                  child: Wrap(
+                    spacing: gap,
+                    runSpacing: gap,
+                    children: <Widget>[
+                      for (int index = 0; index < cells.length; index++)
+                        SizedBox(
+                          key: ValueKey<String>('profile-heatmap-cell-$index'),
+                          width: cellWidth,
+                          height: cellHeight,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: _heatColor(
+                                context.nightMoodPalette,
+                                cells[index],
                               ),
+                              borderRadius: BorderRadius.circular(AppRadius.xs),
                             ),
                           ),
-                      ],
-                    ),
+                        ),
+                    ],
                   ),
                 );
               },
@@ -717,6 +705,8 @@ class _ReportInsightCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
     final String summary = report.highlights.isNotEmpty
         ? report.highlights.first
         : '洞察你的睡眠习惯变化';
@@ -737,9 +727,9 @@ class _ReportInsightCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             summary,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+            style: AppTypography.meta(
+              textTheme,
+            ).copyWith(color: appColors.textSecondary),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -786,6 +776,8 @@ class _MiniInsightCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
 
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.sm),
@@ -810,9 +802,9 @@ class _MiniInsightCard extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xxs),
                 Text(
                   subtitle,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+                  style: AppTypography.meta(
+                    textTheme,
+                  ).copyWith(color: appColors.textSecondary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
