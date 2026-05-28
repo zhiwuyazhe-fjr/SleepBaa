@@ -572,6 +572,8 @@ void main() {
       AppTypography.sectionTitle(editTheme).fontSize,
     );
     expect(editTitle.style?.color, AppColors.textPrimary);
+    expect(find.byType(DormRulesEditPage), findsOneWidget);
+    expect(find.byType(DormRulesPage), findsNothing);
   });
 
   testWidgets('night entry from /home opens the welcome flow first', (
@@ -1836,6 +1838,61 @@ void main() {
     expect(rulesIntroIcon.color, appColors.accentDeep);
   });
 
+  testWidgets('dorm rules display uses quiet semantic color tokens', (
+    WidgetTester tester,
+  ) async {
+    const NightMood mood = NightMood.calm;
+    final NightMoodPalette palette = NightMoodPalette.fromMood(mood);
+    final AppSemanticColors appColors = AppSemanticColors.light(palette);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormRules,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(mood),
+    );
+
+    final AppCard introCard = tester.widget<AppCard>(
+      find
+          .ancestor(of: find.text('共同维护良好宿舍环境'), matching: find.byType(AppCard))
+          .first,
+    );
+    expect(introCard.color, appColors.accentSoft);
+
+    final Finder displayGroupFinder = find.byKey(
+      const ValueKey<String>('dorm-rules-display-group-basic'),
+    );
+    final AppSettingsItem displayGroup = tester.widget<AppSettingsItem>(
+      displayGroupFinder,
+    );
+    expect(displayGroup.iconColor, appColors.accentDeep);
+    expect(displayGroup.iconBackgroundColor, appColors.surfaceMuted);
+
+    final AppCard displayGroupCard = tester.widget<AppCard>(
+      find.ancestor(of: displayGroupFinder, matching: find.byType(AppCard)),
+    );
+    expect(displayGroupCard.color, appColors.surface);
+
+    await tester.tap(displayGroupFinder);
+    await tester.pumpAndSettle();
+
+    final Text rowTitle = tester.widget<Text>(find.text('23:00后保持安静'));
+    final Text rowDescription = tester.widget<Text>(find.text('请使用耳机，避免外放声音'));
+    expect(rowTitle.style?.color, appColors.textPrimary);
+    expect(rowDescription.style?.color, appColors.textSecondary);
+
+    final Finder rowCheckIcon = find.byIcon(Icons.check_rounded).first;
+    final Icon checkIcon = tester.widget<Icon>(rowCheckIcon);
+    expect(checkIcon.color, appColors.accentDeep);
+
+    final Container checkContainer = tester.widget<Container>(
+      find.ancestor(of: rowCheckIcon, matching: find.byType(Container)).first,
+    );
+    final BoxDecoration checkDecoration =
+        checkContainer.decoration! as BoxDecoration;
+    expect(checkDecoration.color, appColors.surfaceMuted);
+  });
+
   testWidgets(
     'dorm rules page enters a responsive edit draft from the header',
     (WidgetTester tester) async {
@@ -1952,30 +2009,16 @@ void main() {
         tester.getTopRight(editButton).dx,
         lessThanOrEqualTo(390 - AppSpacing.md),
       );
-      final double displayHeaderTop = tester.getTopLeft(find.text('宿舍公约')).dy;
 
       await tester.tap(editButton);
-      await tester.pump();
-      expect(
-        tester.getTopLeft(find.text('宿舍公约')).dy,
-        lessThanOrEqualTo(displayHeaderTop + AppSpacing.xs),
-      );
-
-      final SlideTransition editSlideTransition = tester
-          .widget<SlideTransition>(
-            find
-                .ancestor(
-                  of: find.byKey(
-                    const ValueKey<String>('dorm-rules-edit-view'),
-                  ),
-                  matching: find.byType(SlideTransition),
-                )
-                .first,
-          );
-      expect(editSlideTransition.position.value.dx, greaterThan(0));
-      expect(editSlideTransition.position.value.dy, 0);
       await tester.pumpAndSettle();
 
+      expect(find.byType(DormRulesPage), findsNothing);
+      expect(find.byType(DormRulesEditPage), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('dorm-rules-edit-view')),
+        findsOneWidget,
+      );
       expect(find.text('编辑宿舍公约'), findsOneWidget);
       expect(find.text('修改后需要室友确认'), findsOneWidget);
       expect(find.text('本页保存的是调整草案，不会立即覆盖当前正式公约。'), findsOneWidget);
@@ -2279,6 +2322,102 @@ void main() {
       expect(find.byType(AlertDialog), findsNothing);
     },
   );
+
+  testWidgets('dorm rules long routine note expands instead of ellipsizing', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const String longRoutineNote =
+        '平日室友之间起床时间差异较大，如果需要提前出门，请提前一晚确认闹钟音量并优先使用震动提醒，避免影响还在休息的室友。';
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormRules,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(NightMood.calm),
+    );
+
+    final AppServices services = AppScope.of(
+      tester.element(find.byType(DormRulesPage)),
+    );
+    await services.dormRepository.createDorm(
+      name: '长备注测试寝室',
+      rulesSettings: services.dormRepository.currentDorm.rulesSettings.copyWith(
+        routineNote: longRoutineNote,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('dorm-rules-display-group-routine')),
+    );
+    await tester.pumpAndSettle();
+
+    final Finder displayRoutineText = find.descendant(
+      of: find.byKey(
+        const ValueKey<String>('dorm-rules-display-group-routine-body'),
+      ),
+      matching: find.text(longRoutineNote),
+    );
+    expect(displayRoutineText, findsOneWidget);
+    final Text displayRoutineNote = tester.widget<Text>(displayRoutineText);
+    expect(displayRoutineNote.overflow, isNot(TextOverflow.ellipsis));
+    expect(displayRoutineNote.maxLines, isNull);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('dorm-rules-edit-entry')),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey<String>('dorm-rules-trailing-作息习惯备注')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+
+    final Finder editRoutineTrailing = find.byKey(
+      const ValueKey<String>('dorm-rules-trailing-作息习惯备注'),
+    );
+    final Text editRoutineNote = tester.widget<Text>(
+      find.descendant(
+        of: editRoutineTrailing,
+        matching: find.text(longRoutineNote),
+      ),
+    );
+    expect(editRoutineNote.overflow, isNot(TextOverflow.ellipsis));
+    expect(editRoutineNote.maxLines, isNull);
+    expect(
+      tester.getSize(editRoutineTrailing).height,
+      greaterThan(AppSpacing.xxxl),
+    );
+  });
+
+  testWidgets('dorm rules edit route opens as a standalone page', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormRulesEdit,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(NightMood.calm),
+    );
+
+    expect(find.byType(DormRulesEditPage), findsOneWidget);
+    expect(find.byType(DormRulesPage), findsNothing);
+    expect(find.text('编辑宿舍公约'), findsOneWidget);
+    expect(find.text('宿舍公约'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('dorm-rules-submit-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('dorm-rules-cancel-button')),
+      findsOneWidget,
+    );
+  });
 
   testWidgets('dorm event actions route to dorm status records page', (
     WidgetTester tester,
@@ -3218,6 +3357,13 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('profile-badge-summary-card')),
+        matching: find.text('保持稳定睡眠节律并减少夜醒。'),
+      ),
+      findsNothing,
+    );
     expect(find.text('当前佩戴：安睡大师'), findsNothing);
     expect(find.text('当前展示：安睡大师'), findsNothing);
     expect(find.text('点击任意勋章可查看说明，并把已获得勋章切换为当前展示。'), findsNothing);
@@ -3235,6 +3381,19 @@ void main() {
       findsNothing,
     );
     expect(find.text('已获得的勋章会高亮显示，未解锁的勋章也可以先查看说明。'), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('profile-badge-summary-card')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('profile-badge-sheet-sleep-master')),
+      findsOneWidget,
+    );
+
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pumpAndSettle();
 
     final Finder earlySleeperTile = find.byKey(
       const ValueKey<String>('profile-badge-grid-early-sleeper'),
@@ -3329,6 +3488,24 @@ void main() {
     final Finder dormSummaryCard = find.byKey(
       const ValueKey<String>('dorm-badge-summary-card'),
     );
+    final FilledButton dormSummaryAction = tester.widget<FilledButton>(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('badge-summary-action-button')),
+        matching: find.byType(FilledButton),
+      ),
+    );
+    expect(
+      dormSummaryAction.style?.backgroundColor?.resolve(const <WidgetState>{
+        WidgetState.disabled,
+      }),
+      AppColors.surfaceMuted,
+    );
+    expect(
+      dormSummaryAction.style?.foregroundColor?.resolve(const <WidgetState>{
+        WidgetState.disabled,
+      }),
+      AppColors.textSecondary,
+    );
     expect(
       find.descendant(of: dormSummaryCard, matching: find.text('不醒人室')),
       findsOneWidget,
@@ -3337,6 +3514,13 @@ void main() {
       find.descendant(
         of: dormSummaryCard,
         matching: find.textContaining('当前展示'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: dormSummaryCard,
+        matching: find.text('宿舍成员整体睡眠时间长，睡眠状态良好'),
       ),
       findsNothing,
     );
@@ -3358,6 +3542,13 @@ void main() {
       visibilityItem.titleStyle?.fontSize,
       AppTypography.body(textTheme).fontSize,
     );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('dorm-badge-visibility-item')),
+        matching: find.byType(AppSettingsToggle),
+      ),
+      findsOneWidget,
+    );
 
     final Finder selectedDormBadge = find.byKey(
       const ValueKey<String>('dorm-badge-grid-no-wake-room'),
@@ -3376,13 +3567,7 @@ void main() {
     final Rect summaryTitleRect = tester.getRect(
       find.descendant(of: dormSummaryCard, matching: find.text('不醒人室')),
     );
-    final Rect summaryDescriptionRect = tester.getRect(
-      find.text('宿舍成员整体睡眠时间长，睡眠状态良好'),
-    );
-    expect(
-      (summaryTitleRect.center.dy + summaryDescriptionRect.center.dy) / 2,
-      closeTo(summaryRect.center.dy, 18),
-    );
+    expect(summaryTitleRect.center.dy, closeTo(summaryRect.center.dy, 18));
 
     expect(tester.getSize(selectedDormBadge).height, lessThan(150));
     final Icon selectedDormBadgeIcon = tester.widget<Icon>(
@@ -3395,6 +3580,14 @@ void main() {
     );
     expect(selectedDormBadgeIcon.color, isNot(AppColors.textStrong));
     expect(selectedDormBadgeIcon.color, appColors.accentDeep);
+
+    await tester.tap(dormSummaryCard);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('dorm-badge-sheet-no-wake-room')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('badge header follows detail page title rhythm', (
@@ -4282,8 +4475,59 @@ void main() {
     expect(find.text('开启睡眠模式'), findsOneWidget);
     expect(find.text('轻触进入'), findsNothing);
     expect(find.text('音频已同步'), findsNothing);
-    expect(find.byIcon(Icons.dark_mode_rounded), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(StartSleepModeCard),
+        matching: find.byIcon(Icons.dark_mode_rounded),
+      ),
+      findsOneWidget,
+    );
   });
+
+  testWidgets('sleep risk card keeps a springy pressed state until release', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+    );
+
+    final Finder feedbackSurface = find.byKey(
+      const ValueKey<String>('home-sleep-risk-feedback-surface'),
+    );
+    AnimatedScale riskScale() {
+      return tester.widget<AnimatedScale>(
+        find.descendant(
+          of: feedbackSurface,
+          matching: find.byType(AnimatedScale),
+        ),
+      );
+    }
+
+    expect(riskScale().scale, 1);
+
+    final TestGesture tapGesture = await tester.startGesture(
+      tester.getCenter(feedbackSurface),
+    );
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(riskScale().scale, closeTo(0.93, 0.001));
+
+    await tapGesture.up();
+    await tester.pump();
+    expect(riskScale().scale, 1);
+
+    final TestGesture longPressGesture = await tester.startGesture(
+      tester.getCenter(feedbackSurface),
+    );
+    await tester.pump(const Duration(milliseconds: 640));
+    expect(riskScale().scale, closeTo(0.93, 0.001));
+
+    await longPressGesture.up();
+    await tester.pump();
+    expect(riskScale().scale, 1);
+  });
+
   testWidgets('entering sleep mode shows the ongoing sleep notification', (
     WidgetTester tester,
   ) async {

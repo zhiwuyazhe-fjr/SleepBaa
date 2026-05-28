@@ -31,7 +31,7 @@ class SleepRiskCard extends StatefulWidget {
 
 class _SleepRiskCardState extends State<SleepRiskCard> {
   bool _pressed = false;
-  bool _longPressed = false;
+  bool _holdingLongPress = false;
 
   void _setPressed(bool value) {
     if (_pressed == value) {
@@ -42,12 +42,12 @@ class _SleepRiskCardState extends State<SleepRiskCard> {
     });
   }
 
-  void _setLongPressed(bool value) {
-    if (_longPressed == value) {
+  void _setHoldingLongPress(bool value) {
+    if (_holdingLongPress == value) {
       return;
     }
     setState(() {
-      _longPressed = value;
+      _holdingLongPress = value;
     });
   }
 
@@ -55,11 +55,8 @@ class _SleepRiskCardState extends State<SleepRiskCard> {
   Widget build(BuildContext context) {
     final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
-    final double scale = _longPressed
-        ? 1.025
-        : _pressed
-        ? 0.975
-        : 1;
+    final bool isActive = _pressed || _holdingLongPress;
+    final double scale = isActive ? 0.93 : 1;
     return GestureDetector(
       key: const ValueKey<String>('home-sleep-risk-feedback-surface'),
       behavior: HitTestBehavior.opaque,
@@ -69,22 +66,20 @@ class _SleepRiskCardState extends State<SleepRiskCard> {
       onTapUp: (_) => _setPressed(false),
       onLongPressStart: (_) {
         _setPressed(false);
-        _setLongPressed(true);
+        _setHoldingLongPress(true);
       },
-      onLongPressEnd: (_) => _setLongPressed(false),
+      onLongPressEnd: (_) => _setHoldingLongPress(false),
       child: AnimatedScale(
         scale: scale,
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOutCubic,
+        duration: Duration(milliseconds: isActive ? 120 : 260),
+        curve: isActive ? Curves.easeOutBack : Curves.elasticOut,
         child: AppCard(
           padding: EdgeInsets.zero,
           borderRadius: AppRadius.surfacePrimary,
-          boxShadow: _pressed || _longPressed
-              ? AppColors.floatingShadow
-              : AppColors.cardShadow,
+          boxShadow: isActive ? AppColors.floatingShadow : AppColors.cardShadow,
           child: AnimatedOpacity(
-            opacity: _pressed ? 0.94 : 1,
-            duration: const Duration(milliseconds: 120),
+            opacity: isActive ? 0.9 : 1,
+            duration: Duration(milliseconds: isActive ? 90 : 180),
             curve: Curves.easeOutCubic,
             child: Container(
               height: 120,

@@ -63,6 +63,7 @@ abstract final class AppRoutes {
   static const String sleepEncyclopediaTopic = '/sleep/encyclopedia/topic';
   static const String dorm = '/dorm';
   static const String dormRules = '/dorm/rules';
+  static const String dormRulesEdit = kDormRulesEditPath;
   static const String dormInvite = '/dorm/invite';
   static const String dormMember = '/dorm/member';
   static const String dormStatus = '/dorm/status';
@@ -335,6 +336,11 @@ GoRouter createRouter({
         builder: (BuildContext context, GoRouterState state) => DormRulesPage(
           showReviewOverlayOnOpen: state.uri.queryParameters['review'] == '1',
         ),
+      ),
+      GoRoute(
+        path: AppRoutes.dormRulesEdit,
+        builder: (BuildContext context, GoRouterState state) =>
+            const DormRulesEditPage(),
       ),
       GoRoute(
         path: AppRoutes.dormInvite,

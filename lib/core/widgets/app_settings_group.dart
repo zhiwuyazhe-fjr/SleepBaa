@@ -129,7 +129,7 @@ class AppSettingsItem extends StatelessWidget {
             ),
             if (trailing != null) ...<Widget>[
               const SizedBox(width: AppSpacing.sm),
-              trailing!,
+              Flexible(child: trailing!),
             ] else if (onTap != null) ...<Widget>[
               const SizedBox(width: AppSpacing.sm),
               const Icon(
@@ -167,24 +167,31 @@ class AppSettingsValueTrailing extends StatelessWidget {
     required this.value,
     this.showChevron = true,
     this.maxLines = 1,
+    this.overflow = TextOverflow.ellipsis,
   });
 
   final String value;
   final bool showChevron;
-  final int maxLines;
+  final int? maxLines;
+  final TextOverflow overflow;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
-        Text(
-          value,
-          maxLines: maxLines,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w500,
+        Flexible(
+          child: Text(
+            value,
+            maxLines: maxLines,
+            overflow: overflow,
+            textAlign: TextAlign.end,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w500,
+              height: 1.35,
+            ),
           ),
         ),
         if (showChevron) ...<Widget>[

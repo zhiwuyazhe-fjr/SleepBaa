@@ -198,9 +198,6 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                           .length;
                       final String currentBadgeLabel =
                           activeBadge?.label ?? '暂无勋章';
-                      final String currentBadgeDescription =
-                          activeBadge?.description ??
-                          '完成睡眠打卡后，最新获得的勋章会自动展示在这里。';
                       final String summaryModeLabel = showingLatestEarned
                           ? '自动同步最新'
                           : '手动佩戴中';
@@ -214,10 +211,15 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                           ),
                           iconData: activeBadge?.icon,
                           title: currentBadgeLabel,
-                          description: currentBadgeDescription,
                           modeLabel: summaryModeLabel,
                           actionLabel: showingLatestEarned ? '已同步最新' : '恢复默认最新',
                           palette: palette,
+                          onTap: activeBadge == null
+                              ? null
+                              : () => showProfileBadgeDetailsSheet(
+                                  context,
+                                  badge: activeBadge,
+                                ),
                           onActionPressed: showingLatestEarned
                               ? null
                               : () async {
@@ -294,8 +296,6 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                           normalizedSelectedDormBadgeId == null;
                       final String currentBadgeLabel =
                           activeBadge?.label ?? '暂无勋章';
-                      final String currentBadgeDescription =
-                          activeBadge?.meaning ?? '寝室获得勋章后，最新一枚会自动展示在这里。';
                       final String summaryModeLabel = showingLatestEarned
                           ? '自动同步最新'
                           : '手动切换中';
@@ -309,10 +309,15 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                           ),
                           iconData: activeBadge?.icon,
                           title: currentBadgeLabel,
-                          description: currentBadgeDescription,
                           modeLabel: summaryModeLabel,
                           actionLabel: showingLatestEarned ? '已同步最新' : '恢复默认最新',
                           palette: palette,
+                          onTap: activeBadge == null
+                              ? null
+                              : () => showDormBadgeDetailsSheet(
+                                  context,
+                                  badge: activeBadge,
+                                ),
                           onActionPressed: showingLatestEarned
                               ? null
                               : () => _saveDormBadgeSelection(services, null),
@@ -320,7 +325,6 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                         SizedBox(height: sectionSpacing),
                         _DormPulseBadgeVisibilityCard(
                           value: effectiveShowDormPulseBadge,
-                          palette: palette,
                           onChanged: (bool value) =>
                               _setDormPulseBadgeVisibility(services, value),
                         ),
@@ -529,20 +533,20 @@ class _CatalogSummaryCard extends StatelessWidget {
     super.key,
     required this.iconData,
     required this.title,
-    required this.description,
     required this.modeLabel,
     required this.actionLabel,
     required this.palette,
     required this.onActionPressed,
+    this.onTap,
   });
 
   final IconData? iconData;
   final String title;
-  final String description;
   final String modeLabel;
   final String actionLabel;
   final NightMoodPalette palette;
   final VoidCallback? onActionPressed;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -576,92 +580,97 @@ class _CatalogSummaryCard extends StatelessWidget {
         final double buttonHorizontalPadding = (constraints.maxWidth * 0.03)
             .clamp(AppSpacing.sm, AppSpacing.md);
 
-        return Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: horizontalPadding,
-            vertical: verticalPadding,
-          ),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: appColors.accentSoft.withAlpha(150)),
-            boxShadow: AppColors.cardShadow,
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              SizedBox.square(
-                dimension: badgeSize,
-                child: _SummaryBadgeVisual(
-                  iconData: iconData,
-                  palette: palette,
-                  size: badgeSize,
-                ),
+            onTap: onTap,
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: horizontalPadding,
+                vertical: verticalPadding,
               ),
-              SizedBox(width: rowGap),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.clip,
-                        style: AppTypography.sectionTitle(textTheme).copyWith(
-                          color: appColors.textPrimary,
-                          fontWeight: FontWeight.w800,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(color: appColors.accentSoft.withAlpha(150)),
+                boxShadow: AppColors.cardShadow,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: <Widget>[
+                  SizedBox.square(
+                    dimension: badgeSize,
+                    child: _SummaryBadgeVisual(
+                      iconData: iconData,
+                      palette: palette,
+                      size: badgeSize,
+                    ),
+                  ),
+                  SizedBox(width: rowGap),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                            style: AppTypography.sectionTitle(textTheme)
+                                .copyWith(
+                                  color: appColors.textPrimary,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                    SizedBox(height: rowGap * 0.48),
-                    Text(
-                      description,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.body(
-                        textTheme,
-                      ).copyWith(color: appColors.textSecondary),
+                  ),
+                  SizedBox(width: rowGap),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      minWidth: 112,
+                      maxWidth: 112,
                     ),
-                  ],
-                ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        _SummaryModeChip(
+                          key: const ValueKey<String>(
+                            'badge-summary-mode-chip',
+                          ),
+                          modeLabel: modeLabel,
+                          horizontalPadding: chipHorizontalPadding,
+                          height: actionHeight,
+                        ),
+                        SizedBox(height: actionGap),
+                        SizedBox(
+                          key: const ValueKey<String>(
+                            'badge-summary-action-button',
+                          ),
+                          height: actionHeight,
+                          width: double.infinity,
+                          child: _SummaryActionButton(
+                            label: actionLabel,
+                            onPressed: onActionPressed,
+                            backgroundColor: AppColors.surfaceMuted,
+                            foregroundColor: palette.primaryDeep,
+                            disabledForegroundColor: AppColors.textSecondary,
+                            horizontalPadding: buttonHorizontalPadding,
+                            height: actionHeight,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              SizedBox(width: rowGap),
-              ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 112, maxWidth: 112),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    _SummaryModeChip(
-                      key: const ValueKey<String>('badge-summary-mode-chip'),
-                      modeLabel: modeLabel,
-                      horizontalPadding: chipHorizontalPadding,
-                      height: actionHeight,
-                    ),
-                    SizedBox(height: actionGap),
-                    SizedBox(
-                      key: const ValueKey<String>(
-                        'badge-summary-action-button',
-                      ),
-                      height: actionHeight,
-                      width: double.infinity,
-                      child: _SummaryActionButton(
-                        label: actionLabel,
-                        onPressed: onActionPressed,
-                        backgroundColor: appColors.accent,
-                        foregroundColor: appColors.textOnAccent,
-                        horizontalPadding: buttonHorizontalPadding,
-                        height: actionHeight,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
         );
       },
@@ -756,6 +765,7 @@ class _SummaryActionButton extends StatelessWidget {
     required this.onPressed,
     required this.backgroundColor,
     required this.foregroundColor,
+    required this.disabledForegroundColor,
     required this.horizontalPadding,
     required this.height,
   });
@@ -764,6 +774,7 @@ class _SummaryActionButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final Color backgroundColor;
   final Color foregroundColor;
+  final Color disabledForegroundColor;
   final double horizontalPadding;
   final double height;
 
@@ -774,8 +785,8 @@ class _SummaryActionButton extends StatelessWidget {
       style: FilledButton.styleFrom(
         backgroundColor: backgroundColor,
         foregroundColor: foregroundColor,
-        disabledBackgroundColor: backgroundColor.withAlpha(110),
-        disabledForegroundColor: foregroundColor.withAlpha(140),
+        disabledBackgroundColor: backgroundColor,
+        disabledForegroundColor: disabledForegroundColor,
         elevation: 0,
         shadowColor: Colors.transparent,
         minimumSize: Size.fromHeight(height),
@@ -824,12 +835,10 @@ class _BadgeSectionHeader extends StatelessWidget {
 class _DormPulseBadgeVisibilityCard extends StatelessWidget {
   const _DormPulseBadgeVisibilityCard({
     required this.value,
-    required this.palette,
     required this.onChanged,
   });
 
   final bool value;
-  final NightMoodPalette palette;
   final ValueChanged<bool> onChanged;
 
   @override
@@ -848,64 +857,11 @@ class _DormPulseBadgeVisibilityCard extends StatelessWidget {
           titleStyle: AppTypography.body(
             textTheme,
           ).copyWith(color: appColors.textPrimary, fontWeight: FontWeight.w600),
-          trailing: _DormBadgeVisibilityToggle(value: value, palette: palette),
+          trailing: AppSettingsToggle(value: value),
           onTap: () => onChanged(!value),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
         ),
       ],
-    );
-  }
-}
-
-class _DormBadgeVisibilityToggle extends StatelessWidget {
-  const _DormBadgeVisibilityToggle({
-    required this.value,
-    required this.palette,
-  });
-
-  final bool value;
-  final NightMoodPalette palette;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppSemanticColors appColors = context.appColors;
-    return Semantics(
-      toggled: value,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        width: 52,
-        height: 26,
-        padding: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-          color: value ? appColors.accentSoft : appColors.surfaceMuted,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: value
-                ? appColors.accent.withValues(alpha: 0.28)
-                : appColors.borderSubtle,
-          ),
-        ),
-        child: AnimatedAlign(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOutCubic,
-          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-          child: Container(
-            width: 22,
-            height: 22,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: value ? appColors.accent : appColors.surface,
-              boxShadow: const <BoxShadow>[
-                BoxShadow(
-                  color: Color(0x1A000000),
-                  blurRadius: 4,
-                  offset: Offset(0, 1),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
