@@ -4492,7 +4492,7 @@ void main() {
     );
   });
 
-  testWidgets('sleep risk card behaves like a responsive button', (
+  testWidgets('sleep risk card responds like a natural pressable button', (
     WidgetTester tester,
   ) async {
     await _pumpApp(
@@ -4523,10 +4523,7 @@ void main() {
 
     await quickTapGesture.up();
     await tester.pump();
-    expect(riskScale().scale, closeTo(0.93, 0.001));
-
-    await tester.pump(const Duration(milliseconds: 120));
-    expect(riskScale().scale, closeTo(0.93, 0.001));
+    expect(riskScale().scale, 1);
 
     await tester.pump(const Duration(milliseconds: 260));
     expect(riskScale().scale, 1);

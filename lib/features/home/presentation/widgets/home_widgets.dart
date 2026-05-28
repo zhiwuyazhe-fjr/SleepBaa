@@ -31,11 +31,6 @@ class SleepRiskCard extends StatefulWidget {
 
 class _SleepRiskCardState extends State<SleepRiskCard> {
   bool _pressed = false;
-  bool _minimumPressElapsed = false;
-  Timer? _minimumPressTimer;
-  Timer? _releaseFeedbackTimer;
-
-  static const Duration _releaseFeedbackDuration = Duration(milliseconds: 140);
 
   void _setPressed(bool value) {
     if (_pressed == value) {
@@ -47,43 +42,15 @@ class _SleepRiskCardState extends State<SleepRiskCard> {
   }
 
   void _handlePointerDown(PointerDownEvent event) {
-    _minimumPressTimer?.cancel();
-    _releaseFeedbackTimer?.cancel();
-    _releaseFeedbackTimer = null;
-    _minimumPressElapsed = false;
-    _minimumPressTimer = Timer(_releaseFeedbackDuration, () {
-      _minimumPressElapsed = true;
-    });
     _setPressed(true);
   }
 
   void _handlePointerUp(PointerUpEvent event) {
-    _holdFeedbackAfterRelease();
+    _setPressed(false);
   }
 
   void _handlePointerCancel(PointerCancelEvent event) {
-    _holdFeedbackAfterRelease();
-  }
-
-  void _holdFeedbackAfterRelease() {
-    _minimumPressTimer?.cancel();
-    _releaseFeedbackTimer?.cancel();
-    if (_minimumPressElapsed) {
-      _setPressed(false);
-      return;
-    }
-    _releaseFeedbackTimer = Timer(_releaseFeedbackDuration, () {
-      if (mounted) {
-        _setPressed(false);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _minimumPressTimer?.cancel();
-    _releaseFeedbackTimer?.cancel();
-    super.dispose();
+    _setPressed(false);
   }
 
   @override
