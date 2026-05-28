@@ -2158,6 +2158,14 @@ void main() {
       final Finder examToggleFinder = find.byKey(
         const ValueKey<String>('dorm-rules-switch-exam-week'),
       );
+      final Finder examWeekItem = find.ancestor(
+        of: find.text('考试周模式'),
+        matching: find.byType(AppSettingsItem),
+      );
+      expect(
+        tester.getTopRight(examToggleFinder).dx,
+        closeTo(tester.getTopRight(examWeekItem).dx - AppSpacing.md, 2),
+      );
       final AppSettingsToggle examToggle = tester.widget<AppSettingsToggle>(
         examToggleFinder,
       );

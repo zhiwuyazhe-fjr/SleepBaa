@@ -1886,6 +1886,7 @@ class _DormRulesCompactValueCard extends StatelessWidget {
         showChevron: true,
         maxLines: expandValue ? null : 1,
         overflow: expandValue ? TextOverflow.visible : TextOverflow.ellipsis,
+        maxWidth: expandValue ? 156 : null,
       ),
     );
   }
