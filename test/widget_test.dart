@@ -51,6 +51,7 @@ import 'package:sleep_dorm_app/features/notifications/presentation/pages/notific
 import 'package:sleep_dorm_app/features/profile/presentation/pages/calendar_checkin_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_account_pages.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/settings_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/sleep_report_page.dart';
 import 'package:sleep_dorm_app/features/sleep/presentation/pages/cant_sleep_page.dart';
 
@@ -244,7 +245,7 @@ void main() {
     },
   );
 
-  testWidgets('home quick actions show defaults and editor catalog', (
+  testWidgets('home quick actions are hidden by default', (
     WidgetTester tester,
   ) async {
     await _pumpApp(
@@ -253,29 +254,90 @@ void main() {
       clock: _dayClock,
     );
 
+    expect(find.text('快捷功能'), findsNothing);
+    expect(find.text('音乐'), findsNothing);
+    expect(find.text('梦记一则'), findsNothing);
+    expect(find.text('打卡日历'), findsNothing);
+    expect(find.text('思绪清理'), findsNothing);
+  });
+
+  testWidgets('settings switch shows home quick actions when enabled', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileSettings,
+      clock: _dayClock,
+    );
+
+    expect(find.text('首页显示'), findsOneWidget);
+    expect(find.text('快捷功能'), findsOneWidget);
+
+    await tester.tap(find.text('快捷功能'));
+    final Finder saveButton = find.widgetWithText(FilledButton, '保存睡眠设置');
+    await tester.drag(find.byType(ListView), const Offset(0, -640));
+    await tester.pumpAndSettle();
+    await tester.tap(saveButton);
+    await tester.pumpAndSettle();
+
+    final AppServices services = AppScope.of(
+      tester.element(find.byType(SettingsPage)),
+    );
+    expect(
+      services.settingsRepository.currentSettings.showHomeQuickActions,
+      isTrue,
+    );
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+      initialSettings: services.settingsRepository.currentSettings,
+    );
+
+    expect(find.text('快捷功能'), findsOneWidget);
     expect(find.text('音乐'), findsOneWidget);
     expect(find.text('梦记一则'), findsOneWidget);
     expect(find.text('打卡日历'), findsOneWidget);
     expect(find.text('思绪清理'), findsOneWidget);
-
-    await tester.tap(find.text('编辑').first);
-    await tester.pumpAndSettle();
-
-    expect(find.text('编辑快捷功能'), findsOneWidget);
-    expect(find.text('睡眠百科'), findsOneWidget);
-    await _scrollToHomeQuickActionCandidate(
-      tester,
-      HomeQuickActionIds.thoughtVault,
-    );
-    expect(find.text('事记仓库'), findsOneWidget);
-    expect(find.text('我的勋章'), findsOneWidget);
-    await _scrollToHomeQuickActionCandidate(
-      tester,
-      HomeQuickActionIds.profileReport,
-    );
-    expect(find.text('实验报告'), findsOneWidget);
-    expect(find.text('设置'), findsOneWidget);
   });
+
+  testWidgets(
+    'home quick actions show defaults and editor catalog when enabled',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.homePreSleep,
+        clock: _dayClock,
+        initialSettings: buildDefaultUserSettings().copyWith(
+          showHomeQuickActions: true,
+        ),
+      );
+
+      expect(find.text('音乐'), findsOneWidget);
+      expect(find.text('梦记一则'), findsOneWidget);
+      expect(find.text('打卡日历'), findsOneWidget);
+      expect(find.text('思绪清理'), findsOneWidget);
+
+      await tester.tap(find.text('编辑').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('编辑快捷功能'), findsOneWidget);
+      expect(find.text('睡眠百科'), findsOneWidget);
+      await _scrollToHomeQuickActionCandidate(
+        tester,
+        HomeQuickActionIds.thoughtVault,
+      );
+      expect(find.text('事记仓库'), findsOneWidget);
+      expect(find.text('我的勋章'), findsOneWidget);
+      await _scrollToHomeQuickActionCandidate(
+        tester,
+        HomeQuickActionIds.profileReport,
+      );
+      expect(find.text('实验报告'), findsOneWidget);
+      expect(find.text('设置'), findsOneWidget);
+    },
+  );
 
   testWidgets('home section header typography matches dorm standard', (
     WidgetTester tester,
@@ -284,6 +346,9 @@ void main() {
       tester,
       initialLocation: AppRoutes.homePreSleep,
       clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        showHomeQuickActions: true,
+      ),
     );
 
     final Text quickTitle = tester.widget<Text>(find.text('快捷功能'));
@@ -321,6 +386,9 @@ void main() {
       tester,
       initialLocation: AppRoutes.homePreSleep,
       clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        showHomeQuickActions: true,
+      ),
     );
 
     await tester.tap(find.text('编辑').first);
@@ -360,6 +428,9 @@ void main() {
       tester,
       initialLocation: AppRoutes.homePreSleep,
       clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        showHomeQuickActions: true,
+      ),
     );
 
     await tester.tap(find.text('编辑').first);
@@ -392,12 +463,9 @@ void main() {
 
     await _pumpApp(
       tester,
-      initialLocation: AppRoutes.homePreSleep,
+      initialLocation: AppRoutes.homeQuickActionsEdit,
       clock: _dayClock,
     );
-
-    await tester.tap(find.text('编辑').first);
-    await tester.pumpAndSettle();
 
     final Finder selectedFinder = find.byKey(
       const ValueKey<String>(
@@ -426,12 +494,9 @@ void main() {
 
       await _pumpApp(
         tester,
-        initialLocation: AppRoutes.homePreSleep,
+        initialLocation: AppRoutes.homeQuickActionsEdit,
         clock: _dayClock,
       );
-
-      await tester.tap(find.text('编辑').first);
-      await tester.pumpAndSettle();
 
       final Finder saveButton = find.widgetWithText(FilledButton, '保存快捷功能');
       final double buttonBottom = tester.getBottomLeft(saveButton).dy;

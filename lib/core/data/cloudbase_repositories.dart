@@ -2329,6 +2329,7 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
   late UserSettings _settings;
   NightMood? _pendingMoodOverride;
   List<String>? _pendingHomeQuickActionIds;
+  bool? _pendingShowHomeQuickActions;
 
   @override
   UserSettings get currentSettings => _settings;
@@ -2343,6 +2344,7 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
   Future<void> saveSettings(UserSettings settings) async {
     final NightMood? previousMood = _settings.selectedNightMood;
     final List<String> previousQuickActionIds = _settings.homeQuickActionIds;
+    final bool previousShowHomeQuickActions = _settings.showHomeQuickActions;
     if (previousMood != settings.selectedNightMood) {
       _pendingMoodOverride = settings.selectedNightMood;
     }
@@ -2350,6 +2352,9 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
       _pendingHomeQuickActionIds = normalizeHomeQuickActionIds(
         settings.homeQuickActionIds,
       );
+    }
+    if (previousShowHomeQuickActions != settings.showHomeQuickActions) {
+      _pendingShowHomeQuickActions = settings.showHomeQuickActions;
     }
     replaceLocalSettings(settings);
     if (!_appApiClient.isConfigured) {
@@ -2393,6 +2398,7 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
       snapshot.settings,
     );
     incoming = _mergePendingHomeQuickActionsIfServerOmitted(incoming);
+    incoming = _mergePendingHomeQuickActionsVisibilityIfServerOmitted(incoming);
     if (_pendingMoodOverride != null &&
         incoming.selectedNightMood != _pendingMoodOverride &&
         _settings.selectedNightMood == _pendingMoodOverride) {
@@ -2441,6 +2447,24 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
       return incoming.copyWith(homeQuickActionIds: pending);
     }
     _pendingHomeQuickActionIds = null;
+    return incoming;
+  }
+
+  UserSettings _mergePendingHomeQuickActionsVisibilityIfServerOmitted(
+    UserSettings incoming,
+  ) {
+    final bool? pending = _pendingShowHomeQuickActions;
+    if (pending == null) {
+      return incoming;
+    }
+    if (incoming.showHomeQuickActions == pending) {
+      _pendingShowHomeQuickActions = null;
+      return incoming;
+    }
+    if (_settings.showHomeQuickActions == pending) {
+      return incoming.copyWith(showHomeQuickActions: pending);
+    }
+    _pendingShowHomeQuickActions = null;
     return incoming;
   }
 

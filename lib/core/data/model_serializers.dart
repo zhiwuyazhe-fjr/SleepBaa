@@ -57,6 +57,7 @@ abstract final class ModelSerializers {
       'homeQuickActionIds': normalizeHomeQuickActionIds(
         settings.homeQuickActionIds,
       ),
+      'showHomeQuickActions': settings.showHomeQuickActions,
       'assistantReplyMotionLevel': settings.assistantReplyMotionLevel.name,
       'selectedNightMood': settings.selectedNightMood?.name,
       'eveningEncouragementPeriodKey': settings.eveningEncouragementPeriodKey,
@@ -83,7 +84,9 @@ abstract final class ModelSerializers {
       homeQuickActionIds: normalizeHomeQuickActionIds(
         _stringListFromDynamic(map['homeQuickActionIds']),
       ),
-      assistantReplyMotionLevel: _assistantReplyMotionLevelFromName(
+      showHomeQuickActions: map['showHomeQuickActions'] as bool? ?? false,
+      assistantReplyMotionLevel:
+          _assistantReplyMotionLevelFromName(
             map['assistantReplyMotionLevel'] as String?,
           ) ??
           AssistantReplyMotionLevel.medium,

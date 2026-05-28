@@ -453,6 +453,7 @@ class UserSettings {
     required this.preferredTrackTitle,
     required this.smartSuggestionsEnabled,
     this.homeQuickActionIds = kDefaultHomeQuickActionIds,
+    this.showHomeQuickActions = false,
     this.assistantReplyMotionLevel = AssistantReplyMotionLevel.medium,
     this.selectedNightMood,
     this.eveningEncouragementPeriodKey,
@@ -468,6 +469,7 @@ class UserSettings {
   final String preferredTrackTitle;
   final bool smartSuggestionsEnabled;
   final List<String> homeQuickActionIds;
+  final bool showHomeQuickActions;
   final AssistantReplyMotionLevel assistantReplyMotionLevel;
   final NightMood? selectedNightMood;
   final String? eveningEncouragementPeriodKey;
@@ -483,6 +485,7 @@ class UserSettings {
     String? preferredTrackTitle,
     bool? smartSuggestionsEnabled,
     List<String>? homeQuickActionIds,
+    bool? showHomeQuickActions,
     AssistantReplyMotionLevel? assistantReplyMotionLevel,
     NightMood? selectedNightMood,
     bool clearSelectedNightMood = false,
@@ -506,6 +509,7 @@ class UserSettings {
       homeQuickActionIds: normalizeHomeQuickActionIds(
         homeQuickActionIds ?? this.homeQuickActionIds,
       ),
+      showHomeQuickActions: showHomeQuickActions ?? this.showHomeQuickActions,
       assistantReplyMotionLevel:
           assistantReplyMotionLevel ?? this.assistantReplyMotionLevel,
       selectedNightMood: clearSelectedNightMood

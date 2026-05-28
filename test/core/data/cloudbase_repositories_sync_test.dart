@@ -2045,7 +2045,7 @@ void main() {
   });
 
   test(
-    'cloudbase user settings keeps pending quick actions when refreshed snapshot omits them',
+    'cloudbase user settings keeps pending quick action state when refreshed snapshot omits it',
     () async {
       final List<_PostCall> calls = <_PostCall>[];
       final Map<String, dynamic> stalePayload = <String, dynamic>{
@@ -2084,19 +2084,25 @@ void main() {
         HomeQuickActionIds.profileReport,
       ];
       await repository.saveSettings(
-        repository.currentSettings.copyWith(homeQuickActionIds: selectedIds),
+        repository.currentSettings.copyWith(
+          homeQuickActionIds: selectedIds,
+          showHomeQuickActions: true,
+        ),
       );
 
       expect(repository.currentSettings.homeQuickActionIds, selectedIds);
+      expect(repository.currentSettings.showHomeQuickActions, isTrue);
       expect(calls.map((call) => call.path), <String>['/api/profile/save']);
       final Map<String, dynamic> settingsBody = Map<String, dynamic>.from(
         calls.single.body['settings'] as Map,
       );
       expect(settingsBody['homeQuickActionIds'], selectedIds);
+      expect(settingsBody['showHomeQuickActions'], isTrue);
 
       snapshotStore.pushPayload(stalePayload);
 
       expect(repository.currentSettings.homeQuickActionIds, selectedIds);
+      expect(repository.currentSettings.showHomeQuickActions, isTrue);
 
       repository.dispose();
       authRepository.dispose();

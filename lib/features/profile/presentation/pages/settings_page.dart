@@ -40,6 +40,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _morningReminderEnabled = true;
   bool _dormAlertsEnabled = true;
   bool _smartSuggestionsEnabled = true;
+  bool _showHomeQuickActions = false;
   AssistantReplyMotionLevel _assistantReplyMotionLevel =
       AssistantReplyMotionLevel.medium;
   TimeOfDay _bedtimeReminder = const TimeOfDay(hour: 23, minute: 10);
@@ -57,6 +58,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _morningReminderEnabled = settings.morningReminderEnabled;
     _dormAlertsEnabled = settings.dormAlertsEnabled;
     _smartSuggestionsEnabled = settings.smartSuggestionsEnabled;
+    _showHomeQuickActions = settings.showHomeQuickActions;
     _assistantReplyMotionLevel = settings.assistantReplyMotionLevel;
     _bedtimeReminder = settings.bedtimeReminder;
   }
@@ -133,6 +135,7 @@ class _SettingsPageState extends State<SettingsPage> {
             morningReminderEnabled: _morningReminderEnabled,
             dormAlertsEnabled: _dormAlertsEnabled,
             smartSuggestionsEnabled: _smartSuggestionsEnabled,
+            showHomeQuickActions: _showHomeQuickActions,
             bedtimeReminder: _bedtimeReminder,
             assistantReplyMotionLevel: _assistantReplyMotionLevel,
           );
@@ -355,6 +358,20 @@ class _SettingsPageState extends State<SettingsPage> {
                       onTap: _isSavingAssistantMotion
                           ? null
                           : () => _showAssistantMotionSheet(services),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                AppSettingsGroup(
+                  title: '首页显示',
+                  children: <Widget>[
+                    _SettingsSwitchRow(
+                      icon: Icons.grid_view_rounded,
+                      title: '快捷功能',
+                      value: _showHomeQuickActions,
+                      onChanged: (bool value) {
+                        setState(() => _showHomeQuickActions = value);
+                      },
                     ),
                   ],
                 ),
@@ -748,6 +765,7 @@ String _settingsSignature(UserSettings settings) {
     settings.morningReminderEnabled,
     settings.dormAlertsEnabled,
     settings.smartSuggestionsEnabled,
+    settings.showHomeQuickActions,
     bedtimeReminder.hour,
     bedtimeReminder.minute,
     settings.assistantReplyMotionLevel.name,

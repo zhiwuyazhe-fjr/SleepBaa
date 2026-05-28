@@ -176,7 +176,9 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
           final TonightInterferenceState interference =
               services.interferenceProbeController.currentState;
           final List<HomeQuickActionDefinition> quickActions =
-              homeQuickActionDefinitionsFor(settings.homeQuickActionIds);
+              settings.showHomeQuickActions
+              ? homeQuickActionDefinitionsFor(settings.homeQuickActionIds)
+              : const <HomeQuickActionDefinition>[];
           final AudioTrack? currentAudioTrack =
               services.audioPlaybackController.currentTrack;
           final bool hasStartedAudio = currentAudioTrack != null;
@@ -261,35 +263,38 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                               ),
                             ),
                             const SizedBox(height: AppSpacing.xl),
-                            SectionTitle(
-                              title: '快捷功能',
-                              actionLabel: '编辑',
-                              variant: SectionTitleVariant.dorm,
-                              onAction: () =>
-                                  context.push(AppRoutes.homeQuickActionsEdit),
-                            ),
-                            const SizedBox(height: AppSpacing.md),
-                            Row(
-                              children: <Widget>[
-                                for (
-                                  int index = 0;
-                                  index < quickActions.length;
-                                  index++
-                                ) ...<Widget>[
-                                  Expanded(
-                                    child: QuickActionIconButton(
-                                      icon: quickActions[index].icon,
-                                      label: quickActions[index].label,
-                                      onTap: () =>
-                                          quickActions[index].open(context),
+                            if (settings.showHomeQuickActions) ...<Widget>[
+                              SectionTitle(
+                                title: '快捷功能',
+                                actionLabel: '编辑',
+                                variant: SectionTitleVariant.dorm,
+                                onAction: () => context.push(
+                                  AppRoutes.homeQuickActionsEdit,
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              Row(
+                                children: <Widget>[
+                                  for (
+                                    int index = 0;
+                                    index < quickActions.length;
+                                    index++
+                                  ) ...<Widget>[
+                                    Expanded(
+                                      child: QuickActionIconButton(
+                                        icon: quickActions[index].icon,
+                                        label: quickActions[index].label,
+                                        onTap: () =>
+                                            quickActions[index].open(context),
+                                      ),
                                     ),
-                                  ),
-                                  if (index != quickActions.length - 1)
-                                    const SizedBox(width: AppSpacing.xs),
+                                    if (index != quickActions.length - 1)
+                                      const SizedBox(width: AppSpacing.xs),
+                                  ],
                                 ],
-                              ],
-                            ),
-                            const SizedBox(height: AppSpacing.xl),
+                              ),
+                              const SizedBox(height: AppSpacing.xl),
+                            ],
                             SectionTitle(
                               title: '今晚影响因素',
                               actionLabel: '查看详情',
