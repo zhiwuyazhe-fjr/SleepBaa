@@ -192,14 +192,9 @@ class _SleepRiskCardState extends State<SleepRiskCard> {
 }
 
 class StartSleepModeCard extends StatelessWidget {
-  const StartSleepModeCard({
-    super.key,
-    required this.onTap,
-    required this.isAudioReady,
-  });
+  const StartSleepModeCard({super.key, required this.onTap});
 
   final VoidCallback onTap;
-  final bool isAudioReady;
 
   @override
   Widget build(BuildContext context) {
@@ -230,30 +225,7 @@ class StartSleepModeCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
-                if (isAudioReady)
-                  Flexible(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: appColors.surfaceMuted,
-                        borderRadius: AppRadius.surfaceSecondary,
-                      ),
-                      child: Text(
-                        '音频已同步',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.chip(
-                          textTheme,
-                        ).copyWith(color: appColors.textSecondary),
-                      ),
-                    ),
-                  )
-                else
-                  const Spacer(),
-                if (isAudioReady) const SizedBox(width: AppSpacing.sm),
+                const Spacer(),
                 Container(
                   width: 40,
                   height: 40,

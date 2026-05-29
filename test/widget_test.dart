@@ -5084,7 +5084,7 @@ void main() {
     expect(find.text('佩戴隔音耳塞'), findsOneWidget);
   });
 
-  testWidgets('start sleep card keeps full title and light hint', (
+  testWidgets('start sleep card keeps only title and moon action', (
     WidgetTester tester,
   ) async {
     await _pumpApp(

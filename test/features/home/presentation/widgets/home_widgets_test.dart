@@ -298,7 +298,7 @@ void main() {
     expect(tester.widget<Text>(find.text('灯光环境')).style?.fontSize, 13);
   });
 
-  testWidgets('start sleep card separates audio status from moon action', (
+  testWidgets('start sleep card hides audio status beside the moon action', (
     WidgetTester tester,
   ) async {
     final NightMoodPalette palette = NightMoodPalette.fromMood(null);
@@ -308,28 +308,21 @@ void main() {
     );
 
     await tester.pumpWidget(
-      _wrap(
-        StartSleepModeCard(onTap: () {}, isAudioReady: true),
-        tokens: tokens,
-      ),
+      _wrap(StartSleepModeCard(onTap: () {}), tokens: tokens),
     );
 
-    final Finder status = find.text('音频已同步');
     final Finder moon = find.byIcon(Icons.dark_mode_rounded);
-    expect(tester.getTopRight(status).dx, lessThan(tester.getTopLeft(moon).dx));
-    expect(
-      tester.getTopLeft(moon).dx - tester.getTopRight(status).dx,
-      greaterThanOrEqualTo(8),
-    );
+    expect(find.text('音频已同步'), findsNothing);
+    expect(find.text('音频正常播放'), findsNothing);
+    expect(find.text('轻触进入'), findsNothing);
+    expect(moon, findsOneWidget);
     expect(tester.widget<Icon>(moon).color, tokens.accentDeep);
   });
 
   testWidgets(
     'start sleep card keeps the moon action without idle helper text',
     (WidgetTester tester) async {
-      await tester.pumpWidget(
-        _wrap(StartSleepModeCard(onTap: () {}, isAudioReady: false)),
-      );
+      await tester.pumpWidget(_wrap(StartSleepModeCard(onTap: () {})));
 
       expect(find.text('开启睡眠模式'), findsOneWidget);
       expect(find.text('轻触进入'), findsNothing);

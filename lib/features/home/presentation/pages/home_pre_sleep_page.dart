@@ -249,11 +249,6 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                 primaryValue: '${dorm.noiseDb} dB',
                               ),
                               right: StartSleepModeCard(
-                                isAudioReady:
-                                    services
-                                        .audioPlaybackController
-                                        .currentTrack !=
-                                    null,
                                 onTap: () async {
                                   await services.sleepExperienceController
                                       .enterSleepMode();
