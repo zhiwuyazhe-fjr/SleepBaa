@@ -13,6 +13,7 @@ import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_member_deta
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_rules_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_status_page.dart';
+import 'package:sleep_dorm_app/features/dream/presentation/dream_content.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_detail_page.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_journal_page.dart';
 import 'package:sleep_dorm_app/features/feedback/presentation/pages/morning_feedback_page.dart';
@@ -164,6 +165,13 @@ abstract final class AppRoutes {
       queryParameters: <String, String>{'uid': memberUid},
     ).toString();
   }
+
+  static String dreamDetailListLocation() {
+    return Uri(
+      path: dreamDetail,
+      queryParameters: const <String, String>{'view': 'list'},
+    ).toString();
+  }
 }
 
 GoRouter createRouter({
@@ -301,8 +309,16 @@ GoRouter createRouter({
       ),
       GoRoute(
         path: AppRoutes.dreamDetail,
-        builder: (BuildContext context, GoRouterState state) =>
-            const DreamDetailPage(),
+        builder: (BuildContext context, GoRouterState state) {
+          final Object? extra = state.extra;
+          return DreamDetailPage(
+            showList: state.uri.queryParameters['view'] == 'list',
+            entry: extra is DreamEntryData ? extra : null,
+            entries: extra is List<DreamEntryData>
+                ? extra
+                : DreamContent.entries,
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.dreamJournal,

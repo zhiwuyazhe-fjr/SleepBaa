@@ -15,6 +15,7 @@ import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
+import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/dream_content.dart';
 
 class DreamJournalPage extends StatelessWidget {
@@ -329,9 +330,7 @@ class _DreamCreateTabState extends State<_DreamCreateTab> {
                           ),
                           child: Text(
                             entry,
-                            style: AppTypography.body(
-                              textTheme,
-                            ).copyWith(
+                            style: AppTypography.body(textTheme).copyWith(
                               color: appColors.textOnAccent,
                               height: 1.55,
                             ),
@@ -353,9 +352,7 @@ class _DreamCreateTabState extends State<_DreamCreateTab> {
             ),
             decoration: BoxDecoration(
               color: appColors.surface.withAlpha(248),
-              border: Border(
-                top: BorderSide(color: appColors.borderSubtle),
-              ),
+              border: Border(top: BorderSide(color: appColors.borderSubtle)),
             ),
             child: _DreamComposer(
               controller: _controller,
@@ -484,44 +481,57 @@ class _DreamListTab extends StatelessWidget {
     return ListenableBuilder(
       listenable: services.sleepCaptureRepository,
       builder: (BuildContext context, Widget? child) {
-        final List<DreamEntryData> capturedEntries = services
-            .sleepCaptureRepository
-            .recordsByType(SleepCaptureType.dream)
+        final List<SleepCaptureRecord> capturedRecords =
+            List<SleepCaptureRecord>.from(
+              services.sleepCaptureRepository.recordsByType(
+                SleepCaptureType.dream,
+              ),
+            )..sort(
+              (SleepCaptureRecord a, SleepCaptureRecord b) =>
+                  b.createdAt.compareTo(a.createdAt),
+            );
+        final List<DreamEntryData> capturedEntries = capturedRecords
             .map(_dreamEntryFromRecord)
             .toList();
         final List<DreamEntryData> allEntries = <DreamEntryData>[
           ...capturedEntries,
           ...DreamContent.entries,
         ];
+        final DreamEntryData latestEntry = allEntries.first;
 
         return ListView(
           padding: AppPageInsets.page(
-            top: AppSpacing.lg,
+            top: AppSpacing.md,
             bottom: AppSpacing.xxxl,
           ),
           children: <Widget>[
             _HighlightCard(palette: palette),
-            const SizedBox(height: AppSpacing.xl),
-            Text(
-              '最近梦境',
-              style: AppTypography.sectionTitle(
+            const SizedBox(height: AppSpacing.lg),
+            SectionTitle(
+              title: '最近梦境',
+              actionLabel: '查看详细',
+              onAction: () {
+                context.push(
+                  AppRoutes.dreamDetailListLocation(),
+                  extra: allEntries,
+                );
+              },
+              titleStyle: AppTypography.sectionTitle(
                 textTheme,
               ).copyWith(color: appColors.textPrimary),
+              actionStyle: AppTypography.meta(
+                textTheme,
+              ).copyWith(color: appColors.accentDeep),
             ),
             const SizedBox(height: AppSpacing.sm),
-            ...allEntries.asMap().entries.map(
-              (MapEntry<int, DreamEntryData> item) => Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                child: _DreamEntryCard(entry: item.value, palette: palette),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
+            _DreamEntryCard(entry: latestEntry, palette: palette),
+            const SizedBox(height: AppSpacing.md),
             Center(
               child: Column(
                 children: <Widget>[
                   Icon(
                     Icons.bedtime_rounded,
-                    size: 34,
+                    size: 30,
                     color: appColors.accentSoft.withAlpha(180),
                   ),
                   const SizedBox(height: AppSpacing.xs),
@@ -571,20 +581,20 @@ class _DreamMappingTab extends StatelessWidget {
         final _DreamAnalysisViewData analysis = _buildDreamAnalysis(records);
         return ListView(
           padding: AppPageInsets.page(
-            top: AppSpacing.lg,
+            top: AppSpacing.md,
             bottom: AppSpacing.xxxl,
           ),
           children: <Widget>[
             AppCard(
-              padding: const EdgeInsets.all(AppSpacing.lg),
+              padding: const EdgeInsets.all(AppSpacing.md),
               borderRadius: AppRadius.compactCard,
               border: _dreamCardBorder(palette),
               child: Column(
                 children: <Widget>[
                   Container(
                     key: const ValueKey<String>('dream-mapping-hero-image'),
-                    width: 88,
-                    height: 88,
+                    width: 80,
+                    height: 80,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: appColors.accentSoft.withAlpha(180),
@@ -600,7 +610,7 @@ class _DreamMappingTab extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.lg),
+                  const SizedBox(height: AppSpacing.md),
                   Text(
                     analysis.mappingTitle,
                     style: AppTypography.panelTitle(
@@ -619,7 +629,7 @@ class _DreamMappingTab extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.md),
             _PatternBreakdownCard(
               palette: palette,
               patterns: analysis.patterns,
@@ -630,7 +640,7 @@ class _DreamMappingTab extends StatelessWidget {
               (DreamInsightData insight) => Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.md),
                 child: AppCard(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  padding: const EdgeInsets.all(AppSpacing.md),
                   borderRadius: AppRadius.compactCard,
                   border: _dreamCardBorder(palette),
                   child: Row(
@@ -729,7 +739,7 @@ class _HighlightCard extends StatelessWidget {
           services.sleepCaptureRepository.recordsByType(SleepCaptureType.dream),
         );
         return AppCard(
-          padding: const EdgeInsets.all(AppSpacing.lg),
+          padding: const EdgeInsets.all(AppSpacing.md),
           borderRadius: AppRadius.compactCard,
           border: _dreamCardBorder(palette),
           child: Column(
@@ -760,21 +770,21 @@ class _HighlightCard extends StatelessWidget {
                   Icon(Icons.auto_awesome_rounded, color: appColors.accent),
                 ],
               ),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.sm),
               Text(
                 analysis.highlight.title,
                 style: AppTypography.panelTitle(
                   textTheme,
                 ).copyWith(color: appColors.textPrimary),
               ),
-              const SizedBox(height: AppSpacing.sm),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 analysis.highlight.description,
                 style: AppTypography.bodyMuted(
                   textTheme,
                 ).copyWith(color: appColors.textSecondary),
               ),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.sm),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: analysis.patterns.map((DreamPatternData pattern) {
@@ -848,7 +858,7 @@ class _PatternBreakdownCard extends StatelessWidget {
     final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.md),
       borderRadius: AppRadius.compactCard,
       border: _dreamCardBorder(palette),
       child: Column(
@@ -883,14 +893,14 @@ class _PatternBreakdownCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: patterns.asMap().entries.map((
               MapEntry<int, DreamPatternData> item,
             ) {
               final DreamPatternData pattern = item.value;
-              final double baseHeight = 38 + (pattern.value * 96);
+              final double baseHeight = 30 + (pattern.value * 76);
               final Color barColor = switch (item.key) {
                 1 => palette.primarySoft,
                 2 => Color.lerp(palette.primarySoft, Colors.white, 0.35)!,
@@ -1094,7 +1104,7 @@ class _DreamEntryCard extends StatelessWidget {
     final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
-      onTap: () => context.push(AppRoutes.dreamDetail),
+      onTap: () => context.push(AppRoutes.dreamDetail, extra: entry),
       borderRadius: AppRadius.compactCard,
       border: _dreamCardBorder(palette, alpha: 100),
       padding: const EdgeInsets.all(AppSpacing.md),

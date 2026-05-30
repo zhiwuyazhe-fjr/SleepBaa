@@ -1757,6 +1757,7 @@ void main() {
     );
     await _pumpAssistantSurface(tester);
 
+    await _pumpUntilFound(tester, find.text('把梦先轻轻记下来'));
     expect(find.text('把梦先轻轻记下来'), findsOneWidget);
     expect(find.text('会保存到“我的 / 梦境记录”。'), findsOneWidget);
     expect(find.text('例如：我梦见自己站在很高的桥上...'), findsOneWidget);
@@ -4401,8 +4402,8 @@ void main() {
     final Text entryTitle = tester.widget<Text>(find.text('漂浮柑橘岛'));
 
     expect(entryCard.borderRadius, AppRadius.compactCard);
-    expect(highlightCard.padding, const EdgeInsets.all(AppSpacing.lg));
-    expect(tester.getSize(find.byWidget(highlightCard)).height, lessThan(236));
+    expect(highlightCard.padding, const EdgeInsets.all(AppSpacing.md));
+    expect(tester.getSize(find.byWidget(highlightCard)).height, lessThan(220));
     expect(
       sectionTitle.style?.fontSize,
       AppTypography.sectionTitle(textTheme).fontSize,
@@ -4416,6 +4417,16 @@ void main() {
       AppTypography.cardTitle(textTheme).fontSize,
     );
     expect(entryCard.padding, const EdgeInsets.all(AppSpacing.md));
+    expect(find.text('查看详细'), findsOneWidget);
+    expect(find.text('水下图书馆'), findsNothing);
+
+    await tester.tap(find.text('查看详细'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('全部梦境'), findsOneWidget);
+    expect(find.text('漂浮柑橘岛'), findsOneWidget);
+    expect(find.text('水下图书馆'), findsOneWidget);
+    expect(find.text('会说话的风'), findsOneWidget);
   });
 
   testWidgets('dream mapping tab uses compact visual hierarchy', (
@@ -4443,7 +4454,7 @@ void main() {
     final AppCard mappingCard = tester.widget<AppCard>(mappingCardFinder);
     final Text mappingTitle = tester.widget<Text>(find.text('学会梦的语言，解锁梦的启示'));
 
-    expect(mappingCard.padding, const EdgeInsets.all(AppSpacing.lg));
+    expect(mappingCard.padding, const EdgeInsets.all(AppSpacing.md));
     expect(
       mappingTitle.style?.fontSize,
       AppTypography.panelTitle(textTheme).fontSize,
@@ -4452,9 +4463,9 @@ void main() {
       tester.getSize(
         find.byKey(const ValueKey<String>('dream-mapping-hero-image')),
       ),
-      const Size(88, 88),
+      const Size(80, 80),
     );
-    expect(tester.getSize(mappingCardFinder).height, lessThan(236));
+    expect(tester.getSize(mappingCardFinder).height, lessThan(220));
   });
 
   testWidgets(

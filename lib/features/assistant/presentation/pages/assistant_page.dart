@@ -113,7 +113,17 @@ class _AssistantPageState extends State<AssistantPage>
       if (!mounted) {
         return;
       }
-      await context.appServices.assistantConversationController.bootstrap();
+      final AssistantConversationController controller =
+          context.appServices.assistantConversationController;
+      await controller.bootstrap();
+      if (!mounted || !widget.captureModeEnabled) {
+        return;
+      }
+      await controller.startNewConversation(
+        title: widget.initialCaptureTab == AssistantCaptureTab.dream
+            ? '梦记收纳'
+            : '事记收纳',
+      );
     });
   }
 
