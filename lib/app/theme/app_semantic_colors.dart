@@ -62,24 +62,24 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
   }
 
   static AppSemanticColors dark(NightMoodPalette palette) {
-    final Color accent = _darkAccentForMood(palette.mood);
+    final _DarkMoodTone tone = _DarkMoodTone.forMood(palette.mood);
     return AppSemanticColors(
       pageBackground: AppColors.darkBackground,
-      surface: const Color(0xFF1C2023),
-      surfaceMuted: const Color(0xFF24292D),
-      surfaceRaised: const Color(0xFF2A3034),
+      surface: const Color(0xFF1D2023),
+      surfaceMuted: const Color(0xFF252A2E),
+      surfaceRaised: const Color(0xFF2D3338),
       borderSubtle: const Color(0x29FFFFFF),
       textPrimary: const Color(0xFFF3F5F4),
       textSecondary: const Color(0xFFC4CBC8),
       textOnAccent: AppColors.onDark,
-      accent: accent,
-      accentSoft: _blendOnDark(accent, const Color(0xFF1C2023), 0.24),
-      accentDeep: _darkDeepForMood(palette.mood),
-      heroStart: palette.heroGradientStart,
-      heroMid: palette.heroGradientMid,
-      heroEnd: palette.heroGradientEnd,
+      accent: tone.accent,
+      accentSoft: tone.soft,
+      accentDeep: tone.deep,
+      heroStart: tone.heroStart,
+      heroMid: tone.heroMid,
+      heroEnd: tone.heroEnd,
       darkGlass: const Color(0x2EFFFFFF),
-      primaryButtonShadow: _primaryButtonShadow(accent),
+      primaryButtonShadow: _primaryButtonShadow(tone.accent),
     );
   }
 
@@ -105,28 +105,6 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
         offset: Offset(0, 4),
       ),
     ];
-  }
-
-  static Color _darkAccentForMood(NightMood? mood) {
-    return switch (mood) {
-      NightMood.happy => const Color(0xFFD993AE),
-      NightMood.sad => const Color(0xFFD79A7E),
-      NightMood.calm => const Color(0xFF8ECDB8),
-      null => const Color(0xFF8CBFD0),
-    };
-  }
-
-  static Color _darkDeepForMood(NightMood? mood) {
-    return switch (mood) {
-      NightMood.happy => const Color(0xFFB87492),
-      NightMood.sad => const Color(0xFFB9785C),
-      NightMood.calm => const Color(0xFF6FAE99),
-      null => const Color(0xFF6EA5B8),
-    };
-  }
-
-  static Color _blendOnDark(Color color, Color base, double amount) {
-    return Color.lerp(base, color, amount)!;
   }
 
   @override
@@ -200,5 +178,60 @@ extension AppSemanticColorsContext on BuildContext {
   AppSemanticColors get appColors {
     return Theme.of(this).extension<AppSemanticColors>() ??
         AppSemanticColors.light(nightMoodPalette);
+  }
+}
+
+class _DarkMoodTone {
+  const _DarkMoodTone({
+    required this.accent,
+    required this.soft,
+    required this.deep,
+    required this.heroStart,
+    required this.heroMid,
+    required this.heroEnd,
+  });
+
+  final Color accent;
+  final Color soft;
+  final Color deep;
+  final Color heroStart;
+  final Color heroMid;
+  final Color heroEnd;
+
+  static _DarkMoodTone forMood(NightMood? mood) {
+    return switch (mood) {
+      NightMood.happy => const _DarkMoodTone(
+        accent: Color(0xFFA45578),
+        soft: Color(0xFF352530),
+        deep: Color(0xFFE5B4C8),
+        heroStart: Color(0xFF6F3C58),
+        heroMid: Color(0xFF563045),
+        heroEnd: Color(0xFF2A2027),
+      ),
+      NightMood.sad => const _DarkMoodTone(
+        accent: Color(0xFFA66045),
+        soft: Color(0xFF352A25),
+        deep: Color(0xFFE3B89E),
+        heroStart: Color(0xFF714532),
+        heroMid: Color(0xFF573629),
+        heroEnd: Color(0xFF2B211D),
+      ),
+      NightMood.calm => const _DarkMoodTone(
+        accent: Color(0xFF4D9B86),
+        soft: Color(0xFF233530),
+        deep: Color(0xFFA7DDCC),
+        heroStart: Color(0xFF386D61),
+        heroMid: Color(0xFF2C554D),
+        heroEnd: Color(0xFF1E2A28),
+      ),
+      null => const _DarkMoodTone(
+        accent: Color(0xFF347F93),
+        soft: Color(0xFF22333A),
+        deep: Color(0xFFAED6E2),
+        heroStart: Color(0xFF2F6A7A),
+        heroMid: Color(0xFF284F5B),
+        heroEnd: Color(0xFF1D282D),
+      ),
+    };
   }
 }

@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 
 class PassiveToastController {
@@ -202,27 +203,35 @@ class _PassiveToastSession {
               child: IgnorePointer(
                 child: KeyedSubtree(
                   key: toastKey,
-                  child: Material(
-                    key: _toastLayoutKey,
-                    color: const Color(0xFF181B22),
-                    borderRadius: AppRadius.toast,
-                    elevation: 8,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md,
-                        vertical: AppSpacing.sm,
-                      ),
-                      child: Text(
-                        message,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          height: 1.3,
+                  child: Builder(
+                    builder: (BuildContext context) {
+                      final Color toastColor =
+                          Theme.of(context).brightness == Brightness.dark
+                          ? context.appColors.surfaceRaised
+                          : const Color(0xFF181B22);
+                      return Material(
+                        key: _toastLayoutKey,
+                        color: toastColor,
+                        borderRadius: AppRadius.toast,
+                        elevation: 8,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.sm,
+                          ),
+                          child: Text(
+                            message,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              height: 1.3,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   ),
                 ),
               ),

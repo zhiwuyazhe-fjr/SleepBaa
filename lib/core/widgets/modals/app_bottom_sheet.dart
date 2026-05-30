@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
@@ -147,10 +148,12 @@ class AppBottomSheetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: backgroundColor ?? context.appColors.surface,
-        borderRadius: BorderRadius.circular(24),
+        color: backgroundColor ?? appColors.surfaceRaised,
+        borderRadius: AppRadius.card,
+        border: Border.all(color: appColors.borderSubtle),
       ),
       child: child,
     );
@@ -202,6 +205,7 @@ class AppRichDetailSheetScaffold extends StatelessWidget {
             decoration: BoxDecoration(
               color: backgroundColor ?? appColors.surface,
               borderRadius: borderRadius,
+              border: Border.all(color: appColors.borderSubtle),
             ),
             child: SafeArea(
               top: false,

@@ -60,6 +60,8 @@ class PrimaryButton extends StatelessWidget {
       elevation: 0,
       backgroundColor: _backgroundColor(palette, appColors),
       foregroundColor: foregroundColor ?? _foregroundColor(palette, appColors),
+      disabledBackgroundColor: _disabledBackgroundColor(appColors),
+      disabledForegroundColor: appColors.textSecondary,
       side: _borderSide(appColors),
       textStyle: buttonTextStyle,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -140,10 +142,30 @@ class PrimaryButton extends StatelessWidget {
     };
   }
 
+  Color _disabledBackgroundColor(AppSemanticColors colors) {
+    if (backgroundColor != null) {
+      return Color.alphaBlend(
+        colors.surfaceMuted.withAlpha(180),
+        backgroundColor!,
+      );
+    }
+    return switch (variant) {
+      PrimaryButtonVariant.filled => Color.alphaBlend(
+        colors.accent.withAlpha(60),
+        colors.surfaceMuted,
+      ),
+      PrimaryButtonVariant.soft => colors.surfaceMuted,
+      PrimaryButtonVariant.ghost => Colors.transparent,
+    };
+  }
+
   BorderSide? _borderSide(AppSemanticColors colors) {
     return switch (variant) {
       PrimaryButtonVariant.ghost => BorderSide(
         color: borderColor ?? colors.borderSubtle,
+      ),
+      PrimaryButtonVariant.soft => BorderSide(
+        color: borderColor ?? colors.accentSoft.withAlpha(190),
       ),
       _ => null,
     };

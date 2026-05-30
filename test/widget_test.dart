@@ -156,17 +156,18 @@ void main() {
 
     final AppSemanticColors dark = AppSemanticColors.dark(calm);
     expect(dark.pageBackground, AppColors.darkBackground);
-    expect(dark.surface, const Color(0xFF1C2023));
-    expect(dark.surfaceMuted, const Color(0xFF24292D));
-    expect(dark.surfaceRaised, const Color(0xFF2A3034));
+    expect(dark.surface, const Color(0xFF1D2023));
+    expect(dark.surfaceMuted, const Color(0xFF252A2E));
+    expect(dark.surfaceRaised, const Color(0xFF2D3338));
     expect(dark.textPrimary, const Color(0xFFF3F5F4));
     expect(dark.textSecondary, const Color(0xFFC4CBC8));
-    expect(dark.accent, const Color(0xFF8ECDB8));
+    expect(dark.accent, const Color(0xFF4D9B86));
     expect(dark.textOnAccent, AppColors.onDark);
-    expect(dark.accentDeep, const Color(0xFF6FAE99));
-    expect(dark.heroStart, calm.heroGradientStart);
-    expect(dark.heroMid, calm.heroGradientMid);
-    expect(dark.heroEnd, calm.heroGradientEnd);
+    expect(dark.accentSoft, const Color(0xFF233530));
+    expect(dark.accentDeep, const Color(0xFFA7DDCC));
+    expect(dark.heroStart, const Color(0xFF386D61));
+    expect(dark.heroMid, const Color(0xFF2C554D));
+    expect(dark.heroEnd, const Color(0xFF1E2A28));
   });
 
   testWidgets('dorm page uses dark semantic neutral surfaces', (
@@ -234,9 +235,7 @@ void main() {
       greaterThan(appColors.pageBackground.computeLuminance()),
     );
 
-    final Text quoteText = tester.widget<Text>(
-      find.text('完成今晚心情选择，解锁一句陪伴语'),
-    );
+    final Text quoteText = tester.widget<Text>(find.text('完成今晚心情选择，解锁一句陪伴语'));
     expect(quoteText.style?.color, AppColors.onDark);
   });
 
@@ -260,81 +259,85 @@ void main() {
     expect(moodLabel.style?.color, appColors.textPrimary);
   });
 
-  testWidgets('settings and profile navigation icons use dark semantic accent', (
-    WidgetTester tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+  testWidgets(
+    'settings and profile navigation icons use dark semantic accent',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final UserSettings darkCalmSettings = buildDefaultUserSettings().copyWith(
-      themeMode: AppThemeMode.dark,
-      selectedNightMood: NightMood.calm,
-    );
+      final UserSettings darkCalmSettings = buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      );
 
-    await _pumpApp(
-      tester,
-      initialLocation: AppRoutes.profileSettings,
-      clock: _dayClock,
-      initialSettings: darkCalmSettings,
-    );
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profileSettings,
+        clock: _dayClock,
+        initialSettings: darkCalmSettings,
+      );
 
-    final AppSemanticColors settingsColors = tester
-        .element(find.byType(SettingsPage))
-        .appColors;
-    final AppSettingsItem accountItem = tester.widget<AppSettingsItem>(
-      find.widgetWithText(AppSettingsItem, '账号管理'),
-    );
-    final AppSettingsItem appearanceItem = tester.widget<AppSettingsItem>(
-      find.widgetWithText(AppSettingsItem, '外观模式'),
-    );
+      final AppSemanticColors settingsColors = tester
+          .element(find.byType(SettingsPage))
+          .appColors;
+      final AppSettingsItem accountItem = tester.widget<AppSettingsItem>(
+        find.widgetWithText(AppSettingsItem, '账号管理'),
+      );
+      final AppSettingsItem appearanceItem = tester.widget<AppSettingsItem>(
+        find.widgetWithText(AppSettingsItem, '外观模式'),
+      );
 
-    expect(accountItem.iconColor, settingsColors.accentDeep);
-    expect(appearanceItem.iconColor, settingsColors.accentDeep);
+      expect(accountItem.iconColor, settingsColors.accentDeep);
+      expect(appearanceItem.iconColor, settingsColors.accentDeep);
 
-    await _pumpApp(
-      tester,
-      initialLocation: AppRoutes.profileAccountCenter,
-      clock: _dayClock,
-      initialSettings: darkCalmSettings,
-    );
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profileAccountCenter,
+        clock: _dayClock,
+        initialSettings: darkCalmSettings,
+      );
 
-    final AppSemanticColors accountColors = tester
-        .element(find.byType(AccountManagementPage))
-        .appColors;
-    final AppSettingsItem profileItem = tester.widget<AppSettingsItem>(
-      find.widgetWithText(AppSettingsItem, '个人资料'),
-    );
+      final AppSemanticColors accountColors = tester
+          .element(find.byType(AccountManagementPage))
+          .appColors;
+      final AppSettingsItem profileItem = tester.widget<AppSettingsItem>(
+        find.widgetWithText(AppSettingsItem, '个人资料'),
+      );
 
-    expect(profileItem.iconColor, accountColors.accentDeep);
+      expect(profileItem.iconColor, accountColors.accentDeep);
 
-    await _pumpApp(
-      tester,
-      initialLocation: AppRoutes.profile,
-      clock: _dayClock,
-      initialSettings: darkCalmSettings,
-    );
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profile,
+        clock: _dayClock,
+        initialSettings: darkCalmSettings,
+      );
 
-    await tester.ensureVisible(find.text('设置'));
+      await tester.ensureVisible(find.text('设置'));
 
-    final AppSemanticColors profileColors = tester
-        .element(find.byType(ProfilePage))
-        .appColors;
-    final Icon settingsIcon = tester.widget<Icon>(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('profile-settings-card')),
-        matching: find.byIcon(Icons.settings_outlined),
-      ),
-    );
-    final Icon dreamIcon = tester.widget<Icon>(
-      find.descendant(
-        of: find.ancestor(of: find.text('梦记'), matching: find.byType(AppCard)),
-        matching: find.byIcon(Icons.menu_book_outlined),
-      ),
-    );
+      final AppSemanticColors profileColors = tester
+          .element(find.byType(ProfilePage))
+          .appColors;
+      final Icon settingsIcon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('profile-settings-card')),
+          matching: find.byIcon(Icons.settings_outlined),
+        ),
+      );
+      final Icon dreamIcon = tester.widget<Icon>(
+        find.descendant(
+          of: find.ancestor(
+            of: find.text('梦记'),
+            matching: find.byType(AppCard),
+          ),
+          matching: find.byIcon(Icons.menu_book_outlined),
+        ),
+      );
 
-    expect(settingsIcon.color, profileColors.accentDeep);
-    expect(dreamIcon.color, profileColors.accentDeep);
-  });
+      expect(settingsIcon.color, profileColors.accentDeep);
+      expect(dreamIcon.color, profileColors.accentDeep);
+    },
+  );
 
   testWidgets('shared avatar and dialog icons use dark semantic colors', (
     WidgetTester tester,
@@ -374,10 +377,7 @@ void main() {
                 onPressed: () {
                   showAppModal<void>(
                     context,
-                    spec: const AppInfoDialogSpec(
-                      title: '提示',
-                      body: '测试内容',
-                    ),
+                    spec: const AppInfoDialogSpec(title: '提示', body: '测试内容'),
                   );
                 },
                 child: const Text('打开弹窗'),
@@ -423,9 +423,7 @@ void main() {
     final AppSettingsItem inviteItem = tester.widget<AppSettingsItem>(
       find.widgetWithText(AppSettingsItem, '邀请舍友'),
     );
-    final Text dormName = tester.widget<Text>(
-      find.text('梅苑 2 栋 204').first,
-    );
+    final Text dormName = tester.widget<Text>(find.text('梅苑 2 栋 204').first);
 
     expect(inviteItem.iconColor, appColors.accentDeep);
     expect(inviteItem.titleStyle?.color, appColors.textPrimary);
@@ -549,10 +547,7 @@ void main() {
       appColors.pageBackground,
     );
     final AppCard summaryCard = tester.widget<AppCard>(
-      find.ancestor(
-        of: find.text('睡眠摘要'),
-        matching: find.byType(AppCard),
-      ),
+      find.ancestor(of: find.text('睡眠摘要'), matching: find.byType(AppCard)),
     );
     expect(summaryCard.color, appColors.surface);
     final Text feedbackCount = tester.widget<Text>(find.text('1 条'));
@@ -574,7 +569,8 @@ void main() {
       initialSettings: darkCalmSettings,
     );
 
-    AppSemanticColors appColors = tester.element(find.byType(PhoneAuthPage))
+    AppSemanticColors appColors = tester
+        .element(find.byType(PhoneAuthPage))
         .appColors;
     Scaffold scaffold = tester.widget<Scaffold>(
       find.descendant(
