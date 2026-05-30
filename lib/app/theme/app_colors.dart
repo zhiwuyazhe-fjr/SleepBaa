@@ -16,8 +16,8 @@ abstract final class AppColors {
   static const Color textSubtle = Color(0xFF888888);
 
   static const Color primary = Color(0xFF357E92);
-  static const Color primarySoft = Color(0xFF8EDDF2);
-  static const Color primaryHighlight = Color(0xFFB2EBF2);
+  static const Color primarySoft = Color(0xFF90DDF2);
+  static const Color primaryHighlight = Color(0xFFD5F2F7);
   static const Color primaryDeep = Color(0xFF3F5962);
   static const Color calmBlue = Color(0xFF4EA8C2);
 

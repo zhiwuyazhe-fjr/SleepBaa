@@ -407,7 +407,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       icon: Icons.nightlight_round,
                       iconColor: appColors.accentDeep,
                       iconBackgroundColor: appColors.surfaceMuted,
-                      title: '打开心情选择流程',
+                      title: '重新选择心情',
                       titleStyle: textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),

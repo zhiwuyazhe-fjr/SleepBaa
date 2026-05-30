@@ -89,15 +89,15 @@ void main() {
     () {
       expect(AppColors.darkCard, const Color(0xFF1A1A1A));
       expect(AppColors.primary, const Color(0xFF357E92));
-      expect(AppColors.primarySoft, const Color(0xFF8EDDF2));
+      expect(AppColors.primarySoft, const Color(0xFF90DDF2));
       expect(AppColors.primaryDeep, const Color(0xFF3F5962));
       expect(AppColors.primary, isNot(AppColors.primarySoft));
 
       final Map<NightMood?, List<Color>> expectedHeroGradients =
           <NightMood?, List<Color>>{
             null: const <Color>[
-              Color(0xFF8EDDF2),
-              Color(0xFF8EDDF2),
+              Color(0xFF90DDF2),
+              Color(0xFF90DDF2),
               Color(0xFF357E92),
             ],
             NightMood.happy: const <Color>[
@@ -166,8 +166,8 @@ void main() {
     expect(dark.textOnAccent, AppColors.onDark);
     expect(dark.accentSoft, const Color(0xFF233530));
     expect(dark.accentDeep, const Color(0xFFA7DDCC));
-    expect(dark.heroStart, const Color(0xFF386D61));
-    expect(dark.heroMid, const Color(0xFF2C554D));
+    expect(dark.heroStart, const Color(0xFF315F55));
+    expect(dark.heroMid, const Color(0xFF294D46));
     expect(dark.heroEnd, const Color(0xFF1E2A28));
   });
 
@@ -948,9 +948,9 @@ void main() {
     );
 
     expect(find.text('显示与首页'), findsOneWidget);
-    expect(find.text('打开心情选择流程'), findsOneWidget);
+    expect(find.text('重新选择心情'), findsOneWidget);
 
-    await tester.tap(find.text('打开心情选择流程'));
+    await tester.tap(find.text('重新选择心情'));
     await tester.pumpAndSettle();
 
     expect(find.byType(NightMoodWelcomeFlow), findsOneWidget);
@@ -1963,6 +1963,36 @@ void main() {
       );
     },
   );
+
+  testWidgets('phone auth send code button uses stronger verification color', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.authPhone,
+      clock: _dayClock,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('auth-login-method-code')),
+    );
+    await tester.pumpAndSettle();
+
+    final FilledButton sendButton = tester.widget<FilledButton>(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('auth-login-code-send')),
+        matching: find.byType(FilledButton),
+      ),
+    );
+    expect(
+      sendButton.style?.backgroundColor?.resolve(<WidgetState>{}),
+      const Color(0xFFBFE6F0),
+    );
+    expect(
+      sendButton.style?.foregroundColor?.resolve(<WidgetState>{}),
+      const Color(0xFF004F5D),
+    );
+  });
 
   testWidgets(
     'phone auth password login shows required phone toast on empty submit',
@@ -3619,7 +3649,7 @@ void main() {
     WidgetTester tester,
   ) async {
     expect(AppColors.primary, const Color(0xFF357E92));
-    expect(AppColors.primarySoft, const Color(0xFF8EDDF2));
+    expect(AppColors.primarySoft, const Color(0xFF90DDF2));
     expect(AppColors.primary, isNot(AppColors.primarySoft));
   });
 

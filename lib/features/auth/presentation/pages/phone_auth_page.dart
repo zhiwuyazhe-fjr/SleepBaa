@@ -1298,10 +1298,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     return _PencilSplitPage(
       unit: unit,
       bodyChildren: <Widget>[
-        AppDetailPageHeader(
-          title: '找回密码',
-          onBack: _returnToPreviousView,
-        ),
+        AppDetailPageHeader(title: '找回密码', onBack: _returnToPreviousView),
         SizedBox(height: 20 * unit),
         _PencilInputField(
           fieldKey: ValueKey<String>('auth-reset-phone-$_resetPhoneRemount'),
@@ -1373,10 +1370,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     return _PencilSplitPage(
       unit: unit,
       bodyChildren: <Widget>[
-        AppDetailPageHeader(
-          title: '重置密码',
-          onBack: _returnToPreviousView,
-        ),
+        AppDetailPageHeader(title: '重置密码', onBack: _returnToPreviousView),
         SizedBox(height: 10 * unit),
         Text(
           '短信验证已通过，现在请设置一个新的登录密码。',
@@ -1748,6 +1742,9 @@ class _AuthAccentColors {
     required this.disabled,
     required this.disabledForeground,
     required this.action,
+    required this.codeButtonBackground,
+    required this.codeButtonPressed,
+    required this.codeButtonForeground,
     required this.buttonShadow,
     required this.focusShadow,
     required this.infoIcon,
@@ -1761,6 +1758,9 @@ class _AuthAccentColors {
   final Color disabled;
   final Color disabledForeground;
   final Color action;
+  final Color codeButtonBackground;
+  final Color codeButtonPressed;
+  final Color codeButtonForeground;
   final Color buttonShadow;
   final Color focusShadow;
   final Color infoIcon;
@@ -1774,6 +1774,9 @@ class _AuthAccentColors {
     disabled: Color(0xFFCFE4EB),
     disabledForeground: Color(0xFF6F8890),
     action: Color(0xFF00697A),
+    codeButtonBackground: Color(0xFFBFE6F0),
+    codeButtonPressed: Color(0xFFA8D9E6),
+    codeButtonForeground: Color(0xFF004F5D),
     buttonShadow: Color(0x4A90DDF2),
     focusShadow: Color(0x142457CF),
     infoIcon: Color(0xFF204F96),
@@ -1793,6 +1796,9 @@ class _AuthAccentColors {
       disabled: Color(0xFFCFE4EB),
       disabledForeground: Color(0xFF6F8890),
       action: Color(0xFF00697A),
+      codeButtonBackground: Color(0xFF2C5C69),
+      codeButtonPressed: Color(0xFF347084),
+      codeButtonForeground: Color(0xFFEAFBFF),
       buttonShadow: Color(0x4A90DDF2),
       focusShadow: Color(0x142457CF),
       infoIcon: Color(0xFF204F96),
@@ -2212,21 +2218,38 @@ class _PencilSoftButton extends StatelessWidget {
       height: 56 * unit,
       child: FilledButton(
         onPressed: onPressed,
-        style: FilledButton.styleFrom(
-          padding: EdgeInsets.symmetric(horizontal: 10 * unit),
-          elevation: 0,
-          backgroundColor: accents.soft,
-          disabledBackgroundColor: appColors.surfaceMuted,
-          foregroundColor: accents.action,
-          disabledForegroundColor: appColors.textSecondary,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18 * unit),
-          ),
-          textStyle: Theme.of(context).textTheme.bodyMedium!.copyWith(
-            fontSize: 13 * unit,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        style:
+            FilledButton.styleFrom(
+              padding: EdgeInsets.symmetric(horizontal: 10 * unit),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18 * unit),
+              ),
+              textStyle: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                fontSize: 13 * unit,
+                fontWeight: FontWeight.w700,
+              ),
+            ).copyWith(
+              backgroundColor: WidgetStateProperty.resolveWith<Color>((
+                Set<WidgetState> states,
+              ) {
+                if (states.contains(WidgetState.disabled)) {
+                  return appColors.surfaceMuted;
+                }
+                if (states.contains(WidgetState.pressed)) {
+                  return accents.codeButtonPressed;
+                }
+                return accents.codeButtonBackground;
+              }),
+              foregroundColor: WidgetStateProperty.resolveWith<Color>((
+                Set<WidgetState> states,
+              ) {
+                if (states.contains(WidgetState.disabled)) {
+                  return appColors.textSecondary;
+                }
+                return accents.codeButtonForeground;
+              }),
+            ),
         child: FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(label, maxLines: 1),
