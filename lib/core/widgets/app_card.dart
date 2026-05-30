@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 
@@ -9,7 +10,7 @@ class AppCard extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(AppSpacing.xl),
-    this.color = AppColors.surface,
+    this.color,
     this.borderRadius,
     this.border,
     this.boxShadow,
@@ -19,7 +20,7 @@ class AppCard extends StatelessWidget {
 
   final Widget child;
   final EdgeInsetsGeometry padding;
-  final Color color;
+  final Color? color;
   final BorderRadius? borderRadius;
   final Border? border;
   final List<BoxShadow>? boxShadow;
@@ -28,9 +29,10 @@ class AppCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final BorderRadius effectiveRadius = borderRadius ?? AppRadius.cardLarge;
     final BoxDecoration decoration = BoxDecoration(
-      color: color,
+      color: color ?? appColors.surface,
       borderRadius: effectiveRadius,
       border: border,
       boxShadow: boxShadow ?? AppColors.cardShadow,

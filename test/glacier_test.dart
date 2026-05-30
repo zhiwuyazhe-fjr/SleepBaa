@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:sleep_dorm_app/app/app.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -163,21 +164,24 @@ void main() {
   testWidgets(
     'sleep preference action rows keep shared settings item baseline',
     (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
+      await _scrollToSleepPreferences(tester);
 
-      final Iterable<AppSettingsItem> settingsItems = tester.widgetList(
-        find.byType(AppSettingsItem),
-      );
       final List<String> sleepItemTitles = <String>[
         '睡前提醒时间',
         '睡前提醒',
         '晨间反馈提醒',
-        '宿舍动态提醒',
+        '寝室动态提醒',
         '智能建议',
       ];
+      final List<AppSettingsItem> settingsItems = tester
+          .widgetList<AppSettingsItem>(find.byType(AppSettingsItem))
+          .toList(growable: false);
 
       for (final String title in sleepItemTitles) {
-        final AppSettingsItem item = settingsItems.singleWhere(
+        final AppSettingsItem item = settingsItems.firstWhere(
           (AppSettingsItem candidate) => candidate.title == title,
         );
         expect(item.leadingWidth, 28, reason: title);
@@ -191,6 +195,9 @@ void main() {
   testWidgets('sleep preference rows match account and dorm entry heights', (
     WidgetTester tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await _pumpApp(tester, initialLocation: AppRoutes.profileAccountCenter);
     final double accountEntryHeight = tester
         .getSize(
@@ -206,11 +213,12 @@ void main() {
         .height;
 
     await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
+    await _scrollToSleepPreferences(tester);
     final List<String> sleepItemTitles = <String>[
       '睡前提醒时间',
       '睡前提醒',
       '晨间反馈提醒',
-      '宿舍动态提醒',
+      '寝室动态提醒',
       '智能建议',
     ];
 
@@ -228,12 +236,16 @@ void main() {
   testWidgets('sleep preference toggles are wider without stretching rows', (
     WidgetTester tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
+    await _scrollToSleepPreferences(tester);
 
     final List<String> switchItemTitles = <String>[
       '睡前提醒',
       '晨间反馈提醒',
-      '宿舍动态提醒',
+      '寝室动态提醒',
       '智能建议',
     ];
 
@@ -306,9 +318,13 @@ void main() {
   testWidgets('settings page exposes assistant reply motion entry', (
     WidgetTester tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
 
     expect(find.text('AI陪伴'), findsOneWidget);
+    await tester.ensureVisible(find.text('睡眠偏好'));
     expect(find.text('睡眠偏好'), findsOneWidget);
     expect(find.text('回复文字浮动'), findsOneWidget);
     expect(
@@ -317,7 +333,7 @@ void main() {
     );
   });
 
-  testWidgets('filled primary button uses welcome accent colors', (
+  testWidgets('filled primary button uses semantic action colors', (
     WidgetTester tester,
   ) async {
     const NightMoodPalette palette = NightMoodPalette(
@@ -340,9 +356,13 @@ void main() {
       moonGradientEnd: Color(0xFFEEEEEE),
     );
 
+    final AppSemanticColors appColors = AppSemanticColors.light(palette);
+
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(extensions: const <ThemeExtension<dynamic>>[palette]),
+        theme: ThemeData(
+          extensions: <ThemeExtension<dynamic>>[palette, appColors],
+        ),
         home: const Scaffold(
           body: Center(child: PrimaryButton(label: '保存')),
         ),
@@ -355,11 +375,11 @@ void main() {
 
     expect(
       button.style?.backgroundColor?.resolve(<WidgetState>{}),
-      palette.welcomeAccentColor,
+      appColors.accent,
     );
     expect(
       button.style?.foregroundColor?.resolve(<WidgetState>{}),
-      palette.welcomeTextOnAccent,
+      appColors.textOnAccent,
     );
 
     final RoundedRectangleBorder shape =
@@ -1046,7 +1066,11 @@ void main() {
   testWidgets('sleep goal slider expands and collapses from the settings row', (
     WidgetTester tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await _pumpRouteApp(tester, AppRoutes.profileSettings);
+    await _scrollToSleepPreferences(tester);
 
     expect(find.byType(SettingsPage), findsOneWidget);
     expect(find.text('目标睡眠时长'), findsOneWidget);
@@ -1084,6 +1108,11 @@ Future<void> _pumpApp(
   required String initialLocation,
 }) async {
   await _pumpRouteApp(tester, initialLocation);
+}
+
+Future<void> _scrollToSleepPreferences(WidgetTester tester) async {
+  await tester.ensureVisible(find.text('睡眠偏好'));
+  await tester.pumpAndSettle();
 }
 
 Future<void> _pumpGlacierApp(

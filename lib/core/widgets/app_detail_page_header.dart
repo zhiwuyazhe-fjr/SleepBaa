@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
@@ -13,18 +13,20 @@ class AppDetailPageHeader extends StatelessWidget {
     required this.onBack,
     this.titleKey,
     this.trailing,
-    this.foregroundColor = AppColors.textPrimary,
+    this.foregroundColor,
   });
 
   final String title;
   final VoidCallback onBack;
   final Key? titleKey;
   final Widget? trailing;
-  final Color foregroundColor;
+  final Color? foregroundColor;
 
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
+    final Color resolvedForeground =
+        foregroundColor ?? context.appColors.textPrimary;
     return Row(
       children: <Widget>[
         Material(
@@ -37,7 +39,7 @@ class AppDetailPageHeader extends StatelessWidget {
               child: Icon(
                 Icons.chevron_left_rounded,
                 size: AppSpacing.lg,
-                color: foregroundColor,
+                color: resolvedForeground,
               ),
             ),
           ),
@@ -51,7 +53,7 @@ class AppDetailPageHeader extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: AppTypography.sectionTitle(
               textTheme,
-            ).copyWith(color: foregroundColor),
+            ).copyWith(color: resolvedForeground),
           ),
         ),
         if (trailing != null) ...<Widget>[
@@ -71,23 +73,24 @@ class AppDetailPageAppBar extends StatelessWidget
     required this.onBack,
     this.titleKey,
     this.trailing,
-    this.foregroundColor = AppColors.textPrimary,
+    this.foregroundColor,
   });
 
   final String title;
   final VoidCallback onBack;
   final Key? titleKey;
   final Widget? trailing;
-  final Color foregroundColor;
+  final Color? foregroundColor;
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return AppBar(
       automaticallyImplyLeading: false,
-      backgroundColor: AppColors.background,
+      backgroundColor: appColors.pageBackground,
       elevation: 0,
       leadingWidth: 0,
       scrolledUnderElevation: 0,
@@ -100,7 +103,7 @@ class AppDetailPageAppBar extends StatelessWidget
           titleKey: titleKey,
           onBack: onBack,
           trailing: trailing,
-          foregroundColor: foregroundColor,
+          foregroundColor: foregroundColor ?? appColors.textPrimary,
         ),
       ),
     );

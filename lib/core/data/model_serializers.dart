@@ -58,6 +58,7 @@ abstract final class ModelSerializers {
         settings.homeQuickActionIds,
       ),
       'showHomeQuickActions': settings.showHomeQuickActions,
+      'themeMode': settings.themeMode.name,
       'assistantReplyMotionLevel': settings.assistantReplyMotionLevel.name,
       'selectedNightMood': settings.selectedNightMood?.name,
       'eveningEncouragementPeriodKey': settings.eveningEncouragementPeriodKey,
@@ -85,6 +86,9 @@ abstract final class ModelSerializers {
         _stringListFromDynamic(map['homeQuickActionIds']),
       ),
       showHomeQuickActions: map['showHomeQuickActions'] as bool? ?? false,
+      themeMode:
+          _appThemeModeFromName(map['themeMode'] as String?) ??
+          AppThemeMode.system,
       assistantReplyMotionLevel:
           _assistantReplyMotionLevelFromName(
             map['assistantReplyMotionLevel'] as String?,
@@ -839,6 +843,16 @@ abstract final class ModelSerializers {
     return _firstWhereOrNull(
       NightMood.values,
       (NightMood item) => item.name == value,
+    );
+  }
+
+  static AppThemeMode? _appThemeModeFromName(String? value) {
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    return _firstWhereOrNull(
+      AppThemeMode.values,
+      (AppThemeMode item) => item.name == value,
     );
   }
 

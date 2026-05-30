@@ -24,6 +24,7 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
+import 'package:sleep_dorm_app/core/data/model_serializers.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -151,14 +152,71 @@ void main() {
     expect(light.heroEnd, calm.heroGradientEnd);
 
     final AppSemanticColors dark = AppSemanticColors.dark(calm);
-    expect(dark.pageBackground, const Color(0xFF161A1E));
-    expect(dark.surface, const Color(0xFF20262B));
-    expect(dark.surfaceRaised, const Color(0xFF242A30));
-    expect(dark.textPrimary, AppColors.onDark);
-    expect(dark.textSecondary, AppColors.onDark.withAlpha(180));
-    expect(dark.accent, const Color(0xFF7FB8AA));
-    expect(dark.textOnAccent, const Color(0xFF102B28));
-    expect(dark.accentSoft, const Color(0xFF243531));
+    expect(dark.pageBackground, const Color(0xFF121416));
+    expect(dark.surface, const Color(0xFF1C2023));
+    expect(dark.surfaceMuted, const Color(0xFF24292D));
+    expect(dark.surfaceRaised, const Color(0xFF2A3034));
+    expect(dark.textPrimary, const Color(0xFFF3F5F4));
+    expect(dark.textSecondary, const Color(0xFFC4CBC8));
+    expect(dark.accent, const Color(0xFF8ECDB8));
+    expect(dark.textOnAccent, const Color(0xFF10221F));
+    expect(dark.accentDeep, const Color(0xFF6FAE99));
+    expect(dark.heroStart, isNot(dark.heroEnd));
+  });
+
+  test('user settings persist the selected app theme mode', () {
+    final UserSettings defaults = buildDefaultUserSettings();
+    expect(defaults.themeMode, AppThemeMode.system);
+
+    final Map<String, dynamic> encoded = ModelSerializers.userSettingsToMap(
+      defaults.copyWith(themeMode: AppThemeMode.dark),
+    );
+    expect(encoded['themeMode'], 'dark');
+
+    final UserSettings decoded = ModelSerializers.userSettingsFromMap(
+      encoded,
+    );
+    expect(decoded.themeMode, AppThemeMode.dark);
+
+    expect(
+      ModelSerializers.userSettingsFromMap(<String, dynamic>{
+        'themeMode': 'light',
+      }).themeMode,
+      AppThemeMode.light,
+    );
+    expect(
+      ModelSerializers.userSettingsFromMap(<String, dynamic>{
+        'themeMode': 'unknown',
+      }).themeMode,
+      AppThemeMode.system,
+    );
+  });
+
+  testWidgets('app applies dark semantic colors from user theme mode', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileSettings,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      ),
+    );
+
+    final BuildContext context = tester.element(find.byType(SettingsPage));
+    final ThemeData theme = Theme.of(context);
+    final AppSemanticColors appColors = context.appColors;
+    final AppSemanticColors expected = AppSemanticColors.dark(
+      NightMoodPalette.fromMood(NightMood.calm),
+    );
+
+    expect(theme.brightness, Brightness.dark);
+    expect(theme.scaffoldBackgroundColor, expected.pageBackground);
+    expect(appColors.pageBackground, expected.pageBackground);
+    expect(appColors.surface, expected.surface);
+    expect(appColors.accent, expected.accent);
   });
 
   test('app typography exposes approved home font roles', () {
@@ -335,6 +393,41 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(BottomNavShell.navBarKey), findsNothing);
+  });
+
+  testWidgets('settings can switch app appearance mode immediately', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileSettings,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.system,
+      ),
+    );
+
+    expect(find.text('显示与首页'), findsOneWidget);
+    expect(find.text('外观模式'), findsOneWidget);
+    expect(find.text('跟随系统'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('外观模式'));
+    await tester.tap(find.text('外观模式'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 240));
+    await tester.tap(find.text('深色').last);
+    await tester.pump();
+
+    final AppServices services = AppScope.of(
+      tester.element(find.byType(SettingsPage)),
+    );
+    expect(
+      services.settingsRepository.currentSettings.themeMode,
+      AppThemeMode.dark,
+    );
   });
 
   testWidgets('manual night mood flow saves mood and returns to settings', (
@@ -2219,10 +2312,13 @@ void main() {
           matching: find.byIcon(Icons.chevron_right_rounded),
         ),
       );
+      final AppSemanticColors editAppColors = tester
+          .element(find.byType(DormRulesEditPage))
+          .appColors;
       expect(quietTrailingText.style?.color, AppColors.textSecondary);
       expect(quietTrailingText.style?.fontWeight, FontWeight.w500);
       expect(quietTrailingChevron.size, 18);
-      expect(quietTrailingChevron.color, AppColors.textHint);
+      expect(quietTrailingChevron.color, editAppColors.textSecondary);
       expect(find.text('开始'), findsNothing);
       expect(find.text('结束'), findsNothing);
       expect(find.text('熄灯提醒'), findsOneWidget);

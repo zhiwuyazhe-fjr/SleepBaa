@@ -62,23 +62,24 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
   }
 
   static AppSemanticColors dark(NightMoodPalette palette) {
+    final Color accent = _darkAccentForMood(palette.mood);
     return AppSemanticColors(
-      pageBackground: const Color(0xFF161A1E),
-      surface: const Color(0xFF20262B),
-      surfaceMuted: const Color(0xFF20262B),
-      surfaceRaised: const Color(0xFF242A30),
-      borderSubtle: const Color(0x16FFFFFF),
-      textPrimary: AppColors.onDark,
-      textSecondary: AppColors.onDark.withAlpha(180),
-      textOnAccent: const Color(0xFF102B28),
-      accent: const Color(0xFF7FB8AA),
-      accentSoft: const Color(0xFF243531),
-      accentDeep: const Color(0xFF516B64),
-      heroStart: const Color(0xFF2B3A3A),
-      heroMid: const Color(0xFF243033),
-      heroEnd: const Color(0xFF1E2529),
-      darkGlass: const Color(0x24FFFFFF),
-      primaryButtonShadow: _primaryButtonShadow(const Color(0xFF7FB8AA)),
+      pageBackground: const Color(0xFF121416),
+      surface: const Color(0xFF1C2023),
+      surfaceMuted: const Color(0xFF24292D),
+      surfaceRaised: const Color(0xFF2A3034),
+      borderSubtle: const Color(0x29FFFFFF),
+      textPrimary: const Color(0xFFF3F5F4),
+      textSecondary: const Color(0xFFC4CBC8),
+      textOnAccent: const Color(0xFF10221F),
+      accent: accent,
+      accentSoft: _blendOnDark(accent, const Color(0xFF1C2023), 0.24),
+      accentDeep: _darkDeepForMood(palette.mood),
+      heroStart: _blendOnDark(palette.heroGradientStart, AppColors.onDark, 0.4),
+      heroMid: _blendOnDark(palette.heroGradientMid, AppColors.onDark, 0.32),
+      heroEnd: _blendOnDark(palette.heroGradientEnd, AppColors.onDark, 0.2),
+      darkGlass: const Color(0x2EFFFFFF),
+      primaryButtonShadow: _primaryButtonShadow(accent),
     );
   }
 
@@ -104,6 +105,28 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
         offset: Offset(0, 4),
       ),
     ];
+  }
+
+  static Color _darkAccentForMood(NightMood? mood) {
+    return switch (mood) {
+      NightMood.happy => const Color(0xFFD993AE),
+      NightMood.sad => const Color(0xFFD79A7E),
+      NightMood.calm => const Color(0xFF8ECDB8),
+      null => const Color(0xFF8CBFD0),
+    };
+  }
+
+  static Color _darkDeepForMood(NightMood? mood) {
+    return switch (mood) {
+      NightMood.happy => const Color(0xFFB87492),
+      NightMood.sad => const Color(0xFFB9785C),
+      NightMood.calm => const Color(0xFF6FAE99),
+      null => const Color(0xFF6EA5B8),
+    };
+  }
+
+  static Color _blendOnDark(Color color, Color base, double amount) {
+    return Color.lerp(base, color, amount)!;
   }
 
   @override

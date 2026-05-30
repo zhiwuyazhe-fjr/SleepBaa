@@ -7,6 +7,7 @@ import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -40,6 +41,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _dormAlertsEnabled = true;
   bool _smartSuggestionsEnabled = true;
   bool _showHomeQuickActions = false;
+  AppThemeMode _themeMode = AppThemeMode.system;
   AssistantReplyMotionLevel _assistantReplyMotionLevel =
       AssistantReplyMotionLevel.medium;
   TimeOfDay _bedtimeReminder = const TimeOfDay(hour: 23, minute: 10);
@@ -58,6 +60,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _dormAlertsEnabled = settings.dormAlertsEnabled;
     _smartSuggestionsEnabled = settings.smartSuggestionsEnabled;
     _showHomeQuickActions = settings.showHomeQuickActions;
+    _themeMode = settings.themeMode;
     _assistantReplyMotionLevel = settings.assistantReplyMotionLevel;
     _bedtimeReminder = settings.bedtimeReminder;
   }
@@ -140,6 +143,46 @@ class _SettingsPageState extends State<SettingsPage> {
     unawaited(_saveSettingsInBackground(services, nextSettings));
   }
 
+  Future<void> _changeThemeMode(
+    AppServices services,
+    AppThemeMode themeMode,
+  ) async {
+    if (themeMode == _themeMode) {
+      return;
+    }
+    final UserSettings nextSettings = services.profileFacade.currentSettings
+        .copyWith(themeMode: themeMode);
+    setState(() => _themeMode = themeMode);
+    services.settingsRepository.replaceLocalSettings(nextSettings);
+    unawaited(_saveSettingsInBackground(services, nextSettings));
+    unawaited(notifyPassiveToast(context, message: '外观模式已更新。'));
+  }
+
+  Future<void> _showThemeModeSheet(AppServices services) async {
+    final AppThemeMode? selected = await showAppModal<AppThemeMode>(
+      context,
+      spec: AppSelectionSheetSpec<AppThemeMode>(
+        title: '外观模式',
+        description: '控制全局浅色、深色或跟随系统显示。',
+        selectedValue: _themeMode,
+        useSafeArea: true,
+        showDragHandle: true,
+        options: AppThemeMode.values
+            .map(
+              (AppThemeMode mode) => AppSelectionOption<AppThemeMode>(
+                value: mode,
+                label: _themeModeTitle(mode),
+              ),
+            )
+            .toList(growable: false),
+      ),
+    );
+    if (selected == null || !mounted) {
+      return;
+    }
+    await _changeThemeMode(services, selected);
+  }
+
   Future<void> _saveSettingsInBackground(
     AppServices services,
     UserSettings settings,
@@ -214,6 +257,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
     return Scaffold(
       appBar: AppDetailPageAppBar(
         title: '设置',
@@ -237,13 +281,13 @@ class _SettingsPageState extends State<SettingsPage> {
               children: <Widget>[
                 if (services.authRepository.lastAuthError != null) ...<Widget>[
                   AppCard(
-                    color: AppColors.surfaceMuted,
+                    color: appColors.surfaceMuted,
                     padding: const EdgeInsets.all(AppSpacing.sm),
                     borderRadius: AppRadius.compactCard,
                     child: Text(
                       services.authRepository.lastAuthError!,
                       style: textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: appColors.textSecondary,
                         height: 1.35,
                       ),
                     ),
@@ -256,7 +300,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     AppSettingsItem(
                       icon: Icons.person_outline_rounded,
                       iconColor: context.nightMoodPalette.primaryDeep,
-                      iconBackgroundColor: AppColors.surfaceMuted,
+                      iconBackgroundColor: appColors.surfaceMuted,
                       title: '账号管理',
                       titleStyle: textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
@@ -345,7 +389,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       icon: Icons.auto_awesome_rounded,
                       title: '回复文字浮动',
                       iconColor: context.nightMoodPalette.primaryDeep,
-                      iconBackgroundColor: AppColors.surfaceMuted,
+                      iconBackgroundColor: appColors.surfaceMuted,
                       trailing: _SettingsValueTrailing(
                         value: _assistantReplyMotionTitle(
                           _assistantReplyMotionLevel,
@@ -362,12 +406,22 @@ class _SettingsPageState extends State<SettingsPage> {
                     AppSettingsItem(
                       icon: Icons.nightlight_round,
                       iconColor: context.nightMoodPalette.primaryDeep,
-                      iconBackgroundColor: AppColors.surfaceMuted,
+                      iconBackgroundColor: appColors.surfaceMuted,
                       title: '打开心情选择流程',
                       titleStyle: textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                       onTap: () => context.push(AppRoutes.manualNightMood),
+                    ),
+                    AppSettingsItem(
+                      icon: Icons.contrast_rounded,
+                      iconColor: context.nightMoodPalette.primaryDeep,
+                      iconBackgroundColor: appColors.surfaceMuted,
+                      title: '外观模式',
+                      trailing: AppSettingsValueTrailing(
+                        value: _themeModeTitle(_themeMode),
+                      ),
+                      onTap: () => _showThemeModeSheet(services),
                     ),
                     _SettingsSwitchRow(
                       icon: Icons.grid_view_rounded,
@@ -404,7 +458,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           icon: Icons.schedule_rounded,
                           title: '睡前提醒时间',
                           iconColor: context.nightMoodPalette.primaryDeep,
-                          iconBackgroundColor: AppColors.surfaceMuted,
+                          iconBackgroundColor: appColors.surfaceMuted,
                           trailing: _SettingsValueTrailing(
                             value: Formatters.formatClock(_bedtimeReminder),
                           ),
@@ -498,7 +552,7 @@ class _SettingsSliderRow extends StatelessWidget {
         AppSettingsItem(
           icon: Icons.hotel_rounded,
           iconColor: context.nightMoodPalette.primaryDeep,
-          iconBackgroundColor: AppColors.surfaceMuted,
+          iconBackgroundColor: context.appColors.surfaceMuted,
           title: title,
           trailing: _SettingsValueTrailing(
             value: valueLabel,
@@ -549,7 +603,7 @@ class _SleepGoalSliderPanel extends StatelessWidget {
               Text(
                 '6 小时',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textHint,
+                  color: context.appColors.textSecondary,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -557,7 +611,7 @@ class _SleepGoalSliderPanel extends StatelessWidget {
               Text(
                 '9 小时',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textHint,
+                  color: context.appColors.textSecondary,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -601,7 +655,7 @@ class _SettingsSwitchRow extends StatelessWidget {
     return AppSettingsItem(
       icon: icon,
       iconColor: context.nightMoodPalette.primaryDeep,
-      iconBackgroundColor: AppColors.surfaceMuted,
+      iconBackgroundColor: context.appColors.surfaceMuted,
       title: title,
       trailing: AppSettingsToggle(
         key: ValueKey<String>('settings-toggle-$title'),
@@ -633,12 +687,12 @@ class _SettingsValueTrailing extends StatelessWidget {
         Text(
           value,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppColors.textSecondary,
+            color: context.appColors.textSecondary,
             fontWeight: FontWeight.w500,
           ),
         ),
         const SizedBox(width: AppSpacing.xxs),
-        Icon(icon, size: 18, color: AppColors.textHint),
+        Icon(icon, size: 18, color: context.appColors.textSecondary),
       ],
     );
   }
@@ -769,11 +823,20 @@ String _settingsSignature(UserSettings settings) {
     settings.dormAlertsEnabled,
     settings.smartSuggestionsEnabled,
     settings.showHomeQuickActions,
+    settings.themeMode.name,
     bedtimeReminder.hour,
     bedtimeReminder.minute,
     settings.assistantReplyMotionLevel.name,
     settings.selectedNightMood?.name,
   ].join('|');
+}
+
+String _themeModeTitle(AppThemeMode mode) {
+  return switch (mode) {
+    AppThemeMode.system => '跟随系统',
+    AppThemeMode.light => '浅色',
+    AppThemeMode.dark => '深色',
+  };
 }
 
 String _assistantReplyMotionTitle(AssistantReplyMotionLevel level) {

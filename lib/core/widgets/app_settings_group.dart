@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
@@ -97,6 +97,7 @@ class AppSettingsItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     Widget row = Padding(
       padding: padding,
       child: ConstrainedBox(
@@ -107,7 +108,7 @@ class AppSettingsItem extends StatelessWidget {
             if (icon != null) ...<Widget>[
               _SettingsItemIcon(
                 icon: icon!,
-                iconColor: iconColor ?? AppColors.textPrimary,
+                iconColor: iconColor ?? appColors.textPrimary,
                 iconSize: iconSize,
                 backgroundColor: iconBackgroundColor,
                 containerKey: iconContainerKey,
@@ -132,10 +133,10 @@ class AppSettingsItem extends StatelessWidget {
               trailing!,
             ] else if (onTap != null) ...<Widget>[
               const SizedBox(width: AppSpacing.sm),
-              const Icon(
+              Icon(
                 Icons.chevron_right_rounded,
                 size: 18,
-                color: AppColors.textHint,
+                color: appColors.textSecondary,
               ),
             ],
           ],
@@ -176,6 +177,7 @@ class AppSettingsValueTrailing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final Widget row = Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -187,7 +189,7 @@ class AppSettingsValueTrailing extends StatelessWidget {
             overflow: overflow,
             textAlign: TextAlign.end,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppColors.textSecondary,
+              color: appColors.textSecondary,
               fontWeight: FontWeight.w500,
               height: 1.35,
             ),
@@ -195,10 +197,10 @@ class AppSettingsValueTrailing extends StatelessWidget {
         ),
         if (showChevron) ...<Widget>[
           const SizedBox(width: AppSpacing.xxs),
-          const Icon(
+          Icon(
             Icons.chevron_right_rounded,
             size: 18,
-            color: AppColors.textHint,
+            color: appColors.textSecondary,
           ),
         ],
       ],
@@ -221,6 +223,7 @@ class AppSettingsToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     return Semantics(
       toggled: value,
       child: AnimatedContainer(
@@ -229,12 +232,12 @@ class AppSettingsToggle extends StatelessWidget {
         height: 26,
         padding: const EdgeInsets.all(2),
         decoration: BoxDecoration(
-          color: value ? palette.primarySoft : AppColors.surfaceMuted,
+          color: value ? palette.primarySoft : appColors.surfaceMuted,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: value
                 ? palette.primary.withValues(alpha: 0.28)
-                : AppColors.surfaceBorder,
+                : appColors.borderSubtle,
           ),
         ),
         child: AnimatedAlign(
@@ -246,7 +249,7 @@ class AppSettingsToggle extends StatelessWidget {
             height: 22,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: value ? palette.primary : AppColors.textHint,
+              color: value ? palette.primary : appColors.textSecondary,
             ),
           ),
         ),
@@ -326,7 +329,7 @@ class AppSettingsDetailItem extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
+              color: context.appColors.textSecondary,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -334,7 +337,7 @@ class AppSettingsDetailItem extends StatelessWidget {
           Text(
             value,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.textPrimary,
+              color: context.appColors.textPrimary,
               height: 1.35,
             ),
           ),

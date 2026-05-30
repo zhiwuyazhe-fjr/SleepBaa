@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 enum HomeMode { preSleep, postSleep }
 
+enum AppThemeMode { system, light, dark }
+
 enum NightMood { happy, sad, calm }
 
 enum RecommendationType { audio, quickAction }
@@ -454,6 +456,7 @@ class UserSettings {
     required this.smartSuggestionsEnabled,
     this.homeQuickActionIds = kDefaultHomeQuickActionIds,
     this.showHomeQuickActions = false,
+    this.themeMode = AppThemeMode.system,
     this.assistantReplyMotionLevel = AssistantReplyMotionLevel.medium,
     this.selectedNightMood,
     this.eveningEncouragementPeriodKey,
@@ -470,6 +473,7 @@ class UserSettings {
   final bool smartSuggestionsEnabled;
   final List<String> homeQuickActionIds;
   final bool showHomeQuickActions;
+  final AppThemeMode themeMode;
   final AssistantReplyMotionLevel assistantReplyMotionLevel;
   final NightMood? selectedNightMood;
   final String? eveningEncouragementPeriodKey;
@@ -486,6 +490,7 @@ class UserSettings {
     bool? smartSuggestionsEnabled,
     List<String>? homeQuickActionIds,
     bool? showHomeQuickActions,
+    AppThemeMode? themeMode,
     AssistantReplyMotionLevel? assistantReplyMotionLevel,
     NightMood? selectedNightMood,
     bool clearSelectedNightMood = false,
@@ -510,6 +515,7 @@ class UserSettings {
         homeQuickActionIds ?? this.homeQuickActionIds,
       ),
       showHomeQuickActions: showHomeQuickActions ?? this.showHomeQuickActions,
+      themeMode: themeMode ?? this.themeMode,
       assistantReplyMotionLevel:
           assistantReplyMotionLevel ?? this.assistantReplyMotionLevel,
       selectedNightMood: clearSelectedNightMood

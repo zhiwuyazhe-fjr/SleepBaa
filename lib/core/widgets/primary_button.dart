@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
@@ -42,6 +42,7 @@ class PrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     final VoidCallback? resolvedOnPressed = onPressed == null || isLoading
         ? null
         : AppHaptics.confirmHandler(onPressed);
@@ -57,9 +58,9 @@ class PrimaryButton extends StatelessWidget {
         borderRadius: borderRadius ?? AppRadius.button,
       ),
       elevation: 0,
-      backgroundColor: _backgroundColor(palette),
-      foregroundColor: foregroundColor ?? _foregroundColor(palette),
-      side: _borderSide(),
+      backgroundColor: _backgroundColor(palette, appColors),
+      foregroundColor: foregroundColor ?? _foregroundColor(palette, appColors),
+      side: _borderSide(appColors),
       textStyle: buttonTextStyle,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.standard,
@@ -76,7 +77,7 @@ class PrimaryButton extends StatelessWidget {
             child: CircularProgressIndicator(
               strokeWidth: 2.2,
               valueColor: AlwaysStoppedAnimation<Color>(
-                foregroundColor ?? _foregroundColor(palette),
+                foregroundColor ?? _foregroundColor(palette, appColors),
               ),
             ),
           ),
@@ -120,29 +121,29 @@ class PrimaryButton extends StatelessWidget {
     };
   }
 
-  Color _backgroundColor(NightMoodPalette palette) {
+  Color _backgroundColor(NightMoodPalette palette, AppSemanticColors colors) {
     if (backgroundColor != null) {
       return backgroundColor!;
     }
     return switch (variant) {
-      PrimaryButtonVariant.filled => palette.welcomeAccentColor,
-      PrimaryButtonVariant.soft => palette.primarySoft,
+      PrimaryButtonVariant.filled => colors.accent,
+      PrimaryButtonVariant.soft => colors.accentSoft,
       PrimaryButtonVariant.ghost => Colors.transparent,
     };
   }
 
-  Color _foregroundColor(NightMoodPalette palette) {
+  Color _foregroundColor(NightMoodPalette palette, AppSemanticColors colors) {
     return switch (variant) {
-      PrimaryButtonVariant.filled => palette.welcomeTextOnAccent,
-      PrimaryButtonVariant.soft => palette.primaryDeep,
-      PrimaryButtonVariant.ghost => AppColors.textPrimary,
+      PrimaryButtonVariant.filled => colors.textOnAccent,
+      PrimaryButtonVariant.soft => colors.accentDeep,
+      PrimaryButtonVariant.ghost => colors.textPrimary,
     };
   }
 
-  BorderSide? _borderSide() {
+  BorderSide? _borderSide(AppSemanticColors colors) {
     return switch (variant) {
       PrimaryButtonVariant.ghost => BorderSide(
-        color: borderColor ?? AppColors.surfaceBorder,
+        color: borderColor ?? colors.borderSubtle,
       ),
       _ => null,
     };
