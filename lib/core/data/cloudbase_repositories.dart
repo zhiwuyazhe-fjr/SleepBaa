@@ -963,6 +963,10 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   VerifiedPhoneIdentity? _cachedVerifiedIdentity;
   UserProfile? _cachedAuthProfile;
   bool _currentUserRestoredFromAuthProfileCache = false;
+  bool _hasPendingEquippedBadgeId = false;
+  String? _pendingEquippedBadgeId;
+  bool _hasPendingSelectedDormBadgeId = false;
+  String? _pendingSelectedDormBadgeId;
   static const Duration _authRevalidationInterval = Duration(minutes: 5);
 
   @override
@@ -1477,6 +1481,10 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
               equippedBadgeId: equippedBadgeId,
               clearEquippedBadge: clearEquippedBadge,
             );
+    if (_appApiClient.isConfigured) {
+      _hasPendingEquippedBadgeId = true;
+      _pendingEquippedBadgeId = next.equippedBadgeId;
+    }
     _currentUser = next;
     notifyListeners();
     if (_appApiClient.isConfigured) {
@@ -1552,6 +1560,10 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
               selectedDormBadgeId: selectedDormBadgeId,
               clearSelectedDormBadgeId: clearSelectedDormBadgeId,
             );
+    if (_appApiClient.isConfigured) {
+      _hasPendingSelectedDormBadgeId = true;
+      _pendingSelectedDormBadgeId = next.selectedDormBadgeId;
+    }
     _currentUser = next;
     notifyListeners();
     if (_appApiClient.isConfigured) {
@@ -2305,6 +2317,43 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       preferFreshSnapshotForCachedProfile:
           _currentUserRestoredFromAuthProfileCache,
     );
+    final bool hasEquippedBadgeSnapshot = rawUser.containsKey(
+      'equippedBadgeId',
+    );
+    String? nextEquippedBadgeId = hasEquippedBadgeSnapshot
+        ? snapshot.user.equippedBadgeId
+        : _currentUser.equippedBadgeId;
+    bool clearEquippedBadge =
+        hasEquippedBadgeSnapshot && snapshot.user.equippedBadgeId == null;
+    if (_hasPendingEquippedBadgeId) {
+      if (hasEquippedBadgeSnapshot &&
+          snapshot.user.equippedBadgeId == _pendingEquippedBadgeId) {
+        _hasPendingEquippedBadgeId = false;
+        _pendingEquippedBadgeId = null;
+      } else {
+        nextEquippedBadgeId = _pendingEquippedBadgeId;
+        clearEquippedBadge = _pendingEquippedBadgeId == null;
+      }
+    }
+    final bool hasSelectedDormBadgeSnapshot = rawUser.containsKey(
+      'selectedDormBadgeId',
+    );
+    String? nextSelectedDormBadgeId = hasSelectedDormBadgeSnapshot
+        ? snapshot.user.selectedDormBadgeId
+        : _currentUser.selectedDormBadgeId;
+    bool clearSelectedDormBadgeId =
+        hasSelectedDormBadgeSnapshot &&
+        snapshot.user.selectedDormBadgeId == null;
+    if (_hasPendingSelectedDormBadgeId) {
+      if (hasSelectedDormBadgeSnapshot &&
+          snapshot.user.selectedDormBadgeId == _pendingSelectedDormBadgeId) {
+        _hasPendingSelectedDormBadgeId = false;
+        _pendingSelectedDormBadgeId = null;
+      } else {
+        nextSelectedDormBadgeId = _pendingSelectedDormBadgeId;
+        clearSelectedDormBadgeId = _pendingSelectedDormBadgeId == null;
+      }
+    }
     _currentUser = _currentUser.copyWith(
       uid: snapshot.user.uid,
       displayName: snapshot.user.displayName,
@@ -2313,21 +2362,13 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       earnedBadgeIds: rawUser.containsKey('earnedBadgeIds')
           ? snapshot.user.earnedBadgeIds
           : _currentUser.earnedBadgeIds,
-      equippedBadgeId: rawUser.containsKey('equippedBadgeId')
-          ? snapshot.user.equippedBadgeId
-          : _currentUser.equippedBadgeId,
-      clearEquippedBadge:
-          rawUser.containsKey('equippedBadgeId') &&
-          snapshot.user.equippedBadgeId == null,
+      equippedBadgeId: nextEquippedBadgeId,
+      clearEquippedBadge: clearEquippedBadge,
       showDormPulseBadge: rawUser.containsKey('showDormPulseBadge')
           ? snapshot.user.showDormPulseBadge
           : _currentUser.showDormPulseBadge,
-      selectedDormBadgeId: rawUser.containsKey('selectedDormBadgeId')
-          ? snapshot.user.selectedDormBadgeId
-          : _currentUser.selectedDormBadgeId,
-      clearSelectedDormBadgeId:
-          rawUser.containsKey('selectedDormBadgeId') &&
-          snapshot.user.selectedDormBadgeId == null,
+      selectedDormBadgeId: nextSelectedDormBadgeId,
+      clearSelectedDormBadgeId: clearSelectedDormBadgeId,
       dormId: snapshot.user.dormId,
       phoneNumber: snapshotPhone?.trim().isNotEmpty == true
           ? snapshotPhone

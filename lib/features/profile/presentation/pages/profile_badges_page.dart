@@ -173,10 +173,9 @@ class _ProfileBadgesPageState extends State<ProfileBadgesPage> {
                         : screenRatio < 0.42
                         ? 2
                         : 3;
-                    final double tileAspectRatio =
-                        widget.mode == BadgeCatalogMode.dorm
-                        ? (crossAxisCount == 4 ? 0.88 : 0.78)
-                        : (crossAxisCount == 4 ? 0.8 : 0.7);
+                    final double tileAspectRatio = crossAxisCount == 4
+                        ? 0.88
+                        : 0.78;
 
                     late final String countLabel;
                     late final List<Widget> catalogChildren;
@@ -464,7 +463,7 @@ class _BadgeCatalogModeSwitch extends StatelessWidget {
       decoration: BoxDecoration(
         color: appColors.surface,
         borderRadius: AppRadius.pill,
-        border: Border.all(color: appColors.accentSoft.withAlpha(150)),
+        border: Border.all(color: appColors.borderSubtle),
       ),
       padding: const EdgeInsets.all(4),
       child: Row(
@@ -499,6 +498,7 @@ class _BadgeCatalogModeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
+    final bool dark = Theme.of(context).brightness == Brightness.dark;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -510,7 +510,9 @@ class _BadgeCatalogModeButton extends StatelessWidget {
           curve: Curves.easeOut,
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: selected ? appColors.accent : Colors.transparent,
+            color: selected
+                ? (dark ? appColors.accentSoft : appColors.accent)
+                : Colors.transparent,
             borderRadius: AppRadius.pill,
           ),
           alignment: Alignment.center,
@@ -518,7 +520,7 @@ class _BadgeCatalogModeButton extends StatelessWidget {
             mode.title,
             style: AppTypography.meta(textTheme).copyWith(
               color: selected
-                  ? appColors.textOnAccent
+                  ? (dark ? appColors.accentDeep : appColors.textOnAccent)
                   : appColors.textSecondary,
               fontWeight: FontWeight.w800,
             ),
@@ -976,7 +978,7 @@ class _ProfileBadgeTileVisual extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double tileSize = constraints.maxWidth;
-        final double visualSize = tileSize * 0.76;
+        final double visualSize = tileSize * 0.72;
         final double ringSize = visualSize * 0.61;
         final double ringStroke = visualSize * (isDisplayed ? 0.022 : 0.017);
 
