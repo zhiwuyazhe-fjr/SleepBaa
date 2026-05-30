@@ -631,7 +631,7 @@ void main() {
     expect(accountResetLabel.style?.color, appColors.textSecondary);
   });
 
-  testWidgets('phone auth dark mode only mutes the primary light blue', (
+  testWidgets('phone auth dark mode only mutes unselected login method blue', (
     WidgetTester tester,
   ) async {
     await _pumpApp(
@@ -651,7 +651,7 @@ void main() {
     final FilledButton submitButton = tester.widget<FilledButton>(submitFinder);
     expect(
       submitButton.style?.backgroundColor?.resolve(<WidgetState>{}),
-      const Color(0xFF72858E),
+      const Color(0xFF90DDF2),
     );
     expect(
       submitButton.style?.backgroundColor?.resolve(<WidgetState>{
@@ -670,8 +670,8 @@ void main() {
     final Material codeSegment = tester.widget<Material>(
       find.byKey(const ValueKey<String>('auth-login-method-code')),
     );
-    expect(passwordSegment.color, const Color(0xFF72858E));
-    expect(codeSegment.color, const Color(0xFFE8F7FB));
+    expect(passwordSegment.color, const Color(0xFF90DDF2));
+    expect(codeSegment.color, const Color(0xFFBFD1D8));
 
     final Text forgotPassword = tester.widget<Text>(find.text('忘记密码？'));
     expect(forgotPassword.style?.color, const Color(0xFF00697A));

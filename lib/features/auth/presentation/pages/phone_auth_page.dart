@@ -1786,8 +1786,8 @@ class _AuthAccentColors {
     }
 
     return const _AuthAccentColors(
-      accent: Color(0xFF72858E),
-      soft: Color(0xFFE8F7FB),
+      accent: Color(0xFF90DDF2),
+      soft: Color(0xFFBFD1D8),
       foreground: Color(0xFF004F5D),
       pressed: Color(0xFF7CCDE5),
       disabled: Color(0xFFCFE4EB),
