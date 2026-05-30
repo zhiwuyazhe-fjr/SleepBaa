@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
@@ -47,10 +47,12 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    final AppSemanticColors appColors = context.appColors;
     final NightMoodPalette palette = context.nightMoodPalette;
     final TextTheme textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
+      backgroundColor: appColors.pageBackground,
       body: SafeArea(
         child: ListenableBuilder(
           listenable: services.interferenceProbeController,
@@ -87,7 +89,7 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
                         '进入后小眠已经再次帮你检测啦',
                         style: AppTypography.bodyMuted(
                           textTheme,
-                        ).copyWith(color: AppColors.textSecondary),
+                        ).copyWith(color: appColors.textSecondary),
                       ),
                     ],
                   ),
@@ -99,7 +101,7 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
                   titleStyle: AppTypography.sectionTitle(textTheme),
                   actionStyle: AppTypography.meta(
                     textTheme,
-                  ).copyWith(color: AppColors.textSecondary),
+                  ).copyWith(color: appColors.textSecondary),
                   onAction: () => context.pop(),
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -118,7 +120,7 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
                 AppCard(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   borderRadius: AppRadius.surfacePrimary,
-                  color: AppColors.surfaceMuted,
+                  color: appColors.surfaceMuted,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -131,7 +133,7 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
                         '如果你觉得这些结果还不够完整，可以把当下的感受、舍友动态，或者刚刚发生的小插曲告诉小眠，它会继续帮你一起梳理。',
                         style: AppTypography.bodyMuted(
                           textTheme,
-                        ).copyWith(color: AppColors.textSecondary),
+                        ).copyWith(color: appColors.textSecondary),
                       ),
                       const SizedBox(height: AppSpacing.md),
                       PrimaryButton(
@@ -161,6 +163,7 @@ class _FactorDetailCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
     final _FactorVisual visual = _visualOf(factor.type, palette);
     final bool isWorking = factor.status == InterferenceFactorStatus.measuring;
@@ -195,7 +198,7 @@ class _FactorDetailCard extends StatelessWidget {
                       _headlineFor(factor),
                       style: AppTypography.bodyMuted(
                         textTheme,
-                      ).copyWith(color: AppColors.textSecondary),
+                      ).copyWith(color: appColors.textSecondary),
                     ),
                   ],
                 ),
@@ -276,13 +279,14 @@ class _MetaChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
+        color: appColors.surfaceMuted,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text('$label  $value', style: AppTypography.chip(textTheme)),

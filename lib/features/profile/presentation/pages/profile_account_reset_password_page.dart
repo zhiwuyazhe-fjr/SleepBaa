@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
@@ -19,7 +20,6 @@ class AccountResetPasswordPage extends StatefulWidget {
 
 class _AccountResetPasswordPageState extends State<AccountResetPasswordPage> {
   static const double _designWidth = 390;
-  static const Color _cardBorder = Color(0xFFDFE3E7);
   static const Color _accentBlue = Color(0xFF90DDF2);
   static const Color _accentBlueSoft = Color(0xFFE8F7FB);
   static const Color _accentBlueDeep = Color(0xFF004F5D);
@@ -27,12 +27,7 @@ class _AccountResetPasswordPageState extends State<AccountResetPasswordPage> {
   static const Color _accentBlueDisabled = Color(0xFFCFE4EB);
   static const Color _accentBlueDisabledText = Color(0xFF6F8890);
   static const Color _successBlue = Color(0xFF4EA8C2);
-  static const Color _surfaceMuted = Color(0xFFF2F4F6);
   static const Color _surfaceSoftDisabled = Color(0xFFE9EFF2);
-  static const Color _textPrimary = Color(0xFF2F3336);
-  static const Color _textSecondary = Color(0xFF5B6063);
-  static const Color _textMuted = Color(0xFF57606B);
-  static const Color _textHint = Color(0xFFA0A0A0);
   static const Color _actionText = Color(0xFF00697A);
   static const Color _buttonShadow = Color(0x4A90DDF2);
 
@@ -329,7 +324,6 @@ class _AccountResetPasswordPageState extends State<AccountResetPasswordPage> {
       bodyChildren: <Widget>[
         AppDetailPageHeader(
           title: '找回密码',
-          foregroundColor: _textPrimary,
           onBack: _handleBack,
         ),
         SizedBox(height: 10 * unit),
@@ -341,7 +335,7 @@ class _AccountResetPasswordPageState extends State<AccountResetPasswordPage> {
             context,
             size: 15 * unit,
             weight: FontWeight.w500,
-            color: _textMuted,
+            color: context.appColors.textSecondary,
             height: 1.5,
           ),
         ),
@@ -413,7 +407,6 @@ class _AccountResetPasswordPageState extends State<AccountResetPasswordPage> {
       bodyChildren: <Widget>[
         AppDetailPageHeader(
           title: '重置密码',
-          foregroundColor: _textPrimary,
           onBack: _handleBack,
         ),
         SizedBox(height: 10 * unit),
@@ -423,7 +416,7 @@ class _AccountResetPasswordPageState extends State<AccountResetPasswordPage> {
             context,
             size: 15 * unit,
             weight: FontWeight.w500,
-            color: _textMuted,
+            color: context.appColors.textSecondary,
             height: 1.5,
           ),
         ),
@@ -483,6 +476,7 @@ class _AccountResetPasswordPageState extends State<AccountResetPasswordPage> {
   }
 
   Widget _buildSuccessPage(BuildContext context, double unit) {
+    final AppSemanticColors appColors = context.appColors;
     return _AccountPencilSplitPage(
       unit: unit,
       bodyChildren: <Widget>[
@@ -492,7 +486,7 @@ class _AccountResetPasswordPageState extends State<AccountResetPasswordPage> {
             context,
             size: 32 * unit,
             weight: FontWeight.w700,
-            color: _textPrimary,
+            color: context.appColors.textPrimary,
           ),
         ),
         SizedBox(height: 12 * unit),
@@ -502,7 +496,7 @@ class _AccountResetPasswordPageState extends State<AccountResetPasswordPage> {
             context,
             size: 15 * unit,
             weight: FontWeight.w500,
-            color: _textMuted,
+            color: context.appColors.textSecondary,
             height: 1.5,
           ),
         ),
@@ -511,9 +505,9 @@ class _AccountResetPasswordPageState extends State<AccountResetPasswordPage> {
           height: 180 * unit,
           width: double.infinity,
           decoration: BoxDecoration(
-            color: _surfaceMuted,
+            color: context.appColors.surfaceMuted,
             borderRadius: BorderRadius.circular(28 * unit),
-            border: Border.all(color: _cardBorder),
+            border: Border.all(color: context.appColors.borderSubtle),
           ),
           child: Center(
             child: Container(
@@ -526,7 +520,7 @@ class _AccountResetPasswordPageState extends State<AccountResetPasswordPage> {
               child: Icon(
                 Icons.check_rounded,
                 size: 42 * unit,
-                color: Colors.white,
+                color: appColors.textOnAccent,
               ),
             ),
           ),
@@ -565,7 +559,7 @@ class _AccountResetPasswordPageState extends State<AccountResetPasswordPage> {
             context,
             size: 13 * unit,
             weight: FontWeight.w600,
-            color: _textSecondary,
+            color: context.appColors.textSecondary,
           ),
         ),
         SizedBox(height: 6 * unit),
@@ -609,13 +603,16 @@ class _AccountResetPasswordPageState extends State<AccountResetPasswordPage> {
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    final AppSemanticColors appColors = context.appColors;
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final bool hasVisibleKeyboard = keyboardInset > 0;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark,
+      value: Theme.of(context).brightness == Brightness.dark
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: appColors.pageBackground,
         resizeToAvoidBottomInset: false,
         body: PopScope<void>(
           canPop: _step == _AccountResetStep.verify && !hasVisibleKeyboard,
@@ -742,6 +739,7 @@ class _AccountPencilInputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -750,7 +748,7 @@ class _AccountPencilInputField extends StatelessWidget {
           style: Theme.of(context).textTheme.bodyMedium!.copyWith(
             fontSize: 13 * scaleUnit,
             fontWeight: FontWeight.w600,
-            color: _AccountResetPasswordPageState._textSecondary,
+            color: appColors.textSecondary,
           ),
         ),
         SizedBox(height: 6 * scaleUnit),
@@ -826,7 +824,8 @@ class _AccountPencilBareInputState extends State<_AccountPencilBareInput> {
 
   @override
   Widget build(BuildContext context) {
-    final Color borderColor = _AccountResetPasswordPageState._cardBorder;
+    final AppSemanticColors appColors = context.appColors;
+    final Color borderColor = appColors.borderSubtle;
     final double borderWidth = widget.scaleUnit;
     final bool showsClearButton = widget.clearSemanticsLabel != null;
     final Widget? suffixIcon = showsClearButton || widget.obscureText
@@ -851,7 +850,7 @@ class _AccountPencilBareInputState extends State<_AccountPencilBareInput> {
                         ? Icons.visibility_outlined
                         : Icons.visibility_off_outlined,
                     size: 20 * widget.scaleUnit,
-                    color: _AccountResetPasswordPageState._textHint,
+                    color: appColors.textSecondary,
                   ),
                 ),
             ],
@@ -861,7 +860,7 @@ class _AccountPencilBareInputState extends State<_AccountPencilBareInput> {
     return Container(
       height: 56 * widget.scaleUnit,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: appColors.surface,
         borderRadius: BorderRadius.circular(18 * widget.scaleUnit),
         border: Border.all(color: borderColor, width: math.max(1, borderWidth)),
         boxShadow: const <BoxShadow>[],
@@ -885,7 +884,7 @@ class _AccountPencilBareInputState extends State<_AccountPencilBareInput> {
         style: Theme.of(context).textTheme.bodyMedium!.copyWith(
           fontSize: 14 * widget.scaleUnit,
           fontWeight: FontWeight.w500,
-          color: _AccountResetPasswordPageState._textPrimary,
+          color: appColors.textPrimary,
         ),
         decoration: InputDecoration(
           hintText: widget.hintText,
@@ -893,8 +892,8 @@ class _AccountPencilBareInputState extends State<_AccountPencilBareInput> {
             fontSize: 14 * widget.scaleUnit,
             fontWeight: widget.obscureText ? FontWeight.w600 : FontWeight.w500,
             color: widget.obscureText
-                ? _AccountResetPasswordPageState._textPrimary
-                : _AccountResetPasswordPageState._textHint,
+                ? appColors.textPrimary
+                : appColors.textSecondary.withAlpha(150),
           ),
           border: InputBorder.none,
           isDense: true,
@@ -902,7 +901,7 @@ class _AccountPencilBareInputState extends State<_AccountPencilBareInput> {
           prefixIcon: Icon(
             widget.icon,
             size: 20 * widget.scaleUnit,
-            color: _AccountResetPasswordPageState._textSecondary,
+            color: appColors.textSecondary,
           ),
           prefixIconConstraints: BoxConstraints(
             minWidth: 48 * widget.scaleUnit,
@@ -1033,6 +1032,7 @@ class _AccountPencilSoftButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return SizedBox(
       key: buttonKey,
       height: 56 * unit,
@@ -1050,7 +1050,7 @@ class _AccountPencilSoftButton extends StatelessWidget {
           disabledBackgroundColor:
               _AccountResetPasswordPageState._surfaceSoftDisabled,
           foregroundColor: _AccountResetPasswordPageState._actionText,
-          disabledForegroundColor: _AccountResetPasswordPageState._textMuted,
+          disabledForegroundColor: appColors.textSecondary,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18 * unit),
           ),
@@ -1081,11 +1081,12 @@ class _AccountPencilSupportCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Container(
       height: 92 * unit,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: _AccountResetPasswordPageState._surfaceMuted,
+        color: appColors.surfaceMuted,
         borderRadius: BorderRadius.circular(24 * unit),
       ),
       child: Column(
@@ -1096,7 +1097,7 @@ class _AccountPencilSupportCard extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium!.copyWith(
               fontSize: 13 * unit,
               fontWeight: FontWeight.w500,
-              color: _AccountResetPasswordPageState._textMuted,
+              color: appColors.textSecondary,
             ),
           ),
           SizedBox(height: 8 * unit),
@@ -1105,7 +1106,7 @@ class _AccountPencilSupportCard extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium!.copyWith(
               fontSize: 14 * unit,
               fontWeight: FontWeight.w700,
-              color: _AccountResetPasswordPageState._textSecondary,
+              color: appColors.textPrimary,
             ),
           ),
         ],

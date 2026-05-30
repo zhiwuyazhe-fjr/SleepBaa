@@ -36,6 +36,7 @@ import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
 import 'package:sleep_dorm_app/core/widgets/bottom_nav_shell.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
+import 'package:sleep_dorm_app/features/analysis/presentation/pages/interference_factor_page.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/pages/assistant_page.dart';
 import 'package:sleep_dorm_app/features/auth/presentation/pages/phone_auth_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_current_status_page.dart';
@@ -55,6 +56,7 @@ import 'package:sleep_dorm_app/features/notifications/presentation/pages/notific
 import 'package:sleep_dorm_app/features/profile/presentation/pages/calendar_checkin_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_account_pages.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_account_reset_password_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/settings_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/sleep_report_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/thought_note_detail_page.dart';
@@ -428,6 +430,205 @@ void main() {
     expect(inviteItem.iconColor, appColors.accentDeep);
     expect(inviteItem.titleStyle?.color, appColors.textPrimary);
     expect(dormName.style?.color, appColors.textPrimary);
+  });
+
+  testWidgets('remaining detail pages use dark semantic surfaces', (
+    WidgetTester tester,
+  ) async {
+    final UserSettings darkCalmSettings = buildDefaultUserSettings().copyWith(
+      themeMode: AppThemeMode.dark,
+      selectedNightMood: NightMood.calm,
+    );
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.notifications,
+      clock: _dayClock,
+      initialSettings: darkCalmSettings,
+    );
+
+    AppSemanticColors appColors = tester
+        .element(find.byType(NotificationsPage))
+        .appColors;
+    Scaffold scaffold = tester.widget<Scaffold>(
+      find.descendant(
+        of: find.byType(NotificationsPage),
+        matching: find.byType(Scaffold),
+      ),
+    );
+    BuildContext pageContext = tester.element(find.byType(NotificationsPage));
+    expect(
+      scaffold.backgroundColor ?? Theme.of(pageContext).scaffoldBackgroundColor,
+      appColors.pageBackground,
+    );
+    AppCard overviewCard = tester.widget<AppCard>(
+      find.ancestor(
+        of: find.textContaining('待处理消息').first,
+        matching: find.byType(AppCard),
+      ),
+    );
+    expect(overviewCard.color, appColors.surface);
+    Text overviewBody = tester.widget<Text>(find.text('建议先查看「待处理」分组'));
+    expect(overviewBody.style?.color, appColors.textSecondary);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.analysisInterferenceFactors,
+      clock: _dayClock,
+      initialSettings: darkCalmSettings,
+    );
+
+    appColors = tester.element(find.byType(InterferenceFactorPage)).appColors;
+    scaffold = tester.widget<Scaffold>(
+      find.descendant(
+        of: find.byType(InterferenceFactorPage),
+        matching: find.byType(Scaffold),
+      ),
+    );
+    pageContext = tester.element(find.byType(InterferenceFactorPage));
+    expect(
+      scaffold.backgroundColor ?? Theme.of(pageContext).scaffoldBackgroundColor,
+      appColors.pageBackground,
+    );
+    final AppCard introCard = tester.widget<AppCard>(
+      find.ancestor(
+        of: find.text('今晚先一起看看，哪些细小因素正在悄悄影响你的安睡。'),
+        matching: find.byType(AppCard),
+      ),
+    );
+    expect(introCard.color, isNull);
+    await tester.dragUntilVisible(
+      find.text('和小眠说一说，看看还有哪些因素影响了今晚的安睡……'),
+      find
+          .descendant(
+            of: find.byType(InterferenceFactorPage),
+            matching: find.byType(ListView),
+          )
+          .first,
+      const Offset(0, -260),
+    );
+    final AppCard assistantCard = tester.widget<AppCard>(
+      find.ancestor(
+        of: find.text('和小眠说一说，看看还有哪些因素影响了今晚的安睡……'),
+        matching: find.byType(AppCard),
+      ),
+    );
+    expect(assistantCard.color, appColors.surfaceMuted);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.feedbackMorning,
+      clock: _feedbackClock,
+      initialSettings: darkCalmSettings,
+    );
+    final AppServices services = AppScope.of(
+      tester.element(find.byType(MorningFeedbackPage)),
+    );
+    final SleepSession targetSession = _buildPendingFeedbackSession(
+      uid: services.authRepository.currentUser.uid,
+      id: 'dark-feedback-target-session',
+      startedAt: DateTime(2026, 4, 17, 23, 18),
+      recommendationTitle: 'Dark feedback session',
+    );
+    await services.sleepSessionRepository.saveSession(targetSession);
+    GoRouter.of(
+      tester.element(find.byType(MorningFeedbackPage)),
+    ).go(AppRoutes.feedbackMorningLocation(sessionId: targetSession.id));
+    await tester.pumpAndSettle();
+
+    appColors = tester.element(find.byType(MorningFeedbackPage)).appColors;
+    scaffold = tester.widget<Scaffold>(
+      find.descendant(
+        of: find.byType(MorningFeedbackPage),
+        matching: find.byType(Scaffold),
+      ),
+    );
+    pageContext = tester.element(find.byType(MorningFeedbackPage));
+    expect(
+      scaffold.backgroundColor ?? Theme.of(pageContext).scaffoldBackgroundColor,
+      appColors.pageBackground,
+    );
+    final AppCard summaryCard = tester.widget<AppCard>(
+      find.ancestor(
+        of: find.text('睡眠摘要'),
+        matching: find.byType(AppCard),
+      ),
+    );
+    expect(summaryCard.color, appColors.surface);
+    final Text feedbackCount = tester.widget<Text>(find.text('1 条'));
+    expect(feedbackCount.style?.color, appColors.textSecondary);
+  });
+
+  testWidgets('auth recovery pages use dark semantic neutral colors', (
+    WidgetTester tester,
+  ) async {
+    final UserSettings darkCalmSettings = buildDefaultUserSettings().copyWith(
+      themeMode: AppThemeMode.dark,
+      selectedNightMood: NightMood.calm,
+    );
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.authPhone,
+      clock: _dayClock,
+      initialSettings: darkCalmSettings,
+    );
+
+    AppSemanticColors appColors = tester.element(find.byType(PhoneAuthPage))
+        .appColors;
+    Scaffold scaffold = tester.widget<Scaffold>(
+      find.descendant(
+        of: find.byType(PhoneAuthPage),
+        matching: find.byType(Scaffold),
+      ),
+    );
+    BuildContext pageContext = tester.element(find.byType(PhoneAuthPage));
+    expect(
+      scaffold.backgroundColor ?? Theme.of(pageContext).scaffoldBackgroundColor,
+      appColors.pageBackground,
+    );
+    Text loginTitle = tester.widget<Text>(find.text(AppBrand.loginTitle));
+    expect(loginTitle.style?.color, appColors.textPrimary);
+    Text loginLabel = tester.widget<Text>(find.text('手机号').first);
+    expect(loginLabel.style?.color, appColors.textSecondary);
+    TextField loginInput = tester.widget<TextField>(
+      find.byKey(const ValueKey<String>('auth-login-phone-0')),
+    );
+    expect(loginInput.style?.color, appColors.textPrimary);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('auth-forgot-password')),
+    );
+    await tester.pumpAndSettle();
+
+    final Text resetTitle = tester.widget<Text>(find.text('找回密码'));
+    expect(resetTitle.style?.color, appColors.textPrimary);
+    final Text resetLabel = tester.widget<Text>(find.text('短信验证码').first);
+    expect(resetLabel.style?.color, appColors.textSecondary);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileAccountPassword,
+      clock: _dayClock,
+      initialSettings: darkCalmSettings,
+    );
+
+    appColors = tester.element(find.byType(AccountResetPasswordPage)).appColors;
+    scaffold = tester.widget<Scaffold>(
+      find.descendant(
+        of: find.byType(AccountResetPasswordPage),
+        matching: find.byType(Scaffold),
+      ),
+    );
+    pageContext = tester.element(find.byType(AccountResetPasswordPage));
+    expect(
+      scaffold.backgroundColor ?? Theme.of(pageContext).scaffoldBackgroundColor,
+      appColors.pageBackground,
+    );
+    final Text accountResetTitle = tester.widget<Text>(find.text('找回密码'));
+    expect(accountResetTitle.style?.color, appColors.textPrimary);
+    final Text accountResetLabel = tester.widget<Text>(find.text('手机号').first);
+    expect(accountResetLabel.style?.color, appColors.textSecondary);
   });
 
   testWidgets('dream journal uses dark semantic surfaces', (

@@ -49,6 +49,7 @@
 - 深色模式只反转背景、卡片、边框、文字等中性色；首页“睡眠风险”、宿舍 Hero 等 mood 彩色渐变必须继续使用 `NightMoodPalette.heroGradient*` 原色，不要为了深色模式再混白或漂白。
 - 彩色底上的文字使用 `context.appColors.textOnAccent` 或明确的 `AppColors.onDark`；不要用 `context.appColors.surface` 充当白字，因为它在深色模式会变成深色卡片面。
 - 普通文字、图标、chip 文案不要直接使用 `palette.primaryDeep`、`palette.welcomeTextOnAccent` 这类浅色模式 token；跨明暗主题时使用 `context.appColors.accentDeep/textOnAccent`。
+- 登录、找回密码、验证码弹窗等独立 Pencil 风格页面也必须接入 `context.appColors.pageBackground/surface/surfaceMuted/borderSubtle/textPrimary/textSecondary`；可以保留品牌蓝色按钮，但不能复制一套固定白底黑字的中性色。
 
 ## 夜间情绪主题
 

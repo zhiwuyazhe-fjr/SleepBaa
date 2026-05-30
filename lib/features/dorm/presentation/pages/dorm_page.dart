@@ -656,7 +656,7 @@ class _DormPulseBadgePill extends StatelessWidget {
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: AppColors.onDark.withAlpha(236),
+        color: appColors.surfaceMuted.withAlpha(236),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -692,7 +692,7 @@ class _HeroInfoPill extends StatelessWidget {
         vertical: AppSpacing.xxs,
       ),
       decoration: BoxDecoration(
-        color: AppColors.onDark.withAlpha(246),
+        color: appColors.surfaceMuted.withAlpha(236),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -713,9 +713,10 @@ class _HeroActionPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return Material(
-      color: AppColors.onDark,
+      color: appColors.surfaceMuted.withAlpha(236),
       borderRadius: AppRadius.pill,
       child: InkWell(
         borderRadius: AppRadius.pill,
@@ -731,13 +732,13 @@ class _HeroActionPill extends StatelessWidget {
               Icon(
                 Icons.settings_rounded,
                 size: AppSpacing.sm,
-                color: AppColors.textPrimary,
+                color: appColors.textPrimary,
               ),
               const SizedBox(width: AppSpacing.xxs),
               Text(
                 label,
                 style: AppTypography.chip(textTheme).copyWith(
-                  color: AppColors.textPrimary,
+                  color: appColors.textPrimary,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -764,7 +765,7 @@ class _HeroRatingPill extends StatelessWidget {
         vertical: AppSpacing.xxs,
       ),
       decoration: BoxDecoration(
-        color: AppColors.onDark.withAlpha(246),
+        color: appColors.surfaceMuted.withAlpha(236),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(

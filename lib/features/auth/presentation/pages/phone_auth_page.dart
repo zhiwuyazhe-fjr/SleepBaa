@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/app_brand.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -30,7 +31,6 @@ class PhoneAuthPage extends StatefulWidget {
 
 class _PhoneAuthPageState extends State<PhoneAuthPage> {
   static const double _designWidth = 390;
-  static const Color _cardBorder = Color(0xFFDFE3E7);
   static const Color _accentBlue = Color(0xFF90DDF2);
   static const Color _accentBlueSoft = Color(0xFFE8F7FB);
   static const Color _accentBlueDeep = Color(0xFF004F5D);
@@ -39,13 +39,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
   static const Color _accentBlueDisabledText = Color(0xFF6F8890);
   static const Color _navyBlue = Color(0xFF204F96);
   static const Color _successBlue = Color(0xFF4EA8C2);
-  static const Color _surfaceMuted = Color(0xFFF2F4F6);
-  static const Color _surfaceSoft = Color(0xFFECEEF1);
   static const Color _surfaceSoftDisabled = Color(0xFFE9EFF2);
-  static const Color _textPrimary = Color(0xFF2F3336);
-  static const Color _textSecondary = Color(0xFF5B6063);
-  static const Color _textMuted = Color(0xFF57606B);
-  static const Color _textHint = Color(0xFFA0A0A0);
   static const Color _actionText = Color(0xFF00697A);
   static const Color _buttonShadow = Color(0x4A90DDF2);
   static const Color _focusShadow = Color(0x142457CF);
@@ -1057,7 +1051,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
             context,
             size: 32 * unit,
             weight: FontWeight.w700,
-            color: _textPrimary,
+            color: context.appColors.textPrimary,
           ),
         ),
         SizedBox(height: 20 * unit),
@@ -1185,7 +1179,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
             context,
             size: 32 * unit,
             weight: FontWeight.w700,
-            color: _textPrimary,
+            color: context.appColors.textPrimary,
           ),
         ),
         SizedBox(height: 20 * unit),
@@ -1311,7 +1305,6 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
       bodyChildren: <Widget>[
         AppDetailPageHeader(
           title: '找回密码',
-          foregroundColor: _textPrimary,
           onBack: _returnToPreviousView,
         ),
         SizedBox(height: 20 * unit),
@@ -1387,7 +1380,6 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
       bodyChildren: <Widget>[
         AppDetailPageHeader(
           title: '重置密码',
-          foregroundColor: _textPrimary,
           onBack: _returnToPreviousView,
         ),
         SizedBox(height: 10 * unit),
@@ -1397,7 +1389,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
             context,
             size: 15 * unit,
             weight: FontWeight.w500,
-            color: _textMuted,
+            color: context.appColors.textSecondary,
             height: 1.5,
           ),
         ),
@@ -1472,7 +1464,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
             context,
             size: 32 * unit,
             weight: FontWeight.w700,
-            color: _textPrimary,
+            color: context.appColors.textPrimary,
           ),
         ),
         SizedBox(height: 12 * unit),
@@ -1482,7 +1474,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
             context,
             size: 15 * unit,
             weight: FontWeight.w500,
-            color: _textMuted,
+            color: context.appColors.textSecondary,
             height: 1.5,
           ),
         ),
@@ -1556,7 +1548,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
             context,
             size: 13 * unit,
             weight: FontWeight.w600,
-            color: _textSecondary,
+            color: context.appColors.textSecondary,
           ),
         ),
         SizedBox(height: 6 * unit),
@@ -1693,10 +1685,14 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     );
     final bool hasRouter = Router.maybeOf(context) != null;
 
+    final AppSemanticColors appColors = context.appColors;
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark,
+      value: Theme.of(context).brightness == Brightness.dark
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: appColors.pageBackground,
         resizeToAvoidBottomInset: false,
         body: hasRouter
             ? BackButtonListener(
@@ -1839,6 +1835,7 @@ class _PencilInputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -1847,7 +1844,7 @@ class _PencilInputField extends StatelessWidget {
           style: Theme.of(context).textTheme.bodyMedium!.copyWith(
             fontSize: 13 * scaleUnit,
             fontWeight: FontWeight.w600,
-            color: _PhoneAuthPageState._textSecondary,
+            color: appColors.textSecondary,
           ),
         ),
         SizedBox(height: 6 * scaleUnit),
@@ -1925,9 +1922,10 @@ class _PencilBareInputState extends State<_PencilBareInput> {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final Color borderColor = widget.forceHighlightedBorder
-        ? _PhoneAuthPageState._successBlue
-        : _PhoneAuthPageState._cardBorder;
+        ? appColors.accentDeep
+        : appColors.borderSubtle;
     final double borderWidth = widget.forceHighlightedBorder
         ? 2 * widget.scaleUnit
         : widget.scaleUnit;
@@ -1954,7 +1952,7 @@ class _PencilBareInputState extends State<_PencilBareInput> {
                         ? Icons.visibility_outlined
                         : Icons.visibility_off_outlined,
                     size: 20 * widget.scaleUnit,
-                    color: _PhoneAuthPageState._textHint,
+                    color: appColors.textSecondary,
                   ),
                 ),
             ],
@@ -1964,7 +1962,7 @@ class _PencilBareInputState extends State<_PencilBareInput> {
     return Container(
       height: 56 * widget.scaleUnit,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: appColors.surface,
         borderRadius: BorderRadius.circular(18 * widget.scaleUnit),
         border: Border.all(color: borderColor, width: math.max(1, borderWidth)),
         boxShadow: widget.forceHighlightedBorder
@@ -1996,7 +1994,7 @@ class _PencilBareInputState extends State<_PencilBareInput> {
         style: Theme.of(context).textTheme.bodyMedium!.copyWith(
           fontSize: 14 * widget.scaleUnit,
           fontWeight: FontWeight.w500,
-          color: _PhoneAuthPageState._textPrimary,
+          color: appColors.textPrimary,
         ),
         decoration: InputDecoration(
           hintText: widget.hintText,
@@ -2004,10 +2002,10 @@ class _PencilBareInputState extends State<_PencilBareInput> {
             fontSize: 14 * widget.scaleUnit,
             fontWeight: widget.obscureText ? FontWeight.w600 : FontWeight.w500,
             color: widget.forceHighlightedBorder
-                ? _PhoneAuthPageState._textPrimary
+                ? appColors.textPrimary
                 : widget.obscureText
-                ? _PhoneAuthPageState._textPrimary
-                : _PhoneAuthPageState._textHint,
+                ? appColors.textPrimary
+                : appColors.textSecondary.withAlpha(150),
           ),
           border: InputBorder.none,
           isDense: true,
@@ -2015,7 +2013,7 @@ class _PencilBareInputState extends State<_PencilBareInput> {
           prefixIcon: Icon(
             widget.icon,
             size: 20 * widget.scaleUnit,
-            color: _PhoneAuthPageState._textSecondary,
+            color: appColors.textSecondary,
           ),
           prefixIconConstraints: BoxConstraints(
             minWidth: 48 * widget.scaleUnit,
@@ -2150,6 +2148,7 @@ class _PencilSoftButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return SizedBox(
       key: buttonKey,
       height: 56 * unit,
@@ -2161,7 +2160,7 @@ class _PencilSoftButton extends StatelessWidget {
           backgroundColor: _PhoneAuthPageState._accentBlueSoft,
           disabledBackgroundColor: _PhoneAuthPageState._surfaceSoftDisabled,
           foregroundColor: _PhoneAuthPageState._actionText,
-          disabledForegroundColor: _PhoneAuthPageState._textMuted,
+          disabledForegroundColor: appColors.textSecondary,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18 * unit),
           ),
@@ -2270,11 +2269,12 @@ class _PencilInfoStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Container(
       height: 38 * unit,
       padding: EdgeInsets.symmetric(horizontal: 14 * unit),
       decoration: BoxDecoration(
-        color: _PhoneAuthPageState._surfaceMuted,
+        color: appColors.surfaceMuted,
         borderRadius: BorderRadius.circular(14 * unit),
       ),
       child: Row(
@@ -2287,7 +2287,7 @@ class _PencilInfoStrip extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall!.copyWith(
                 fontSize: 12 * unit,
                 fontWeight: FontWeight.w500,
-                color: _PhoneAuthPageState._textMuted,
+                color: appColors.textSecondary,
               ),
             ),
           ),
@@ -2314,8 +2314,9 @@ class _PencilFooterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Material(
-      color: _PhoneAuthPageState._surfaceMuted,
+      color: appColors.surfaceMuted,
       borderRadius: BorderRadius.circular(24 * unit),
       child: InkWell(
         key: actionKey,
@@ -2332,7 +2333,7 @@ class _PencilFooterCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodyMedium!.copyWith(
                   fontSize: 13 * unit,
                   fontWeight: FontWeight.w500,
-                  color: _PhoneAuthPageState._textMuted,
+                  color: appColors.textSecondary,
                 ),
               ),
               SizedBox(height: 6 * unit),
@@ -2368,11 +2369,12 @@ class _PencilSupportCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Container(
       height: 92 * unit,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: _PhoneAuthPageState._surfaceMuted,
+        color: appColors.surfaceMuted,
         borderRadius: BorderRadius.circular(24 * unit),
       ),
       child: Column(
@@ -2383,7 +2385,7 @@ class _PencilSupportCard extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium!.copyWith(
               fontSize: 13 * unit,
               fontWeight: FontWeight.w500,
-              color: _PhoneAuthPageState._textMuted,
+              color: appColors.textSecondary,
             ),
           ),
           SizedBox(height: 8 * unit),
@@ -2392,7 +2394,7 @@ class _PencilSupportCard extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium!.copyWith(
               fontSize: 14 * unit,
               fontWeight: FontWeight.w700,
-              color: _PhoneAuthPageState._textSecondary,
+              color: appColors.textPrimary,
             ),
           ),
         ],
@@ -2408,6 +2410,7 @@ class _PencilSuccessIllustration extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final double leftRotation = -12 * math.pi / 180;
     final double rightRotation = 12 * math.pi / 180;
     final double topBarRotation = 32 * math.pi / 180;
@@ -2416,10 +2419,10 @@ class _PencilSuccessIllustration extends StatelessWidget {
       height: 220 * unit,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: _PhoneAuthPageState._surfaceSoft,
+        color: appColors.surfaceMuted,
         borderRadius: BorderRadius.circular(28 * unit),
         border: Border.all(
-          color: _PhoneAuthPageState._cardBorder,
+          color: appColors.borderSubtle,
           width: math.max(1, unit),
         ),
       ),
@@ -2438,7 +2441,7 @@ class _PencilSuccessIllustration extends StatelessWidget {
                     width: width * 0.5,
                     height: height * 0.49,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: appColors.surface,
                       borderRadius: BorderRadius.circular(24 * unit),
                     ),
                   ),
@@ -2629,6 +2632,7 @@ class _CaptchaVerifyDialogState extends State<_CaptchaVerifyDialog> {
   @override
   Widget build(BuildContext context) {
     final Uint8List? imageBytes = _captchaBytes(_challenge.imageData);
+    final AppSemanticColors appColors = context.appColors;
 
     return AppFormDialogScaffold(
       title: '完成图片验证',
@@ -2642,9 +2646,9 @@ class _CaptchaVerifyDialogState extends State<_CaptchaVerifyDialog> {
             width: double.infinity,
             height: 96,
             decoration: BoxDecoration(
-              color: _PhoneAuthPageState._surfaceMuted,
+              color: appColors.surfaceMuted,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _PhoneAuthPageState._cardBorder),
+              border: Border.all(color: appColors.borderSubtle),
             ),
             alignment: Alignment.center,
             child: imageBytes == null || imageBytes.isEmpty
