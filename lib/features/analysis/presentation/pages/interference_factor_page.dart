@@ -48,7 +48,6 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     final AppSemanticColors appColors = context.appColors;
-    final NightMoodPalette palette = context.nightMoodPalette;
     final TextTheme textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
@@ -74,9 +73,12 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
                 ),
                 const SizedBox(height: AppSpacing.md),
                 AppCard(
+                  color: appColors.surface,
                   padding: const EdgeInsets.all(AppSpacing.md),
                   borderRadius: AppRadius.surfacePrimary,
-                  border: Border.all(color: palette.primarySoft.withAlpha(90)),
+                  border: Border.all(
+                    color: appColors.accentSoft.withAlpha(150),
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -97,30 +99,21 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
                 const SizedBox(height: AppSpacing.xl),
                 SectionTitle(
                   title: '今晚的四个观察点',
-                  actionLabel: '回到首页',
                   titleStyle: AppTypography.sectionTitle(textTheme),
-                  actionStyle: AppTypography.meta(
-                    textTheme,
-                  ).copyWith(color: appColors.textSecondary),
-                  onAction: () => context.pop(),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                ...state.factors.map(
-                  (InterferenceFactorSnapshot factor) => Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: _FactorDetailCard(
-                      factor: factor,
-                      onRetest: factor.type == InterferenceFactorType.emotion
-                          ? null
-                          : () => _detectFactor(factor.type),
-                    ),
-                  ),
+                _FactorOverviewGrid(
+                  factors: state.factors,
+                  onRetest: (InterferenceFactorSnapshot factor) =>
+                      factor.type == InterferenceFactorType.emotion
+                      ? null
+                      : () => _detectFactor(factor.type),
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 AppCard(
+                  color: appColors.surfaceMuted,
                   padding: const EdgeInsets.all(AppSpacing.md),
                   borderRadius: AppRadius.surfacePrimary,
-                  color: appColors.surfaceMuted,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -154,6 +147,52 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
   }
 }
 
+class _FactorOverviewGrid extends StatelessWidget {
+  const _FactorOverviewGrid({required this.factors, required this.onRetest});
+
+  final List<InterferenceFactorSnapshot> factors;
+  final VoidCallback? Function(InterferenceFactorSnapshot factor) onRetest;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double spacing = constraints.maxWidth < 360
+            ? AppSpacing.xs
+            : AppSpacing.sm;
+        final double childAspectRatio = constraints.maxWidth >= 560
+            ? 1.22
+            : 0.82;
+        return Align(
+          alignment: Alignment.center,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: GridView.builder(
+              shrinkWrap: true,
+              primary: false,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: factors.length,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: spacing,
+                mainAxisSpacing: spacing,
+                childAspectRatio: childAspectRatio,
+              ),
+              itemBuilder: (BuildContext context, int index) {
+                final InterferenceFactorSnapshot factor = factors[index];
+                return _FactorDetailCard(
+                  factor: factor,
+                  onRetest: onRetest(factor),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _FactorDetailCard extends StatelessWidget {
   const _FactorDetailCard({required this.factor, required this.onRetest});
 
@@ -162,14 +201,14 @@ class _FactorDetailCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
     final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
-    final _FactorVisual visual = _visualOf(factor.type, palette);
+    final _FactorVisual visual = _visualOf(context, factor.type);
     final bool isWorking = factor.status == InterferenceFactorStatus.measuring;
 
     return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      color: appColors.surface,
+      padding: const EdgeInsets.all(AppSpacing.sm),
       borderRadius: AppRadius.surfacePrimary,
       border: Border.all(color: visual.borderColor),
       child: Column(
@@ -183,19 +222,24 @@ class _FactorDetailCard extends StatelessWidget {
                 backgroundColor: visual.badgeBackground,
                 iconColor: visual.badgeForeground,
                 borderRadius: BorderRadius.circular(AppRadius.xl),
+                size: 36,
               ),
-              const SizedBox(width: AppSpacing.md),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
                       factor.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: AppTypography.cardTitle(textTheme),
                     ),
-                    const SizedBox(height: AppSpacing.xs),
+                    const SizedBox(height: AppSpacing.xxs),
                     Text(
                       _headlineFor(factor),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: AppTypography.bodyMuted(
                         textTheme,
                       ).copyWith(color: appColors.textSecondary),
@@ -203,10 +247,10 @@ class _FactorDetailCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: AppSpacing.md),
+              const SizedBox(width: AppSpacing.xs),
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
+                  horizontal: AppSpacing.xs,
                   vertical: AppSpacing.xs,
                 ),
                 decoration: BoxDecoration(
@@ -223,33 +267,42 @@ class _FactorDetailCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
           Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
             children: <Widget>[
               _MetaChip(label: '当前值', value: factor.value),
               _MetaChip(label: '状态', value: _statusLabelOf(factor.status)),
-              _MetaChip(
-                label: '最近检测',
-                value: _measuredAtLabel(factor.measuredAt),
-              ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text(factor.detail, style: AppTypography.body(textTheme)),
+          Expanded(
+            child: Text(
+              factor.detail,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.body(
+                textTheme,
+              ).copyWith(color: appColors.textPrimary, height: 1.42),
+            ),
+          ),
           if (isWorking) ...<Widget>[
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.xs),
             const LinearProgressIndicator(minHeight: 6),
           ],
           if (onRetest != null) ...<Widget>[
-            const SizedBox(height: AppSpacing.md),
-            PrimaryButton(
-              label: isWorking ? '检测中...' : '再次检测',
-              icon: Icons.refresh_rounded,
-              variant: PrimaryButtonVariant.soft,
-              size: PrimaryButtonSize.compact,
-              onPressed: isWorking ? null : onRetest,
+            const SizedBox(height: AppSpacing.xs),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: PrimaryButton(
+                label: isWorking ? '检测中' : '再次检测',
+                icon: Icons.refresh_rounded,
+                variant: PrimaryButtonVariant.soft,
+                size: PrimaryButtonSize.compact,
+                expand: false,
+                onPressed: isWorking ? null : onRetest,
+              ),
             ),
           ],
         ],
@@ -289,7 +342,14 @@ class _MetaChip extends StatelessWidget {
         color: appColors.surfaceMuted,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text('$label  $value', style: AppTypography.chip(textTheme)),
+      child: Text(
+        '$label  $value',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.chip(
+          textTheme,
+        ).copyWith(color: appColors.textSecondary),
+      ),
     );
   }
 }
@@ -308,7 +368,38 @@ class _FactorVisual {
   final Color borderColor;
 }
 
-_FactorVisual _visualOf(InterferenceFactorType type, NightMoodPalette palette) {
+_FactorVisual _visualOf(BuildContext context, InterferenceFactorType type) {
+  final NightMoodPalette palette = context.nightMoodPalette;
+  final AppSemanticColors appColors = context.appColors;
+  final bool dark = Theme.of(context).brightness == Brightness.dark;
+  if (dark) {
+    return switch (type) {
+      InterferenceFactorType.noise => _FactorVisual(
+        icon: Icons.volume_up_outlined,
+        badgeBackground: appColors.accentSoft,
+        badgeForeground: appColors.accentDeep,
+        borderColor: appColors.accent.withAlpha(130),
+      ),
+      InterferenceFactorType.light => const _FactorVisual(
+        icon: Icons.lightbulb_outline_rounded,
+        badgeBackground: Color(0xFF3A3124),
+        badgeForeground: Color(0xFFE8B260),
+        borderColor: Color(0xFF6A4E28),
+      ),
+      InterferenceFactorType.phoneUsage => const _FactorVisual(
+        icon: Icons.smartphone_rounded,
+        badgeBackground: Color(0xFF252E49),
+        badgeForeground: Color(0xFFAFC4FF),
+        borderColor: Color(0xFF445A9A),
+      ),
+      InterferenceFactorType.emotion => const _FactorVisual(
+        icon: Icons.favorite_border_rounded,
+        badgeBackground: Color(0xFF3A2531),
+        badgeForeground: Color(0xFFE7A5BD),
+        borderColor: Color(0xFF7B4258),
+      ),
+    };
+  }
   return switch (type) {
     InterferenceFactorType.noise => _FactorVisual(
       icon: Icons.volume_up_outlined,
@@ -347,14 +438,4 @@ String _statusLabelOf(InterferenceFactorStatus status) {
     InterferenceFactorStatus.unsupported => '暂不支持',
     InterferenceFactorStatus.error => '检测失败',
   };
-}
-
-String _measuredAtLabel(DateTime? measuredAt) {
-  if (measuredAt == null) {
-    return '暂无';
-  }
-  final DateTime local = measuredAt.toLocal();
-  final String hh = local.hour.toString().padLeft(2, '0');
-  final String mm = local.minute.toString().padLeft(2, '0');
-  return '$hh:$mm';
 }

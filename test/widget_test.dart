@@ -494,7 +494,7 @@ void main() {
         matching: find.byType(AppCard),
       ),
     );
-    expect(introCard.color, isNull);
+    expect(introCard.color, appColors.surface);
     await tester.dragUntilVisible(
       find.text('和小眠说一说，看看还有哪些因素影响了今晚的安睡……'),
       find
@@ -5199,6 +5199,7 @@ void main() {
     final Text sectionTitle = tester.widget<Text>(find.text('今晚的四个观察点'));
     expect(sectionTitle.style?.fontSize, 18);
     expect(sectionTitle.style?.fontWeight, FontWeight.w800);
+    expect(find.text('回到首页'), findsNothing);
 
     final Text noiseTitle = tester.widget<Text>(find.text('宿舍噪声'));
     expect(noiseTitle.style?.fontSize, 15);
