@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
@@ -40,6 +41,7 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppDetailPageAppBar(
@@ -143,7 +145,7 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
               ),
               const SizedBox(height: AppSpacing.md),
               AppCard(
-                color: AppColors.surfaceMuted,
+                color: appColors.surfaceMuted,
                 padding: const EdgeInsets.all(AppSpacing.md),
                 borderRadius: AppRadius.surfacePrimary,
                 child: Column(
@@ -171,7 +173,7 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
                       '同一睡眠日多次退出或再次进入都会累计到同一天，晨间反馈完成后该日时长会锁定。',
                       style: AppTypography.bodyMuted(
                         textTheme,
-                      ).copyWith(color: AppColors.textSecondary, height: 1.45),
+                      ).copyWith(color: appColors.textSecondary, height: 1.45),
                     ),
                   ],
                 ),
@@ -232,12 +234,13 @@ class _SelectedSessionDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
     if (session == null) {
       return Text(
         '这一天还没有睡眠记录。',
         style: AppTypography.bodyMuted(
           textTheme,
-        ).copyWith(color: AppColors.textSecondary),
+        ).copyWith(color: appColors.textSecondary),
       );
     }
 
@@ -249,7 +252,7 @@ class _SelectedSessionDetail extends StatelessWidget {
     final bool sleepGoalMet =
         _sleepGoalMetForSession(session!, sleepGoalHours) == true;
     final String stageLabel = _sessionStageLabel(session!);
-    final Color stageColor = _sessionStageColor(session!);
+    final Color stageColor = _sessionStageColor(session!, appColors);
     final String durationLabel =
         '${session!.displaySleepHours().toStringAsFixed(1)} h';
 
@@ -287,7 +290,7 @@ class _SelectedSessionDetail extends StatelessWidget {
           summary?.note ?? _summaryFallback(session!),
           style: AppTypography.bodyMuted(
             textTheme,
-          ).copyWith(color: AppColors.textSecondary, height: 1.5),
+          ).copyWith(color: appColors.textSecondary, height: 1.5),
         ),
         if (canSupplementFeedback) ...<Widget>[
           const SizedBox(height: AppSpacing.md),
@@ -341,7 +344,7 @@ class _SelectedSessionDetail extends StatelessWidget {
     };
   }
 
-  Color _sessionStageColor(SleepSession session) {
+  Color _sessionStageColor(SleepSession session, AppSemanticColors appColors) {
     if (session.summary != null ||
         session.status == SleepSessionStatus.completed) {
       return const Color(0xFF2D9272);
@@ -351,7 +354,7 @@ class _SelectedSessionDetail extends StatelessWidget {
       SleepSessionStatus.paused => const Color(0xFF8B7CF6),
       SleepSessionStatus.awaitingFeedback => const Color(0xFFF39A3C),
       SleepSessionStatus.completed => const Color(0xFF2D9272),
-      SleepSessionStatus.drafted => AppColors.textSecondary,
+      SleepSessionStatus.drafted => appColors.textSecondary,
     };
   }
 }
@@ -363,13 +366,14 @@ class _WeekdayLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Expanded(
       child: Center(
         child: Text(
           label,
           style: AppTypography.chip(
             Theme.of(context).textTheme,
-          ).copyWith(color: AppColors.textSecondary),
+          ).copyWith(color: appColors.textSecondary),
         ),
       ),
     );
@@ -447,13 +451,14 @@ class _DayCell extends StatelessWidget {
     final bool sleepGoalMet =
         session != null &&
         _sleepGoalMetForSession(session!, sleepGoalHours) == true;
+    final AppSemanticColors appColors = context.appColors;
     final Color fill = switch (quality) {
       5 => palette.primary,
       4 => palette.primarySoft,
       3 => palette.primarySoft.withAlpha(150),
       2 => palette.primarySoft.withAlpha(90),
       1 => palette.primarySoft.withAlpha(50),
-      _ => pending ? palette.primarySoft.withAlpha(72) : AppColors.surfaceSoft,
+      _ => pending ? palette.primarySoft.withAlpha(72) : appColors.surfaceMuted,
     };
     return InkWell(
       key: ValueKey<String>('calendar-day-cell-${date.day}'),
@@ -473,7 +478,7 @@ class _DayCell extends StatelessWidget {
       },
       child: Ink(
         decoration: BoxDecoration(
-          color: selected ? AppColors.darkSurface : fill,
+          color: selected ? appColors.accentDeep : fill,
           borderRadius: AppRadius.surfaceSecondary,
           border: pending
               ? Border.all(
@@ -497,8 +502,8 @@ class _DayCell extends StatelessWidget {
                             color: selected
                                 ? AppColors.onDark
                                 : quality > 3
-                                ? palette.primaryDeep
-                                : AppColors.textPrimary,
+                                ? appColors.accentDeep
+                                : appColors.textPrimary,
                           ),
                     ),
                     if (pending) ...<Widget>[
@@ -509,7 +514,7 @@ class _DayCell extends StatelessWidget {
                             .copyWith(
                               color: selected
                                   ? AppColors.onDark
-                                  : palette.primaryDeep,
+                                  : appColors.accentDeep,
                               fontWeight: FontWeight.w700,
                             ),
                       ),
@@ -551,13 +556,14 @@ class _DetailChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
+        color: appColors.surfaceMuted,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(

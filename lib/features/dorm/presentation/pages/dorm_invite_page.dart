@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
@@ -171,8 +170,9 @@ class _DormInvitePageState extends State<DormInvitePage> {
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    final AppSemanticColors appColors = context.appColors;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: appColors.pageBackground,
       body: ListenableBuilder(
         listenable: Listenable.merge(<Listenable>[
           services.authRepository,
@@ -233,6 +233,7 @@ class _DormInvitePageState extends State<DormInvitePage> {
   }
 
   List<Widget> _buildChooseMode() {
+    final AppSemanticColors appColors = context.appColors;
     return <Widget>[
       AppCard(
         onTap: () => setState(() => _preferredMode = _DormInviteMode.create),
@@ -251,7 +252,7 @@ class _DormInvitePageState extends State<DormInvitePage> {
             Text(
               '适合你是当前宿舍里第一个使用 App 的人，先完成宿舍初始化，再生成邀请码邀请舍友。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
+                color: appColors.textSecondary,
                 height: 1.35,
               ),
             ),
@@ -281,7 +282,7 @@ class _DormInvitePageState extends State<DormInvitePage> {
             Text(
               '如果你的舍友已经创建过宿舍，直接输入邀请码就能加入当前宿舍协作空间。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
+                color: appColors.textSecondary,
                 height: 1.35,
               ),
             ),
@@ -373,7 +374,7 @@ class _DormInvitePageState extends State<DormInvitePage> {
             Text(
               '输入舍友分享的邀请码即可加入宿舍。加入成功后，宿舍页会自动刷新。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
+                color: context.appColors.textSecondary,
                 height: 1.35,
               ),
             ),
@@ -468,7 +469,7 @@ class _DormInvitePageState extends State<DormInvitePage> {
       ),
       const SizedBox(height: AppSpacing.sm),
       AppCard(
-        color: AppColors.surfaceMuted,
+        color: context.appColors.surfaceMuted,
         padding: const EdgeInsets.all(AppSpacing.md),
         borderRadius: AppRadius.compactCard,
         child: Column(
@@ -487,7 +488,7 @@ class _DormInvitePageState extends State<DormInvitePage> {
                 child: Text(
                   '• ${member.name}：${member.note}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: context.appColors.textSecondary,
                     height: 1.35,
                   ),
                 ),
@@ -496,9 +497,9 @@ class _DormInvitePageState extends State<DormInvitePage> {
             if (dorm.members.isEmpty)
               Text(
                 '宿舍成员还没有同步过来，先生成邀请码邀请舍友加入。',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: context.appColors.textSecondary,
+                ),
               ),
           ],
         ),
@@ -614,6 +615,7 @@ class _LabeledField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return TextField(
       controller: controller,
       maxLines: maxLines,
@@ -623,22 +625,22 @@ class _LabeledField extends StatelessWidget {
         hintText: hintText,
         isDense: true,
         filled: true,
-        fillColor: AppColors.surfaceMuted,
+        fillColor: appColors.surfaceMuted,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
           vertical: AppSpacing.sm,
         ),
         border: OutlineInputBorder(
           borderRadius: AppRadius.card,
-          borderSide: const BorderSide(color: AppColors.surfaceBorder),
+          borderSide: BorderSide(color: appColors.borderSubtle),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: AppRadius.card,
-          borderSide: const BorderSide(color: AppColors.surfaceBorder),
+          borderSide: BorderSide(color: appColors.borderSubtle),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: AppRadius.card,
-          borderSide: const BorderSide(color: AppColors.textHint),
+          borderSide: BorderSide(color: appColors.textSecondary),
         ),
       ),
     );
@@ -658,6 +660,7 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final Widget valueWidget = selectable
         ? SelectableText(value, style: Theme.of(context).textTheme.bodyMedium)
         : Text(value, style: Theme.of(context).textTheme.bodyMedium);
@@ -672,7 +675,7 @@ class _InfoRow extends StatelessWidget {
               label,
               style: Theme.of(
                 context,
-              ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+              ).textTheme.bodySmall?.copyWith(color: appColors.textSecondary),
             ),
           ),
           const SizedBox(width: AppSpacing.sm),

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
@@ -30,6 +30,7 @@ class SleepReportPage extends StatelessWidget {
           ]),
           builder: (BuildContext context, Widget? child) {
             final NightMoodPalette palette = context.nightMoodPalette;
+            final AppSemanticColors appColors = context.appColors;
             final TextTheme textTheme = Theme.of(context).textTheme;
             final SleepReport report = services.insightsFacade.currentReport;
             final List<SleepSession> recent = services.sleepFacade
@@ -60,7 +61,7 @@ class SleepReportPage extends StatelessWidget {
                         '${report.generatedAt.minute.toString().padLeft(2, '0')}',
                         style: AppTypography.chip(
                           textTheme,
-                        ).copyWith(color: AppColors.textSecondary),
+                        ).copyWith(color: appColors.textSecondary),
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       Wrap(
@@ -223,6 +224,7 @@ class _RecentSessionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final bool pending = !session.hasSubmittedFeedback;
     final bool canOpenFeedback =
         pending &&
@@ -251,12 +253,12 @@ class _RecentSessionTile extends StatelessWidget {
           vertical: AppSpacing.sm,
         ),
         decoration: BoxDecoration(
-          color: AppColors.surfaceMuted,
+          color: appColors.surfaceMuted,
           borderRadius: AppRadius.compactCard,
         ),
         child: Row(
           children: <Widget>[
-            const Icon(Icons.nightlight_round, color: AppColors.textSecondary),
+            Icon(Icons.nightlight_round, color: appColors.textSecondary),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
@@ -271,7 +273,7 @@ class _RecentSessionTile extends StatelessWidget {
                     subtitle,
                     style: AppTypography.bodyMuted(
                       Theme.of(context).textTheme,
-                    ).copyWith(color: AppColors.textSecondary),
+                    ).copyWith(color: appColors.textSecondary),
                   ),
                 ],
               ),

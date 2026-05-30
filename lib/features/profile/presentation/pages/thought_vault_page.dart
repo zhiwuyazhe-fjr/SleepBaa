@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
-import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -17,10 +16,10 @@ class ThoughtVaultPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: appColors.pageBackground,
       appBar: AppDetailPageAppBar(
         title: '事记仓库',
         onBack: () => Navigator.of(context).maybePop(),
@@ -39,7 +38,7 @@ class ThoughtVaultPage extends StatelessWidget {
                   '睡眠模式里记下的事，会在这里慢慢收成卡片。',
                   style: AppTypography.body(
                     textTheme,
-                  ).copyWith(color: AppColors.textSecondary),
+                  ).copyWith(color: appColors.textSecondary),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -71,20 +70,20 @@ class ThoughtVaultPage extends StatelessWidget {
                             vertical: AppSpacing.xxs,
                           ),
                           decoration: BoxDecoration(
-                            color: palette.primaryHighlight,
+                            color: appColors.accentSoft,
                             borderRadius: AppRadius.pill,
                           ),
                           child: Text(
                             _formatRecordTime(record.createdAt),
                             style: AppTypography.chip(
                               textTheme,
-                            ).copyWith(color: palette.primaryDeep),
+                            ).copyWith(color: appColors.accentDeep),
                           ),
                         ),
                         const Spacer(),
                         Icon(
                           Icons.east_rounded,
-                          color: palette.primaryDeep.withAlpha(150),
+                          color: appColors.accentDeep.withAlpha(150),
                           size: 20,
                         ),
                       ],
@@ -99,7 +98,7 @@ class ThoughtVaultPage extends StatelessWidget {
                       record.outline,
                       style: AppTypography.bodyMuted(
                         textTheme,
-                      ).copyWith(color: AppColors.textSecondary, height: 1.5),
+                      ).copyWith(color: appColors.textSecondary, height: 1.5),
                     ),
                   ],
                 ),

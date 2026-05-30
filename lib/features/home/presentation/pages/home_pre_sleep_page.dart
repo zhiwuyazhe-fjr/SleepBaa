@@ -358,7 +358,7 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                               '点击卡片更新最新结果',
                               style: AppTypography.bodyMuted(
                                 textTheme,
-                              ).copyWith(color: AppColors.textSecondary),
+                              ).copyWith(color: context.appColors.textSecondary),
                             ),
                             const SizedBox(height: AppSpacing.xl),
                             SectionTitle(

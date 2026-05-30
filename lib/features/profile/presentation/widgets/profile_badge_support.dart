@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
@@ -167,6 +166,7 @@ Future<void> showProfileBadgeDetailsSheet(
         final bool selected = profile.displayBadgeId == badge.id;
         final bool explicitlyEquipped = profile.equippedBadgeId == badge.id;
         final NightMoodPalette palette = sheetContext.nightMoodPalette;
+        final AppSemanticColors appColors = sheetContext.appColors;
         final String statusLabel = !unlocked
             ? '未获得'
             : explicitlyEquipped
@@ -233,7 +233,7 @@ Future<void> showProfileBadgeDetailsSheet(
                                     .textTheme
                                     .headlineSmall
                                     ?.copyWith(
-                                      color: AppColors.textPrimary,
+                                      color: appColors.textPrimary,
                                       fontWeight: FontWeight.w800,
                                     ),
                               ),
@@ -245,8 +245,8 @@ Future<void> showProfileBadgeDetailsSheet(
                                 ),
                                 decoration: BoxDecoration(
                                   color: unlocked
-                                      ? palette.primaryHighlight
-                                      : AppColors.surfaceSoft,
+                                      ? appColors.accentSoft
+                                      : appColors.surfaceMuted,
                                   borderRadius: AppRadius.pill,
                                 ),
                                 child: Text(
@@ -256,8 +256,8 @@ Future<void> showProfileBadgeDetailsSheet(
                                       .labelLarge
                                       ?.copyWith(
                                         color: unlocked
-                                            ? palette.primaryDeep
-                                            : AppColors.textSecondary,
+                                            ? appColors.accentDeep
+                                            : appColors.textSecondary,
                                         fontWeight: FontWeight.w700,
                                       ),
                                 ),
@@ -272,14 +272,14 @@ Future<void> showProfileBadgeDetailsSheet(
                       width: double.infinity,
                       padding: EdgeInsets.all(constraints.maxWidth * 0.04),
                       decoration: BoxDecoration(
-                        color: palette.primaryHighlight,
+                        color: appColors.accentSoft,
                         borderRadius: AppRadius.card,
                       ),
                       child: Text(
                         badge.description,
                         style: Theme.of(sheetContext).textTheme.bodyLarge
                             ?.copyWith(
-                              color: AppColors.textSecondary,
+                              color: appColors.textSecondary,
                               height: 1.65,
                             ),
                       ),
@@ -289,7 +289,7 @@ Future<void> showProfileBadgeDetailsSheet(
                       width: double.infinity,
                       padding: EdgeInsets.all(constraints.maxWidth * 0.04),
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceMuted,
+                        color: appColors.surfaceMuted,
                         borderRadius: AppRadius.card,
                       ),
                       child: Column(
@@ -299,7 +299,7 @@ Future<void> showProfileBadgeDetailsSheet(
                             infoTitle,
                             style: Theme.of(sheetContext).textTheme.titleMedium
                                 ?.copyWith(
-                                  color: AppColors.textPrimary,
+                                  color: appColors.textPrimary,
                                   fontWeight: FontWeight.w800,
                                 ),
                           ),
@@ -312,7 +312,7 @@ Future<void> showProfileBadgeDetailsSheet(
                             decoration: BoxDecoration(
                               color: unlocked
                                   ? palette.primary.withAlpha(36)
-                                  : AppColors.surface,
+                                  : appColors.surface,
                               borderRadius: AppRadius.pill,
                             ),
                             child: Text(
@@ -322,8 +322,8 @@ Future<void> showProfileBadgeDetailsSheet(
                                   .labelMedium
                                   ?.copyWith(
                                     color: unlocked
-                                        ? palette.primaryDeep
-                                        : AppColors.textSecondary,
+                                        ? appColors.accentDeep
+                                        : appColors.textSecondary,
                                     fontWeight: FontWeight.w700,
                                   ),
                             ),
@@ -333,7 +333,7 @@ Future<void> showProfileBadgeDetailsSheet(
                             infoBody,
                             style: Theme.of(sheetContext).textTheme.bodyMedium
                                 ?.copyWith(
-                                  color: AppColors.textSecondary,
+                                  color: appColors.textSecondary,
                                   height: 1.55,
                                 ),
                           ),
@@ -355,11 +355,11 @@ Future<void> showProfileBadgeDetailsSheet(
                                   }
                                 },
                           style: FilledButton.styleFrom(
-                            backgroundColor: palette.welcomeAccentColor,
-                            foregroundColor: palette.welcomeTextOnAccent,
-                            disabledBackgroundColor: palette.welcomeAccentColor
+                            backgroundColor: appColors.accent,
+                            foregroundColor: appColors.textOnAccent,
+                            disabledBackgroundColor: appColors.accent
                                 .withAlpha(110),
-                            disabledForegroundColor: palette.welcomeTextOnAccent
+                            disabledForegroundColor: appColors.textOnAccent
                                 .withAlpha(140),
                             elevation: 0,
                             shadowColor: Colors.transparent,
@@ -388,7 +388,7 @@ Future<void> showProfileBadgeDetailsSheet(
                               }
                             },
                             style: TextButton.styleFrom(
-                              foregroundColor: palette.primaryDeep,
+                              foregroundColor: appColors.accentDeep,
                             ),
                             child: const Text('恢复最新获得'),
                           ),
@@ -506,7 +506,7 @@ Future<void> showDormBadgeDetailsSheet(
                       width: handleWidth,
                       height: handleWidth * 0.1,
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceBorder,
+                        color: appColors.borderSubtle,
                         borderRadius: BorderRadius.circular(handleWidth * 0.1),
                       ),
                     ),
@@ -543,7 +543,7 @@ Future<void> showDormBadgeDetailsSheet(
                               decoration: BoxDecoration(
                                 color: unlocked
                                     ? appColors.accentSoft
-                                    : AppColors.surfaceSoft,
+                                    : appColors.surfaceMuted,
                                 borderRadius: AppRadius.pill,
                               ),
                               child: Text(
@@ -581,7 +581,7 @@ Future<void> showDormBadgeDetailsSheet(
                     width: double.infinity,
                     padding: EdgeInsets.all(constraints.maxWidth * 0.04),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceMuted,
+                      color: appColors.surfaceMuted,
                       borderRadius: AppRadius.card,
                     ),
                     child: Column(
@@ -714,7 +714,7 @@ class _SheetBadgeVisual extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: unlocked ? appColors.accentSoft : AppColors.surfaceSoft,
+        color: unlocked ? appColors.accentSoft : appColors.surfaceMuted,
         border: Border.all(
           color: unlocked ? appColors.accent : appColors.borderSubtle,
           width: borderWidth,
@@ -724,7 +724,7 @@ class _SheetBadgeVisual extends StatelessWidget {
       child: Icon(
         unlocked ? badge.icon : Icons.lock_rounded,
         size: size * 0.4,
-        color: unlocked ? appColors.accentDeep : AppColors.textHint,
+        color: unlocked ? appColors.accentDeep : appColors.textSecondary,
       ),
     );
   }
@@ -753,7 +753,7 @@ class _DormSheetBadgeVisual extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: unlocked ? appColors.accentSoft : AppColors.surfaceSoft,
+        color: unlocked ? appColors.accentSoft : appColors.surfaceMuted,
         border: Border.all(
           color: unlocked ? appColors.accent : appColors.borderSubtle,
           width: borderWidth,
@@ -763,7 +763,7 @@ class _DormSheetBadgeVisual extends StatelessWidget {
       child: Icon(
         unlocked ? badge.icon : Icons.lock_rounded,
         size: size * 0.4,
-        color: unlocked ? appColors.accentDeep : AppColors.textHint,
+        color: unlocked ? appColors.accentDeep : appColors.textSecondary,
       ),
     );
   }

@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
-import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -31,7 +29,7 @@ class AccountManagementPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     return Scaffold(
       appBar: AppDetailPageAppBar(
         title: '账号管理',
@@ -45,29 +43,29 @@ class AccountManagementPage extends StatelessWidget {
               children: <Widget>[
                 AppSettingsItem(
                   icon: Icons.person_outline_rounded,
-                  iconColor: palette.primaryDeep,
-                  iconBackgroundColor: AppColors.surfaceMuted,
+                  iconColor: appColors.accentDeep,
+                  iconBackgroundColor: appColors.surfaceMuted,
                   title: '个人资料',
                   onTap: () => context.push(AppRoutes.profileAccountProfile),
                 ),
                 AppSettingsItem(
                   icon: Icons.lock_reset_rounded,
-                  iconColor: palette.primaryDeep,
-                  iconBackgroundColor: AppColors.surfaceMuted,
+                  iconColor: appColors.accentDeep,
+                  iconBackgroundColor: appColors.surfaceMuted,
                   title: '重置密码',
                   onTap: () => context.push(AppRoutes.profileAccountPassword),
                 ),
                 AppSettingsItem(
                   icon: Icons.phonelink_lock_rounded,
-                  iconColor: palette.primaryDeep,
-                  iconBackgroundColor: AppColors.surfaceMuted,
+                  iconColor: appColors.accentDeep,
+                  iconBackgroundColor: appColors.surfaceMuted,
                   title: '登录管理',
                   onTap: () => context.push(AppRoutes.profileAccountLogin),
                 ),
                 AppSettingsItem(
                   icon: Icons.meeting_room_outlined,
-                  iconColor: palette.primaryDeep,
-                  iconBackgroundColor: AppColors.surfaceMuted,
+                  iconColor: appColors.accentDeep,
+                  iconBackgroundColor: appColors.surfaceMuted,
                   title: '寝室管理',
                   onTap: () => context.push(AppRoutes.profileAccountDorm),
                 ),
@@ -98,6 +96,7 @@ class AccountProfilePage extends StatelessWidget {
             services.dormRepository,
           ]),
           builder: (BuildContext context, Widget? child) {
+            final AppSemanticColors appColors = context.appColors;
             final UserProfile profile = services.profileFacade.currentUser;
             final Dorm dorm = services.dormFacade.currentDorm;
             final String displayedPhone = _displayedPhone(
@@ -140,7 +139,7 @@ class AccountProfilePage extends StatelessWidget {
                                       : displayedPhone,
                                   style: Theme.of(context).textTheme.bodySmall
                                       ?.copyWith(
-                                        color: AppColors.textSecondary,
+                                        color: appColors.textSecondary,
                                       ),
                                 ),
                               ],
@@ -205,6 +204,7 @@ class LoginManagementPage extends StatelessWidget {
         child: ListenableBuilder(
           listenable: services.authRepository,
           builder: (BuildContext context, Widget? child) {
+            final AppSemanticColors appColors = context.appColors;
             final UserProfile profile = services.profileFacade.currentUser;
             final String displayedPhone = _displayedPhone(
               profile,
@@ -228,7 +228,7 @@ class LoginManagementPage extends StatelessWidget {
                             icon: hasVerifiedPhoneIdentity
                                 ? Icons.verified_user_rounded
                                 : Icons.info_outline_rounded,
-                            color: context.nightMoodPalette.welcomeAccentColor,
+                            color: appColors.accent,
                           ),
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(
@@ -249,7 +249,7 @@ class LoginManagementPage extends StatelessWidget {
                                       : '当前手机号：$displayedPhone',
                                   style: Theme.of(context).textTheme.bodySmall
                                       ?.copyWith(
-                                        color: AppColors.textSecondary,
+                                        color: appColors.textSecondary,
                                         height: 1.3,
                                       ),
                                 ),
@@ -281,13 +281,13 @@ class LoginManagementPage extends StatelessWidget {
                 if (services.authRepository.lastAuthError != null) ...<Widget>[
                   const SizedBox(height: AppSpacing.sm),
                   AppCard(
-                    color: AppColors.surfaceMuted,
+                    color: appColors.surfaceMuted,
                     padding: const EdgeInsets.all(AppSpacing.sm),
                     borderRadius: AppRadius.compactCard,
                     child: Text(
                       services.authRepository.lastAuthError!,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: appColors.textSecondary,
                         height: 1.3,
                       ),
                     ),

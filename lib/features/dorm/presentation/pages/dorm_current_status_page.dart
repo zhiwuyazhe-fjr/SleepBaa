@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
@@ -30,12 +29,13 @@ class _DormCurrentStatusPageState extends State<DormCurrentStatusPage> {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return DormLiveStatusScope(
       pageId: 'dorm-current-status-page',
       builder: (BuildContext context) {
         final AppServices services = context.appServices;
         return Scaffold(
-          backgroundColor: AppColors.background,
+          backgroundColor: appColors.pageBackground,
           body: SafeArea(
             child: ListenableBuilder(
               listenable: Listenable.merge(<Listenable>[
@@ -93,7 +93,7 @@ class _DormCurrentStatusPageState extends State<DormCurrentStatusPage> {
                                         .textTheme
                                         .labelLarge
                                         ?.copyWith(
-                                          color: AppColors.textSecondary,
+                                          color: appColors.textSecondary,
                                           fontWeight: FontWeight.w700,
                                         ),
                                   ),

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
@@ -18,9 +18,10 @@ class ProfileFaqPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: appColors.pageBackground,
       appBar: AppDetailPageAppBar(
         title: '常见问题',
         onBack: () => Navigator.of(context).maybePop(),
@@ -85,7 +86,7 @@ class ProfileFaqPage extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
             AppCard(
               onTap: () => _showComingSoon(context),
-              color: AppColors.surface,
+              color: appColors.surface,
               borderRadius: BorderRadius.circular(20),
               padding: const EdgeInsets.all(AppSpacing.md),
               child: Column(
@@ -101,7 +102,7 @@ class ProfileFaqPage extends StatelessWidget {
                   Text(
                     '这里会整理头像设置、睡眠报告查看、打卡热力说明，以及梦记与事记仓库的使用方式。',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFF888888),
+                      color: appColors.textSecondary,
                       fontWeight: FontWeight.w400,
                     ),
                   ),
@@ -110,7 +111,7 @@ class ProfileFaqPage extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
             AppCard(
-              color: AppColors.legacyCardSurface,
+              color: appColors.surfaceMuted,
               borderRadius: BorderRadius.circular(20),
               padding: const EdgeInsets.all(AppSpacing.md),
               child: Column(
@@ -145,7 +146,7 @@ class ProfileFaqPage extends StatelessWidget {
                             point,
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
-                                  color: AppColors.textSecondary,
+                                  color: appColors.textSecondary,
                                   fontWeight: FontWeight.w400,
                                 ),
                           ),
@@ -164,8 +165,8 @@ class ProfileFaqPage extends StatelessWidget {
               child: FilledButton.icon(
                 onPressed: () => _showComingSoon(context),
                 style: FilledButton.styleFrom(
-                  backgroundColor: palette.welcomeAccentColor,
-                  foregroundColor: palette.welcomeTextOnAccent,
+                  backgroundColor: appColors.accent,
+                  foregroundColor: appColors.textOnAccent,
                   elevation: 0,
                   shadowColor: Colors.transparent,
                   shape: const StadiumBorder(),

@@ -515,6 +515,7 @@ class _DormHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -524,7 +525,7 @@ class _DormHeader extends StatelessWidget {
             dorm.name,
             style: AppTypography.heroTitle(
               textTheme,
-            ).copyWith(color: AppColors.textPrimary),
+            ).copyWith(color: appColors.textPrimary),
           ),
         ),
         if (dormPulseBadge != null) ...<Widget>[
@@ -582,7 +583,7 @@ class _DormHeroCard extends StatelessWidget {
                   child: Text(
                     '宿舍脉搏',
                     style: AppTypography.chip(textTheme).copyWith(
-                      color: AppColors.textStrong,
+                      color: AppColors.onDark,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -599,7 +600,7 @@ class _DormHeroCard extends StatelessWidget {
               '今晚宿舍整体状态平稳',
               style: AppTypography.sectionTitle(
                 textTheme,
-              ).copyWith(color: AppColors.textStrong),
+              ).copyWith(color: AppColors.onDark),
             ),
             const SizedBox(height: AppSpacing.sm),
             LayoutBuilder(
@@ -655,7 +656,7 @@ class _DormPulseBadgePill extends StatelessWidget {
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surface.withAlpha(236),
+        color: AppColors.onDark.withAlpha(236),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -666,7 +667,7 @@ class _DormPulseBadgePill extends StatelessWidget {
           Text(
             badge.label,
             style: AppTypography.meta(textTheme).copyWith(
-              color: AppColors.textPrimary,
+              color: appColors.textPrimary,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -683,6 +684,7 @@ class _HeroInfoPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -690,14 +692,14 @@ class _HeroInfoPill extends StatelessWidget {
         vertical: AppSpacing.xxs,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surface.withAlpha(246),
+        color: AppColors.onDark.withAlpha(246),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
         style: AppTypography.meta(
           textTheme,
-        ).copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w800),
+        ).copyWith(color: appColors.textPrimary, fontWeight: FontWeight.w800),
       ),
     );
   }
@@ -713,7 +715,7 @@ class _HeroActionPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
     return Material(
-      color: AppColors.surface,
+      color: AppColors.onDark,
       borderRadius: AppRadius.pill,
       child: InkWell(
         borderRadius: AppRadius.pill,
@@ -726,16 +728,16 @@ class _HeroActionPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              const Icon(
+              Icon(
                 Icons.settings_rounded,
                 size: AppSpacing.sm,
-                color: AppColors.textStrong,
+                color: AppColors.textPrimary,
               ),
               const SizedBox(width: AppSpacing.xxs),
               Text(
                 label,
                 style: AppTypography.chip(textTheme).copyWith(
-                  color: AppColors.textStrong,
+                  color: AppColors.textPrimary,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -762,7 +764,7 @@ class _HeroRatingPill extends StatelessWidget {
         vertical: AppSpacing.xxs,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surface.withAlpha(246),
+        color: AppColors.onDark.withAlpha(246),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -771,7 +773,7 @@ class _HeroRatingPill extends StatelessWidget {
           Text(
             '安静等级',
             style: AppTypography.meta(textTheme).copyWith(
-              color: AppColors.textPrimary,
+              color: appColors.textPrimary,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -813,7 +815,7 @@ class _DormMemberCard extends StatelessWidget {
     final NightMoodPalette palette = context.nightMoodPalette;
     final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
-    final Color accentColor = _memberColor(member.status, palette);
+    final Color accentColor = _memberColor(member.status, palette, appColors);
     final String? resolvedBadgeId = isCurrentUser
         ? currentUserProfile?.displayBadgeId ?? member.displayBadgeId
         : member.displayBadgeId;
@@ -876,14 +878,14 @@ class _DormMemberCard extends StatelessWidget {
                             color: appColors.accent,
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: AppColors.surface,
+                              color: appColors.surface,
                               width: 2,
                             ),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.star_rounded,
                             size: 10,
-                            color: AppColors.surface,
+                            color: appColors.surface,
                           ),
                         ),
                       ),
@@ -896,7 +898,7 @@ class _DormMemberCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                   style: AppTypography.meta(textTheme).copyWith(
-                    color: AppColors.textPrimary,
+                    color: appColors.textPrimary,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -979,7 +981,7 @@ class _DormHubCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppTypography.cardTitle(textTheme).copyWith(
-              color: AppColors.textPrimary,
+              color: appColors.textPrimary,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -990,7 +992,7 @@ class _DormHubCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: AppTypography.bodyMuted(
               textTheme,
-            ).copyWith(color: AppColors.textSecondary),
+            ).copyWith(color: appColors.textSecondary),
           ),
         ],
       ),
@@ -1042,11 +1044,15 @@ bool _isDormHomeActiveRecord(DormEventRecord event) {
       event.title.contains('公约');
 }
 
-Color _memberColor(DormMemberStatus status, NightMoodPalette palette) {
+Color _memberColor(
+  DormMemberStatus status,
+  NightMoodPalette palette,
+  AppSemanticColors appColors,
+) {
   return switch (status) {
     DormMemberStatus.sleeping => palette.primary,
     DormMemberStatus.quiet => palette.calmBlue,
-    DormMemberStatus.away => AppColors.textHint,
+    DormMemberStatus.away => appColors.textSecondary,
     DormMemberStatus.active => palette.welcomeAccentColor,
   };
 }
@@ -1398,6 +1404,7 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return AppRichActionSheetScaffold(
       title: '委婉提醒',
       description: '先选内容，再选对象；两个栏目可以来回切换。',
@@ -1405,7 +1412,7 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
       header: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: AppColors.surfaceMuted,
+          color: appColors.surfaceMuted,
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(

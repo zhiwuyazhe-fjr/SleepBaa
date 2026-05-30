@@ -21,7 +21,7 @@ abstract final class AppColors {
   static const Color primaryDeep = Color(0xFF3F5962);
   static const Color calmBlue = Color(0xFF4EA8C2);
 
-  static const Color darkBackground = Color(0xFF0C0E10);
+  static const Color darkBackground = Color(0xFF050505);
   static const Color darkCard = Color(0xFF1A1A1A);
   static const Color darkSurface = Color(0xFF1A1C1E);
   static const Color darkPill = Color(0xFF1A1A1A);

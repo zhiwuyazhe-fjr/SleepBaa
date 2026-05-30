@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
@@ -32,11 +32,12 @@ class PlaceholderPageScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
     final NightMoodPalette palette = context.nightMoodPalette;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: appColors.pageBackground,
       appBar: AppDetailPageAppBar(
         title: title,
         onBack: () => Navigator.of(context).maybePop(),
@@ -57,7 +58,7 @@ class PlaceholderPageScaffold extends StatelessWidget {
               const SizedBox(height: AppSpacing.sm),
               AppCard(
                 onTap: () => _showPendingToast(context),
-                color: AppColors.surface,
+                color: appColors.surface,
                 borderRadius: AppRadius.compactCard,
                 padding: const EdgeInsets.all(AppSpacing.md),
                 child: Column(
@@ -75,7 +76,7 @@ class PlaceholderPageScaffold extends StatelessWidget {
                     Text(
                       description,
                       style: textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFF888888),
+                        color: appColors.textSecondary,
                         fontWeight: FontWeight.w400,
                       ),
                     ),
@@ -84,7 +85,7 @@ class PlaceholderPageScaffold extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.sm),
               AppCard(
-                color: AppColors.legacyCardSurface,
+                color: appColors.surfaceMuted,
                 borderRadius: AppRadius.compactCard,
                 padding: const EdgeInsets.all(AppSpacing.md),
                 child: Column(
@@ -114,7 +115,7 @@ class PlaceholderPageScaffold extends StatelessWidget {
                             child: Text(
                               point,
                               style: textTheme.bodyMedium?.copyWith(
-                                color: AppColors.textSecondary,
+                                color: appColors.textSecondary,
                                 fontWeight: FontWeight.w400,
                               ),
                             ),

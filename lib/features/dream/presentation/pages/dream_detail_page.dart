@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
@@ -13,18 +14,19 @@ class DreamDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     final DreamEntryData entry = DreamContent.entries.first;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: appColors.pageBackground,
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: <Color>[
-              palette.primaryHighlight.withAlpha(130),
-              AppColors.background,
+              appColors.accentSoft.withAlpha(100),
+              appColors.pageBackground,
             ],
           ),
         ),
@@ -42,7 +44,7 @@ class DreamDetailPage extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(AppSpacing.xl),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: appColors.surface,
                   borderRadius: AppRadius.cardLarge,
                   boxShadow: AppColors.cardShadow,
                 ),
@@ -59,14 +61,14 @@ class DreamDetailPage extends StatelessWidget {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: palette.primaryHighlight.withAlpha(170),
+                            color: appColors.accentSoft.withAlpha(170),
                             borderRadius: AppRadius.pill,
                           ),
                           child: Text(
                             tag,
                             style: Theme.of(context).textTheme.labelMedium
                                 ?.copyWith(
-                                  color: palette.primaryDeep,
+                                  color: appColors.accentDeep,
                                   fontWeight: FontWeight.w700,
                                 ),
                           ),
@@ -77,13 +79,16 @@ class DreamDetailPage extends StatelessWidget {
                     Text(
                       entry.title,
                       style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.w800),
+                          ?.copyWith(
+                            color: appColors.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       entry.summary,
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: appColors.textSecondary,
                         height: 1.6,
                       ),
                     ),
@@ -147,10 +152,11 @@ class _DetailSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: appColors.surface,
         borderRadius: AppRadius.card,
         boxShadow: AppColors.cardShadow,
       ),
@@ -161,7 +167,10 @@ class _DetailSection extends StatelessWidget {
             title,
             style: Theme.of(
               context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ).textTheme.titleLarge?.copyWith(
+              color: appColors.textPrimary,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           ...children.map(
@@ -183,7 +192,7 @@ class _DetailSection extends StatelessWidget {
                     child: Text(
                       item,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: appColors.textSecondary,
                         height: 1.45,
                       ),
                     ),
@@ -211,24 +220,25 @@ class _MetaChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
         vertical: AppSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: palette.primaryHighlight.withAlpha(160),
+        color: appColors.accentSoft.withAlpha(160),
         borderRadius: AppRadius.pill,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(icon, size: 16, color: palette.primaryDeep),
+          Icon(icon, size: 16, color: appColors.accentDeep),
           const SizedBox(width: AppSpacing.xs),
           Text(
             label,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: palette.primaryDeep,
+              color: appColors.accentDeep,
               fontWeight: FontWeight.w700,
             ),
           ),

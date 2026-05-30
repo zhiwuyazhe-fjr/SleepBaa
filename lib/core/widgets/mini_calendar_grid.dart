@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 
@@ -21,6 +21,7 @@ class MiniCalendarGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     return Column(
       children: <Widget>[
         if (showWeekdays) ...<Widget>[
@@ -32,7 +33,7 @@ class MiniCalendarGrid extends StatelessWidget {
                       child: Text(
                         label,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AppColors.textSecondary.withAlpha(120),
+                          color: appColors.textSecondary.withAlpha(120),
                         ),
                       ),
                     ),
@@ -55,7 +56,7 @@ class MiniCalendarGrid extends StatelessWidget {
           itemBuilder: (BuildContext context, int index) {
             return DecoratedBox(
               decoration: BoxDecoration(
-                color: _resolveColor(intensity[index], palette),
+                color: _resolveColor(intensity[index], palette, appColors),
                 borderRadius: BorderRadius.circular(AppRadius.xs),
               ),
             );
@@ -65,14 +66,18 @@ class MiniCalendarGrid extends StatelessWidget {
     );
   }
 
-  Color _resolveColor(int step, NightMoodPalette palette) {
+  Color _resolveColor(
+    int step,
+    NightMoodPalette palette,
+    AppSemanticColors appColors,
+  ) {
     return switch (step) {
       5 => palette.primary,
       4 => palette.primarySoft,
       3 => palette.primarySoft.withAlpha(190),
       2 => palette.primarySoft.withAlpha(120),
       1 => palette.primarySoft.withAlpha(72),
-      _ => AppColors.surfaceSoft,
+      _ => appColors.surfaceMuted,
     };
   }
 }

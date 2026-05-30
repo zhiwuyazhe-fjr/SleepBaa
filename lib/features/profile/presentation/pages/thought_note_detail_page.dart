@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -15,8 +15,9 @@ class ThoughtNoteDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: appColors.pageBackground,
       appBar: AppDetailPageAppBar(
         title: '事记详情',
         onBack: () => Navigator.of(context).maybePop(),
@@ -35,7 +36,7 @@ class ThoughtNoteDetailPage extends StatelessWidget {
             '记录于 ${_formatRecordTime(record.createdAt)}',
             style: AppTypography.meta(
               textTheme,
-            ).copyWith(color: AppColors.textSecondary),
+            ).copyWith(color: appColors.textSecondary),
           ),
           const SizedBox(height: AppSpacing.md),
           AppCard(
@@ -50,7 +51,7 @@ class ThoughtNoteDetailPage extends StatelessWidget {
                   record.outline,
                   style: AppTypography.bodyMuted(
                     textTheme,
-                  ).copyWith(color: AppColors.textSecondary, height: 1.5),
+                  ).copyWith(color: appColors.textSecondary, height: 1.5),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 Text('原文内容', style: AppTypography.cardTitle(textTheme)),

@@ -64,20 +64,20 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
   static AppSemanticColors dark(NightMoodPalette palette) {
     final Color accent = _darkAccentForMood(palette.mood);
     return AppSemanticColors(
-      pageBackground: const Color(0xFF121416),
+      pageBackground: AppColors.darkBackground,
       surface: const Color(0xFF1C2023),
       surfaceMuted: const Color(0xFF24292D),
       surfaceRaised: const Color(0xFF2A3034),
       borderSubtle: const Color(0x29FFFFFF),
       textPrimary: const Color(0xFFF3F5F4),
       textSecondary: const Color(0xFFC4CBC8),
-      textOnAccent: const Color(0xFF10221F),
+      textOnAccent: AppColors.onDark,
       accent: accent,
       accentSoft: _blendOnDark(accent, const Color(0xFF1C2023), 0.24),
       accentDeep: _darkDeepForMood(palette.mood),
-      heroStart: _blendOnDark(palette.heroGradientStart, AppColors.onDark, 0.4),
-      heroMid: _blendOnDark(palette.heroGradientMid, AppColors.onDark, 0.32),
-      heroEnd: _blendOnDark(palette.heroGradientEnd, AppColors.onDark, 0.2),
+      heroStart: palette.heroGradientStart,
+      heroMid: palette.heroGradientMid,
+      heroEnd: palette.heroGradientEnd,
       darkGlass: const Color(0x2EFFFFFF),
       primaryButtonShadow: _primaryButtonShadow(accent),
     );

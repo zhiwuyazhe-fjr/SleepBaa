@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
@@ -96,6 +95,7 @@ class _HomeQuickActionsEditPageState extends State<HomeQuickActionsEditPage> {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppDetailPageAppBar(title: '编辑快捷功能', onBack: () => context.pop()),
@@ -165,9 +165,9 @@ class _HomeQuickActionsEditPageState extends State<HomeQuickActionsEditPage> {
               horizontal: AppPageInsets.horizontal,
               vertical: AppSpacing.md,
             ),
-            decoration: const BoxDecoration(
-              color: AppColors.background,
-              border: Border(top: BorderSide(color: AppColors.divider)),
+            decoration: BoxDecoration(
+              color: appColors.pageBackground,
+              border: Border(top: BorderSide(color: appColors.borderSubtle)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -179,7 +179,7 @@ class _HomeQuickActionsEditPageState extends State<HomeQuickActionsEditPage> {
                     textAlign: TextAlign.center,
                     style: AppTypography.meta(
                       textTheme,
-                    ).copyWith(color: context.appColors.accentDeep),
+                    ).copyWith(color: appColors.accentDeep),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                 ],
@@ -213,7 +213,7 @@ class _EditorSectionHeader extends StatelessWidget {
           detail,
           style: AppTypography.meta(
             textTheme,
-          ).copyWith(color: AppColors.textSecondary),
+            ).copyWith(color: context.appColors.textSecondary),
         ),
       ],
     );
@@ -233,23 +233,24 @@ class _SelectedQuickActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color iconColor = context.appColors.accentDeep;
+    final AppSemanticColors appColors = context.appColors;
+    final Color iconColor = appColors.accentDeep;
     return _QuickActionStripTile(
       action: action,
       enabled: true,
       iconColor: iconColor,
-      titleColor: AppColors.textPrimary,
+      titleColor: appColors.textPrimary,
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           ReorderableDragStartListener(
             key: ValueKey<String>('home-quick-action-drag-${action.id}'),
             index: index,
-            child: const Padding(
-              padding: EdgeInsets.all(AppSpacing.xs),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.xs),
               child: Icon(
                 Icons.drag_handle_rounded,
-                color: AppColors.textHint,
+                color: appColors.textSecondary,
                 size: AppSpacing.lg,
               ),
             ),
@@ -280,20 +281,20 @@ class _AvailableQuickActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color iconColor = enabled
-        ? context.appColors.accentDeep
-        : AppColors.textHint;
+    final AppSemanticColors appColors = context.appColors;
+    final Color disabledColor = appColors.textSecondary.withAlpha(120);
+    final Color iconColor = enabled ? appColors.accentDeep : disabledColor;
     return _QuickActionStripTile(
       key: ValueKey<String>('home-quick-action-add-${action.id}'),
       action: action,
       enabled: enabled,
       iconColor: iconColor,
-      titleColor: enabled ? AppColors.textPrimary : AppColors.textHint,
+      titleColor: enabled ? appColors.textPrimary : disabledColor,
       onTap: enabled ? onTap : null,
       trailing: Icon(
         Icons.add_rounded,
         size: AppSpacing.lg,
-        color: enabled ? AppColors.textSecondary : AppColors.textHint,
+        color: enabled ? appColors.textSecondary : disabledColor,
       ),
     );
   }
@@ -319,13 +320,14 @@ class _QuickActionStripTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       padding: EdgeInsets.zero,
       borderRadius: AppRadius.compactCard,
       boxShadow: const <BoxShadow>[],
-      border: Border.all(color: AppColors.divider),
-      color: enabled ? AppColors.surface : AppColors.surfaceMuted,
+      border: Border.all(color: appColors.borderSubtle),
+      color: enabled ? appColors.surface : appColors.surfaceMuted,
       onTap: onTap,
       child: AppSettingsItem(
         title: action.label,
@@ -366,7 +368,7 @@ class _StripActionButton extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpacing.xs),
             child: Icon(
               icon,
-              color: AppColors.textPrimary,
+              color: context.appColors.textPrimary,
               size: AppSpacing.lg,
             ),
           ),

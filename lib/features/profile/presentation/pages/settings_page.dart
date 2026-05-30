@@ -299,7 +299,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   children: <Widget>[
                     AppSettingsItem(
                       icon: Icons.person_outline_rounded,
-                      iconColor: context.nightMoodPalette.primaryDeep,
+                      iconColor: appColors.accentDeep,
                       iconBackgroundColor: appColors.surfaceMuted,
                       title: '账号管理',
                       titleStyle: textTheme.titleMedium?.copyWith(
@@ -388,7 +388,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     AppSettingsItem(
                       icon: Icons.auto_awesome_rounded,
                       title: '回复文字浮动',
-                      iconColor: context.nightMoodPalette.primaryDeep,
+                      iconColor: appColors.accentDeep,
                       iconBackgroundColor: appColors.surfaceMuted,
                       trailing: _SettingsValueTrailing(
                         value: _assistantReplyMotionTitle(
@@ -405,7 +405,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   children: <Widget>[
                     AppSettingsItem(
                       icon: Icons.nightlight_round,
-                      iconColor: context.nightMoodPalette.primaryDeep,
+                      iconColor: appColors.accentDeep,
                       iconBackgroundColor: appColors.surfaceMuted,
                       title: '打开心情选择流程',
                       titleStyle: textTheme.titleMedium?.copyWith(
@@ -415,7 +415,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                     AppSettingsItem(
                       icon: Icons.contrast_rounded,
-                      iconColor: context.nightMoodPalette.primaryDeep,
+                      iconColor: appColors.accentDeep,
                       iconBackgroundColor: appColors.surfaceMuted,
                       title: '外观模式',
                       trailing: AppSettingsValueTrailing(
@@ -457,7 +457,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         AppSettingsItem(
                           icon: Icons.schedule_rounded,
                           title: '睡前提醒时间',
-                          iconColor: context.nightMoodPalette.primaryDeep,
+                          iconColor: appColors.accentDeep,
                           iconBackgroundColor: appColors.surfaceMuted,
                           trailing: _SettingsValueTrailing(
                             value: Formatters.formatClock(_bedtimeReminder),
@@ -551,7 +551,7 @@ class _SettingsSliderRow extends StatelessWidget {
       children: <Widget>[
         AppSettingsItem(
           icon: Icons.hotel_rounded,
-          iconColor: context.nightMoodPalette.primaryDeep,
+          iconColor: context.appColors.accentDeep,
           iconBackgroundColor: context.appColors.surfaceMuted,
           title: title,
           trailing: _SettingsValueTrailing(
@@ -654,7 +654,7 @@ class _SettingsSwitchRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppSettingsItem(
       icon: icon,
-      iconColor: context.nightMoodPalette.primaryDeep,
+      iconColor: context.appColors.accentDeep,
       iconBackgroundColor: context.appColors.surfaceMuted,
       title: title,
       trailing: AppSettingsToggle(
@@ -759,7 +759,7 @@ class _MoodAssistantFabSlot extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: textTheme.bodyLarge?.copyWith(
-                  color: palette.primaryDeep,
+                  color: context.appColors.textPrimary,
                   fontWeight: FontWeight.w500,
                   height: 1.1,
                 ),

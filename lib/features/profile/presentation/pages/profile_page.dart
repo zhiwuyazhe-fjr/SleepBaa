@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -23,6 +23,7 @@ class ProfilePage extends StatelessWidget {
         services.settingsRepository,
       ]),
       builder: (BuildContext context, Widget? child) {
+        final AppSemanticColors appColors = context.appColors;
         final UserProfile profile = services.authRepository.currentUser;
         final UserSettings settings =
             services.settingsRepository.currentSettings;
@@ -46,7 +47,7 @@ class ProfilePage extends StatelessWidget {
             buildProfileBadgePreview(profile);
 
         return Scaffold(
-          backgroundColor: AppColors.background,
+          backgroundColor: appColors.pageBackground,
           body: SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(0, AppSpacing.sm, 0, 128),

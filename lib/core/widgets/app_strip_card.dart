@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 
@@ -36,12 +37,15 @@ class AppStripCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
 
     return AppCard(
       onTap: onTap,
       padding: padding,
-      color: backgroundColor,
+      color: backgroundColor == AppColors.surface
+          ? appColors.surface
+          : backgroundColor,
       borderRadius: borderRadius ?? AppRadius.stripCard,
       border: borderColor == null ? null : Border.all(color: borderColor!),
       boxShadow: boxShadow,
@@ -72,7 +76,7 @@ class AppStripCard extends StatelessWidget {
                     style:
                         subtitleStyle ??
                         textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
+                          color: appColors.textSecondary,
                         ),
                   ),
                 ],

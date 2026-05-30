@@ -560,7 +560,7 @@ class _DormRulesEditPageState extends State<DormRulesEditPage> {
                               side: BorderSide(
                                 color: selected
                                     ? appColors.accentDeep.withAlpha(80)
-                                    : AppColors.surfaceBorder,
+                                    : appColors.borderSubtle,
                               ),
                               onSelected: (_) {
                                 setSheetState(() {
@@ -1949,7 +1949,7 @@ class _DormRulesInlineSlider extends StatelessWidget {
                           data: SliderTheme.of(context).copyWith(
                             trackHeight: AppSpacing.xxs,
                             activeTrackColor: appColors.accent,
-                            inactiveTrackColor: AppColors.surfaceSoft,
+                            inactiveTrackColor: appColors.surfaceMuted,
                             thumbColor: appColors.accentDeep,
                             overlayShape: SliderComponentShape.noOverlay,
                             thumbShape: const RoundSliderThumbShape(

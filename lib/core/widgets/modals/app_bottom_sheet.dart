@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal_spec.dart';
@@ -139,17 +139,17 @@ class AppBottomSheetCard extends StatelessWidget {
   const AppBottomSheetCard({
     super.key,
     required this.child,
-    this.backgroundColor = Colors.white,
+    this.backgroundColor,
   });
 
   final Widget child;
-  final Color backgroundColor;
+  final Color? backgroundColor;
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: backgroundColor,
+        color: backgroundColor ?? context.appColors.surface,
         borderRadius: BorderRadius.circular(24),
       ),
       child: child,
@@ -162,7 +162,7 @@ class AppRichDetailSheetScaffold extends StatelessWidget {
     super.key,
     required this.child,
     this.surfaceKey = const ValueKey<String>('app-bottom-sheet-rich-detail'),
-    this.backgroundColor = AppColors.surface,
+    this.backgroundColor,
     this.borderRadius = const BorderRadius.vertical(top: Radius.circular(28)),
     this.showHandle = true,
     this.includeBottomSafeInset = true,
@@ -170,13 +170,14 @@ class AppRichDetailSheetScaffold extends StatelessWidget {
 
   final Widget child;
   final Key surfaceKey;
-  final Color backgroundColor;
+  final Color? backgroundColor;
   final BorderRadiusGeometry borderRadius;
   final bool showHandle;
   final bool includeBottomSafeInset;
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final double viewInsetBottom = MediaQuery.viewInsetsOf(context).bottom;
     final double bottomSafeInset = MediaQuery.viewPaddingOf(context).bottom;
     final double bottomGestureInset = MediaQuery.systemGestureInsetsOf(
@@ -199,7 +200,7 @@ class AppRichDetailSheetScaffold extends StatelessWidget {
             key: surfaceKey,
             width: double.infinity,
             decoration: BoxDecoration(
-              color: backgroundColor,
+              color: backgroundColor ?? appColors.surface,
               borderRadius: borderRadius,
             ),
             child: SafeArea(
@@ -217,7 +218,7 @@ class AppRichDetailSheetScaffold extends StatelessWidget {
                           width: handleWidth,
                           height: handleHeight,
                           decoration: BoxDecoration(
-                            color: AppColors.surfaceBorder,
+                            color: appColors.borderSubtle,
                             borderRadius: BorderRadius.circular(handleHeight),
                           ),
                         ),
@@ -263,6 +264,7 @@ class AppRichActionSheetScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return AppRichDetailSheetScaffold(
       surfaceKey: surfaceKey,
       child: Padding(
@@ -286,7 +288,7 @@ class AppRichActionSheetScaffold extends StatelessWidget {
                   Text(
                     description!,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
+                      color: appColors.textSecondary,
                       height: 1.5,
                     ),
                   ),

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
@@ -37,7 +36,7 @@ class SectionTitle extends StatelessWidget {
         (useDormStyle
             ? AppTypography.sectionTitle(
                 textTheme,
-              ).copyWith(color: AppColors.textPrimary)
+              ).copyWith(color: appColors.textPrimary)
             : textTheme.headlineSmall);
     final TextStyle? resolvedActionStyle =
         actionStyle ??

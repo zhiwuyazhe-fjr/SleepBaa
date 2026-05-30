@@ -462,7 +462,7 @@ class _BadgeCatalogModeSwitch extends StatelessWidget {
     final AppSemanticColors appColors = context.appColors;
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: appColors.surface,
         borderRadius: AppRadius.pill,
         border: Border.all(color: appColors.accentSoft.withAlpha(150)),
       ),
@@ -592,7 +592,7 @@ class _CatalogSummaryCard extends StatelessWidget {
                 vertical: verticalPadding,
               ),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: appColors.surface,
                 borderRadius: BorderRadius.circular(AppRadius.lg),
                 border: Border.all(color: appColors.accentSoft.withAlpha(150)),
                 boxShadow: AppColors.cardShadow,
@@ -659,9 +659,9 @@ class _CatalogSummaryCard extends StatelessWidget {
                           child: _SummaryActionButton(
                             label: actionLabel,
                             onPressed: onActionPressed,
-                            backgroundColor: AppColors.surfaceMuted,
-                            foregroundColor: palette.primaryDeep,
-                            disabledForegroundColor: AppColors.textSecondary,
+                            backgroundColor: appColors.surfaceMuted,
+                            foregroundColor: appColors.accentDeep,
+                            disabledForegroundColor: appColors.textSecondary,
                             horizontalPadding: buttonHorizontalPadding,
                             height: actionHeight,
                           ),
@@ -720,7 +720,7 @@ class _SummaryBadgeVisual extends StatelessWidget {
       child: Icon(
         hasBadge ? iconData! : Icons.emoji_events_outlined,
         size: size * 0.44,
-        color: hasBadge ? appColors.accentDeep : AppColors.textHint,
+        color: hasBadge ? appColors.accentDeep : appColors.textSecondary,
       ),
     );
   }
@@ -745,7 +745,7 @@ class _SummaryModeChip extends StatelessWidget {
       height: height,
       padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
       decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
+        color: appColors.surfaceMuted,
         borderRadius: AppRadius.pill,
       ),
       alignment: Alignment.center,
@@ -971,7 +971,7 @@ class _ProfileBadgeTileVisual extends StatelessWidget {
         ? appColors.accentDeep
         : badge.unlocked
         ? appColors.accentDeep
-        : AppColors.textHint;
+        : appColors.textSecondary;
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
@@ -1121,7 +1121,7 @@ class _DormBadgeTileVisual extends StatelessWidget {
         ? appColors.accentDeep
         : badge.unlocked
         ? appColors.accentDeep
-        : AppColors.textHint;
+        : appColors.textSecondary;
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {

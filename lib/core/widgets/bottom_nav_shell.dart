@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
@@ -64,6 +65,7 @@ class _BottomNavShellState extends State<BottomNavShell> {
         services.settingsRepository,
       ]),
       builder: (BuildContext context, Widget? child) {
+        final AppSemanticColors appColors = context.appColors;
         final bool hideShellChrome =
             widget.navigationShell.currentIndex == 0 &&
             services.nightWelcomeController.shouldShowWelcome(
@@ -104,9 +106,12 @@ class _BottomNavShellState extends State<BottomNavShell> {
                         22,
                       ),
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
+                        color: appColors.surface,
                         border: Border(
-                          top: BorderSide(color: AppColors.divider, width: 1),
+                          top: BorderSide(
+                            color: appColors.borderSubtle,
+                            width: 1,
+                          ),
                         ),
                       ),
                       child: Row(
@@ -190,6 +195,7 @@ class _NavPillButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
@@ -210,14 +216,14 @@ class _NavPillButton extends StatelessWidget {
             children: <Widget>[
               Icon(
                 item.icon,
-                color: selected ? AppColors.onDark : AppColors.textHint,
+                color: selected ? AppColors.onDark : appColors.textSecondary,
                 size: 20,
               ),
               const SizedBox(height: 2),
               Text(
                 item.label,
                 style: textTheme.labelSmall?.copyWith(
-                  color: selected ? AppColors.onDark : AppColors.textHint,
+                  color: selected ? AppColors.onDark : appColors.textSecondary,
                   fontWeight: FontWeight.w400,
                 ),
               ),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -78,6 +78,7 @@ class _AppMenuGroupRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -96,7 +97,15 @@ class _AppMenuGroupRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(item.title, style: item.titleStyle),
+                    Text(
+                      item.title,
+                      style:
+                          item.titleStyle ??
+                          Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: appColors.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
                     if (item.subtitle != null) ...<Widget>[
                       const SizedBox(height: AppSpacing.xxs),
                       Text(
@@ -104,7 +113,7 @@ class _AppMenuGroupRow extends StatelessWidget {
                         style:
                             item.subtitleStyle ??
                             Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppColors.textSecondary,
+                              color: appColors.textSecondary,
                               height: 1.35,
                             ),
                       ),
@@ -114,9 +123,9 @@ class _AppMenuGroupRow extends StatelessWidget {
               ),
               const SizedBox(width: AppSpacing.sm),
               item.trailing ??
-                  const Icon(
+                  Icon(
                     Icons.chevron_right_rounded,
-                    color: AppColors.textHint,
+                    color: appColors.textSecondary,
                   ),
             ],
           ),
@@ -133,7 +142,7 @@ class _AppMenuGroupIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color iconColor = item.iconColor ?? AppColors.textPrimary;
+    final Color iconColor = item.iconColor ?? context.appColors.textPrimary;
     if (item.iconBackgroundColor == null) {
       return SizedBox(
         width: item.iconSize + AppSpacing.xs,

@@ -1,8 +1,8 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -149,7 +149,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                           '头像也可以直接点按更新。',
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
-                                color: AppColors.textSecondary,
+                                color: context.appColors.textSecondary,
                                 height: 1.3,
                               ),
                         ),
@@ -257,6 +257,7 @@ class _EditSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -270,7 +271,7 @@ class _EditSectionHeader extends StatelessWidget {
         Text(
           subtitle,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppColors.textSecondary,
+            color: appColors.textSecondary,
             height: 1.3,
           ),
         ),
@@ -298,6 +299,7 @@ class _LabeledEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -305,7 +307,7 @@ class _LabeledEditor extends StatelessWidget {
           label,
           style: Theme.of(
             context,
-          ).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary),
+          ).textTheme.labelMedium?.copyWith(color: appColors.textSecondary),
         ),
         const SizedBox(height: AppSpacing.xxs),
         TextField(
@@ -316,18 +318,18 @@ class _LabeledEditor extends StatelessWidget {
           decoration: InputDecoration(
             hintText: hintText,
             filled: true,
-            fillColor: AppColors.surface,
+            fillColor: appColors.surface,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.sm,
               vertical: AppSpacing.sm,
             ),
             border: OutlineInputBorder(
               borderRadius: AppRadius.control,
-              borderSide: const BorderSide(color: AppColors.surfaceBorder),
+              borderSide: BorderSide(color: appColors.borderSubtle),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: AppRadius.control,
-              borderSide: const BorderSide(color: AppColors.surfaceBorder),
+              borderSide: BorderSide(color: appColors.borderSubtle),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: AppRadius.control,
@@ -354,6 +356,7 @@ class _RoleOptionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -372,10 +375,12 @@ class _RoleOptionButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected
                 ? palette.welcomeAccentColor.withAlpha(70)
-                : AppColors.surfaceMuted,
+                : appColors.surfaceMuted,
             borderRadius: AppRadius.compactCard,
             border: Border.all(
-              color: selected ? palette.welcomeAccentColor : AppColors.divider,
+              color: selected
+                  ? palette.welcomeAccentColor
+                  : appColors.borderSubtle,
               width: selected ? 1.8 : 1,
             ),
           ),
@@ -386,8 +391,8 @@ class _RoleOptionButton extends StatelessWidget {
                 selected ? Icons.check_circle_rounded : Icons.circle_outlined,
                 size: 18,
                 color: selected
-                    ? palette.welcomeTextOnAccent
-                    : AppColors.textSecondary,
+                    ? appColors.textOnAccent
+                    : appColors.textSecondary,
               ),
               const SizedBox(width: AppSpacing.sm),
               Flexible(
@@ -395,8 +400,8 @@ class _RoleOptionButton extends StatelessWidget {
                   label,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: selected
-                        ? palette.welcomeTextOnAccent
-                        : AppColors.textPrimary,
+                        ? appColors.textOnAccent
+                        : appColors.textPrimary,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   ),
                 ),

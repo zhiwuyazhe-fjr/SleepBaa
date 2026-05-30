@@ -112,7 +112,10 @@ class _SleepDormAppState extends State<SleepDormApp> {
       useMaterial3: true,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: appColors.pageBackground,
-      textTheme: AppTextStyles.buildTextTheme(),
+      textTheme: AppTextStyles.buildTextTheme(
+        textPrimary: appColors.textPrimary,
+        textSecondary: appColors.textSecondary,
+      ),
       fontFamilyFallback: AppTextStyles.cjkFallbackFonts,
       extensions: <ThemeExtension<dynamic>>[palette, appColors],
       appBarTheme: AppBarTheme(
