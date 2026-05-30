@@ -9,6 +9,7 @@ import 'package:sleep_dorm_app/core/backend/cloudbase_auth_profile_cache_store.d
 import 'package:sleep_dorm_app/core/backend/cloudbase_auth_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_session_store.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_snapshot_store.dart';
+import 'package:sleep_dorm_app/core/backend/user_settings_cache_store.dart';
 import 'package:sleep_dorm_app/core/backend/verified_phone_identity_store.dart';
 import 'package:sleep_dorm_app/core/data/backend_contract.dart';
 import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
@@ -2356,17 +2357,21 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
     required AuthRepository authRepository,
     required CloudBaseSnapshotStore snapshotStore,
     required CloudBaseAppApiClient appApiClient,
+    UserSettings? initialSettings,
+    UserSettingsCacheStore? cacheStore,
   }) : _authRepository = authRepository,
        _snapshotStore = snapshotStore,
-       _appApiClient = appApiClient {
+       _appApiClient = appApiClient,
+       _cacheStore = cacheStore {
     _snapshotStore.addListener(_applySnapshot);
-    _settings = buildDefaultUserSettings();
+    _settings = initialSettings ?? buildDefaultUserSettings();
     _lastSnapshotSettings = _settings;
   }
 
   final AuthRepository _authRepository;
   final CloudBaseSnapshotStore _snapshotStore;
   final CloudBaseAppApiClient _appApiClient;
+  final UserSettingsCacheStore? _cacheStore;
 
   late UserSettings _settings;
   UserSettings? _lastSnapshotSettings;
@@ -2381,6 +2386,7 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
   @override
   void replaceLocalSettings(UserSettings settings) {
     _settings = settings;
+    _cacheSettings(settings);
     notifyListeners();
   }
 
@@ -2458,7 +2464,16 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
         _pendingMoodOverride = null;
       }
     }
+    _cacheSettings(_settings);
     notifyListeners();
+  }
+
+  void _cacheSettings(UserSettings settings) {
+    final UserSettingsCacheStore? cacheStore = _cacheStore;
+    if (cacheStore == null) {
+      return;
+    }
+    unawaited(cacheStore.write(settings));
   }
 
   UserSettings _mergePendingSettingsSave(UserSettings incoming) {

@@ -631,6 +631,75 @@ void main() {
     expect(accountResetLabel.style?.color, appColors.textSecondary);
   });
 
+  testWidgets('phone auth dark mode uses muted blue-gray accents', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.authPhone,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      ),
+    );
+
+    final Finder submitFinder = find.descendant(
+      of: find.byKey(const ValueKey<String>('auth-login-submit')),
+      matching: find.byType(FilledButton),
+    );
+    final FilledButton submitButton = tester.widget<FilledButton>(submitFinder);
+    expect(
+      submitButton.style?.backgroundColor?.resolve(<WidgetState>{}),
+      const Color(0xFF72858E),
+    );
+    expect(
+      submitButton.style?.backgroundColor?.resolve(<WidgetState>{
+        WidgetState.pressed,
+      }),
+      const Color(0xFF8399A3),
+    );
+    expect(
+      submitButton.style?.foregroundColor?.resolve(<WidgetState>{}),
+      const Color(0xFFF3F5F4),
+    );
+
+    final Material passwordSegment = tester.widget<Material>(
+      find.byKey(const ValueKey<String>('auth-login-method-password')),
+    );
+    final Material codeSegment = tester.widget<Material>(
+      find.byKey(const ValueKey<String>('auth-login-method-code')),
+    );
+    expect(passwordSegment.color, const Color(0xFF72858E));
+    expect(codeSegment.color, const Color(0xFF253139));
+  });
+
+  testWidgets('cloudbase auth loading overlay follows dark app background', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.home,
+      clock: _dayClock,
+      environment: _cloudBaseTestEnvironment,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      ),
+      settle: false,
+    );
+
+    final ColoredBox loadingBackdrop = tester.widget<ColoredBox>(
+      find
+          .ancestor(
+            of: find.byType(CircularProgressIndicator),
+            matching: find.byType(ColoredBox),
+          )
+          .last,
+    );
+    expect(loadingBackdrop.color, const Color(0xFF050505).withAlpha(224));
+  });
+
   testWidgets('dream journal uses dark semantic surfaces', (
     WidgetTester tester,
   ) async {
