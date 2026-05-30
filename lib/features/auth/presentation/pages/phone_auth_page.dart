@@ -1781,23 +1781,22 @@ class _AuthAccentColors {
   );
 
   static _AuthAccentColors resolve(BuildContext context) {
-    final AppSemanticColors appColors = context.appColors;
     if (Theme.of(context).brightness != Brightness.dark) {
       return _light;
     }
 
-    return _AuthAccentColors(
-      accent: const Color(0xFF72858E),
-      soft: const Color(0xFF253139),
-      foreground: appColors.textPrimary,
-      pressed: const Color(0xFF8399A3),
-      disabled: appColors.surfaceMuted,
-      disabledForeground: appColors.textSecondary,
-      action: const Color(0xFFC9D9DF),
-      buttonShadow: const Color(0x3372858E),
-      focusShadow: const Color(0x2272858E),
-      infoIcon: const Color(0xFFAFC3CD),
-      success: const Color(0xFF7EA7B4),
+    return const _AuthAccentColors(
+      accent: Color(0xFF72858E),
+      soft: Color(0xFFE8F7FB),
+      foreground: Color(0xFF004F5D),
+      pressed: Color(0xFF7CCDE5),
+      disabled: Color(0xFFCFE4EB),
+      disabledForeground: Color(0xFF6F8890),
+      action: Color(0xFF00697A),
+      buttonShadow: Color(0x4A90DDF2),
+      focusShadow: Color(0x142457CF),
+      infoIcon: Color(0xFF204F96),
+      success: Color(0xFF4EA8C2),
     );
   }
 }

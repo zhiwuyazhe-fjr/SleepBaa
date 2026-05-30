@@ -631,7 +631,7 @@ void main() {
     expect(accountResetLabel.style?.color, appColors.textSecondary);
   });
 
-  testWidgets('phone auth dark mode uses muted blue-gray accents', (
+  testWidgets('phone auth dark mode only mutes the primary light blue', (
     WidgetTester tester,
   ) async {
     await _pumpApp(
@@ -657,11 +657,11 @@ void main() {
       submitButton.style?.backgroundColor?.resolve(<WidgetState>{
         WidgetState.pressed,
       }),
-      const Color(0xFF8399A3),
+      const Color(0xFF7CCDE5),
     );
     expect(
       submitButton.style?.foregroundColor?.resolve(<WidgetState>{}),
-      const Color(0xFFF3F5F4),
+      const Color(0xFF004F5D),
     );
 
     final Material passwordSegment = tester.widget<Material>(
@@ -671,7 +671,10 @@ void main() {
       find.byKey(const ValueKey<String>('auth-login-method-code')),
     );
     expect(passwordSegment.color, const Color(0xFF72858E));
-    expect(codeSegment.color, const Color(0xFF253139));
+    expect(codeSegment.color, const Color(0xFFE8F7FB));
+
+    final Text forgotPassword = tester.widget<Text>(find.text('忘记密码？'));
+    expect(forgotPassword.style?.color, const Color(0xFF00697A));
   });
 
   testWidgets('cloudbase auth loading overlay follows dark app background', (
