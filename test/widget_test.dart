@@ -3,7 +3,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5105,6 +5104,7 @@ void main() {
     expect(find.text('帮助主题'), findsOneWidget);
     expect(find.text('常见问题速览'), findsOneWidget);
     expect(find.text('常见问题内容将继续补充'), findsOneWidget);
+    expect(find.widgetWithText(PrimaryButton, '常见问题内容将继续补充'), findsOneWidget);
 
     await tester.tap(find.text('常见问题速览'));
     await tester.pump();
@@ -5116,6 +5116,34 @@ void main() {
     await tester.pump();
 
     expect(find.text('FAQ 正在整理中'), findsOneWidget);
+  });
+
+  testWidgets('profile edit top card uses dark semantic highlight', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileEdit,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      ),
+    );
+
+    final Finder profileIntroText = find.text('调整昵称、签名和角色，让账号页展示更完整。');
+    expect(profileIntroText, findsOneWidget);
+
+    final BuildContext context = tester.element(profileIntroText);
+    final AppSemanticColors appColors = context.appColors;
+    final AppCard introCard = tester.widget<AppCard>(
+      find.ancestor(of: profileIntroText, matching: find.byType(AppCard)),
+    );
+    expect(introCard.color, appColors.accentSoft);
+    expect(introCard.border, Border.all(color: appColors.accent.withAlpha(92)));
+
+    final Text introTitle = tester.widget<Text>(profileIntroText);
+    expect(introTitle.style?.color, appColors.textPrimary);
   });
 
   testWidgets('profile report entry opens sleep report page', (
@@ -5826,6 +5854,42 @@ void main() {
     expect(
       streakValue.style?.fontSize,
       AppTypography.panelTitle(textTheme).fontSize,
+    );
+  });
+
+  testWidgets('calendar selected day marker uses semantic dark accent', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileCalendar,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      ),
+    );
+
+    final int targetDay = DateTime.now().subtract(const Duration(days: 1)).day;
+    final Finder targetCell = find.byKey(
+      ValueKey<String>('calendar-day-cell-$targetDay'),
+    );
+
+    final BuildContext context = tester.element(
+      find.byType(CalendarCheckinPage),
+    );
+    final AppSemanticColors appColors = context.appColors;
+    final Ink selectedInk = tester.widget<Ink>(
+      find.descendant(of: targetCell, matching: find.byType(Ink)).first,
+    );
+    final BoxDecoration decoration = selectedInk.decoration! as BoxDecoration;
+    expect(decoration.color, appColors.accent);
+    expect(
+      decoration.border,
+      Border.all(color: appColors.accentDeep, width: 2),
     );
   });
 

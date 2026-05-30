@@ -309,22 +309,33 @@ class HomeActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final bool selected =
         recommendation.executionState != RecommendationExecutionState.idle;
     final bool highlight = selected;
-    final Color cardColor = highlight ? appColors.accent : appColors.surface;
-    final Color foreground = highlight
-        ? appColors.textOnAccent
-        : appColors.textPrimary;
+    final Color cardColor = highlight
+        ? appColors.accentSoft
+        : appColors.surface;
+    final Color foreground = appColors.textPrimary;
     final Color borderColor = highlight
-        ? appColors.accent.withAlpha(84)
+        ? appColors.accent.withAlpha(isDark ? 190 : 140)
         : appColors.borderSubtle;
     final Color chipBackground = highlight
-        ? Colors.white.withAlpha(170)
+        ? (isDark ? appColors.surfaceRaised : appColors.surface)
         : appColors.pageBackground;
     final Color chipForeground = highlight
-        ? appColors.textOnAccent
+        ? appColors.accentDeep
         : appColors.textSecondary;
+    final Color controlBackground = highlight
+        ? appColors.accent
+        : appColors.pageBackground;
+    final Color controlForeground = highlight
+        ? appColors.textOnAccent
+        : appColors.accentDeep;
+    final Color iconBackground = highlight
+        ? (isDark ? appColors.surfaceRaised : appColors.surface)
+        : appColors.pageBackground;
+    final Color iconForeground = appColors.accentDeep;
     final String title = displayTitle?.trim().isNotEmpty ?? false
         ? displayTitle!.trim()
         : recommendation.title;
@@ -337,7 +348,7 @@ class HomeActionCard extends StatelessWidget {
       padding: EdgeInsets.zero,
       borderRadius: AppRadius.stripCard,
       color: cardColor,
-      border: Border.all(color: borderColor),
+      border: Border.all(color: borderColor, width: highlight ? 1.2 : 1),
       onTap: _isAudio ? null : onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -354,18 +365,17 @@ class HomeActionCard extends StatelessWidget {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: highlight
-                            ? Colors.white.withAlpha(208)
-                            : appColors.pageBackground,
+                        color: iconBackground,
                         shape: BoxShape.circle,
+                        border: highlight
+                            ? Border.all(color: appColors.accent.withAlpha(80))
+                            : null,
                       ),
                       alignment: Alignment.center,
                       child: Icon(
                         recommendation.icon,
                         size: 20,
-                        color: highlight
-                            ? appColors.textOnAccent
-                            : appColors.accentDeep,
+                        color: iconForeground,
                       ),
                     ),
                     const SizedBox(width: AppSpacing.md),
@@ -416,9 +426,7 @@ class HomeActionCard extends StatelessWidget {
                   _AudioTransportIcon(
                     icon: Icons.skip_previous_rounded,
                     onTap: onPreviousAudio,
-                    color: highlight
-                        ? appColors.textOnAccent
-                        : appColors.accentDeep,
+                    color: controlForeground,
                   ),
                 InkWell(
                   onTap: AppHaptics.tapHandler(onPlayToggle ?? onTap),
@@ -427,13 +435,11 @@ class HomeActionCard extends StatelessWidget {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: highlight
-                          ? Colors.white.withAlpha(220)
-                          : appColors.pageBackground,
+                      color: controlBackground,
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: highlight
-                            ? appColors.accentDeep
+                            ? appColors.accent
                             : appColors.borderSubtle,
                       ),
                     ),
@@ -441,9 +447,7 @@ class HomeActionCard extends StatelessWidget {
                     child: Icon(
                       _trailingIcon(selected),
                       size: 22,
-                      color: highlight
-                          ? appColors.textOnAccent
-                          : appColors.accentDeep,
+                      color: controlForeground,
                     ),
                   ),
                 ),
@@ -451,9 +455,7 @@ class HomeActionCard extends StatelessWidget {
                   _AudioTransportIcon(
                     icon: Icons.skip_next_rounded,
                     onTap: onNextAudio,
-                    color: highlight
-                        ? appColors.textOnAccent
-                        : appColors.accentDeep,
+                    color: controlForeground,
                   ),
               ],
             ),

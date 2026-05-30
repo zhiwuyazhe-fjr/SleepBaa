@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
@@ -452,6 +451,13 @@ class _DayCell extends StatelessWidget {
         session != null &&
         _sleepGoalMetForSession(session!, sleepGoalHours) == true;
     final AppSemanticColors appColors = context.appColors;
+    final Color selectedFill = appColors.accent;
+    final Color selectedForeground = appColors.textOnAccent;
+    final Border cellBorder = selected
+        ? Border.all(color: appColors.accentDeep, width: 2)
+        : pending
+        ? Border.all(color: appColors.accent.withAlpha(180))
+        : Border.all(color: appColors.borderSubtle.withAlpha(120));
     final Color fill = switch (quality) {
       5 => palette.primary,
       4 => palette.primarySoft,
@@ -478,13 +484,18 @@ class _DayCell extends StatelessWidget {
       },
       child: Ink(
         decoration: BoxDecoration(
-          color: selected ? appColors.accentDeep : fill,
+          color: selected ? selectedFill : fill,
           borderRadius: AppRadius.surfaceSecondary,
-          border: pending
-              ? Border.all(
-                  color: palette.primary.withAlpha(selected ? 255 : 180),
-                )
-              : null,
+          border: cellBorder,
+          boxShadow: selected
+              ? <BoxShadow>[
+                  BoxShadow(
+                    color: appColors.accent.withAlpha(70),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : const <BoxShadow>[],
         ),
         child: Stack(
           children: <Widget>[
@@ -500,7 +511,7 @@ class _DayCell extends StatelessWidget {
                       style: AppTypography.meta(Theme.of(context).textTheme)
                           .copyWith(
                             color: selected
-                                ? AppColors.onDark
+                                ? selectedForeground
                                 : quality > 3
                                 ? appColors.accentDeep
                                 : appColors.textPrimary,
@@ -513,7 +524,7 @@ class _DayCell extends StatelessWidget {
                         style: AppTypography.chip(Theme.of(context).textTheme)
                             .copyWith(
                               color: selected
-                                  ? AppColors.onDark
+                                  ? selectedForeground
                                   : appColors.accentDeep,
                               fontWeight: FontWeight.w700,
                             ),
@@ -532,7 +543,7 @@ class _DayCell extends StatelessWidget {
                   height: 7,
                   decoration: BoxDecoration(
                     color: selected
-                        ? AppColors.onDark
+                        ? selectedForeground
                         : const Color(0xFF2D9272),
                     shape: BoxShape.circle,
                   ),

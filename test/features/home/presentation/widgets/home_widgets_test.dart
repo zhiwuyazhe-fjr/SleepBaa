@@ -248,6 +248,49 @@ void main() {
     expect(card.border, Border.all(color: tokens.borderSubtle));
   });
 
+  testWidgets('selected home action card uses dark semantic state colors', (
+    WidgetTester tester,
+  ) async {
+    final NightMoodPalette palette = NightMoodPalette.fromMood(NightMood.calm);
+    final AppSemanticColors tokens = AppSemanticColors.dark(palette).copyWith(
+      accent: const Color(0xFF4D9B86),
+      accentSoft: const Color(0xFF233530),
+      accentDeep: const Color(0xFFA7DDCC),
+      surfaceRaised: const Color(0xFF2D3338),
+      textPrimary: const Color(0xFFF3F5F4),
+      textOnAccent: Colors.white,
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        HomeActionCard(
+          recommendation: _quickRecommendation(
+            executionState: RecommendationExecutionState.completed,
+          ),
+          onTap: () {},
+        ),
+        dark: true,
+        tokens: tokens,
+      ),
+    );
+
+    final AppCard card = tester.widget<AppCard>(
+      find.ancestor(of: find.text('佩戴隔音耳塞'), matching: find.byType(AppCard)),
+    );
+    expect(card.color, tokens.accentSoft);
+    expect(
+      card.border,
+      Border.all(color: tokens.accent.withAlpha(190), width: 1.2),
+    );
+
+    final Text title = tester.widget<Text>(find.text('佩戴隔音耳塞'));
+    expect(title.style?.color, tokens.textPrimary);
+    final Text tag = tester.widget<Text>(find.text('低刺激'));
+    expect(tag.style?.color, tokens.accentDeep);
+    final Icon trailing = tester.widget<Icon>(find.byIcon(Icons.check_rounded));
+    expect(trailing.color, tokens.textOnAccent);
+  });
+
   testWidgets('home action card title is lower than section title', (
     WidgetTester tester,
   ) async {
@@ -374,6 +417,7 @@ Widget _wrap(Widget child, {bool dark = false, AppSemanticColors? tokens}) {
   return MaterialApp(
     theme: ThemeData(
       useMaterial3: true,
+      brightness: dark ? Brightness.dark : Brightness.light,
       extensions: <ThemeExtension<dynamic>>[
         palette,
         tokens ?? AppSemanticColors.light(palette),
@@ -383,6 +427,20 @@ Widget _wrap(Widget child, {bool dark = false, AppSemanticColors? tokens}) {
       backgroundColor: dark ? const Color(0xFF111111) : Colors.white,
       body: Center(child: SizedBox(width: 420, child: child)),
     ),
+  );
+}
+
+NightRecommendation _quickRecommendation({
+  required RecommendationExecutionState executionState,
+}) {
+  return NightRecommendation(
+    id: 'earplugs',
+    title: '佩戴隔音耳塞',
+    subtitle: '',
+    type: RecommendationType.quickAction,
+    icon: Icons.hearing_rounded,
+    tags: const <String>['低刺激', '2分钟'],
+    executionState: executionState,
   );
 }
 
