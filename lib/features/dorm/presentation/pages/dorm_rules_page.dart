@@ -142,7 +142,6 @@ class _DormRulesPageState extends State<DormRulesPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
                               _DormRulesDisplayHeader(
-                                palette: palette,
                                 canReviewProposal: canReviewProposal,
                                 hasPendingProposal: hasPendingProposal,
                                 onBack: () => Navigator.of(context).maybePop(),
@@ -165,7 +164,6 @@ class _DormRulesPageState extends State<DormRulesPage> {
                                 },
                               ),
                               _DormRulesDisplayBottomBar(
-                                palette: palette,
                                 onPressed: hasPendingProposal
                                     ? () {
                                         if (canReviewProposal) {
@@ -785,7 +783,6 @@ class _DormRulesEditPageState extends State<DormRulesEditPage> {
 
 class _DormRulesDisplayHeader extends StatelessWidget {
   const _DormRulesDisplayHeader({
-    required this.palette,
     required this.canReviewProposal,
     required this.hasPendingProposal,
     required this.onBack,
@@ -793,7 +790,6 @@ class _DormRulesDisplayHeader extends StatelessWidget {
     required this.onReview,
   });
 
-  final NightMoodPalette palette;
   final bool canReviewProposal;
   final bool hasPendingProposal;
   final VoidCallback onBack;
@@ -816,7 +812,6 @@ class _DormRulesDisplayHeader extends StatelessWidget {
             ? _DormRulesHeaderPill(
                 label: '待确认',
                 icon: Icons.mark_chat_unread_rounded,
-                palette: palette,
                 onPressed: onReview,
               )
             : !hasPendingProposal
@@ -824,7 +819,6 @@ class _DormRulesDisplayHeader extends StatelessWidget {
                 key: const ValueKey<String>('dorm-rules-edit-entry'),
                 label: '编辑',
                 icon: Icons.edit_outlined,
-                palette: palette,
                 onPressed: onEdit,
               )
             : null,
@@ -857,13 +851,11 @@ class _DormRulesHeaderPill extends StatelessWidget {
     super.key,
     required this.label,
     required this.icon,
-    required this.palette,
     required this.onPressed,
   });
 
   final String label;
   final IconData icon;
-  final NightMoodPalette palette;
   final VoidCallback onPressed;
 
   @override
@@ -873,7 +865,6 @@ class _DormRulesHeaderPill extends StatelessWidget {
       icon: icon,
       expand: false,
       size: PrimaryButtonSize.compact,
-      variant: PrimaryButtonVariant.soft,
       onPressed: onPressed,
     );
   }
@@ -1299,18 +1290,15 @@ class _DormRulesPendingSection extends StatelessWidget {
 
 class _DormRulesDisplayBottomBar extends StatelessWidget {
   const _DormRulesDisplayBottomBar({
-    required this.palette,
     required this.onPressed,
     required this.enabled,
   });
 
-  final NightMoodPalette palette;
   final VoidCallback onPressed;
   final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final AppSemanticColors appColors = context.appColors;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.xl,
@@ -1322,8 +1310,6 @@ class _DormRulesDisplayBottomBar extends StatelessWidget {
         label: '我同意遵守以上公约',
         icon: Icons.check_circle_outline_rounded,
         size: PrimaryButtonSize.compact,
-        backgroundColor: appColors.accent,
-        foregroundColor: appColors.textOnAccent,
         onPressed: enabled ? onPressed : null,
       ),
     );
@@ -2079,7 +2065,6 @@ class _DormRulesEditBottomBar extends StatelessWidget {
                   label: '发起确认',
                   icon: Icons.send_rounded,
                   size: PrimaryButtonSize.compact,
-                  variant: PrimaryButtonVariant.soft,
                   onPressed: onConfirm,
                 ),
               ),

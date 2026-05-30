@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -45,6 +46,7 @@ import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_member_deta
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_rules_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_status_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
+import 'package:sleep_dorm_app/features/dorm/presentation/widgets/dorm_member_avatar.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_journal_page.dart';
 import 'package:sleep_dorm_app/features/feedback/presentation/pages/morning_feedback_page.dart';
 import 'package:sleep_dorm_app/features/home/presentation/pages/home_post_sleep_page.dart';
@@ -2816,7 +2818,7 @@ void main() {
         find.descendant(of: editButton, matching: find.byType(PrimaryButton)),
       );
       expect(editEntryButton.size, PrimaryButtonSize.compact);
-      expect(editEntryButton.variant, PrimaryButtonVariant.soft);
+      expect(editEntryButton.variant, PrimaryButtonVariant.filled);
       expect(editEntryButton.backgroundColor, isNull);
       expect(editEntryButton.foregroundColor, isNull);
       expect(
@@ -2934,26 +2936,23 @@ void main() {
         greaterThanOrEqualTo(AppSpacing.lg),
       );
 
-      final BuildContext buttonContext = tester.element(
-        find.byKey(const ValueKey<String>('dorm-rules-submit-button')),
-      );
       final PrimaryButton submitButton = tester.widget<PrimaryButton>(
         find.byKey(const ValueKey<String>('dorm-rules-submit-button')),
       );
       final PrimaryButton cancelButton = tester.widget<PrimaryButton>(
         find.byKey(const ValueKey<String>('dorm-rules-cancel-button')),
       );
-
       final NightMoodPalette editPalette = Theme.of(
-        buttonContext,
+        tester.element(find.byType(DormRulesEditPage)),
       ).extension<NightMoodPalette>()!;
+
       expect(cancelButton.size, PrimaryButtonSize.compact);
       expect(cancelButton.variant, PrimaryButtonVariant.ghost);
       expect(cancelButton.backgroundColor, AppColors.surface);
       expect(cancelButton.foregroundColor, AppColors.textPrimary);
       expect(cancelButton.borderColor, AppColors.surfaceBorder);
       expect(submitButton.size, PrimaryButtonSize.compact);
-      expect(submitButton.variant, PrimaryButtonVariant.soft);
+      expect(submitButton.variant, PrimaryButtonVariant.filled);
       expect(submitButton.backgroundColor, isNull);
       expect(submitButton.foregroundColor, isNull);
       final Container quietIconContainer = tester.widget<Container>(
@@ -3808,6 +3807,110 @@ void main() {
     );
     expect(find.text('月度全勤'), findsNothing);
     expect(find.text('安静守护者'), findsNothing);
+  });
+
+  testWidgets('dorm member avatar keeps last non-empty avatar during refresh', (
+    WidgetTester tester,
+  ) async {
+    const ValueKey<String> avatarKey = ValueKey<String>('stable-avatar');
+    final Uint8List avatarBytes = Uint8List.fromList(const <int>[
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      0x0D,
+      0x0A,
+      0x1A,
+      0x0A,
+      0x00,
+      0x00,
+      0x00,
+      0x0D,
+      0x49,
+      0x48,
+      0x44,
+      0x52,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x08,
+      0x06,
+      0x00,
+      0x00,
+      0x00,
+      0x1F,
+      0x15,
+      0xC4,
+      0x89,
+      0x00,
+      0x00,
+      0x00,
+      0x0A,
+      0x49,
+      0x44,
+      0x41,
+      0x54,
+      0x78,
+      0x9C,
+      0x63,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x05,
+      0x00,
+      0x01,
+      0x0D,
+      0x0A,
+      0x2D,
+      0xB4,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x49,
+      0x45,
+      0x4E,
+      0x44,
+      0xAE,
+      0x42,
+      0x60,
+      0x82,
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DormMemberAvatar(
+          key: avatarKey,
+          size: 44,
+          accentColor: Colors.green,
+          avatarBytes: avatarBytes,
+          fallbackSeed: 'Alice',
+        ),
+      ),
+    );
+
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.text('A'), findsNothing);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: DormMemberAvatar(
+          key: avatarKey,
+          size: 44,
+          accentColor: Colors.green,
+          fallbackSeed: 'Alice',
+        ),
+      ),
+    );
+
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.text('A'), findsNothing);
   });
 
   testWidgets('dorm gentle reminder opens the shared rich action sheet', (

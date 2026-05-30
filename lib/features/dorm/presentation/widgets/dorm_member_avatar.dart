@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
-class DormMemberAvatar extends StatelessWidget {
+class DormMemberAvatar extends StatefulWidget {
   const DormMemberAvatar({
     super.key,
     required this.size,
@@ -19,13 +19,44 @@ class DormMemberAvatar extends StatelessWidget {
   final String fallbackSeed;
 
   @override
+  State<DormMemberAvatar> createState() => _DormMemberAvatarState();
+}
+
+class _DormMemberAvatarState extends State<DormMemberAvatar> {
+  Uint8List? _lastAvatarBytes;
+  String? _lastAvatarUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _rememberLatestAvatar();
+  }
+
+  @override
+  void didUpdateWidget(DormMemberAvatar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _rememberLatestAvatar();
+  }
+
+  void _rememberLatestAvatar() {
+    if (widget.avatarBytes != null && widget.avatarBytes!.isNotEmpty) {
+      _lastAvatarBytes = widget.avatarBytes;
+      return;
+    }
+    final String? nextUrl = widget.avatarUrl?.trim();
+    if (nextUrl != null && nextUrl.isNotEmpty) {
+      _lastAvatarUrl = widget.avatarUrl;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
-      width: size,
-      height: size,
+      width: widget.size,
+      height: widget.size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: accentColor.withAlpha(24),
+        color: widget.accentColor.withAlpha(24),
       ),
       clipBehavior: Clip.antiAlias,
       child: _buildContent(context),
@@ -33,20 +64,29 @@ class DormMemberAvatar extends StatelessWidget {
   }
 
   Widget _buildContent(BuildContext context) {
-    if (avatarBytes != null && avatarBytes!.isNotEmpty) {
+    final Uint8List? displayedBytes =
+        widget.avatarBytes != null && widget.avatarBytes!.isNotEmpty
+        ? widget.avatarBytes
+        : _lastAvatarBytes;
+    final String? displayedUrl = widget.avatarUrl?.trim().isNotEmpty == true
+        ? widget.avatarUrl
+        : _lastAvatarUrl;
+
+    if (displayedBytes != null && displayedBytes.isNotEmpty) {
       return Image.memory(
-        avatarBytes!,
+        displayedBytes,
         fit: BoxFit.cover,
-        width: size,
-        height: size,
+        width: widget.size,
+        height: widget.size,
+        gaplessPlayback: true,
       );
     }
-    if (avatarUrl != null && avatarUrl!.trim().isNotEmpty) {
+    if (displayedUrl != null && displayedUrl.trim().isNotEmpty) {
       return Image.network(
-        avatarUrl!,
+        displayedUrl,
         fit: BoxFit.cover,
-        width: size,
-        height: size,
+        width: widget.size,
+        height: widget.size,
         gaplessPlayback: true,
         errorBuilder:
             (BuildContext context, Object error, StackTrace? stackTrace) {
@@ -58,16 +98,16 @@ class DormMemberAvatar extends StatelessWidget {
   }
 
   Widget _buildFallback(BuildContext context) {
-    final String fallbackText = fallbackSeed.trim().isEmpty
+    final String fallbackText = widget.fallbackSeed.trim().isEmpty
         ? '?'
-        : fallbackSeed.characters.first.toUpperCase();
+        : widget.fallbackSeed.characters.first.toUpperCase();
     return Container(
-      color: accentColor.withAlpha(18),
+      color: widget.accentColor.withAlpha(18),
       alignment: Alignment.center,
       child: Text(
         fallbackText,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-          color: accentColor,
+          color: widget.accentColor,
           fontWeight: FontWeight.w800,
         ),
       ),
