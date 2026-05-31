@@ -18,6 +18,7 @@ class PrimaryButton extends StatelessWidget {
     this.variant = PrimaryButtonVariant.filled,
     this.expand = true,
     this.size = PrimaryButtonSize.regular,
+    this.hapticRole,
     this.foregroundColor,
     this.backgroundColor,
     this.borderColor,
@@ -32,6 +33,7 @@ class PrimaryButton extends StatelessWidget {
   final PrimaryButtonVariant variant;
   final bool expand;
   final PrimaryButtonSize size;
+  final AppHapticRole? hapticRole;
   final Color? foregroundColor;
   final Color? backgroundColor;
   final Color? borderColor;
@@ -43,9 +45,16 @@ class PrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
     final AppSemanticColors appColors = context.appColors;
+    final AppHapticRole resolvedHapticRole =
+        hapticRole ??
+        switch (variant) {
+          PrimaryButtonVariant.filled => AppHapticRole.confirm,
+          PrimaryButtonVariant.soft ||
+          PrimaryButtonVariant.ghost => AppHapticRole.tap,
+        };
     final VoidCallback? resolvedOnPressed = onPressed == null || isLoading
         ? null
-        : AppHaptics.confirmHandler(onPressed);
+        : AppHaptics.handler(onPressed, role: resolvedHapticRole);
     final TextStyle? buttonTextStyle = Theme.of(context).textTheme.labelLarge
         ?.copyWith(
           fontSize: size == PrimaryButtonSize.regular ? 15 : 14,

@@ -562,6 +562,7 @@ class _SettingsSliderRow extends StatelessWidget {
                 ? Icons.keyboard_arrow_up_rounded
                 : Icons.keyboard_arrow_down_rounded,
           ),
+          hapticRole: AppHapticRole.selection,
           onTap: onToggle,
         ),
         AnimatedCrossFade(
@@ -663,6 +664,7 @@ class _SettingsSwitchRow extends StatelessWidget {
         key: ValueKey<String>('settings-toggle-$title'),
         value: value,
       ),
+      hapticRole: AppHapticRole.selection,
       onTap: () => onChanged(!value),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,

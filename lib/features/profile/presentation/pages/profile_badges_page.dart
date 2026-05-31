@@ -861,6 +861,7 @@ class _DormPulseBadgeVisibilityCard extends StatelessWidget {
             textTheme,
           ).copyWith(color: appColors.textPrimary, fontWeight: FontWeight.w600),
           trailing: AppSettingsToggle(value: value),
+          hapticRole: AppHapticRole.selection,
           onTap: () => onChanged(!value),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
         ),

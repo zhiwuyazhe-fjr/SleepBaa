@@ -391,6 +391,61 @@ void main() {
     );
   });
 
+  testWidgets('primary button haptic role follows visual priority', (
+    WidgetTester tester,
+  ) async {
+    final NightMoodPalette palette = NightMoodPalette.fromMood(NightMood.happy);
+    final AppSemanticColors appColors = AppSemanticColors.light(palette);
+    int taps = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+          extensions: <ThemeExtension<dynamic>>[palette, appColors],
+        ),
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                PrimaryButton(
+                  label: '主要操作',
+                  expand: false,
+                  onPressed: () => taps += 1,
+                ),
+                PrimaryButton(
+                  label: '次要操作',
+                  expand: false,
+                  variant: PrimaryButtonVariant.soft,
+                  onPressed: () => taps += 1,
+                ),
+                PrimaryButton(
+                  label: '安静操作',
+                  expand: false,
+                  variant: PrimaryButtonVariant.ghost,
+                  onPressed: () => taps += 1,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('主要操作'));
+    await tester.pump();
+    expect(_platformHapticTypes.last, 'HapticFeedbackType.mediumImpact');
+
+    await tester.tap(find.text('次要操作'));
+    await tester.pump();
+    expect(_platformHapticTypes.last, 'HapticFeedbackType.lightImpact');
+
+    await tester.tap(find.text('安静操作'));
+    await tester.pump();
+    expect(_platformHapticTypes.last, 'HapticFeedbackType.lightImpact');
+    expect(taps, 3);
+  });
+
   testWidgets('assistant glacier empty stage matches the pencil shell', (
     WidgetTester tester,
   ) async {
