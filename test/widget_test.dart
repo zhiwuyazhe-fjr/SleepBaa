@@ -5929,6 +5929,7 @@ void main() {
     expect(noise.borderRadius, AppRadius.surfacePrimary);
     expect(tester.getSize(noiseCard).width, greaterThanOrEqualTo(280));
     expect(tester.getSize(noiseCard).height, greaterThan(250));
+    expect(tester.getSize(noiseCard).height, lessThanOrEqualTo(300));
 
     final Finder retestButton = find.ancestor(
       of: find.text('再次检测').first,
@@ -5973,6 +5974,7 @@ void main() {
     }
 
     final double firstHeight = tester.getSize(cards.first).height;
+    expect(firstHeight, lessThanOrEqualTo(288));
     for (final Finder card in cards.skip(1)) {
       expect(tester.getSize(card).height, closeTo(firstHeight, 0.1));
     }

@@ -165,11 +165,11 @@ class _FactorOverviewScroller extends StatelessWidget {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: factors.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               crossAxisSpacing: AppSpacing.md,
               mainAxisSpacing: AppSpacing.md,
-              mainAxisExtent: 308,
+              mainAxisExtent: _gridCardHeightOf(constraints.maxWidth),
             ),
             itemBuilder: (BuildContext context, int index) {
               final InterferenceFactorSnapshot factor = factors[index];
@@ -186,7 +186,7 @@ class _FactorOverviewScroller extends StatelessWidget {
           336.0,
         );
         return SizedBox(
-          height: 332,
+          height: _horizontalCardHeightOf(constraints.maxWidth),
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             clipBehavior: Clip.none,
@@ -207,6 +207,14 @@ class _FactorOverviewScroller extends StatelessWidget {
         );
       },
     );
+  }
+
+  double _gridCardHeightOf(double maxWidth) {
+    return maxWidth >= 960 ? 276 : 284;
+  }
+
+  double _horizontalCardHeightOf(double maxWidth) {
+    return maxWidth >= 520 ? 284 : 292;
   }
 }
 
