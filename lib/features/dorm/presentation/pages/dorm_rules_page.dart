@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
+
+const String kDormRulesEditPath = '/dorm/rules/edit';
 
 class DormRulesPage extends StatefulWidget {
   const DormRulesPage({super.key, this.showReviewOverlayOnOpen = false});
@@ -25,6 +32,227 @@ enum _DormRulesInlineEditor { summer, winter, ventilationDuration }
 enum _DormRulesDisplayGroup { basic, lightQuiet, routine, temperature }
 
 class _DormRulesPageState extends State<DormRulesPage> {
+  final TextEditingController _objectionReasonController =
+      TextEditingController();
+
+  bool _showReviewOverlay = false;
+  _DormRulesDisplayGroup? _expandedDisplayGroup;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final Dorm dorm = context.appServices.dormRepository.currentDorm;
+    if (widget.showReviewOverlayOnOpen &&
+        _canCurrentUserReviewProposal(dorm) &&
+        !_showReviewOverlay) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() => _showReviewOverlay = true);
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _objectionReasonController.dispose();
+    super.dispose();
+  }
+
+  bool _canCurrentUserReviewProposal(Dorm dorm) {
+    final DormPendingRuleProposal? proposal = dorm.pendingRuleProposal;
+    final String currentUserId =
+        context.appServices.authRepository.currentUser.uid;
+    return proposal != null &&
+        proposal.proposerUid != currentUserId &&
+        proposal.needsReviewFrom(currentUserId);
+  }
+
+  void _enterEditMode() {
+    setState(() {
+      _showReviewOverlay = false;
+    });
+    context.push(kDormRulesEditPath);
+  }
+
+  Future<void> _handleApprove() async {
+    await context.appServices.dormFacade.approvePendingRules();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _showReviewOverlay = false);
+    await notifyPassiveToast(context, message: '你已同意这次规则调整。');
+  }
+
+  Future<void> _handleReject() async {
+    final String reason = _objectionReasonController.text.trim();
+    if (reason.isEmpty) {
+      await notifyPassiveToast(context, message: '请先填写不同意原因。');
+      return;
+    }
+    await context.appServices.dormFacade.rejectPendingRules(reason: reason);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _showReviewOverlay = false);
+    _objectionReasonController.clear();
+    await notifyPassiveToast(context, message: '已保留旧规则，并记录你的异议。');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Listenable dormRepository = context.appServices.dormRepository;
+    return ListenableBuilder(
+      listenable: dormRepository,
+      builder: (BuildContext context, Widget? child) {
+        final Dorm dorm = context.appServices.dormRepository.currentDorm;
+
+        final NightMoodPalette palette = context.nightMoodPalette;
+        final AppSemanticColors appColors = context.appColors;
+        final bool hasPendingProposal = dorm.pendingRuleProposal != null;
+        final bool canReviewProposal = _canCurrentUserReviewProposal(dorm);
+
+        if (_showReviewOverlay && !canReviewProposal) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() => _showReviewOverlay = false);
+            }
+          });
+        }
+
+        return Scaffold(
+          backgroundColor: appColors.pageBackground,
+          body: SafeArea(
+            child: LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                final double widthFactor = _rulesPageWidthFactor(
+                  constraints.maxWidth,
+                );
+                return Stack(
+                  children: <Widget>[
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: FractionallySizedBox(
+                          widthFactor: widthFactor,
+                          child: Column(
+                            key: const ValueKey<String>(
+                              'dorm-rules-display-view',
+                            ),
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              _DormRulesDisplayHeader(
+                                canReviewProposal: canReviewProposal,
+                                hasPendingProposal: hasPendingProposal,
+                                onBack: () => Navigator.of(context).maybePop(),
+                                onEdit: _enterEditMode,
+                                onReview: () {
+                                  setState(() => _showReviewOverlay = true);
+                                },
+                              ),
+                              _DormRulesDisplayBody(
+                                dorm: dorm,
+                                palette: palette,
+                                expandedGroup: _expandedDisplayGroup,
+                                onToggleGroup: (_DormRulesDisplayGroup group) {
+                                  setState(() {
+                                    _expandedDisplayGroup =
+                                        _expandedDisplayGroup == group
+                                        ? null
+                                        : group;
+                                  });
+                                },
+                              ),
+                              _DormRulesDisplayBottomBar(
+                                onPressed: hasPendingProposal
+                                    ? () {
+                                        if (canReviewProposal) {
+                                          setState(
+                                            () => _showReviewOverlay = true,
+                                          );
+                                        }
+                                      }
+                                    : () {
+                                        notifyPassiveToast(
+                                          context,
+                                          message: '已记录你的确认，一起把约定执行下去吧。',
+                                        );
+                                      },
+                                enabled:
+                                    !hasPendingProposal || canReviewProposal,
+                              ),
+                              if (hasPendingProposal)
+                                _DormRulesPendingSection(
+                                  proposal: dorm.pendingRuleProposal!,
+                                  currentSettings: dorm.rulesSettings,
+                                  palette: palette,
+                                  onReviewPending: canReviewProposal
+                                      ? () {
+                                          setState(
+                                            () => _showReviewOverlay = true,
+                                          );
+                                        }
+                                      : null,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_showReviewOverlay && canReviewProposal)
+                      Align(
+                        alignment: Alignment.topCenter,
+                        child: FractionallySizedBox(
+                          widthFactor: widthFactor,
+                          child: Padding(
+                            padding: const EdgeInsets.only(
+                              top:
+                                  AppSpacing.xxxl +
+                                  AppSpacing.xl +
+                                  AppSpacing.sm,
+                            ),
+                            child: Align(
+                              alignment: Alignment.topRight,
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  right: AppSpacing.lg,
+                                ),
+                                child: FractionallySizedBox(
+                                  widthFactor: 0.72,
+                                  alignment: Alignment.topRight,
+                                  child: _DormRulesReviewOverlay(
+                                    palette: palette,
+                                    objectionReasonController:
+                                        _objectionReasonController,
+                                    onApprove: _handleApprove,
+                                    onReject: _handleReject,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class DormRulesEditPage extends StatefulWidget {
+  const DormRulesEditPage({super.key});
+
+  @override
+  State<DormRulesEditPage> createState() => _DormRulesEditPageState();
+}
+
+class _DormRulesEditPageState extends State<DormRulesEditPage> {
   final TextEditingController _quietStartController = TextEditingController();
   final TextEditingController _quietEndController = TextEditingController();
   final TextEditingController _lightsOffController = TextEditingController();
@@ -34,12 +262,8 @@ class _DormRulesPageState extends State<DormRulesPage> {
   final TextEditingController _alarmResponseController =
       TextEditingController();
   final TextEditingController _routineNoteController = TextEditingController();
-  final TextEditingController _objectionReasonController =
-      TextEditingController();
 
   bool _initialized = false;
-  bool _showReviewOverlay = false;
-  bool _isEditing = false;
   bool _examWeekMode = true;
   bool _blackoutCurtain = true;
   bool _vibrationFirst = true;
@@ -49,7 +273,6 @@ class _DormRulesPageState extends State<DormRulesPage> {
   String _selectedVentilationWindow = '早晨';
   List<String> _routineTags = const <String>['考试周', '夜猫子', '早起党'];
   _DormRulesInlineEditor? _expandedInlineEditor;
-  _DormRulesDisplayGroup? _expandedDisplayGroup;
   String _loadedProposalId = '';
   String _loadedSettingsSignature = '';
 
@@ -58,12 +281,10 @@ class _DormRulesPageState extends State<DormRulesPage> {
     super.didChangeDependencies();
     final Dorm dorm = context.appServices.dormRepository.currentDorm;
     _syncDraftFromDorm(dorm);
-    if (widget.showReviewOverlayOnOpen &&
-        _canCurrentUserReviewProposal(dorm) &&
-        !_showReviewOverlay) {
+    if (dorm.pendingRuleProposal != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          setState(() => _showReviewOverlay = true);
+          Navigator.of(context).maybePop();
         }
       });
     }
@@ -78,7 +299,6 @@ class _DormRulesPageState extends State<DormRulesPage> {
     _personalLightingController.dispose();
     _alarmResponseController.dispose();
     _routineNoteController.dispose();
-    _objectionReasonController.dispose();
     super.dispose();
   }
 
@@ -87,9 +307,8 @@ class _DormRulesPageState extends State<DormRulesPage> {
     final String settingsSignature = _settingsSignature(dorm.rulesSettings);
     final bool shouldRefreshDraft =
         !_initialized ||
-        (!_isEditing &&
-            (proposalId != _loadedProposalId ||
-                settingsSignature != _loadedSettingsSignature));
+        (proposalId != _loadedProposalId ||
+            settingsSignature != _loadedSettingsSignature);
     if (shouldRefreshDraft) {
       _populateFromSettings(dorm.rulesSettings);
       _loadedProposalId = proposalId;
@@ -119,31 +338,6 @@ class _DormRulesPageState extends State<DormRulesPage> {
     _routineTags = settings.routineTags.isEmpty
         ? DormRulesSettings.defaults().routineTags
         : settings.routineTags;
-  }
-
-  bool _canCurrentUserReviewProposal(Dorm dorm) {
-    final DormPendingRuleProposal? proposal = dorm.pendingRuleProposal;
-    final String currentUserId =
-        context.appServices.authRepository.currentUser.uid;
-    return proposal != null &&
-        proposal.proposerUid != currentUserId &&
-        proposal.needsReviewFrom(currentUserId);
-  }
-
-  void _enterEditMode() {
-    setState(() {
-      _isEditing = true;
-      _showReviewOverlay = false;
-    });
-  }
-
-  void _cancelEditing(DormRulesSettings settings) {
-    FocusScope.of(context).unfocus();
-    _populateFromSettings(settings);
-    setState(() {
-      _isEditing = false;
-      _expandedInlineEditor = null;
-    });
   }
 
   Future<void> _showTextEditor({
@@ -355,17 +549,17 @@ class _DormRulesPageState extends State<DormRulesPage> {
                       children: const <String>['考试周', '夜猫子', '早起党']
                           .map((String option) {
                             final bool selected = draftTags.contains(option);
+                            final AppSemanticColors appColors =
+                                context.appColors;
                             return FilterChip(
                               selected: selected,
                               label: Text(option),
-                              selectedColor:
-                                  context.nightMoodPalette.welcomeAccentColor,
-                              backgroundColor: AppColors.surfaceMuted,
+                              selectedColor: appColors.accentSoft,
+                              backgroundColor: appColors.surfaceMuted,
                               side: BorderSide(
                                 color: selected
-                                    ? context.nightMoodPalette.primaryDeep
-                                          .withAlpha(80)
-                                    : AppColors.surfaceBorder,
+                                    ? appColors.accentDeep.withAlpha(80)
+                                    : appColors.borderSubtle,
                               ),
                               onSelected: (_) {
                                 setSheetState(() {
@@ -430,36 +624,10 @@ class _DormRulesPageState extends State<DormRulesPage> {
     if (!mounted) {
       return;
     }
-    setState(() {
-      _isEditing = false;
-      _showReviewOverlay = false;
-      _expandedInlineEditor = null;
-    });
     await notifyPassiveToast(context, message: '已提交待确认规则，等待室友确认。');
-  }
-
-  Future<void> _handleApprove() async {
-    await context.appServices.dormFacade.approvePendingRules();
-    if (!mounted) {
-      return;
+    if (mounted) {
+      Navigator.of(context).maybePop();
     }
-    setState(() => _showReviewOverlay = false);
-    await notifyPassiveToast(context, message: '你已同意这次规则调整。');
-  }
-
-  Future<void> _handleReject() async {
-    final String reason = _objectionReasonController.text.trim();
-    if (reason.isEmpty) {
-      await notifyPassiveToast(context, message: '请先填写不同意原因。');
-      return;
-    }
-    await context.appServices.dormFacade.rejectPendingRules(reason: reason);
-    if (!mounted) {
-      return;
-    }
-    setState(() => _showReviewOverlay = false);
-    _objectionReasonController.clear();
-    await notifyPassiveToast(context, message: '已保留旧规则，并记录你的异议。');
   }
 
   @override
@@ -470,373 +638,142 @@ class _DormRulesPageState extends State<DormRulesPage> {
       builder: (BuildContext context, Widget? child) {
         final Dorm dorm = context.appServices.dormRepository.currentDorm;
         _syncDraftFromDorm(dorm);
-
         final NightMoodPalette palette = context.nightMoodPalette;
-        final bool hasPendingProposal = dorm.pendingRuleProposal != null;
-        final bool canReviewProposal = _canCurrentUserReviewProposal(dorm);
-        final bool showEditView = _isEditing && !hasPendingProposal;
+        final AppSemanticColors appColors = context.appColors;
 
-        if (_showReviewOverlay && !canReviewProposal) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              setState(() => _showReviewOverlay = false);
-            }
-          });
-        }
-        if (_isEditing && hasPendingProposal) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              _cancelEditing(dorm.rulesSettings);
-            }
-          });
-        }
-
-        return PopScope<void>(
-          canPop: !showEditView,
-          onPopInvokedWithResult: (bool didPop, void result) {
-            if (!didPop && showEditView) {
-              _cancelEditing(dorm.rulesSettings);
-            }
-          },
-          child: Scaffold(
-            backgroundColor: AppColors.background,
-            body: SafeArea(
-              child: LayoutBuilder(
-                builder: (BuildContext context, BoxConstraints constraints) {
-                  final double widthFactor = _rulesPageWidthFactor(
-                    constraints.maxWidth,
-                  );
-                  return Stack(
-                    children: <Widget>[
-                      SingleChildScrollView(
-                        padding: EdgeInsets.only(
-                          bottom: showEditView
-                              ? AppSpacing.xxxl +
-                                    AppSpacing.xxxl +
-                                    AppSpacing.sm
-                              : AppSpacing.sm,
-                        ),
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          child: FractionallySizedBox(
-                            widthFactor: widthFactor,
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 260),
-                              switchInCurve: Curves.easeOutCubic,
-                              switchOutCurve: Curves.easeInCubic,
-                              layoutBuilder:
-                                  (
-                                    Widget? currentChild,
-                                    List<Widget> previousChildren,
-                                  ) {
-                                    return Stack(
-                                      alignment: Alignment.topCenter,
-                                      children: <Widget>[
-                                        ...previousChildren,
-                                        ?currentChild,
-                                      ],
-                                    );
-                                  },
-                              transitionBuilder:
-                                  (Widget child, Animation<double> animation) {
-                                    final bool isEditPage =
-                                        child.key ==
-                                        const ValueKey<String>(
-                                          'dorm-rules-edit-view',
-                                        );
-                                    final Offset beginOffset = isEditPage
-                                        ? const Offset(1, 0)
-                                        : const Offset(-1, 0);
-                                    final Animation<double> curvedAnimation =
-                                        CurvedAnimation(
-                                          parent: animation,
-                                          curve: Curves.easeOutCubic,
-                                          reverseCurve: Curves.easeInCubic,
-                                        );
-                                    return FadeTransition(
-                                      opacity: curvedAnimation,
-                                      child: SlideTransition(
-                                        position: Tween<Offset>(
-                                          begin: beginOffset,
-                                          end: Offset.zero,
-                                        ).animate(curvedAnimation),
-                                        child: child,
-                                      ),
-                                    );
-                                  },
-                              child: showEditView
-                                  ? Column(
-                                      key: const ValueKey<String>(
-                                        'dorm-rules-edit-view',
-                                      ),
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: <Widget>[
-                                        _DormRulesEditHeader(
-                                          onBack: () => _cancelEditing(
-                                            dorm.rulesSettings,
-                                          ),
-                                        ),
-                                        _DormRulesEditBody(
-                                          palette: palette,
-                                          quietStartController:
-                                              _quietStartController,
-                                          quietEndController:
-                                              _quietEndController,
-                                          lightsOffController:
-                                              _lightsOffController,
-                                          noteController: _noteController,
-                                          personalLightingController:
-                                              _personalLightingController,
-                                          alarmResponseController:
-                                              _alarmResponseController,
-                                          routineNoteController:
-                                              _routineNoteController,
-                                          examWeekMode: _examWeekMode,
-                                          blackoutCurtain: _blackoutCurtain,
-                                          vibrationFirst: _vibrationFirst,
-                                          summerTemp: _summerTemp,
-                                          winterTemp: _winterTemp,
-                                          ventilationMinutes:
-                                              _ventilationMinutes,
-                                          selectedVentilationWindow:
-                                              _selectedVentilationWindow,
-                                          routineTags: _routineTags,
-                                          expandedInlineEditor:
-                                              _expandedInlineEditor,
-                                          onEditQuietHours:
-                                              _showQuietHoursEditor,
-                                          onEditLightsOff: _showLightsOffEditor,
-                                          onEditNote: () => _showTextEditor(
-                                            title: '补充说明',
-                                            targetController: _noteController,
-                                            maxLines: 3,
-                                          ),
-                                          onEditPersonalLighting: () =>
-                                              _showTextEditor(
-                                                title: '个人照明要求',
-                                                targetController:
-                                                    _personalLightingController,
-                                                maxLines: 2,
-                                              ),
-                                          onEditAlarmResponse: () =>
-                                              _showTextEditor(
-                                                title: '闹钟响应时限',
-                                                targetController:
-                                                    _alarmResponseController,
-                                                keyboardType:
-                                                    TextInputType.number,
-                                                suffixText: '秒',
-                                              ),
-                                          onEditRoutineNote: () =>
-                                              _showTextEditor(
-                                                title: '作息习惯备注',
-                                                targetController:
-                                                    _routineNoteController,
-                                                maxLines: 2,
-                                              ),
-                                          onEditRoutineTags:
-                                              _showRoutineTagsEditor,
-                                          onToggleSummerTemp: () =>
-                                              setState(() {
-                                                _expandedInlineEditor =
-                                                    _expandedInlineEditor ==
-                                                        _DormRulesInlineEditor
-                                                            .summer
-                                                    ? null
-                                                    : _DormRulesInlineEditor
-                                                          .summer;
-                                              }),
-                                          onToggleWinterTemp: () =>
-                                              setState(() {
-                                                _expandedInlineEditor =
-                                                    _expandedInlineEditor ==
-                                                        _DormRulesInlineEditor
-                                                            .winter
-                                                    ? null
-                                                    : _DormRulesInlineEditor
-                                                          .winter;
-                                              }),
-                                          onToggleVentilationDuration: () =>
-                                              setState(() {
-                                                _expandedInlineEditor =
-                                                    _expandedInlineEditor ==
-                                                        _DormRulesInlineEditor
-                                                            .ventilationDuration
-                                                    ? null
-                                                    : _DormRulesInlineEditor
-                                                          .ventilationDuration;
-                                              }),
-                                          onSummerTempChanged: (double value) =>
-                                              setState(
-                                                () => _summerTemp = value,
-                                              ),
-                                          onWinterTempChanged: (double value) =>
-                                              setState(
-                                                () => _winterTemp = value,
-                                              ),
-                                          onVentilationMinutesChanged:
-                                              (double value) => setState(
-                                                () =>
-                                                    _ventilationMinutes = value,
-                                              ),
-                                          onEditVentilationWindow: () =>
-                                              _showSingleChoiceEditor(
-                                                title: '通风时段',
-                                                options: const <String>[
-                                                  '早晨',
-                                                  '中午',
-                                                  '睡前',
-                                                ],
-                                                selectedValue:
-                                                    _selectedVentilationWindow,
-                                                onSelected: (String value) =>
-                                                    _selectedVentilationWindow =
-                                                        value,
-                                              ),
-                                          onExamWeekModeChanged: (bool value) =>
-                                              setState(
-                                                () => _examWeekMode = value,
-                                              ),
-                                          onBlackoutCurtainChanged:
-                                              (bool value) => setState(
-                                                () => _blackoutCurtain = value,
-                                              ),
-                                          onVibrationFirstChanged:
-                                              (bool value) => setState(
-                                                () => _vibrationFirst = value,
-                                              ),
-                                        ),
-                                      ],
-                                    )
-                                  : Column(
-                                      key: const ValueKey<String>(
-                                        'dorm-rules-display-view',
-                                      ),
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: <Widget>[
-                                        _DormRulesDisplayHeader(
-                                          palette: palette,
-                                          canReviewProposal: canReviewProposal,
-                                          hasPendingProposal:
-                                              hasPendingProposal,
-                                          onBack: () =>
-                                              Navigator.of(context).maybePop(),
-                                          onEdit: _enterEditMode,
-                                          onReview: () {
-                                            setState(
-                                              () => _showReviewOverlay = true,
-                                            );
-                                          },
-                                        ),
-                                        _DormRulesDisplayBody(
-                                          dorm: dorm,
-                                          palette: palette,
-                                          expandedGroup: _expandedDisplayGroup,
-                                          onToggleGroup:
-                                              (_DormRulesDisplayGroup group) {
-                                                setState(() {
-                                                  _expandedDisplayGroup =
-                                                      _expandedDisplayGroup ==
-                                                          group
-                                                      ? null
-                                                      : group;
-                                                });
-                                              },
-                                        ),
-                                        _DormRulesDisplayBottomBar(
-                                          palette: palette,
-                                          onPressed: hasPendingProposal
-                                              ? () {
-                                                  if (canReviewProposal) {
-                                                    setState(
-                                                      () => _showReviewOverlay =
-                                                          true,
-                                                    );
-                                                  }
-                                                }
-                                              : () {
-                                                  notifyPassiveToast(
-                                                    context,
-                                                    message:
-                                                        '已记录你的确认，一起把约定执行下去吧。',
-                                                  );
-                                                },
-                                          enabled:
-                                              !hasPendingProposal ||
-                                              canReviewProposal,
-                                        ),
-                                        if (hasPendingProposal)
-                                          _DormRulesPendingSection(
-                                            proposal: dorm.pendingRuleProposal!,
-                                            currentSettings: dorm.rulesSettings,
-                                            palette: palette,
-                                            onReviewPending: canReviewProposal
-                                                ? () {
-                                                    setState(
-                                                      () => _showReviewOverlay =
-                                                          true,
-                                                    );
-                                                  }
-                                                : null,
-                                          ),
-                                      ],
+        return Scaffold(
+          backgroundColor: appColors.pageBackground,
+          body: SafeArea(
+            child: LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                final double widthFactor = _rulesPageWidthFactor(
+                  constraints.maxWidth,
+                );
+                return Stack(
+                  children: <Widget>[
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.only(
+                        bottom:
+                            AppSpacing.xxxl + AppSpacing.xxxl + AppSpacing.sm,
+                      ),
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: FractionallySizedBox(
+                          widthFactor: widthFactor,
+                          child: Column(
+                            key: const ValueKey<String>('dorm-rules-edit-view'),
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              _DormRulesEditHeader(
+                                onBack: () => Navigator.of(context).maybePop(),
+                              ),
+                              _DormRulesEditBody(
+                                palette: palette,
+                                quietStartController: _quietStartController,
+                                quietEndController: _quietEndController,
+                                lightsOffController: _lightsOffController,
+                                noteController: _noteController,
+                                personalLightingController:
+                                    _personalLightingController,
+                                alarmResponseController:
+                                    _alarmResponseController,
+                                routineNoteController: _routineNoteController,
+                                examWeekMode: _examWeekMode,
+                                blackoutCurtain: _blackoutCurtain,
+                                vibrationFirst: _vibrationFirst,
+                                summerTemp: _summerTemp,
+                                winterTemp: _winterTemp,
+                                ventilationMinutes: _ventilationMinutes,
+                                selectedVentilationWindow:
+                                    _selectedVentilationWindow,
+                                routineTags: _routineTags,
+                                expandedInlineEditor: _expandedInlineEditor,
+                                onEditQuietHours: _showQuietHoursEditor,
+                                onEditLightsOff: _showLightsOffEditor,
+                                onEditNote: () => _showTextEditor(
+                                  title: '补充说明',
+                                  targetController: _noteController,
+                                  maxLines: 3,
+                                ),
+                                onEditPersonalLighting: () => _showTextEditor(
+                                  title: '个人照明要求',
+                                  targetController: _personalLightingController,
+                                  maxLines: 2,
+                                ),
+                                onEditAlarmResponse: () => _showTextEditor(
+                                  title: '闹钟响应时限',
+                                  targetController: _alarmResponseController,
+                                  keyboardType: TextInputType.number,
+                                  suffixText: '秒',
+                                ),
+                                onEditRoutineNote: () => _showTextEditor(
+                                  title: '作息习惯备注',
+                                  targetController: _routineNoteController,
+                                  maxLines: 2,
+                                ),
+                                onEditRoutineTags: _showRoutineTagsEditor,
+                                onToggleSummerTemp: () => setState(() {
+                                  _expandedInlineEditor =
+                                      _expandedInlineEditor ==
+                                          _DormRulesInlineEditor.summer
+                                      ? null
+                                      : _DormRulesInlineEditor.summer;
+                                }),
+                                onToggleWinterTemp: () => setState(() {
+                                  _expandedInlineEditor =
+                                      _expandedInlineEditor ==
+                                          _DormRulesInlineEditor.winter
+                                      ? null
+                                      : _DormRulesInlineEditor.winter;
+                                }),
+                                onToggleVentilationDuration: () => setState(() {
+                                  _expandedInlineEditor =
+                                      _expandedInlineEditor ==
+                                          _DormRulesInlineEditor
+                                              .ventilationDuration
+                                      ? null
+                                      : _DormRulesInlineEditor
+                                            .ventilationDuration;
+                                }),
+                                onSummerTempChanged: (double value) =>
+                                    setState(() => _summerTemp = value),
+                                onWinterTempChanged: (double value) =>
+                                    setState(() => _winterTemp = value),
+                                onVentilationMinutesChanged: (double value) =>
+                                    setState(() => _ventilationMinutes = value),
+                                onEditVentilationWindow: () =>
+                                    _showSingleChoiceEditor(
+                                      title: '通风时段',
+                                      options: const <String>['早晨', '中午', '睡前'],
+                                      selectedValue: _selectedVentilationWindow,
+                                      onSelected: (String value) =>
+                                          _selectedVentilationWindow = value,
                                     ),
-                            ),
+                                onExamWeekModeChanged: (bool value) =>
+                                    setState(() => _examWeekMode = value),
+                                onBlackoutCurtainChanged: (bool value) =>
+                                    setState(() => _blackoutCurtain = value),
+                                onVibrationFirstChanged: (bool value) =>
+                                    setState(() => _vibrationFirst = value),
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                      if (_showReviewOverlay && canReviewProposal)
-                        Align(
-                          alignment: Alignment.topCenter,
-                          child: FractionallySizedBox(
-                            widthFactor: widthFactor,
-                            child: Padding(
-                              padding: const EdgeInsets.only(
-                                top:
-                                    AppSpacing.xxxl +
-                                    AppSpacing.xl +
-                                    AppSpacing.sm,
-                              ),
-                              child: Align(
-                                alignment: Alignment.topRight,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(
-                                    right: AppSpacing.lg,
-                                  ),
-                                  child: FractionallySizedBox(
-                                    widthFactor: 0.72,
-                                    alignment: Alignment.topRight,
-                                    child: _DormRulesReviewOverlay(
-                                      palette: palette,
-                                      objectionReasonController:
-                                          _objectionReasonController,
-                                      onApprove: _handleApprove,
-                                      onReject: _handleReject,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
+                    ),
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: FractionallySizedBox(
+                        widthFactor: widthFactor,
+                        child: _DormRulesEditBottomBar(
+                          onCancel: () => Navigator.of(context).maybePop(),
+                          onConfirm: _handleSave,
                         ),
-                      if (showEditView)
-                        Align(
-                          alignment: Alignment.bottomCenter,
-                          child: FractionallySizedBox(
-                            widthFactor: widthFactor,
-                            child: _DormRulesEditBottomBar(
-                              onCancel: () =>
-                                  _cancelEditing(dorm.rulesSettings),
-                              onConfirm: _handleSave,
-                            ),
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         );
@@ -847,7 +784,6 @@ class _DormRulesPageState extends State<DormRulesPage> {
 
 class _DormRulesDisplayHeader extends StatelessWidget {
   const _DormRulesDisplayHeader({
-    required this.palette,
     required this.canReviewProposal,
     required this.hasPendingProposal,
     required this.onBack,
@@ -855,7 +791,6 @@ class _DormRulesDisplayHeader extends StatelessWidget {
     required this.onReview,
   });
 
-  final NightMoodPalette palette;
   final bool canReviewProposal;
   final bool hasPendingProposal;
   final VoidCallback onBack;
@@ -871,34 +806,23 @@ class _DormRulesDisplayHeader extends StatelessWidget {
         AppSpacing.md,
         AppSpacing.md,
       ),
-      child: Row(
-        children: <Widget>[
-          _DormRulesBackButton(onPressed: onBack),
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            '宿舍公约',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const Spacer(),
-          if (canReviewProposal)
-            _DormRulesHeaderPill(
-              label: '待确认',
-              icon: Icons.mark_chat_unread_rounded,
-              palette: palette,
-              onPressed: onReview,
-            )
-          else if (!hasPendingProposal)
-            _DormRulesHeaderPill(
-              key: const ValueKey<String>('dorm-rules-edit-entry'),
-              label: '编辑',
-              icon: Icons.edit_outlined,
-              palette: palette,
-              onPressed: onEdit,
-            ),
-        ],
+      child: AppDetailPageHeader(
+        title: '宿舍公约',
+        onBack: onBack,
+        trailing: canReviewProposal
+            ? _DormRulesHeaderPill(
+                label: '待确认',
+                icon: Icons.mark_chat_unread_rounded,
+                onPressed: onReview,
+              )
+            : !hasPendingProposal
+            ? _DormRulesHeaderPill(
+                key: const ValueKey<String>('dorm-rules-edit-entry'),
+                label: '编辑',
+                icon: Icons.edit_outlined,
+                onPressed: onEdit,
+              )
+            : null,
       ),
     );
   }
@@ -918,44 +842,7 @@ class _DormRulesEditHeader extends StatelessWidget {
         AppSpacing.md,
         AppSpacing.md,
       ),
-      child: Row(
-        children: <Widget>[
-          _DormRulesBackButton(onPressed: onBack),
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            '编辑宿舍公约',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DormRulesBackButton extends StatelessWidget {
-  const _DormRulesBackButton({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: AppRadius.button,
-        onTap: onPressed,
-        child: const SizedBox.square(
-          dimension: AppSpacing.xxxl,
-          child: Icon(
-            Icons.chevron_left_rounded,
-            size: AppSpacing.lg,
-            color: AppColors.textPrimary,
-          ),
-        ),
-      ),
+      child: AppDetailPageHeader(title: '编辑宿舍公约', onBack: onBack),
     );
   }
 }
@@ -965,13 +852,11 @@ class _DormRulesHeaderPill extends StatelessWidget {
     super.key,
     required this.label,
     required this.icon,
-    required this.palette,
     required this.onPressed,
   });
 
   final String label;
   final IconData icon;
-  final NightMoodPalette palette;
   final VoidCallback onPressed;
 
   @override
@@ -981,7 +866,6 @@ class _DormRulesHeaderPill extends StatelessWidget {
       icon: icon,
       expand: false,
       size: PrimaryButtonSize.compact,
-      variant: PrimaryButtonVariant.soft,
       onPressed: onPressed,
     );
   }
@@ -1035,10 +919,12 @@ class _DormRulesIntroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       borderRadius: AppRadius.card,
       padding: const EdgeInsets.all(AppSpacing.lg),
-      color: _rulesIntroFill(palette),
+      color: appColors.accentSoft,
       boxShadow: const <BoxShadow>[],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1049,31 +935,29 @@ class _DormRulesIntroCard extends StatelessWidget {
               height: AppSpacing.xxxl,
             ),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: appColors.surfaceMuted,
               borderRadius: AppRadius.iconContainer,
             ),
             alignment: Alignment.center,
             child: Icon(
               Icons.shield_outlined,
               size: AppSpacing.lg,
-              color: palette.primaryDeep,
+              color: appColors.accentDeep,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
             '共同维护良好宿舍环境',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: palette.primaryDeep,
-              fontWeight: FontWeight.w700,
-            ),
+            style: AppTypography.sectionTitle(
+              textTheme,
+            ).copyWith(color: appColors.accentDeep),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
             '以下是大家共同制定的宿舍公约，请每位成员认真遵守。',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: palette.primaryDeep,
-              height: 1.5,
-            ),
+            style: AppTypography.body(
+              textTheme,
+            ).copyWith(color: appColors.accentDeep),
           ),
         ],
       ),
@@ -1096,10 +980,12 @@ class _DormRulesDisplayGroupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       borderRadius: AppRadius.compactCard,
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
-      color: Colors.white,
+      color: appColors.surface,
       boxShadow: const <BoxShadow>[],
       child: Column(
         children: <Widget>[
@@ -1107,11 +993,15 @@ class _DormRulesDisplayGroupCard extends StatelessWidget {
             key: ValueKey<String>('dorm-rules-display-group-${data.keySuffix}'),
             title: data.title,
             icon: data.icon,
-            iconColor: palette.primaryDeep,
-            iconBackgroundColor: AppColors.surfaceMuted,
+            iconColor: appColors.accentDeep,
+            iconBackgroundColor: appColors.surfaceMuted,
             iconContainerSize: AppSpacing.xxxl,
             iconSize: AppSpacing.lg,
             leadingWidth: AppSpacing.xxxl,
+            titleStyle: AppTypography.body(textTheme).copyWith(
+              color: appColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.md,
               vertical: AppSpacing.sm,
@@ -1121,8 +1011,8 @@ class _DormRulesDisplayGroupCard extends StatelessWidget {
               children: <Widget>[
                 Text(
                   data.summary,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
+                  style: AppTypography.bodyMuted(textTheme).copyWith(
+                    color: appColors.textSecondary,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -1131,15 +1021,16 @@ class _DormRulesDisplayGroupCard extends StatelessWidget {
                   turns: expanded ? 0.25 : 0,
                   duration: const Duration(milliseconds: 160),
                   curve: Curves.easeOutCubic,
-                  child: const Icon(
+                  child: Icon(
                     Icons.chevron_right_rounded,
                     size: 18,
-                    color: AppColors.textHint,
+                    color: appColors.textSecondary.withAlpha(150),
                   ),
                 ),
               ],
             ),
             onTap: onTap,
+            hapticRole: AppHapticRole.selection,
           ),
           KeyedSubtree(
             key: ValueKey<String>(
@@ -1173,8 +1064,8 @@ class _DormRulesDisplayGroupCard extends StatelessWidget {
                                 data: data.rows[index],
                                 palette: palette,
                                 iconFill: index.isEven
-                                    ? _rulesMutedIconFill(palette)
-                                    : _rulesAccentIconFill(palette),
+                                    ? appColors.surfaceMuted
+                                    : appColors.accentSoft,
                               ),
                               if (index != data.rows.length - 1)
                                 const SizedBox(height: AppSpacing.xxs),
@@ -1205,6 +1096,8 @@ class _DormRulesGroupRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
@@ -1226,7 +1119,7 @@ class _DormRulesGroupRow extends StatelessWidget {
             child: Icon(
               data.icon,
               size: AppSpacing.lg,
-              color: palette.primaryDeep,
+              color: appColors.accentDeep,
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
@@ -1236,17 +1129,17 @@ class _DormRulesGroupRow extends StatelessWidget {
               children: <Widget>[
                 Text(
                   data.title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.textPrimary,
+                  style: AppTypography.cardTitle(textTheme).copyWith(
+                    color: appColors.textPrimary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xxs),
                 Text(
                   data.description,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+                  style: AppTypography.bodyMuted(
+                    textTheme,
+                  ).copyWith(color: appColors.textSecondary),
                 ),
               ],
             ),
@@ -1258,14 +1151,14 @@ class _DormRulesGroupRow extends StatelessWidget {
               height: AppSpacing.xl,
             ),
             decoration: BoxDecoration(
-              color: palette.welcomeAccentColor,
+              color: appColors.surfaceMuted,
               borderRadius: AppRadius.pill,
             ),
             alignment: Alignment.center,
             child: Icon(
               Icons.check_rounded,
               size: AppSpacing.md,
-              color: palette.welcomeTextOnAccent,
+              color: appColors.accentDeep,
             ),
           ),
         ],
@@ -1289,6 +1182,8 @@ class _DormRulesPendingSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.xl,
@@ -1301,8 +1196,8 @@ class _DormRulesPendingSection extends StatelessWidget {
         children: <Widget>[
           Text(
             '待确认规则',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: AppColors.textSecondary,
+            style: AppTypography.meta(textTheme).copyWith(
+              color: appColors.textSecondary,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -1310,7 +1205,7 @@ class _DormRulesPendingSection extends StatelessWidget {
           AppCard(
             borderRadius: AppRadius.compactCard,
             padding: const EdgeInsets.all(AppSpacing.sm),
-            color: Colors.white,
+            color: appColors.surface,
             boxShadow: const <BoxShadow>[],
             child: Row(
               children: <Widget>[
@@ -1320,14 +1215,14 @@ class _DormRulesPendingSection extends StatelessWidget {
                     height: AppSpacing.xxxl,
                   ),
                   decoration: BoxDecoration(
-                    color: _rulesMutedIconFill(palette),
+                    color: appColors.surfaceMuted,
                     borderRadius: BorderRadius.circular(AppSpacing.md),
                   ),
                   alignment: Alignment.center,
                   child: Icon(
                     Icons.timer_outlined,
                     size: 20,
-                    color: palette.primaryDeep,
+                    color: appColors.accentDeep,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -1340,18 +1235,17 @@ class _DormRulesPendingSection extends StatelessWidget {
                           currentSettings,
                           proposal.proposedSettings,
                         ),
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w600,
-                            ),
+                        style: AppTypography.cardTitle(textTheme).copyWith(
+                          color: appColors.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.xxs),
                       Text(
                         _pendingRuleSummary(proposal, currentSettings),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
+                        style: AppTypography.bodyMuted(
+                          textTheme,
+                        ).copyWith(color: appColors.textSecondary),
                       ),
                     ],
                   ),
@@ -1372,16 +1266,15 @@ class _DormRulesPendingSection extends StatelessWidget {
                             vertical: AppSpacing.xs,
                           ),
                           decoration: BoxDecoration(
-                            color: palette.welcomeAccentColor,
+                            color: appColors.surfaceMuted,
                             borderRadius: BorderRadius.circular(AppSpacing.sm),
                           ),
                           child: Text(
                             '确认',
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: palette.primaryDeep,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                            style: AppTypography.chip(textTheme).copyWith(
+                              color: appColors.accentDeep,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),
@@ -1399,12 +1292,10 @@ class _DormRulesPendingSection extends StatelessWidget {
 
 class _DormRulesDisplayBottomBar extends StatelessWidget {
   const _DormRulesDisplayBottomBar({
-    required this.palette,
     required this.onPressed,
     required this.enabled,
   });
 
-  final NightMoodPalette palette;
   final VoidCallback onPressed;
   final bool enabled;
 
@@ -1421,8 +1312,6 @@ class _DormRulesDisplayBottomBar extends StatelessWidget {
         label: '我同意遵守以上公约',
         icon: Icons.check_circle_outline_rounded,
         size: PrimaryButtonSize.compact,
-        backgroundColor: palette.welcomeAccentColor,
-        foregroundColor: palette.primaryDeep,
         onPressed: enabled ? onPressed : null,
       ),
     );
@@ -1504,8 +1393,11 @@ class _DormRulesEditBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle? groupTitleStyle = Theme.of(context).textTheme.labelLarge
-        ?.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w700);
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final TextStyle groupTitleStyle = AppTypography.meta(
+      textTheme,
+    ).copyWith(color: appColors.textSecondary, fontWeight: FontWeight.w700);
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
@@ -1521,7 +1413,6 @@ class _DormRulesEditBody extends StatelessWidget {
           AppSpacing.md,
           AppSpacing.xxs,
         );
-
         return Padding(
           padding: EdgeInsets.symmetric(horizontal: horizontalInset),
           child: Column(
@@ -1534,7 +1425,7 @@ class _DormRulesEditBody extends StatelessWidget {
                   horizontal: AppSpacing.md,
                   vertical: AppSpacing.sm,
                 ),
-                color: palette.primaryHighlight,
+                color: appColors.accentSoft,
                 boxShadow: const <BoxShadow>[],
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1546,14 +1437,14 @@ class _DormRulesEditBody extends StatelessWidget {
                         height: AppSpacing.xxxl,
                       ),
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceMuted,
+                        color: appColors.surfaceMuted,
                         borderRadius: AppRadius.iconContainer,
                       ),
                       alignment: Alignment.center,
                       child: Icon(
                         Icons.verified_user_outlined,
                         size: AppSpacing.lg,
-                        color: palette.primaryDeep,
+                        color: appColors.accentDeep,
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
@@ -1563,20 +1454,16 @@ class _DormRulesEditBody extends StatelessWidget {
                         children: <Widget>[
                           Text(
                             '修改后需要室友确认',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: palette.primaryDeep,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                            style: AppTypography.cardTitle(
+                              textTheme,
+                            ).copyWith(color: appColors.accentDeep),
                           ),
                           const SizedBox(height: AppSpacing.xxs),
                           Text(
                             '本页保存的是调整草案，不会立即覆盖当前正式公约。',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: palette.primaryDeep,
-                                  height: 1.45,
-                                ),
+                            style: AppTypography.bodyMuted(
+                              textTheme,
+                            ).copyWith(color: appColors.accentDeep),
                           ),
                         ],
                       ),
@@ -1633,10 +1520,9 @@ class _DormRulesEditBody extends StatelessWidget {
                     palette: palette,
                     icon: Icons.light_mode_outlined,
                     title: '个人照明要求',
-                    value: _dormRulesPreviewText(
-                      personalLightingController.text,
-                    ),
+                    value: _dormRulesFullText(personalLightingController.text),
                     onTap: onEditPersonalLighting,
+                    expandValue: true,
                   ),
                   _DormRulesToggleCard(
                     palette: palette,
@@ -1675,8 +1561,9 @@ class _DormRulesEditBody extends StatelessWidget {
                     palette: palette,
                     icon: Icons.bedtime_rounded,
                     title: '作息习惯备注',
-                    value: _dormRulesPreviewText(routineNoteController.text),
+                    value: _dormRulesFullText(routineNoteController.text),
                     onTap: onEditRoutineNote,
+                    expandValue: true,
                   ),
                   _DormRulesCompactValueCard(
                     palette: palette,
@@ -1788,10 +1675,10 @@ const EdgeInsetsGeometry _dormRulesEditItemPadding = EdgeInsets.symmetric(
 );
 
 TextStyle? _dormRulesEditItemTitleStyle(BuildContext context) {
-  return Theme.of(context).textTheme.bodyMedium?.copyWith(
-    color: AppColors.textPrimary,
-    fontWeight: FontWeight.w600,
-  );
+  final AppSemanticColors appColors = context.appColors;
+  return AppTypography.body(
+    Theme.of(context).textTheme,
+  ).copyWith(color: appColors.textPrimary, fontWeight: FontWeight.w600);
 }
 
 class _DormRulesEditableQuietHoursCard extends StatelessWidget {
@@ -1809,11 +1696,12 @@ class _DormRulesEditableQuietHoursCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return AppSettingsItem(
       title: '安静时段',
       icon: Icons.volume_off_rounded,
-      iconColor: palette.primaryDeep,
-      iconBackgroundColor: AppColors.surfaceMuted,
+      iconColor: appColors.accentDeep,
+      iconBackgroundColor: appColors.surfaceMuted,
       iconContainerSize: AppSpacing.xxxl,
       iconSize: AppSpacing.lg,
       iconContainerKey: const ValueKey<String>(
@@ -1823,6 +1711,7 @@ class _DormRulesEditableQuietHoursCard extends StatelessWidget {
       titleStyle: _dormRulesEditItemTitleStyle(context),
       padding: _dormRulesEditItemPadding,
       onTap: onTap,
+      hapticRole: AppHapticRole.selection,
       trailing: AppSettingsValueTrailing(
         key: const ValueKey<String>('dorm-rules-trailing-quiet-hours'),
         value:
@@ -1848,13 +1737,14 @@ class _DormRulesSheetTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
+        color: appColors.surfaceMuted,
         borderRadius: AppRadius.control,
       ),
       child: Column(
@@ -1862,8 +1752,8 @@ class _DormRulesSheetTextField extends StatelessWidget {
         children: <Widget>[
           Text(
             label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
+            style: AppTypography.chip(Theme.of(context).textTheme).copyWith(
+              color: appColors.textSecondary,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -1871,8 +1761,8 @@ class _DormRulesSheetTextField extends StatelessWidget {
           TextField(
             controller: controller,
             keyboardType: keyboardType,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.textPrimary,
+            style: AppTypography.body(Theme.of(context).textTheme).copyWith(
+              color: appColors.textPrimary,
               fontWeight: FontWeight.w700,
             ),
             decoration: InputDecoration(
@@ -1901,11 +1791,12 @@ class _DormRulesEditableLightsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return AppSettingsItem(
       title: '熄灯提醒',
       icon: Icons.lightbulb_outline_rounded,
-      iconColor: palette.primaryDeep,
-      iconBackgroundColor: AppColors.surfaceMuted,
+      iconColor: appColors.accentDeep,
+      iconBackgroundColor: appColors.surfaceMuted,
       iconContainerSize: AppSpacing.xxxl,
       iconSize: AppSpacing.lg,
       iconContainerKey: const ValueKey<String>(
@@ -1915,6 +1806,7 @@ class _DormRulesEditableLightsCard extends StatelessWidget {
       titleStyle: _dormRulesEditItemTitleStyle(context),
       padding: _dormRulesEditItemPadding,
       onTap: onTap,
+      hapticRole: AppHapticRole.selection,
       trailing: AppSettingsValueTrailing(
         key: const ValueKey<String>('dorm-rules-trailing-lights-off'),
         value: lightsOffCopy,
@@ -1954,6 +1846,7 @@ class _DormRulesCompactValueCard extends StatelessWidget {
     required this.title,
     required this.value,
     required this.onTap,
+    this.expandValue = false,
   });
 
   final NightMoodPalette palette;
@@ -1961,24 +1854,30 @@ class _DormRulesCompactValueCard extends StatelessWidget {
   final String title;
   final String value;
   final VoidCallback onTap;
+  final bool expandValue;
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return AppSettingsItem(
       title: title,
       icon: icon,
-      iconColor: palette.primaryDeep,
-      iconBackgroundColor: AppColors.surfaceMuted,
+      iconColor: appColors.accentDeep,
+      iconBackgroundColor: appColors.surfaceMuted,
       iconContainerSize: AppSpacing.xxxl,
       iconSize: AppSpacing.lg,
       leadingWidth: AppSpacing.xxxl,
       titleStyle: _dormRulesEditItemTitleStyle(context),
       padding: _dormRulesEditItemPadding,
       onTap: onTap,
+      hapticRole: AppHapticRole.selection,
       trailing: AppSettingsValueTrailing(
         key: ValueKey<String>('dorm-rules-trailing-$title'),
         value: value,
         showChevron: true,
+        maxLines: expandValue ? null : 1,
+        overflow: expandValue ? TextOverflow.visible : TextOverflow.ellipsis,
+        maxWidth: expandValue ? 156 : null,
       ),
     );
   }
@@ -2009,7 +1908,7 @@ class _DormRulesInlineSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     return KeyedSubtree(
       key: expanderKey,
       child: AnimatedSize(
@@ -2040,9 +1939,9 @@ class _DormRulesInlineSlider extends StatelessWidget {
                         SliderTheme(
                           data: SliderTheme.of(context).copyWith(
                             trackHeight: AppSpacing.xxs,
-                            activeTrackColor: palette.primarySoft,
-                            inactiveTrackColor: AppColors.surfaceSoft,
-                            thumbColor: palette.primary,
+                            activeTrackColor: appColors.accent,
+                            inactiveTrackColor: appColors.surfaceMuted,
+                            thumbColor: appColors.accentDeep,
                             overlayShape: SliderComponentShape.noOverlay,
                             thumbShape: const RoundSliderThumbShape(
                               enabledThumbRadius: AppSpacing.xs,
@@ -2062,9 +1961,11 @@ class _DormRulesInlineSlider extends StatelessWidget {
                             alignment: Alignment.centerRight,
                             child: Text(
                               valueLabel,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: AppColors.textSecondary,
+                              style:
+                                  AppTypography.bodyMuted(
+                                    Theme.of(context).textTheme,
+                                  ).copyWith(
+                                    color: appColors.textSecondary,
                                     fontWeight: FontWeight.w500,
                                   ),
                             ),
@@ -2100,11 +2001,12 @@ class _DormRulesToggleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return AppSettingsItem(
       title: title,
       icon: icon,
-      iconColor: palette.primaryDeep,
-      iconBackgroundColor: AppColors.surfaceMuted,
+      iconColor: appColors.accentDeep,
+      iconBackgroundColor: appColors.surfaceMuted,
       iconContainerSize: AppSpacing.xxxl,
       iconSize: AppSpacing.lg,
       iconContainerKey: ValueKey<String>('dorm-rules-edit-icon-$title'),
@@ -2117,6 +2019,7 @@ class _DormRulesToggleCard extends StatelessWidget {
             : null,
         value: value,
       ),
+      hapticRole: AppHapticRole.selection,
       onTap: () => onChanged(!value),
     );
   }
@@ -2133,6 +2036,7 @@ class _DormRulesEditBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double horizontalInset = (constraints.maxWidth * 0.06)
@@ -2154,9 +2058,9 @@ class _DormRulesEditBottomBar extends StatelessWidget {
                   label: '取消',
                   variant: PrimaryButtonVariant.ghost,
                   size: PrimaryButtonSize.compact,
-                  backgroundColor: AppColors.surface,
-                  foregroundColor: AppColors.textPrimary,
-                  borderColor: AppColors.surfaceBorder,
+                  backgroundColor: appColors.surface,
+                  foregroundColor: appColors.textPrimary,
+                  borderColor: appColors.borderSubtle,
                   onPressed: onCancel,
                 ),
               ),
@@ -2167,7 +2071,6 @@ class _DormRulesEditBottomBar extends StatelessWidget {
                   label: '发起确认',
                   icon: Icons.send_rounded,
                   size: PrimaryButtonSize.compact,
-                  variant: PrimaryButtonVariant.soft,
                   onPressed: onConfirm,
                 ),
               ),
@@ -2194,6 +2097,7 @@ class _DormRulesReviewOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Material(
       color: Colors.transparent,
       child: AppCard(
@@ -2206,8 +2110,8 @@ class _DormRulesReviewOverlay extends StatelessWidget {
             PrimaryButton(
               label: '同意',
               size: PrimaryButtonSize.compact,
-              backgroundColor: palette.welcomeAccentColor,
-              foregroundColor: palette.primaryDeep,
+              backgroundColor: appColors.accent,
+              foregroundColor: appColors.textOnAccent,
               onPressed: onApprove,
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -2215,14 +2119,15 @@ class _DormRulesReviewOverlay extends StatelessWidget {
               label: '不同意',
               variant: PrimaryButtonVariant.ghost,
               size: PrimaryButtonSize.compact,
-              borderColor: AppColors.surfaceBorder,
+              foregroundColor: appColors.textPrimary,
+              borderColor: appColors.borderSubtle,
               onPressed: onReject,
             ),
             const SizedBox(height: AppSpacing.sm),
             Container(
               padding: const EdgeInsets.all(AppSpacing.sm),
               decoration: BoxDecoration(
-                color: AppColors.surfaceMuted,
+                color: appColors.surfaceMuted,
                 borderRadius: AppRadius.control,
               ),
               child: TextField(
@@ -2294,7 +2199,7 @@ List<_DormRuleGroupData> _buildDisplayRuleGroups(DormRulesSettings settings) {
         _DormRuleRowData(
           icon: Icons.notes_rounded,
           title: '补充说明',
-          description: _dormRulesPreviewLongText(settings.specialCase),
+          description: _dormRulesFullText(settings.specialCase),
         ),
       ],
     ),
@@ -2313,7 +2218,7 @@ List<_DormRuleGroupData> _buildDisplayRuleGroups(DormRulesSettings settings) {
         _DormRuleRowData(
           icon: Icons.light_mode_outlined,
           title: '个人照明要求',
-          description: _dormRulesPreviewLongText(settings.personalLighting),
+          description: _dormRulesFullText(settings.personalLighting),
         ),
         _DormRuleRowData(
           icon: Icons.blinds_closed_outlined,
@@ -2342,7 +2247,7 @@ List<_DormRuleGroupData> _buildDisplayRuleGroups(DormRulesSettings settings) {
         _DormRuleRowData(
           icon: Icons.bedtime_rounded,
           title: '作息习惯备注',
-          description: _dormRulesPreviewLongText(settings.routineNote),
+          description: _dormRulesFullText(settings.routineNote),
         ),
         _DormRuleRowData(
           icon: Icons.sell_outlined,
@@ -2444,16 +2349,12 @@ String _dormRulesPreviewText(String value) {
   return '${compact.substring(0, maxPreviewLength)}...';
 }
 
-String _dormRulesPreviewLongText(String value) {
+String _dormRulesFullText(String value) {
   final String compact = value.trim().replaceAll(RegExp(r'\s+'), '');
   if (compact.isEmpty) {
     return '未设置';
   }
-  const int maxPreviewLength = 22;
-  if (compact.length <= maxPreviewLength) {
-    return compact;
-  }
-  return '${compact.substring(0, maxPreviewLength)}...';
+  return compact;
 }
 
 String _dormRulesTagsSummary(List<String> tags) {
@@ -2477,18 +2378,6 @@ double _rulesPageWidthFactor(double maxWidth) {
     return 0.74;
   }
   return 1;
-}
-
-Color _rulesIntroFill(NightMoodPalette palette) {
-  return Color.lerp(palette.welcomeAccentColor, Colors.white, 0.28)!;
-}
-
-Color _rulesAccentIconFill(NightMoodPalette palette) {
-  return Color.lerp(palette.welcomeAccentColor, Colors.white, 0.12)!;
-}
-
-Color _rulesMutedIconFill(NightMoodPalette palette) {
-  return Color.lerp(_rulesAccentIconFill(palette), Colors.white, 0.62)!;
 }
 
 String _pendingRuleTitle(

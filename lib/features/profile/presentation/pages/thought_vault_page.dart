@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 
 class ThoughtVaultPage extends StatelessWidget {
   const ThoughtVaultPage({super.key});
@@ -14,13 +16,19 @@ class ThoughtVaultPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('事记仓库')),
+      backgroundColor: appColors.pageBackground,
+      appBar: AppDetailPageAppBar(
+        title: '事记仓库',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: ListenableBuilder(
         listenable: services.sleepCaptureRepository,
         builder: (BuildContext context, Widget? child) {
-          final List<SleepCaptureRecord> records = services.sleepCaptureRepository
+          final List<SleepCaptureRecord> records = services
+              .sleepCaptureRepository
               .recordsByType(SleepCaptureType.memo);
           if (records.isEmpty) {
             return Center(
@@ -28,9 +36,9 @@ class ThoughtVaultPage extends StatelessWidget {
                 padding: const EdgeInsets.all(AppSpacing.xl),
                 child: Text(
                   '睡眠模式里记下的事，会在这里慢慢收成卡片。',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+                  style: AppTypography.body(
+                    textTheme,
+                  ).copyWith(color: appColors.textSecondary),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -47,11 +55,10 @@ class ThoughtVaultPage extends StatelessWidget {
             itemBuilder: (BuildContext context, int index) {
               final SleepCaptureRecord record = records[index];
               return AppCard(
-                borderRadius: AppRadius.cardLarge,
-                onTap: () => context.push(
-                  AppRoutes.profileThoughtDetail,
-                  extra: record,
-                ),
+                padding: const EdgeInsets.all(AppSpacing.md),
+                borderRadius: AppRadius.compactCard,
+                onTap: () =>
+                    context.push(AppRoutes.profileThoughtDetail, extra: record),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
@@ -60,39 +67,38 @@ class ThoughtVaultPage extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: AppSpacing.sm,
-                            vertical: 6,
+                            vertical: AppSpacing.xxs,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.primaryHighlight,
+                            color: appColors.accentSoft,
                             borderRadius: AppRadius.pill,
                           ),
                           child: Text(
                             _formatRecordTime(record.createdAt),
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(color: AppColors.primaryDeep),
+                            style: AppTypography.chip(
+                              textTheme,
+                            ).copyWith(color: appColors.accentDeep),
                           ),
                         ),
                         const Spacer(),
-                        const Icon(
+                        Icon(
                           Icons.east_rounded,
-                          color: AppColors.textSecondary,
+                          color: appColors.accentDeep.withAlpha(150),
+                          size: 20,
                         ),
                       ],
                     ),
-                    const SizedBox(height: AppSpacing.md),
-                    Text(
-                      record.title,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
+                      record.title,
+                      style: AppTypography.cardTitle(textTheme),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
                       record.outline,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
-                        height: 1.5,
-                      ),
+                      style: AppTypography.bodyMuted(
+                        textTheme,
+                      ).copyWith(color: appColors.textSecondary, height: 1.5),
                     ),
                   ],
                 ),

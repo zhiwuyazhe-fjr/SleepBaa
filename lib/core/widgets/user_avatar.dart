@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 
 class UserAvatar extends StatelessWidget {
@@ -21,6 +23,7 @@ class UserAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     final Widget avatar = Container(
       width: size,
       height: size,
@@ -31,7 +34,7 @@ class UserAvatar extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: <Color>[palette.primarySoft, palette.primaryHighlight],
         ),
-        border: Border.all(color: AppColors.surface, width: 4),
+        border: Border.all(color: appColors.surface, width: 4),
       ),
       child: ClipOval(child: _buildContent(context)),
     );
@@ -50,7 +53,7 @@ class UserAvatar extends StatelessWidget {
               decoration: BoxDecoration(
                 color: palette.primary,
                 shape: BoxShape.circle,
-                border: Border.all(color: AppColors.surface, width: 2),
+                border: Border.all(color: appColors.surface, width: 2),
                 boxShadow: AppColors.cardShadow,
               ),
               alignment: Alignment.center,
@@ -71,7 +74,7 @@ class UserAvatar extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTap: AppHaptics.navigationHandler(onTap),
         borderRadius: BorderRadius.circular(size),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xs),
@@ -122,7 +125,7 @@ class UserAvatar extends StatelessWidget {
       child: Text(
         fallbackText,
         style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-          color: context.nightMoodPalette.primaryDeep,
+          color: context.appColors.accentDeep,
           fontWeight: FontWeight.w700,
         ),
       ),

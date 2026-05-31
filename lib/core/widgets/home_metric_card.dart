@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
-import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 
 class HomeMetricCard extends StatelessWidget {
   const HomeMetricCard({
@@ -20,12 +21,13 @@ class HomeMetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     final Widget content = Container(
       padding: const EdgeInsets.all(16),
       constraints: const BoxConstraints(minHeight: 84),
       decoration: BoxDecoration(
-        color: backgroundColor ?? AppColors.metricCardSurface,
+        color: backgroundColor ?? appColors.surface,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -33,17 +35,16 @@ class HomeMetricCard extends StatelessWidget {
         children: <Widget>[
           Row(
             children: <Widget>[
-              Icon(icon, size: 24, color: palette.primary),
+              Icon(icon, size: 24, color: appColors.accentDeep),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppColors.textStrong,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: AppTypography.panelTitle(
+                    textTheme,
+                  ).copyWith(color: appColors.textPrimary),
                 ),
               ),
             ],
@@ -53,10 +54,9 @@ class HomeMetricCard extends StatelessWidget {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSubtle,
-              fontWeight: FontWeight.w400,
-            ),
+            style: AppTypography.bodyMuted(
+              textTheme,
+            ).copyWith(color: appColors.textSecondary),
           ),
         ],
       ),
@@ -67,7 +67,7 @@ class HomeMetricCard extends StatelessWidget {
     }
 
     return InkWell(
-      onTap: onTap,
+      onTap: AppHaptics.tapHandler(onTap),
       borderRadius: BorderRadius.circular(16),
       child: content,
     );

@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal_spec.dart';
 
 Future<T?> showAppBottomSheet<T>(
   BuildContext context, {
   required AppBottomSheetSpec<T> spec,
 }) {
+  final bool usesSharedSheetSurface = spec is AppSelectionSheetSpec<T>;
   return showModalBottomSheet<T>(
     context: context,
     useSafeArea: spec.useSafeArea,
@@ -14,8 +17,10 @@ Future<T?> showAppBottomSheet<T>(
     isScrollControlled: spec.isScrollControlled,
     isDismissible: spec.isDismissible,
     enableDrag: spec.enableDrag,
-    showDragHandle: spec.showDragHandle,
-    backgroundColor: spec.backgroundColor,
+    showDragHandle: usesSharedSheetSurface ? false : spec.showDragHandle,
+    backgroundColor: usesSharedSheetSurface
+        ? Colors.transparent
+        : spec.backgroundColor,
     shape: spec.shape,
     constraints: spec.constraints,
     routeSettings: spec.routeSettings,
@@ -32,6 +37,7 @@ Future<T?> showAppBottomSheet<T>(
           padding: spec.padding,
           title: spec.title,
           description: spec.description,
+          showHandle: spec.showDragHandle,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
@@ -46,7 +52,9 @@ Future<T?> showAppBottomSheet<T>(
                   trailing: option.value == spec.selectedValue
                       ? const Icon(Icons.check_rounded)
                       : null,
-                  onTap: () => Navigator.of(sheetContext).pop(option.value),
+                  onTap: AppHaptics.selectionHandler(
+                    () => Navigator.of(sheetContext).pop(option.value),
+                  ),
                 ),
             ],
           ),
@@ -76,6 +84,7 @@ class AppBottomSheetScaffold extends StatelessWidget {
     this.padding = const EdgeInsets.fromLTRB(20, 12, 20, 24),
     this.crossAxisAlignment = CrossAxisAlignment.start,
     this.includeBottomViewInsets = false,
+    this.showHandle = false,
   });
 
   final String? title;
@@ -85,10 +94,12 @@ class AppBottomSheetScaffold extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final CrossAxisAlignment crossAxisAlignment;
   final bool includeBottomViewInsets;
+  final bool showHandle;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final AppSemanticColors appColors = context.appColors;
     final EdgeInsets resolvedPadding = padding.resolve(
       Directionality.of(context),
     );
@@ -98,33 +109,47 @@ class AppBottomSheetScaffold extends StatelessWidget {
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: resolvedPadding,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: crossAxisAlignment,
-            children: <Widget>[
-              if (header != null) ...<Widget>[
-                header!,
-                const SizedBox(height: AppSpacing.md),
-              ] else if (title != null) ...<Widget>[
-                Text(title!, style: theme.textTheme.titleLarge),
-                if (description != null &&
-                    description!.trim().isNotEmpty) ...<Widget>[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    description!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      height: 1.45,
-                    ),
-                  ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: appColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          border: Border.all(color: appColors.borderSubtle),
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: resolvedPadding,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: crossAxisAlignment,
+                children: <Widget>[
+                  if (showHandle) ...<Widget>[
+                    _AppSheetHandle(color: appColors.borderSubtle),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
+                  if (header != null) ...<Widget>[
+                    header!,
+                    const SizedBox(height: AppSpacing.md),
+                  ] else if (title != null) ...<Widget>[
+                    Text(title!, style: theme.textTheme.titleLarge),
+                    if (description != null &&
+                        description!.trim().isNotEmpty) ...<Widget>[
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        description!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: appColors.textSecondary,
+                          height: 1.45,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                  child,
                 ],
-                const SizedBox(height: AppSpacing.md),
-              ],
-              child,
-            ],
+              ),
+            ),
           ),
         ),
       ),
@@ -136,18 +161,20 @@ class AppBottomSheetCard extends StatelessWidget {
   const AppBottomSheetCard({
     super.key,
     required this.child,
-    this.backgroundColor = Colors.white,
+    this.backgroundColor,
   });
 
   final Widget child;
-  final Color backgroundColor;
+  final Color? backgroundColor;
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(24),
+        color: backgroundColor ?? appColors.surfaceRaised,
+        borderRadius: AppRadius.card,
+        border: Border.all(color: appColors.borderSubtle),
       ),
       child: child,
     );
@@ -159,7 +186,7 @@ class AppRichDetailSheetScaffold extends StatelessWidget {
     super.key,
     required this.child,
     this.surfaceKey = const ValueKey<String>('app-bottom-sheet-rich-detail'),
-    this.backgroundColor = AppColors.surface,
+    this.backgroundColor,
     this.borderRadius = const BorderRadius.vertical(top: Radius.circular(28)),
     this.showHandle = true,
     this.includeBottomSafeInset = true,
@@ -167,13 +194,14 @@ class AppRichDetailSheetScaffold extends StatelessWidget {
 
   final Widget child;
   final Key surfaceKey;
-  final Color backgroundColor;
+  final Color? backgroundColor;
   final BorderRadiusGeometry borderRadius;
   final bool showHandle;
   final bool includeBottomSafeInset;
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final double viewInsetBottom = MediaQuery.viewInsetsOf(context).bottom;
     final double bottomSafeInset = MediaQuery.viewPaddingOf(context).bottom;
     final double bottomGestureInset = MediaQuery.systemGestureInsetsOf(
@@ -196,8 +224,9 @@ class AppRichDetailSheetScaffold extends StatelessWidget {
             key: surfaceKey,
             width: double.infinity,
             decoration: BoxDecoration(
-              color: backgroundColor,
+              color: backgroundColor ?? appColors.surface,
               borderRadius: borderRadius,
+              border: Border.all(color: appColors.borderSubtle),
             ),
             child: SafeArea(
               top: false,
@@ -210,13 +239,10 @@ class AppRichDetailSheetScaffold extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: AppSpacing.sm),
                       child: Center(
-                        child: Container(
+                        child: _AppSheetHandle(
+                          color: appColors.borderSubtle,
                           width: handleWidth,
                           height: handleHeight,
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceBorder,
-                            borderRadius: BorderRadius.circular(handleHeight),
-                          ),
                         ),
                       ),
                     ),
@@ -226,6 +252,32 @@ class AppRichDetailSheetScaffold extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _AppSheetHandle extends StatelessWidget {
+  const _AppSheetHandle({
+    required this.color,
+    this.width = 44,
+    this.height = 4,
+  });
+
+  final Color color;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(height),
+        ),
       ),
     );
   }
@@ -260,6 +312,7 @@ class AppRichActionSheetScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return AppRichDetailSheetScaffold(
       surfaceKey: surfaceKey,
       child: Padding(
@@ -283,7 +336,7 @@ class AppRichActionSheetScaffold extends StatelessWidget {
                   Text(
                     description!,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
+                      color: appColors.textSecondary,
                       height: 1.5,
                     ),
                   ),

@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
-import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/utils/avatar_picker.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/core/widgets/app_strip_card.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
@@ -28,9 +29,12 @@ class AccountManagementPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     return Scaffold(
-      appBar: AppBar(title: const Text('账号管理')),
+      appBar: AppDetailPageAppBar(
+        title: '账号管理',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: SafeArea(
         child: ListView(
           padding: _accountPagePadding,
@@ -39,29 +43,29 @@ class AccountManagementPage extends StatelessWidget {
               children: <Widget>[
                 AppSettingsItem(
                   icon: Icons.person_outline_rounded,
-                  iconColor: palette.primaryDeep,
-                  iconBackgroundColor: AppColors.surfaceMuted,
+                  iconColor: appColors.accentDeep,
+                  iconBackgroundColor: appColors.surfaceMuted,
                   title: '个人资料',
                   onTap: () => context.push(AppRoutes.profileAccountProfile),
                 ),
                 AppSettingsItem(
                   icon: Icons.lock_reset_rounded,
-                  iconColor: palette.primaryDeep,
-                  iconBackgroundColor: AppColors.surfaceMuted,
+                  iconColor: appColors.accentDeep,
+                  iconBackgroundColor: appColors.surfaceMuted,
                   title: '重置密码',
                   onTap: () => context.push(AppRoutes.profileAccountPassword),
                 ),
                 AppSettingsItem(
                   icon: Icons.phonelink_lock_rounded,
-                  iconColor: palette.primaryDeep,
-                  iconBackgroundColor: AppColors.surfaceMuted,
+                  iconColor: appColors.accentDeep,
+                  iconBackgroundColor: appColors.surfaceMuted,
                   title: '登录管理',
                   onTap: () => context.push(AppRoutes.profileAccountLogin),
                 ),
                 AppSettingsItem(
                   icon: Icons.meeting_room_outlined,
-                  iconColor: palette.primaryDeep,
-                  iconBackgroundColor: AppColors.surfaceMuted,
+                  iconColor: appColors.accentDeep,
+                  iconBackgroundColor: appColors.surfaceMuted,
                   title: '寝室管理',
                   onTap: () => context.push(AppRoutes.profileAccountDorm),
                 ),
@@ -81,7 +85,10 @@ class AccountProfilePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     return Scaffold(
-      appBar: AppBar(title: const Text('个人资料')),
+      appBar: AppDetailPageAppBar(
+        title: '个人资料',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: SafeArea(
         child: ListenableBuilder(
           listenable: Listenable.merge(<Listenable>[
@@ -89,6 +96,7 @@ class AccountProfilePage extends StatelessWidget {
             services.dormRepository,
           ]),
           builder: (BuildContext context, Widget? child) {
+            final AppSemanticColors appColors = context.appColors;
             final UserProfile profile = services.profileFacade.currentUser;
             final Dorm dorm = services.dormFacade.currentDorm;
             final String displayedPhone = _displayedPhone(
@@ -131,7 +139,7 @@ class AccountProfilePage extends StatelessWidget {
                                       : displayedPhone,
                                   style: Theme.of(context).textTheme.bodySmall
                                       ?.copyWith(
-                                        color: AppColors.textSecondary,
+                                        color: appColors.textSecondary,
                                       ),
                                 ),
                               ],
@@ -188,11 +196,15 @@ class LoginManagementPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     return Scaffold(
-      appBar: AppBar(title: const Text('登录管理')),
+      appBar: AppDetailPageAppBar(
+        title: '登录管理',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: SafeArea(
         child: ListenableBuilder(
           listenable: services.authRepository,
           builder: (BuildContext context, Widget? child) {
+            final AppSemanticColors appColors = context.appColors;
             final UserProfile profile = services.profileFacade.currentUser;
             final String displayedPhone = _displayedPhone(
               profile,
@@ -216,7 +228,7 @@ class LoginManagementPage extends StatelessWidget {
                             icon: hasVerifiedPhoneIdentity
                                 ? Icons.verified_user_rounded
                                 : Icons.info_outline_rounded,
-                            color: context.nightMoodPalette.welcomeAccentColor,
+                            color: appColors.accent,
                           ),
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(
@@ -237,7 +249,7 @@ class LoginManagementPage extends StatelessWidget {
                                       : '当前手机号：$displayedPhone',
                                   style: Theme.of(context).textTheme.bodySmall
                                       ?.copyWith(
-                                        color: AppColors.textSecondary,
+                                        color: appColors.textSecondary,
                                         height: 1.3,
                                       ),
                                 ),
@@ -269,13 +281,13 @@ class LoginManagementPage extends StatelessWidget {
                 if (services.authRepository.lastAuthError != null) ...<Widget>[
                   const SizedBox(height: AppSpacing.sm),
                   AppCard(
-                    color: AppColors.surfaceMuted,
+                    color: appColors.surfaceMuted,
                     padding: const EdgeInsets.all(AppSpacing.sm),
                     borderRadius: AppRadius.compactCard,
                     child: Text(
                       services.authRepository.lastAuthError!,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: appColors.textSecondary,
                         height: 1.3,
                       ),
                     ),
@@ -382,13 +394,16 @@ class _DormManagementPageState extends State<DormManagementPage> {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     return Scaffold(
-      appBar: AppBar(title: const Text('寝室管理')),
+      appBar: AppDetailPageAppBar(
+        title: '寝室管理',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: SafeArea(
         child: ListenableBuilder(
           listenable: services.dormRepository,
           builder: (BuildContext context, Widget? child) {
             final Dorm dorm = services.dormFacade.currentDorm;
-            final NightMoodPalette palette = context.nightMoodPalette;
+            final AppSemanticColors appColors = context.appColors;
             final TextTheme textTheme = Theme.of(context).textTheme;
 
             if (dorm.id.isEmpty) {
@@ -403,17 +418,17 @@ class _DormManagementPageState extends State<DormManagementPage> {
                       children: <Widget>[
                         Text(
                           '你还没有加入寝室',
-                          style: textTheme.titleMedium?.copyWith(
+                          style: AppTypography.panelTitle(textTheme).copyWith(
+                            color: appColors.textPrimary,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                         const SizedBox(height: AppSpacing.xxs),
                         Text(
                           '账号页只保留轻量入口，完整互动仍建议在宿舍页里完成。',
-                          style: textTheme.bodySmall?.copyWith(
-                            color: AppColors.textSecondary,
-                            height: 1.3,
-                          ),
+                          style: AppTypography.bodyMuted(
+                            textTheme,
+                          ).copyWith(color: appColors.textSecondary),
                         ),
                         const SizedBox(height: AppSpacing.sm),
                         PrimaryButton(
@@ -435,7 +450,7 @@ class _DormManagementPageState extends State<DormManagementPage> {
                 AppStripCard(
                   leading: _LeadingIconBadge(
                     icon: Icons.night_shelter_rounded,
-                    color: palette.welcomeAccentColor,
+                    color: appColors.accent,
                   ),
                   title: dorm.name,
                   subtitle: '${dorm.members.length} 位成员 · ${dorm.overview}',
@@ -447,22 +462,34 @@ class _DormManagementPageState extends State<DormManagementPage> {
                   children: <Widget>[
                     AppSettingsItem(
                       icon: Icons.group_add_outlined,
-                      iconColor: palette.primaryDeep,
-                      iconBackgroundColor: AppColors.surfaceMuted,
+                      iconColor: appColors.accentDeep,
+                      iconBackgroundColor: appColors.surfaceMuted,
+                      titleStyle: AppTypography.body(textTheme).copyWith(
+                        color: appColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
                       title: '邀请舍友',
                       onTap: () => context.push(AppRoutes.dormInvite),
                     ),
                     AppSettingsItem(
                       icon: Icons.fact_check_outlined,
-                      iconColor: palette.primaryDeep,
-                      iconBackgroundColor: AppColors.surfaceMuted,
+                      iconColor: appColors.accentDeep,
+                      iconBackgroundColor: appColors.surfaceMuted,
+                      titleStyle: AppTypography.body(textTheme).copyWith(
+                        color: appColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
                       title: '查看寝室规则',
                       onTap: () => context.push(AppRoutes.dormRules),
                     ),
                     AppSettingsItem(
                       icon: Icons.edit_note_rounded,
-                      iconColor: palette.primaryDeep,
-                      iconBackgroundColor: AppColors.surfaceMuted,
+                      iconColor: appColors.accentDeep,
+                      iconBackgroundColor: appColors.surfaceMuted,
+                      titleStyle: AppTypography.body(textTheme).copyWith(
+                        color: appColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
                       title: '编辑寝室名称',
                       onTap: () => _renameDorm(services, dorm),
                     ),
@@ -501,7 +528,8 @@ class _DormManagementPageState extends State<DormManagementPage> {
                     children: <Widget>[
                       Text(
                         '当前成员',
-                        style: textTheme.titleMedium?.copyWith(
+                        style: AppTypography.panelTitle(textTheme).copyWith(
+                          color: appColors.textPrimary,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -539,9 +567,11 @@ class _DenseMetaTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
+        color: appColors.surfaceMuted,
         borderRadius: AppRadius.compactCard,
       ),
       child: Padding(
@@ -554,18 +584,17 @@ class _DenseMetaTile extends StatelessWidget {
           children: <Widget>[
             Text(
               label,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: AppColors.textSecondary,
+              style: AppTypography.chip(textTheme).copyWith(
+                color: appColors.textSecondary,
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 2),
             Text(
               value,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.textPrimary,
-                height: 1.35,
-              ),
+              style: AppTypography.body(
+                textTheme,
+              ).copyWith(color: appColors.textPrimary),
             ),
           ],
         ),
@@ -601,9 +630,11 @@ class _MemberRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
+        color: appColors.surfaceMuted,
         borderRadius: AppRadius.compactCard,
       ),
       child: Padding(
@@ -613,13 +644,11 @@ class _MemberRow extends StatelessWidget {
           children: <Widget>[
             CircleAvatar(
               radius: 18,
-              backgroundColor: context.nightMoodPalette.primarySoft.withAlpha(
-                90,
-              ),
+              backgroundColor: appColors.accentSoft,
               child: Text(
                 member.name.isEmpty ? '?' : member.name.characters.first,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: AppColors.textStrong,
+                style: AppTypography.cardTitle(textTheme).copyWith(
+                  color: appColors.accentDeep,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -631,16 +660,17 @@ class _MemberRow extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     member.name,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    style: AppTypography.cardTitle(textTheme).copyWith(
+                      color: appColors.textPrimary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     '${_presenceLabel(member.presenceStatus)} · ${_statusLabel(member.status)}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                    style: AppTypography.bodyMuted(
+                      textTheme,
+                    ).copyWith(color: appColors.textSecondary),
                   ),
                 ],
               ),

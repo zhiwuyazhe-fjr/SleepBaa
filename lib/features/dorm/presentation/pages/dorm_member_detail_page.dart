@@ -1,13 +1,15 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_message_record_card.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_member_status_presenter.dart';
@@ -25,8 +27,9 @@ class DormMemberDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    final AppSemanticColors appColors = context.appColors;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: appColors.pageBackground,
       body: SafeArea(
         child: ListenableBuilder(
           listenable: Listenable.merge(<Listenable>[
@@ -35,6 +38,7 @@ class DormMemberDetailPage extends StatelessWidget {
             services.notificationRepository,
           ]),
           builder: (BuildContext context, Widget? child) {
+            final AppSemanticColors appColors = context.appColors;
             final Dorm dorm = services.dormRepository.currentDorm;
             final DormMember member = dorm.members.firstWhere(
               (DormMember item) => item.uid == memberUid,
@@ -147,8 +151,13 @@ class DormMemberDetailPage extends StatelessWidget {
                               const SizedBox(height: AppSpacing.xl),
                               Text(
                                 '最近动态',
-                                style: Theme.of(context).textTheme.titleLarge
-                                    ?.copyWith(fontWeight: FontWeight.w800),
+                                style:
+                                    AppTypography.sectionTitle(
+                                      Theme.of(context).textTheme,
+                                    ).copyWith(
+                                      color: appColors.textPrimary,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                               ),
                               const SizedBox(height: AppSpacing.sm),
                               ...memberEvents.asMap().entries.map(
@@ -163,6 +172,9 @@ class DormMemberDetailPage extends StatelessWidget {
                                         detail: entry.value.detail,
                                         timeLabel: entry.value.timeLabel,
                                         highlighted: entry.key == 0,
+                                        iconBackgroundColor:
+                                            appColors.accentSoft,
+                                        iconColor: appColors.accentDeep,
                                       ),
                                     ),
                               ),
@@ -190,29 +202,7 @@ class _DormDetailHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: AppRadius.button,
-            onTap: onBack,
-            child: const SizedBox.square(
-              dimension: 40,
-              child: Icon(Icons.chevron_left_rounded),
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
-    );
+    return AppDetailPageHeader(title: title, onBack: onBack);
   }
 }
 
@@ -233,7 +223,8 @@ class _DormMemberProfileHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     final Color accentColor = dormPresenceSleepColor(
       member,
       showPresence: showPresence,
@@ -257,10 +248,9 @@ class _DormMemberProfileHero extends StatelessWidget {
         const SizedBox(height: AppSpacing.sm),
         Text(
           member.name,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w800,
-          ),
+          style: AppTypography.sectionTitle(
+            textTheme,
+          ).copyWith(color: appColors.textPrimary, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: AppSpacing.xs),
         Container(
@@ -270,7 +260,7 @@ class _DormMemberProfileHero extends StatelessWidget {
             vertical: AppSpacing.xs,
           ),
           decoration: BoxDecoration(
-            color: palette.welcomeAccentColor,
+            color: appColors.accent,
             borderRadius: AppRadius.pill,
           ),
           child: Row(
@@ -279,16 +269,16 @@ class _DormMemberProfileHero extends StatelessWidget {
               Container(
                 width: 8,
                 height: 8,
-                decoration: const BoxDecoration(
-                  color: AppColors.textStrong,
+                decoration: BoxDecoration(
+                  color: appColors.textOnAccent,
                   shape: BoxShape.circle,
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
               Text(
                 dormPresenceSleepLabel(member, showPresence: showPresence),
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: AppColors.textStrong,
+                style: AppTypography.meta(textTheme).copyWith(
+                  color: appColors.textOnAccent,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -308,6 +298,8 @@ class _DormMemberStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
@@ -321,8 +313,8 @@ class _DormMemberStatCard extends StatelessWidget {
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: AppColors.textPrimary,
+            style: AppTypography.panelTitle(textTheme).copyWith(
+              color: appColors.textPrimary,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -331,8 +323,8 @@ class _DormMemberStatCard extends StatelessWidget {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
+            style: AppTypography.chip(textTheme).copyWith(
+              color: appColors.textSecondary,
               fontWeight: FontWeight.w600,
             ),
           ),

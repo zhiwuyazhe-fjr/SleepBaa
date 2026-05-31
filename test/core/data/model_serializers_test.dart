@@ -110,6 +110,7 @@ void main() {
           'sleepEncyclopedia',
           'thoughtVault',
         ],
+        showHomeQuickActions: true,
         assistantReplyMotionLevel: AssistantReplyMotionLevel.high,
         selectedNightMood: NightMood.calm,
       );
@@ -127,6 +128,7 @@ void main() {
         'thoughtVault',
       ]);
       expect(serialized['assistantReplyMotionLevel'], 'high');
+      expect(serialized['showHomeQuickActions'], isTrue);
       expect(restored.homeQuickActionIds, <String>[
         'dreamJournal',
         'profileCalendar',
@@ -137,9 +139,30 @@ void main() {
         restored.assistantReplyMotionLevel,
         AssistantReplyMotionLevel.high,
       );
+      expect(restored.showHomeQuickActions, isTrue);
       expect(restored.selectedNightMood, NightMood.calm);
     },
   );
+
+  test('user settings default hides home quick actions', () {
+    final UserSettings restored = ModelSerializers.userSettingsFromMap(
+      const <String, dynamic>{},
+    );
+
+    expect(
+      const UserSettings(
+        sleepGoalHours: 7.5,
+        bedtimeReminderEnabled: true,
+        morningReminderEnabled: true,
+        dormAlertsEnabled: true,
+        bedtimeReminder: TimeOfDay(hour: 23, minute: 10),
+        preferredTrackTitle: '深海海浪',
+        smartSuggestionsEnabled: true,
+      ).showHomeQuickActions,
+      isFalse,
+    );
+    expect(restored.showHomeQuickActions, isFalse);
+  });
 
   test('legacy default quick actions migrate to music shortcut', () {
     expect(

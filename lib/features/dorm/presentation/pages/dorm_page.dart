@@ -5,9 +5,12 @@ import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -294,6 +297,7 @@ class _DormPencilScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return SafeArea(
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
@@ -305,9 +309,9 @@ class _DormPencilScaffold extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: <Color>[
-                  palette.primarySoft.withAlpha(18),
-                  AppColors.background,
-                  AppColors.background,
+                  appColors.accentSoft.withAlpha(18),
+                  appColors.pageBackground,
+                  appColors.pageBackground,
                 ],
               ),
             ),
@@ -511,17 +515,17 @@ class _DormHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
         Expanded(
           child: Text(
             dorm.name,
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w800,
-              height: 1.08,
-            ),
+            style: AppTypography.heroTitle(
+              textTheme,
+            ).copyWith(color: appColors.textPrimary),
           ),
         ),
         if (dormPulseBadge != null) ...<Widget>[
@@ -547,6 +551,8 @@ class _DormHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       padding: EdgeInsets.zero,
       boxShadow: AppColors.floatingShadow,
@@ -562,9 +568,9 @@ class _DormHeroCard extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: <Color>[
-              palette.heroGradientStart,
-              palette.heroGradientMid,
-              palette.heroGradientEnd,
+              appColors.heroEnd,
+              appColors.heroMid,
+              appColors.heroStart,
             ],
           ),
         ),
@@ -576,8 +582,8 @@ class _DormHeroCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     '宿舍脉搏',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppColors.textStrong,
+                    style: AppTypography.chip(textTheme).copyWith(
+                      color: AppColors.onDark,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -592,11 +598,9 @@ class _DormHeroCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.xs),
             Text(
               '今晚宿舍整体状态平稳',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: AppColors.textStrong,
-                height: 1.1,
-                fontWeight: FontWeight.w800,
-              ),
+              style: AppTypography.sectionTitle(
+                textTheme,
+              ).copyWith(color: AppColors.onDark),
             ),
             const SizedBox(height: AppSpacing.sm),
             LayoutBuilder(
@@ -644,25 +648,26 @@ class _DormPulseBadgePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surface.withAlpha(236),
+        color: appColors.surfaceMuted.withAlpha(236),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(badge.icon, size: 16, color: palette.welcomeAccentColor),
+          Icon(badge.icon, size: 16, color: appColors.accent),
           const SizedBox(width: AppSpacing.xs),
           Text(
             badge.label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: AppColors.textPrimary,
+            style: AppTypography.meta(textTheme).copyWith(
+              color: appColors.textPrimary,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -679,21 +684,22 @@ class _HeroInfoPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
         vertical: AppSpacing.xxs,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surface.withAlpha(246),
+        color: appColors.surfaceMuted.withAlpha(236),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: AppColors.textPrimary,
-          fontWeight: FontWeight.w800,
-        ),
+        style: AppTypography.meta(
+          textTheme,
+        ).copyWith(color: appColors.textPrimary, fontWeight: FontWeight.w800),
       ),
     );
   }
@@ -707,12 +713,14 @@ class _HeroActionPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Material(
-      color: AppColors.surface,
+      color: appColors.surfaceMuted.withAlpha(236),
       borderRadius: AppRadius.pill,
       child: InkWell(
         borderRadius: AppRadius.pill,
-        onTap: onTap,
+        onTap: AppHaptics.navigationHandler(onTap),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.xs,
@@ -721,16 +729,16 @@ class _HeroActionPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              const Icon(
+              Icon(
                 Icons.settings_rounded,
                 size: AppSpacing.sm,
-                color: AppColors.textStrong,
+                color: appColors.textPrimary,
               ),
               const SizedBox(width: AppSpacing.xxs),
               Text(
                 label,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppColors.textStrong,
+                style: AppTypography.chip(textTheme).copyWith(
+                  color: appColors.textPrimary,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -749,14 +757,15 @@ class _HeroRatingPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
         vertical: AppSpacing.xxs,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surface.withAlpha(246),
+        color: appColors.surfaceMuted.withAlpha(236),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -764,8 +773,8 @@ class _HeroRatingPill extends StatelessWidget {
         children: <Widget>[
           Text(
             '安静等级',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: AppColors.textPrimary,
+            style: AppTypography.meta(textTheme).copyWith(
+              color: appColors.textPrimary,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -777,7 +786,7 @@ class _HeroRatingPill extends StatelessWidget {
               child: Icon(
                 Icons.star_rounded,
                 size: 16,
-                color: palette.welcomeAccentColor,
+                color: appColors.accent,
               ),
             ),
           ),
@@ -805,7 +814,9 @@ class _DormMemberCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
-    final Color accentColor = _memberColor(member.status, palette);
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final Color accentColor = _memberColor(member.status, palette, appColors);
     final String? resolvedBadgeId = isCurrentUser
         ? currentUserProfile?.displayBadgeId ?? member.displayBadgeId
         : member.displayBadgeId;
@@ -826,7 +837,7 @@ class _DormMemberCard extends StatelessWidget {
       label: '${member.name}舍友详情',
       child: InkWell(
         borderRadius: AppRadius.control,
-        onTap: onTap,
+        onTap: AppHaptics.navigationHandler(onTap),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
           child: SizedBox(
@@ -865,17 +876,17 @@ class _DormMemberCard extends StatelessWidget {
                           width: 18,
                           height: 18,
                           decoration: BoxDecoration(
-                            color: palette.welcomeAccentColor,
+                            color: appColors.accent,
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: AppColors.surface,
+                              color: appColors.surface,
                               width: 2,
                             ),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.star_rounded,
                             size: 10,
-                            color: AppColors.surface,
+                            color: appColors.surface,
                           ),
                         ),
                       ),
@@ -887,8 +898,8 @@ class _DormMemberCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: AppColors.textPrimary,
+                  style: AppTypography.meta(textTheme).copyWith(
+                    color: appColors.textPrimary,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -925,6 +936,8 @@ class _DormHubCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       onTap: action.onTap,
       padding: const EdgeInsets.fromLTRB(
@@ -946,10 +959,10 @@ class _DormHubCard extends StatelessWidget {
                 height: 32,
                 decoration: BoxDecoration(
                   borderRadius: AppRadius.iconContainer,
-                  color: palette.primaryHighlight,
+                  color: appColors.accentSoft,
                 ),
                 alignment: Alignment.center,
-                child: Icon(action.icon, color: AppColors.textStrong, size: 18),
+                child: Icon(action.icon, color: appColors.accentDeep, size: 18),
               ),
               const Spacer(),
               if (action.showDot)
@@ -968,18 +981,19 @@ class _DormHubCard extends StatelessWidget {
             action.title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            style: AppTypography.cardTitle(textTheme).copyWith(
+              color: appColors.textPrimary,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const SizedBox(height: AppSpacing.xxs),
           Text(
             action.detail,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+            style: AppTypography.bodyMuted(
+              textTheme,
+            ).copyWith(color: appColors.textSecondary),
           ),
         ],
       ),
@@ -996,6 +1010,7 @@ class _DormEventTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool active = _isDormHomeActiveRecord(event);
+    final AppSemanticColors appColors = context.appColors;
     return AppMessageRecordCard(
       onTap: onTap,
       icon: event.icon,
@@ -1009,17 +1024,14 @@ class _DormEventTile extends StatelessWidget {
             padding: const EdgeInsets.only(top: 2),
             child: Text(
               event.timeLabel,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: active ? AppColors.textStrong : AppColors.textSecondary,
+              style: AppTypography.chip(Theme.of(context).textTheme).copyWith(
+                color: active ? appColors.textPrimary : appColors.textSecondary,
                 fontWeight: active ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
           ),
           const SizedBox(width: AppSpacing.xs),
-          const Icon(
-            Icons.chevron_right_rounded,
-            color: AppColors.textSecondary,
-          ),
+          Icon(Icons.chevron_right_rounded, color: appColors.textSecondary),
         ],
       ),
     );
@@ -1033,11 +1045,15 @@ bool _isDormHomeActiveRecord(DormEventRecord event) {
       event.title.contains('公约');
 }
 
-Color _memberColor(DormMemberStatus status, NightMoodPalette palette) {
+Color _memberColor(
+  DormMemberStatus status,
+  NightMoodPalette palette,
+  AppSemanticColors appColors,
+) {
   return switch (status) {
     DormMemberStatus.sleeping => palette.primary,
     DormMemberStatus.quiet => palette.calmBlue,
-    DormMemberStatus.away => AppColors.textHint,
+    DormMemberStatus.away => appColors.textSecondary,
     DormMemberStatus.active => palette.welcomeAccentColor,
   };
 }
@@ -1173,23 +1189,27 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
     required String label,
   }) {
     final bool selected = _activeTab == tab;
-    final Color highlight = Theme.of(context).colorScheme.primary;
+    final AppSemanticColors appColors = context.appColors;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _activeTab = tab),
+        onTap: AppHaptics.selectionHandler(
+          () => setState(() => _activeTab = tab),
+        ),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
           decoration: BoxDecoration(
-            color: selected ? highlight : Colors.transparent,
+            color: selected ? appColors.accent : Colors.transparent,
             borderRadius: BorderRadius.circular(999),
           ),
           alignment: Alignment.center,
           child: Text(
             label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: selected ? AppColors.surface : AppColors.textSecondary,
+            style: AppTypography.meta(Theme.of(context).textTheme).copyWith(
+              color: selected
+                  ? appColors.textOnAccent
+                  : appColors.textSecondary,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -1200,40 +1220,40 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
 
   Widget _buildContentTab(BuildContext context) {
     final String customMessage = _customMessageController.text.trim();
-    final Color highlight = Theme.of(context).colorScheme.primary;
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
           '选择提醒内容',
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          style: AppTypography.panelTitle(
+            textTheme,
+          ).copyWith(color: appColors.textPrimary, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
           '先选一句更合适的表达，也可以自己写一句更贴心的话。',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppColors.textSecondary,
-            height: 1.5,
-          ),
+          style: AppTypography.body(
+            textTheme,
+          ).copyWith(color: appColors.textSecondary),
         ),
         const SizedBox(height: AppSpacing.md),
         ..._gentleReminderPresets.map(
           (String message) => InkWell(
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            onTap: () => _selectPreset(message),
+            onTap: AppHaptics.selectionHandler(() => _selectPreset(message)),
             child: Container(
               margin: const EdgeInsets.only(bottom: AppSpacing.sm),
               padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
                 color: _selectedPreset == message && customMessage.isEmpty
-                    ? highlight.withAlpha(18)
-                    : AppColors.surfaceMuted,
+                    ? appColors.accentSoft
+                    : appColors.surfaceMuted,
                 borderRadius: BorderRadius.circular(AppRadius.lg),
                 border: Border.all(
                   color: _selectedPreset == message && customMessage.isEmpty
-                      ? highlight
+                      ? appColors.accentDeep
                       : Colors.transparent,
                 ),
               ),
@@ -1252,8 +1272,8 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
                   Expanded(
                     child: Text(
                       message,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        height: 1.5,
+                      style: AppTypography.body(textTheme).copyWith(
+                        color: appColors.textPrimary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -1278,7 +1298,7 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
           decoration: InputDecoration(
             hintText: 'Others……',
             filled: true,
-            fillColor: AppColors.surfaceMuted,
+            fillColor: appColors.surfaceMuted,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.lg,
               vertical: AppSpacing.md,
@@ -1294,22 +1314,23 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
   }
 
   Widget _buildTargetTab(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
           '选择要提醒的舍友',
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          style: AppTypography.panelTitle(
+            textTheme,
+          ).copyWith(color: appColors.textPrimary, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
           '我们会用更温和的方式送达提醒，不会直接替你做生硬通知。',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppColors.textSecondary,
-            height: 1.5,
-          ),
+          style: AppTypography.body(
+            textTheme,
+          ).copyWith(color: appColors.textSecondary),
         ),
         const SizedBox(height: AppSpacing.md),
         CheckboxListTile(
@@ -1321,9 +1342,9 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
           title: const Text('是否使用昵称实名发送'),
           subtitle: Text(
             _anonymous ? '默认显示“您的舍友”' : '将显示你的昵称',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+            style: AppTypography.bodyMuted(
+              textTheme,
+            ).copyWith(color: appColors.textSecondary),
           ),
           onChanged: (bool? value) {
             setState(() => _anonymous = !(value ?? false));
@@ -1333,7 +1354,9 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
         ...widget.members.map(
           (DormMember member) => InkWell(
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            onTap: () => setState(() => _selectedUid = member.uid),
+            onTap: AppHaptics.selectionHandler(
+              () => setState(() => _selectedUid = member.uid),
+            ),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(
@@ -1354,16 +1377,19 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
                       children: <Widget>[
                         Text(
                           member.name,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                          style: AppTypography.cardTitle(textTheme).copyWith(
+                            color: appColors.textPrimary,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           member.note,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: AppColors.textSecondary),
+                          style: AppTypography.bodyMuted(
+                            textTheme,
+                          ).copyWith(color: appColors.textSecondary),
                         ),
                       ],
                     ),
@@ -1379,6 +1405,7 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return AppRichActionSheetScaffold(
       title: '委婉提醒',
       description: '先选内容，再选对象；两个栏目可以来回切换。',
@@ -1386,7 +1413,7 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
       header: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: AppColors.surfaceMuted,
+          color: appColors.surfaceMuted,
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(

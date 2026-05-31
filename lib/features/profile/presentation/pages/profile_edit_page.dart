@@ -1,15 +1,17 @@
-import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/utils/avatar_picker.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/core/widgets/user_avatar.dart';
 
@@ -106,19 +108,26 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     final UserProfile profile = services.profileFacade.currentUser;
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     if (_nameController == null ||
         _taglineController == null ||
         _customRoleController == null) {
       return const Scaffold(body: SizedBox.shrink());
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('编辑个人资料')),
+      backgroundColor: appColors.pageBackground,
+      appBar: AppDetailPageAppBar(
+        title: '编辑个人资料',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: SafeArea(
         child: ListView(
           padding: AppPageInsets.page(bottom: AppSpacing.lg),
           children: <Widget>[
             AppCard(
-              color: context.nightMoodPalette.primaryHighlight,
+              color: appColors.accentSoft,
+              border: Border.all(color: appColors.accent.withAlpha(92)),
               padding: const EdgeInsets.all(AppSpacing.sm),
               borderRadius: AppRadius.compactCard,
               child: Row(
@@ -137,17 +146,16 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                       children: <Widget>[
                         Text(
                           '调整昵称、签名和角色，让账号页展示更完整。',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                          style: AppTypography.cardTitle(
+                            textTheme,
+                          ).copyWith(color: appColors.textPrimary),
                         ),
                         const SizedBox(height: AppSpacing.xxs),
                         Text(
                           '头像也可以直接点按更新。',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: AppColors.textSecondary,
-                                height: 1.3,
-                              ),
+                          style: AppTypography.bodyMuted(
+                            textTheme,
+                          ).copyWith(color: appColors.textSecondary),
                         ),
                       ],
                     ),
@@ -253,6 +261,7 @@ class _EditSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -266,7 +275,7 @@ class _EditSectionHeader extends StatelessWidget {
         Text(
           subtitle,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppColors.textSecondary,
+            color: appColors.textSecondary,
             height: 1.3,
           ),
         ),
@@ -294,6 +303,7 @@ class _LabeledEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -301,7 +311,7 @@ class _LabeledEditor extends StatelessWidget {
           label,
           style: Theme.of(
             context,
-          ).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary),
+          ).textTheme.labelMedium?.copyWith(color: appColors.textSecondary),
         ),
         const SizedBox(height: AppSpacing.xxs),
         TextField(
@@ -312,18 +322,18 @@ class _LabeledEditor extends StatelessWidget {
           decoration: InputDecoration(
             hintText: hintText,
             filled: true,
-            fillColor: AppColors.surface,
+            fillColor: appColors.surface,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.sm,
               vertical: AppSpacing.sm,
             ),
             border: OutlineInputBorder(
               borderRadius: AppRadius.control,
-              borderSide: const BorderSide(color: AppColors.surfaceBorder),
+              borderSide: BorderSide(color: appColors.borderSubtle),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: AppRadius.control,
-              borderSide: const BorderSide(color: AppColors.surfaceBorder),
+              borderSide: BorderSide(color: appColors.borderSubtle),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: AppRadius.control,
@@ -349,14 +359,12 @@ class _RoleOptionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {
-          HapticFeedback.lightImpact();
-          onTap();
-        },
+        onTap: AppHaptics.selectionHandler(onTap),
         borderRadius: AppRadius.control,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
@@ -366,12 +374,10 @@ class _RoleOptionButton extends StatelessWidget {
             vertical: AppSpacing.xs,
           ),
           decoration: BoxDecoration(
-            color: selected
-                ? palette.welcomeAccentColor.withAlpha(70)
-                : AppColors.surfaceMuted,
+            color: selected ? appColors.accentSoft : appColors.surfaceMuted,
             borderRadius: AppRadius.compactCard,
             border: Border.all(
-              color: selected ? palette.welcomeAccentColor : AppColors.divider,
+              color: selected ? appColors.accent : appColors.borderSubtle,
               width: selected ? 1.8 : 1,
             ),
           ),
@@ -382,17 +388,17 @@ class _RoleOptionButton extends StatelessWidget {
                 selected ? Icons.check_circle_rounded : Icons.circle_outlined,
                 size: 18,
                 color: selected
-                    ? palette.welcomeTextOnAccent
-                    : AppColors.textSecondary,
+                    ? appColors.accentDeep
+                    : appColors.textSecondary,
               ),
               const SizedBox(width: AppSpacing.sm),
               Flexible(
                 child: Text(
                   label,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  style: AppTypography.body(textTheme).copyWith(
                     color: selected
-                        ? palette.welcomeTextOnAccent
-                        : AppColors.textPrimary,
+                        ? appColors.accentDeep
+                        : appColors.textPrimary,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   ),
                 ),

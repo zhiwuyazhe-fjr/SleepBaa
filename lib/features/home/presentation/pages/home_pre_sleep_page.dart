@@ -3,9 +3,11 @@ import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
-import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/home_metric_card.dart';
@@ -175,7 +177,9 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
           final TonightInterferenceState interference =
               services.interferenceProbeController.currentState;
           final List<HomeQuickActionDefinition> quickActions =
-              homeQuickActionDefinitionsFor(settings.homeQuickActionIds);
+              settings.showHomeQuickActions
+              ? homeQuickActionDefinitionsFor(settings.homeQuickActionIds)
+              : const <HomeQuickActionDefinition>[];
           final AudioTrack? currentAudioTrack =
               services.audioPlaybackController.currentTrack;
           final bool hasStartedAudio = currentAudioTrack != null;
@@ -203,6 +207,7 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
             child: LayoutBuilder(
               builder: (BuildContext context, BoxConstraints _) {
                 final String greeting = _greetingFor(DateTime.now());
+                final TextTheme textTheme = Theme.of(context).textTheme;
                 return Stack(
                   children: <Widget>[
                     Positioned.fill(
@@ -222,10 +227,7 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                 Expanded(
                                   child: Text(
                                     '$greeting，${profile.displayName}',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .headlineLarge
-                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                    style: AppTypography.heroTitle(textTheme),
                                   ),
                                 ),
                                 const SizedBox(width: AppSpacing.md),
@@ -247,11 +249,6 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                                 primaryValue: '${dorm.noiseDb} dB',
                               ),
                               right: StartSleepModeCard(
-                                isAudioReady:
-                                    services
-                                        .audioPlaybackController
-                                        .currentTrack !=
-                                    null,
                                 onTap: () async {
                                   await services.sleepExperienceController
                                       .enterSleepMode();
@@ -262,35 +259,38 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                               ),
                             ),
                             const SizedBox(height: AppSpacing.xl),
-                            SectionTitle(
-                              title: '快捷功能',
-                              actionLabel: '编辑',
-                              variant: SectionTitleVariant.dorm,
-                              onAction: () =>
-                                  context.push(AppRoutes.homeQuickActionsEdit),
-                            ),
-                            const SizedBox(height: AppSpacing.md),
-                            Row(
-                              children: <Widget>[
-                                for (
-                                  int index = 0;
-                                  index < quickActions.length;
-                                  index++
-                                ) ...<Widget>[
-                                  Expanded(
-                                    child: QuickActionIconButton(
-                                      icon: quickActions[index].icon,
-                                      label: quickActions[index].label,
-                                      onTap: () =>
-                                          quickActions[index].open(context),
+                            if (settings.showHomeQuickActions) ...<Widget>[
+                              SectionTitle(
+                                title: '快捷功能',
+                                actionLabel: '编辑',
+                                variant: SectionTitleVariant.dorm,
+                                onAction: () => context.push(
+                                  AppRoutes.homeQuickActionsEdit,
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              Row(
+                                children: <Widget>[
+                                  for (
+                                    int index = 0;
+                                    index < quickActions.length;
+                                    index++
+                                  ) ...<Widget>[
+                                    Expanded(
+                                      child: QuickActionIconButton(
+                                        icon: quickActions[index].icon,
+                                        label: quickActions[index].label,
+                                        onTap: () =>
+                                            quickActions[index].open(context),
+                                      ),
                                     ),
-                                  ),
-                                  if (index != quickActions.length - 1)
-                                    const SizedBox(width: AppSpacing.xs),
+                                    if (index != quickActions.length - 1)
+                                      const SizedBox(width: AppSpacing.xs),
+                                  ],
                                 ],
-                              ],
-                            ),
-                            const SizedBox(height: AppSpacing.xl),
+                              ),
+                              const SizedBox(height: AppSpacing.xl),
+                            ],
                             SectionTitle(
                               title: '今晚影响因素',
                               actionLabel: '查看详情',
@@ -356,10 +356,9 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                             const SizedBox(height: AppSpacing.sm),
                             Text(
                               '点击卡片更新最新结果',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: AppColors.textSecondary,
-                                    height: 1.45,
+                              style: AppTypography.bodyMuted(textTheme)
+                                  .copyWith(
+                                    color: context.appColors.textSecondary,
                                   ),
                             ),
                             const SizedBox(height: AppSpacing.xl),
@@ -500,11 +499,12 @@ class _SleepMemoBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Material(
       color: Colors.transparent,
       child: GestureDetector(
-        onTap: onTap,
+        onTap: AppHaptics.tapHandler(onTap),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 240),
           width: 380,
@@ -514,10 +514,10 @@ class _SleepMemoBanner extends StatelessWidget {
             vertical: AppSpacing.md,
           ),
           decoration: BoxDecoration(
-            color: AppColors.darkSurface.withAlpha(242),
+            color: appColors.surfaceRaised.withAlpha(242),
             borderRadius: BorderRadius.circular(24),
             boxShadow: AppColors.floatingShadow,
-            border: Border.all(color: palette.welcomeAccentColor.withAlpha(70)),
+            border: Border.all(color: appColors.accent.withAlpha(70)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -531,11 +531,11 @@ class _SleepMemoBanner extends StatelessWidget {
                     height: 44,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: palette.welcomeAccentColor.withAlpha(38),
+                      color: appColors.accent.withAlpha(38),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.inventory_2_rounded,
-                      color: AppColors.onDark,
+                      color: appColors.textPrimary,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
@@ -545,21 +545,17 @@ class _SleepMemoBanner extends StatelessWidget {
                       children: <Widget>[
                         Text(
                           banner.title,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                color: AppColors.onDark,
-                                fontWeight: FontWeight.w500,
-                              ),
+                          style: AppTypography.cardTitle(textTheme).copyWith(
+                            color: appColors.textPrimary,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
                           expanded ? '轻点任意空白处，就能回到首页。' : banner.subtitle,
-                          style: Theme.of(context).textTheme.labelMedium
-                              ?.copyWith(
-                                color: AppColors.onDark.withAlpha(190),
-                                height: 1.5,
-                                fontWeight: FontWeight.w400,
-                              ),
+                          style: AppTypography.bodyMuted(
+                            textTheme,
+                          ).copyWith(color: appColors.textSecondary),
                         ),
                       ],
                     ),
@@ -602,22 +598,23 @@ class _MemoGroupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: Colors.white.withAlpha(14),
+        color: appColors.darkGlass,
         borderRadius: AppRadius.surfacePrimary,
-        border: Border.all(color: Colors.white.withAlpha(20)),
+        border: Border.all(color: appColors.borderSubtle),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
             group.label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w400,
-            ),
+            style: AppTypography.meta(
+              textTheme,
+            ).copyWith(color: appColors.textPrimary),
           ),
           const SizedBox(height: AppSpacing.sm),
           ...group.items.asMap().entries.map((MapEntry<int, String> entry) {
@@ -629,16 +626,14 @@ class _MemoGroupCard extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
-                  color: AppColors.darkCard.withAlpha(170),
+                  color: appColors.surface.withAlpha(170),
                   borderRadius: AppRadius.surfaceSecondary,
                 ),
                 child: Text(
                   '事项 ${entry.key + 1}：${entry.value}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.onDark.withAlpha(220),
-                    height: 1.5,
-                    fontWeight: FontWeight.w400,
-                  ),
+                  style: AppTypography.bodyMuted(
+                    textTheme,
+                  ).copyWith(color: appColors.textPrimary.withAlpha(220)),
                 ),
               ),
             );
@@ -668,15 +663,24 @@ class _NotificationBell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color buttonBackground = isDark
+        ? appColors.accent
+        : appColors.accentSoft;
+    final Color iconColor = isDark
+        ? appColors.textOnAccent
+        : appColors.accentDeep;
     return InkWell(
       borderRadius: BorderRadius.circular(999),
-      onTap: onTap,
+      onTap: AppHaptics.navigationHandler(onTap),
       child: Container(
+        key: const ValueKey<String>('home-notification-bell-surface'),
         width: 52,
         height: 52,
         decoration: BoxDecoration(
-          color: AppColors.darkSurface,
+          color: buttonBackground,
           shape: BoxShape.circle,
           boxShadow: AppColors.cardShadow,
         ),
@@ -684,10 +688,7 @@ class _NotificationBell extends StatelessWidget {
           clipBehavior: Clip.none,
           alignment: Alignment.center,
           children: <Widget>[
-            const Icon(
-              Icons.notifications_none_rounded,
-              color: AppColors.onDark,
-            ),
+            Icon(Icons.notifications_none_rounded, color: iconColor),
             if (unread > 0)
               Positioned(
                 top: 8,
@@ -697,16 +698,15 @@ class _NotificationBell extends StatelessWidget {
                   height: 20,
                   padding: const EdgeInsets.symmetric(horizontal: 6),
                   decoration: BoxDecoration(
-                    color: palette.primarySoft,
+                    color: appColors.accentSoft,
                     borderRadius: BorderRadius.circular(999),
                   ),
                   alignment: Alignment.center,
                   child: Text(
                     unread > 99 ? '99+' : '$unread',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppColors.primaryDeep,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: AppTypography.chip(
+                      textTheme,
+                    ).copyWith(color: appColors.accentDeep),
                   ),
                 ),
               ),

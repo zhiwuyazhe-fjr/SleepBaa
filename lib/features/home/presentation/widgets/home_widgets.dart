@@ -4,73 +4,192 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/icon_badge.dart';
 
-class SleepRiskCard extends StatelessWidget {
+class SleepRiskCard extends StatefulWidget {
   const SleepRiskCard({
     super.key,
     required this.riskLabel,
     required this.primaryValue,
+    this.onTap,
   });
 
   final String riskLabel;
   final String primaryValue;
+  final VoidCallback? onTap;
+
+  @override
+  State<SleepRiskCard> createState() => _SleepRiskCardState();
+}
+
+class _SleepRiskCardState extends State<SleepRiskCard> {
+  bool _pressed = false;
+  bool _longPressed = false;
+  Timer? _longPressTimer;
+
+  static const Duration _longPressThreshold = Duration(milliseconds: 280);
+
+  void _setPressed(bool value) {
+    if (_pressed == value) {
+      return;
+    }
+    setState(() {
+      _pressed = value;
+    });
+  }
+
+  void _setLongPressed(bool value) {
+    if (_longPressed == value) {
+      return;
+    }
+    setState(() {
+      _longPressed = value;
+    });
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    _longPressTimer?.cancel();
+    _setLongPressed(false);
+    _setPressed(true);
+    _longPressTimer = Timer(_longPressThreshold, () {
+      if (mounted && _pressed) {
+        _setLongPressed(true);
+      }
+    });
+  }
+
+  void _handlePointerUp(PointerUpEvent event) {
+    _releasePress();
+  }
+
+  void _handlePointerCancel(PointerCancelEvent event) {
+    _releasePress();
+  }
+
+  void _releasePress() {
+    _longPressTimer?.cancel();
+    _setLongPressed(false);
+    _setPressed(false);
+  }
+
+  void _handleTap() {
+    unawaited(AppHaptics.tap());
+    widget.onTap?.call();
+  }
+
+  @override
+  void dispose() {
+    _longPressTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
-    return AppCard(
-      padding: EdgeInsets.zero,
-      borderRadius: AppRadius.surfacePrimary,
-      boxShadow: AppColors.floatingShadow,
-      child: Container(
-        height: 120,
-        decoration: BoxDecoration(
-          borderRadius: AppRadius.surfacePrimary,
-          gradient: LinearGradient(
-            begin: Alignment.bottomCenter,
-            end: Alignment.topCenter,
-            colors: <Color>[
-              palette.welcomeAccentColor,
-              palette.primarySoft,
-              palette.primary,
-            ],
-          ),
-        ),
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: <Widget>[
-            Text(
-              '睡眠风险',
-              style: textTheme.titleLarge?.copyWith(
-                color: AppColors.onDark,
-                fontWeight: FontWeight.w700,
+    final bool isActive = _pressed;
+    final double scale = _longPressed
+        ? 0.935
+        : isActive
+        ? 0.965
+        : 1;
+    return Semantics(
+      button: true,
+      label: '睡眠风险',
+      onTap: _handleTap,
+      child: Listener(
+        key: const ValueKey<String>('home-sleep-risk-feedback-surface'),
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: _handlePointerDown,
+        onPointerUp: _handlePointerUp,
+        onPointerCancel: _handlePointerCancel,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _handleTap,
+          child: AnimatedScale(
+            scale: scale,
+            duration: Duration(
+              milliseconds: _longPressed
+                  ? 120
+                  : isActive
+                  ? 70
+                  : 180,
+            ),
+            curve: isActive ? Curves.easeOutCubic : Curves.easeOutBack,
+            child: AppCard(
+              padding: EdgeInsets.zero,
+              borderRadius: AppRadius.surfacePrimary,
+              boxShadow: isActive
+                  ? (_longPressed
+                        ? AppColors.floatingShadow
+                        : AppColors.cardShadow)
+                  : AppColors.cardShadow,
+              child: AnimatedOpacity(
+                opacity: _longPressed
+                    ? 0.9
+                    : isActive
+                    ? 0.96
+                    : 1,
+                duration: Duration(milliseconds: _longPressed ? 120 : 90),
+                curve: Curves.easeOutCubic,
+                child: Container(
+                  height: 120,
+                  decoration: BoxDecoration(
+                    borderRadius: AppRadius.surfacePrimary,
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: <Color>[
+                        appColors.heroStart,
+                        appColors.heroMid,
+                        appColors.heroEnd,
+                      ],
+                    ),
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: <Widget>[
+                      Text(
+                        '睡眠风险',
+                        style: AppTypography.panelTitle(
+                          textTheme,
+                        ).copyWith(color: AppColors.onDark),
+                      ),
+                      Row(
+                        children: <Widget>[
+                          Flexible(
+                            child: _CardMetaPill(
+                              label: widget.riskLabel,
+                              backgroundColor: appColors.accentSoft,
+                              foregroundColor: appColors.accentDeep,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Flexible(
+                            child: _CardMetaPill(
+                              label: widget.primaryValue,
+                              backgroundColor: appColors.accentSoft,
+                              foregroundColor: appColors.accentDeep,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-            Row(
-              children: <Widget>[
-                _CardMetaPill(
-                  label: riskLabel,
-                  backgroundColor: palette.primaryDeep,
-                  foregroundColor: AppColors.onDark,
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                _CardMetaPill(
-                  label: primaryValue,
-                  backgroundColor: palette.primaryDeep,
-                  foregroundColor: AppColors.onDark,
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -78,23 +197,19 @@ class SleepRiskCard extends StatelessWidget {
 }
 
 class StartSleepModeCard extends StatelessWidget {
-  const StartSleepModeCard({
-    super.key,
-    required this.onTap,
-    required this.isAudioReady,
-  });
+  const StartSleepModeCard({super.key, required this.onTap});
 
   final VoidCallback onTap;
-  final bool isAudioReady;
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       padding: EdgeInsets.zero,
       borderRadius: AppRadius.surfacePrimary,
-      border: Border.all(color: AppColors.cardBorderSubtle),
+      color: appColors.surface,
+      border: Border.all(color: appColors.borderSubtle),
       boxShadow: AppColors.cardShadow,
       onTap: onTap,
       child: Container(
@@ -108,42 +223,25 @@ class StartSleepModeCard extends StatelessWidget {
               '开启睡眠模式',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: textTheme.titleLarge?.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w700,
-              ),
+              style: AppTypography.panelTitle(
+                textTheme,
+              ).copyWith(color: appColors.textPrimary),
             ),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceSubtle,
-                    borderRadius: AppRadius.surfaceSecondary,
-                  ),
-                  child: Text(
-                    isAudioReady ? '音频已同步' : '轻触进入',
-                    style: textTheme.labelSmall?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
+                const Spacer(),
                 Container(
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: palette.welcomeAccentColor,
+                    color: appColors.accent,
                   ),
                   alignment: Alignment.center,
                   child: Icon(
                     Icons.dark_mode_rounded,
-                    color: palette.welcomeTextOnAccent,
+                    color: appColors.accentDeep,
                     size: 20,
                   ),
                 ),
@@ -182,10 +280,9 @@ class _CardMetaPill extends StatelessWidget {
         label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: foregroundColor,
-          fontWeight: FontWeight.w400,
-        ),
+        style: AppTypography.chip(
+          Theme.of(context).textTheme,
+        ).copyWith(color: foregroundColor),
       ),
     );
   }
@@ -215,25 +312,35 @@ class HomeActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final bool selected =
         recommendation.executionState != RecommendationExecutionState.idle;
     final bool highlight = selected;
     final Color cardColor = highlight
-        ? palette.welcomeAccentColor
-        : AppColors.surface;
-    final Color foreground = highlight
-        ? palette.welcomeTextOnAccent
-        : AppColors.textPrimary;
+        ? appColors.accentSoft
+        : appColors.surface;
+    final Color foreground = appColors.textPrimary;
     final Color borderColor = highlight
-        ? palette.primary.withAlpha(84)
-        : AppColors.divider;
+        ? appColors.accent.withAlpha(isDark ? 190 : 140)
+        : appColors.borderSubtle;
     final Color chipBackground = highlight
-        ? Colors.white.withAlpha(170)
-        : AppColors.background;
+        ? (isDark ? appColors.surfaceRaised : appColors.surface)
+        : appColors.pageBackground;
     final Color chipForeground = highlight
-        ? palette.welcomeTextOnAccent
-        : AppColors.textSecondary;
+        ? appColors.accentDeep
+        : appColors.textSecondary;
+    final Color controlBackground = highlight
+        ? appColors.accent
+        : appColors.pageBackground;
+    final Color controlForeground = highlight
+        ? appColors.textOnAccent
+        : appColors.accentDeep;
+    final Color iconBackground = highlight
+        ? (isDark ? appColors.surfaceRaised : appColors.surface)
+        : appColors.pageBackground;
+    final Color iconForeground = appColors.accentDeep;
     final String title = displayTitle?.trim().isNotEmpty ?? false
         ? displayTitle!.trim()
         : recommendation.title;
@@ -246,7 +353,7 @@ class HomeActionCard extends StatelessWidget {
       padding: EdgeInsets.zero,
       borderRadius: AppRadius.stripCard,
       color: cardColor,
-      border: _isAudio ? null : Border.all(color: borderColor),
+      border: Border.all(color: borderColor, width: highlight ? 1.2 : 1),
       onTap: _isAudio ? null : onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -256,25 +363,24 @@ class HomeActionCard extends StatelessWidget {
             Expanded(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: _isAudio ? onTap : null,
+                onTap: _isAudio ? AppHaptics.tapHandler(onTap) : null,
                 child: Row(
                   children: <Widget>[
                     Container(
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: highlight
-                            ? Colors.white.withAlpha(208)
-                            : AppColors.background,
+                        color: iconBackground,
                         shape: BoxShape.circle,
+                        border: highlight
+                            ? Border.all(color: appColors.accent.withAlpha(80))
+                            : null,
                       ),
                       alignment: Alignment.center,
                       child: Icon(
                         recommendation.icon,
                         size: 20,
-                        color: highlight
-                            ? palette.welcomeTextOnAccent
-                            : palette.primary,
+                        color: iconForeground,
                       ),
                     ),
                     const SizedBox(width: AppSpacing.md),
@@ -285,24 +391,21 @@ class HomeActionCard extends StatelessWidget {
                         children: <Widget>[
                           Builder(
                             builder: (BuildContext context) {
-                              final TextStyle? style = Theme.of(context)
-                                  .textTheme
-                                  .titleLarge
-                                  ?.copyWith(
-                                    color: foreground,
-                                    fontWeight: FontWeight.w700,
-                                  );
+                              final TextStyle titleStyle =
+                                  AppTypography.cardTitle(
+                                    textTheme,
+                                  ).copyWith(color: foreground);
                               if (showTransportControls) {
                                 return _AutoScrollingText(
                                   text: title,
-                                  style: style,
+                                  style: titleStyle,
                                 );
                               }
                               return Text(
                                 title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: style,
+                                style: titleStyle,
                               );
                             },
                           ),
@@ -328,34 +431,28 @@ class HomeActionCard extends StatelessWidget {
                   _AudioTransportIcon(
                     icon: Icons.skip_previous_rounded,
                     onTap: onPreviousAudio,
-                    color: highlight
-                        ? palette.welcomeTextOnAccent
-                        : palette.primary,
+                    color: controlForeground,
                   ),
                 InkWell(
-                  onTap: onPlayToggle ?? onTap,
+                  onTap: AppHaptics.tapHandler(onPlayToggle ?? onTap),
                   borderRadius: BorderRadius.circular(999),
                   child: Container(
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: highlight
-                          ? Colors.white.withAlpha(220)
-                          : AppColors.background,
+                      color: controlBackground,
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: highlight
-                            ? palette.primary
-                            : AppColors.surfaceBorder,
+                            ? appColors.accent
+                            : appColors.borderSubtle,
                       ),
                     ),
                     alignment: Alignment.center,
                     child: Icon(
                       _trailingIcon(selected),
                       size: 22,
-                      color: highlight
-                          ? palette.welcomeTextOnAccent
-                          : palette.primary,
+                      color: controlForeground,
                     ),
                   ),
                 ),
@@ -363,9 +460,7 @@ class HomeActionCard extends StatelessWidget {
                   _AudioTransportIcon(
                     icon: Icons.skip_next_rounded,
                     onTap: onNextAudio,
-                    color: highlight
-                        ? palette.welcomeTextOnAccent
-                        : palette.primary,
+                    color: controlForeground,
                   ),
               ],
             ),
@@ -452,10 +547,9 @@ class _RecommendationTagChip extends StatelessWidget {
         tag,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: foregroundColor,
-          fontWeight: FontWeight.w400,
-        ),
+        style: AppTypography.chip(
+          Theme.of(context).textTheme,
+        ).copyWith(color: foregroundColor),
       ),
     );
   }
@@ -478,7 +572,7 @@ class _AudioTransportIcon extends StatelessWidget {
       constraints: const BoxConstraints.tightFor(width: 36, height: 36),
       padding: EdgeInsets.zero,
       visualDensity: VisualDensity.compact,
-      onPressed: onTap,
+      onPressed: AppHaptics.tapHandler(onTap),
       icon: Icon(icon, size: 22, color: color),
     );
   }
@@ -727,7 +821,7 @@ class SessionAudioCard extends StatelessWidget {
               children: <Widget>[
                 IconButton(
                   tooltip: '上一首',
-                  onPressed: onPrevious,
+                  onPressed: AppHaptics.tapHandler(onPrevious),
                   icon: Icon(
                     Icons.skip_previous_rounded,
                     color: palette.primarySoft,
@@ -735,7 +829,7 @@ class SessionAudioCard extends StatelessWidget {
                 ),
                 IconButton(
                   tooltip: playbackState == PlaybackState.playing ? '暂停' : '播放',
-                  onPressed: onToggle,
+                  onPressed: AppHaptics.tapHandler(onToggle),
                   icon: Icon(
                     playbackState == PlaybackState.playing
                         ? Icons.pause_circle_filled_rounded
@@ -746,7 +840,7 @@ class SessionAudioCard extends StatelessWidget {
                 ),
                 IconButton(
                   tooltip: '下一首',
-                  onPressed: onNext,
+                  onPressed: AppHaptics.tapHandler(onNext),
                   icon: Icon(
                     Icons.skip_next_rounded,
                     color: palette.primarySoft,

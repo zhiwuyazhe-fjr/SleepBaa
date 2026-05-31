@@ -1,19 +1,21 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_page_insets.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/mood_avatar.dart';
@@ -32,13 +34,14 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _boundSettingsSignature;
   bool _isSavingSettings = false;
   bool _isApplyingNightMood = false;
-  bool _isSavingAssistantMotion = false;
   bool _isSleepGoalExpanded = false;
   double _sleepGoalHours = 7.5;
   bool _bedtimeReminderEnabled = true;
   bool _morningReminderEnabled = true;
   bool _dormAlertsEnabled = true;
   bool _smartSuggestionsEnabled = true;
+  bool _showHomeQuickActions = false;
+  AppThemeMode _themeMode = AppThemeMode.system;
   AssistantReplyMotionLevel _assistantReplyMotionLevel =
       AssistantReplyMotionLevel.medium;
   TimeOfDay _bedtimeReminder = const TimeOfDay(hour: 23, minute: 10);
@@ -56,6 +59,8 @@ class _SettingsPageState extends State<SettingsPage> {
     _morningReminderEnabled = settings.morningReminderEnabled;
     _dormAlertsEnabled = settings.dormAlertsEnabled;
     _smartSuggestionsEnabled = settings.smartSuggestionsEnabled;
+    _showHomeQuickActions = settings.showHomeQuickActions;
+    _themeMode = settings.themeMode;
     _assistantReplyMotionLevel = settings.assistantReplyMotionLevel;
     _bedtimeReminder = settings.bedtimeReminder;
   }
@@ -64,35 +69,17 @@ class _SettingsPageState extends State<SettingsPage> {
     AppServices services,
     AssistantReplyMotionLevel level,
   ) async {
-    if (_isSavingAssistantMotion || level == _assistantReplyMotionLevel) {
+    if (level == _assistantReplyMotionLevel) {
       return;
     }
+    final UserSettings nextSettings = services.profileFacade.currentSettings
+        .copyWith(assistantReplyMotionLevel: level);
     setState(() {
       _assistantReplyMotionLevel = level;
-      _isSavingAssistantMotion = true;
     });
-    try {
-      final UserSettings nextSettings = services.profileFacade.currentSettings
-          .copyWith(assistantReplyMotionLevel: level);
-      await services.settingsRepository.saveSettings(nextSettings);
-      if (!mounted) {
-        return;
-      }
-      await notifyPassiveToast(context, message: '回复动效已更新。');
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _assistantReplyMotionLevel =
-            services.profileFacade.currentSettings.assistantReplyMotionLevel;
-      });
-      await notifyPassiveToast(context, message: '保存失败：$error');
-    } finally {
-      if (mounted) {
-        setState(() => _isSavingAssistantMotion = false);
-      }
-    }
+    services.settingsRepository.replaceLocalSettings(nextSettings);
+    unawaited(_saveSettingsInBackground(services, nextSettings));
+    unawaited(notifyPassiveToast(context, message: '回复动效已更新。'));
   }
 
   Future<void> _showAssistantMotionSheet(AppServices services) async {
@@ -123,32 +110,90 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _saveSleepSettings(AppServices services) async {
+    if (_isSavingSettings) {
+      return;
+    }
+    final UserSettings nextSettings = services.profileFacade.currentSettings
+        .copyWith(
+          sleepGoalHours: _sleepGoalHours,
+          bedtimeReminderEnabled: _bedtimeReminderEnabled,
+          morningReminderEnabled: _morningReminderEnabled,
+          dormAlertsEnabled: _dormAlertsEnabled,
+          smartSuggestionsEnabled: _smartSuggestionsEnabled,
+          bedtimeReminder: _bedtimeReminder,
+        );
     setState(() => _isSavingSettings = true);
+    services.settingsRepository.replaceLocalSettings(nextSettings);
+    unawaited(_saveSettingsInBackground(services, nextSettings));
+    if (!mounted) {
+      return;
+    }
+    setState(() => _isSavingSettings = false);
+    await notifyPassiveToast(context, message: '睡眠设置已更新。');
+  }
+
+  void _changeHomeQuickActionsVisibility(AppServices services, bool visible) {
+    if (visible == _showHomeQuickActions) {
+      return;
+    }
+    final UserSettings nextSettings = services.profileFacade.currentSettings
+        .copyWith(showHomeQuickActions: visible);
+    setState(() => _showHomeQuickActions = visible);
+    services.settingsRepository.replaceLocalSettings(nextSettings);
+    unawaited(_saveSettingsInBackground(services, nextSettings));
+  }
+
+  Future<void> _changeThemeMode(
+    AppServices services,
+    AppThemeMode themeMode,
+  ) async {
+    if (themeMode == _themeMode) {
+      return;
+    }
+    final UserSettings nextSettings = services.profileFacade.currentSettings
+        .copyWith(themeMode: themeMode);
+    setState(() => _themeMode = themeMode);
+    services.settingsRepository.replaceLocalSettings(nextSettings);
+    unawaited(_saveSettingsInBackground(services, nextSettings));
+    unawaited(notifyPassiveToast(context, message: '外观模式已更新。'));
+  }
+
+  Future<void> _showThemeModeSheet(AppServices services) async {
+    final AppThemeMode? selected = await showAppModal<AppThemeMode>(
+      context,
+      spec: AppSelectionSheetSpec<AppThemeMode>(
+        title: '外观模式',
+        description: '控制全局浅色、深色或跟随系统显示。',
+        selectedValue: _themeMode,
+        useSafeArea: true,
+        showDragHandle: true,
+        options: AppThemeMode.values
+            .map(
+              (AppThemeMode mode) => AppSelectionOption<AppThemeMode>(
+                value: mode,
+                label: _themeModeTitle(mode),
+              ),
+            )
+            .toList(growable: false),
+      ),
+    );
+    if (selected == null || !mounted) {
+      return;
+    }
+    await _changeThemeMode(services, selected);
+  }
+
+  Future<void> _saveSettingsInBackground(
+    AppServices services,
+    UserSettings settings,
+  ) async {
     try {
-      final UserSettings nextSettings = services.profileFacade.currentSettings
-          .copyWith(
-            sleepGoalHours: _sleepGoalHours,
-            bedtimeReminderEnabled: _bedtimeReminderEnabled,
-            morningReminderEnabled: _morningReminderEnabled,
-            dormAlertsEnabled: _dormAlertsEnabled,
-            smartSuggestionsEnabled: _smartSuggestionsEnabled,
-            bedtimeReminder: _bedtimeReminder,
-            assistantReplyMotionLevel: _assistantReplyMotionLevel,
-          );
-      await services.settingsRepository.saveSettings(nextSettings);
-      if (!mounted) {
-        return;
-      }
-      await notifyPassiveToast(context, message: '睡眠设置已保存。');
+      await services.settingsRepository.saveSettings(settings);
     } catch (error) {
       if (!mounted) {
         return;
       }
       await notifyPassiveToast(context, message: '保存失败：$error');
-    } finally {
-      if (mounted) {
-        setState(() => _isSavingSettings = false);
-      }
     }
   }
 
@@ -212,8 +257,12 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
     return Scaffold(
-      appBar: AppBar(title: const Text('设置')),
+      appBar: AppDetailPageAppBar(
+        title: '设置',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: SafeArea(
         child: ListenableBuilder(
           listenable: Listenable.merge(<Listenable>[
@@ -232,13 +281,13 @@ class _SettingsPageState extends State<SettingsPage> {
               children: <Widget>[
                 if (services.authRepository.lastAuthError != null) ...<Widget>[
                   AppCard(
-                    color: AppColors.surfaceMuted,
+                    color: appColors.surfaceMuted,
                     padding: const EdgeInsets.all(AppSpacing.sm),
                     borderRadius: AppRadius.compactCard,
                     child: Text(
                       services.authRepository.lastAuthError!,
                       style: textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: appColors.textSecondary,
                         height: 1.35,
                       ),
                     ),
@@ -250,8 +299,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   children: <Widget>[
                     AppSettingsItem(
                       icon: Icons.person_outline_rounded,
-                      iconColor: context.nightMoodPalette.primaryDeep,
-                      iconBackgroundColor: AppColors.surfaceMuted,
+                      iconColor: appColors.accentDeep,
+                      iconBackgroundColor: appColors.surfaceMuted,
                       title: '账号管理',
                       titleStyle: textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
@@ -334,23 +383,55 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 AppSettingsGroup(
-                  title: 'AI陪伴',
+                  title: '小眠Agent',
                   children: <Widget>[
                     AppSettingsItem(
                       icon: Icons.auto_awesome_rounded,
                       title: '回复文字浮动',
-                      iconColor: context.nightMoodPalette.primaryDeep,
-                      iconBackgroundColor: AppColors.surfaceMuted,
+                      iconColor: appColors.accentDeep,
+                      iconBackgroundColor: appColors.surfaceMuted,
                       trailing: _SettingsValueTrailing(
-                        value: _isSavingAssistantMotion
-                            ? '保存中...'
-                            : _assistantReplyMotionTitle(
-                                _assistantReplyMotionLevel,
-                              ),
+                        value: _assistantReplyMotionTitle(
+                          _assistantReplyMotionLevel,
+                        ),
                       ),
-                      onTap: _isSavingAssistantMotion
-                          ? null
-                          : () => _showAssistantMotionSheet(services),
+                      hapticRole: AppHapticRole.selection,
+                      onTap: () => _showAssistantMotionSheet(services),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                AppSettingsGroup(
+                  title: '显示与首页',
+                  children: <Widget>[
+                    AppSettingsItem(
+                      icon: Icons.nightlight_round,
+                      iconColor: appColors.accentDeep,
+                      iconBackgroundColor: appColors.surfaceMuted,
+                      title: '重新选择心情',
+                      titleStyle: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      hapticRole: null,
+                      onTap: () => context.push(AppRoutes.manualNightMood),
+                    ),
+                    AppSettingsItem(
+                      icon: Icons.contrast_rounded,
+                      iconColor: appColors.accentDeep,
+                      iconBackgroundColor: appColors.surfaceMuted,
+                      title: '外观模式',
+                      trailing: AppSettingsValueTrailing(
+                        value: _themeModeTitle(_themeMode),
+                      ),
+                      hapticRole: AppHapticRole.selection,
+                      onTap: () => _showThemeModeSheet(services),
+                    ),
+                    _SettingsSwitchRow(
+                      icon: Icons.grid_view_rounded,
+                      title: '快捷功能',
+                      value: _showHomeQuickActions,
+                      onChanged: (bool value) =>
+                          _changeHomeQuickActionsVisibility(services, value),
                     ),
                   ],
                 ),
@@ -379,11 +460,12 @@ class _SettingsPageState extends State<SettingsPage> {
                         AppSettingsItem(
                           icon: Icons.schedule_rounded,
                           title: '睡前提醒时间',
-                          iconColor: context.nightMoodPalette.primaryDeep,
-                          iconBackgroundColor: AppColors.surfaceMuted,
+                          iconColor: appColors.accentDeep,
+                          iconBackgroundColor: appColors.surfaceMuted,
                           trailing: _SettingsValueTrailing(
                             value: Formatters.formatClock(_bedtimeReminder),
                           ),
+                          hapticRole: AppHapticRole.selection,
                           onTap: _pickReminderTime,
                         ),
                         _SettingsSwitchRow(
@@ -431,7 +513,6 @@ class _SettingsPageState extends State<SettingsPage> {
                             isLoading: _isSavingSettings,
                             loadingLabel: '保存中...',
                             size: PrimaryButtonSize.compact,
-                            variant: PrimaryButtonVariant.soft,
                             onPressed: () => _saveSleepSettings(services),
                           ),
                         ),
@@ -473,8 +554,8 @@ class _SettingsSliderRow extends StatelessWidget {
       children: <Widget>[
         AppSettingsItem(
           icon: Icons.hotel_rounded,
-          iconColor: context.nightMoodPalette.primaryDeep,
-          iconBackgroundColor: AppColors.surfaceMuted,
+          iconColor: context.appColors.accentDeep,
+          iconBackgroundColor: context.appColors.surfaceMuted,
           title: title,
           trailing: _SettingsValueTrailing(
             value: valueLabel,
@@ -482,6 +563,7 @@ class _SettingsSliderRow extends StatelessWidget {
                 ? Icons.keyboard_arrow_up_rounded
                 : Icons.keyboard_arrow_down_rounded,
           ),
+          hapticRole: AppHapticRole.selection,
           onTap: onToggle,
         ),
         AnimatedCrossFade(
@@ -525,7 +607,7 @@ class _SleepGoalSliderPanel extends StatelessWidget {
               Text(
                 '6 小时',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textHint,
+                  color: context.appColors.textSecondary,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -533,7 +615,7 @@ class _SleepGoalSliderPanel extends StatelessWidget {
               Text(
                 '9 小时',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textHint,
+                  color: context.appColors.textSecondary,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -576,59 +658,18 @@ class _SettingsSwitchRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppSettingsItem(
       icon: icon,
-      iconColor: context.nightMoodPalette.primaryDeep,
-      iconBackgroundColor: AppColors.surfaceMuted,
+      iconColor: context.appColors.accentDeep,
+      iconBackgroundColor: context.appColors.surfaceMuted,
       title: title,
       trailing: AppSettingsToggle(
         key: ValueKey<String>('settings-toggle-$title'),
         value: value,
       ),
+      hapticRole: AppHapticRole.selection,
       onTap: () => onChanged(!value),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
-        vertical: 11,
-      ),
-    );
-  }
-}
-
-class _SettingsToggle extends StatelessWidget {
-  const _SettingsToggle({super.key, required this.value});
-
-  final bool value;
-
-  @override
-  Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
-    return Semantics(
-      toggled: value,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        width: 52,
-        height: 26,
-        padding: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-          color: value ? palette.primarySoft : AppColors.surfaceMuted,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: value
-                ? palette.primary.withValues(alpha: 0.28)
-                : AppColors.surfaceBorder,
-          ),
-        ),
-        child: AnimatedAlign(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOutCubic,
-          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-          child: Container(
-            width: 22,
-            height: 22,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: value ? palette.primary : AppColors.textHint,
-            ),
-          ),
-        ),
+        vertical: AppSpacing.sm,
       ),
     );
   }
@@ -651,12 +692,12 @@ class _SettingsValueTrailing extends StatelessWidget {
         Text(
           value,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppColors.textSecondary,
+            color: context.appColors.textSecondary,
             fontWeight: FontWeight.w500,
           ),
         ),
         const SizedBox(width: AppSpacing.xxs),
-        Icon(icon, size: 18, color: AppColors.textHint),
+        Icon(icon, size: 18, color: context.appColors.textSecondary),
       ],
     );
   }
@@ -688,12 +729,7 @@ class _MoodAssistantFabSlot extends StatelessWidget {
         label: label,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: enabled
-              ? () {
-                  HapticFeedback.selectionClick();
-                  onTap();
-                }
-              : null,
+          onTap: enabled ? AppHaptics.selectionHandler(onTap) : null,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
@@ -723,7 +759,7 @@ class _MoodAssistantFabSlot extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: textTheme.bodyLarge?.copyWith(
-                  color: palette.primaryDeep,
+                  color: context.appColors.textPrimary,
                   fontWeight: FontWeight.w500,
                   height: 1.1,
                 ),
@@ -786,11 +822,21 @@ String _settingsSignature(UserSettings settings) {
     settings.morningReminderEnabled,
     settings.dormAlertsEnabled,
     settings.smartSuggestionsEnabled,
+    settings.showHomeQuickActions,
+    settings.themeMode.name,
     bedtimeReminder.hour,
     bedtimeReminder.minute,
     settings.assistantReplyMotionLevel.name,
     settings.selectedNightMood?.name,
   ].join('|');
+}
+
+String _themeModeTitle(AppThemeMode mode) {
+  return switch (mode) {
+    AppThemeMode.system => '跟随系统',
+    AppThemeMode.light => '浅色',
+    AppThemeMode.dark => '深色',
+  };
 }
 
 String _assistantReplyMotionTitle(AssistantReplyMotionLevel level) {

@@ -1,6 +1,6 @@
 # Design System
 
-最后核验日期：2026-04-29。本文以 `lib/app/theme/**` 与共享组件实际使用为准。
+最后核验日期：2026-05-30。本文以 `lib/app/theme/**` 与共享组件实际使用为准。
 
 ## 设计原则
 
@@ -24,10 +24,10 @@
 | `textPrimary` | `#2F3336` | 正文主文字。 |
 | `textSecondary` | `#5B6063` | 次级文字。 |
 | `textHint` | `#A0A0A0` | 弱提示。 |
-| `primary` | `#00697A` | 主品牌色。 |
+| `primary` | `#357E92` | 主品牌色。 |
 | `primarySoft` | `#8EDDF2` | 柔和主色。 |
 | `primaryHighlight` | `#B2EBF2` | 高亮背景。 |
-| `primaryDeep` | `#004F5D` | 深色主色。 |
+| `primaryDeep` | `#3F5962` | 深色主色。 |
 | `calmBlue` | `#4EA8C2` | 睡眠/平静辅助色。 |
 | `success` | `#4F8B6F` | 成功状态。 |
 | `warning` | `#AD7A36` | 警告状态。 |
@@ -36,11 +36,20 @@
 
 | Token | 值 | 用途 |
 | --- | --- | --- |
-| `darkBackground` | `#0C0E10` | 深色整屏背景。 |
-| `darkCard` | `#0B192E` | 深色卡片。 |
+| `darkBackground` | `#050505` | 深色整屏背景，和心情选择流程的黑色基调对齐。 |
+| `darkCard` | `#1A1A1A` | 深色卡片。 |
 | `darkSurface` | `#1A1C1E` | 深色弹窗表面。 |
 | `darkPill` | `#1A1A1A` | 选中底部导航 pill。 |
 | `onDark` | `#F9F9FB` | 深底文字。 |
+
+深色模式治理规则：
+
+- 页面不要直接写 `Colors.black`、`AppColors.textPrimary` 或 `AppColors.textSecondary` 作为普通文字色；优先使用 `Theme.of(context).textTheme` 或 `context.appColors.textPrimary/textSecondary`。
+- `AppTextStyles.buildTextTheme()` 由 `SleepDormApp` 注入当前 `AppSemanticColors` 的文字色，保证 Profile、设置、宿舍等页面在深色模式下默认不会继承浅色模式黑字。
+- 深色模式只反转背景、卡片、边框、文字等中性色；首页“睡眠风险”、宿舍 Hero 等 mood 彩色渐变必须继续使用 `NightMoodPalette.heroGradient*` 原色，不要为了深色模式再混白或漂白。
+- 彩色底上的文字使用 `context.appColors.textOnAccent` 或明确的 `AppColors.onDark`；不要用 `context.appColors.surface` 充当白字，因为它在深色模式会变成深色卡片面。
+- 普通文字、图标、chip 文案不要直接使用 `palette.primaryDeep`、`palette.welcomeTextOnAccent` 这类浅色模式 token；跨明暗主题时使用 `context.appColors.accentDeep/textOnAccent`。
+- 登录、找回密码、验证码弹窗等独立 Pencil 风格页面也必须接入 `context.appColors.pageBackground/surface/surfaceMuted/borderSubtle/textPrimary/textSecondary`；可以保留品牌蓝色按钮，但不能复制一套固定白底黑字的中性色。
 
 ## 夜间情绪主题
 

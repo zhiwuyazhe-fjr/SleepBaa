@@ -6,6 +6,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 class NightAwakeningLogPage extends StatefulWidget {
@@ -52,21 +53,10 @@ class _NightAwakeningLogPageState extends State<NightAwakeningLogPage> {
                 AppSpacing.xxl,
               ),
               children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    _TopCircleButton(
-                      icon: Icons.arrow_back_ios_new_rounded,
-                      onTap: () => context.pop(),
-                    ),
-                    const Spacer(),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                Text(
-                  '记录夜醒',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.headlineMedium?.copyWith(color: AppColors.onDark),
+                AppDetailPageHeader(
+                  title: '记录夜醒',
+                  foregroundColor: AppColors.onDark,
+                  onBack: () => context.pop(),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
@@ -257,34 +247,6 @@ class _DarkPanel extends StatelessWidget {
         boxShadow: AppColors.floatingShadow,
       ),
       child: child,
-    );
-  }
-}
-
-class _TopCircleButton extends StatelessWidget {
-  const _TopCircleButton({required this.icon, required this.onTap});
-
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 48,
-      height: 48,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: AppColors.darkSurface.withAlpha(110),
-        border: Border.all(color: AppColors.darkBorder),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(24),
-          onTap: onTap,
-          child: Icon(icon, color: AppColors.onDark.withAlpha(220), size: 20),
-        ),
-      ),
     );
   }
 }

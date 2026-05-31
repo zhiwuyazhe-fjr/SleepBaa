@@ -1,22 +1,28 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/app_text_action.dart';
 import 'package:sleep_dorm_app/core/widgets/mood_avatar.dart';
+import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 class NightMoodWelcomeFlow extends StatefulWidget {
   const NightMoodWelcomeFlow({
     super.key,
     this.initialMood,
+    this.completeButtonLabel = '进入今晚首页',
     required this.onSkip,
     required this.onComplete,
   });
 
   final NightMood? initialMood;
+  final String completeButtonLabel;
   final AsyncVoidCallback onSkip;
   final AsyncValueCallback<NightMood> onComplete;
 
@@ -37,7 +43,7 @@ class _NightMoodWelcomeFlowState extends State<NightMoodWelcomeFlow> {
     _selectedMood = widget.initialMood ?? NightMood.calm;
     _selectedReasons = <String>{_selectedMood.reasons.first};
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _triggerHaptic(HapticFeedback.mediumImpact);
+      unawaited(AppHaptics.flowStart());
     });
   }
 
@@ -121,6 +127,7 @@ class _NightMoodWelcomeFlowState extends State<NightMoodWelcomeFlow> {
             metrics: metrics,
             selectedReasons: _selectedReasons.toList(growable: false),
             isSubmitting: _isSubmitting,
+            completeButtonLabel: widget.completeButtonLabel,
             onBack: () {
               setState(() {
                 _isForward = false;
@@ -138,7 +145,7 @@ class _NightMoodWelcomeFlowState extends State<NightMoodWelcomeFlow> {
     if (mood == _selectedMood || _isSubmitting) {
       return;
     }
-    _triggerHaptic(HapticFeedback.selectionClick);
+    unawaited(AppHaptics.selection());
     if (!mounted) {
       return;
     }
@@ -274,6 +281,7 @@ class _SelectionStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double mediaTop = MediaQuery.paddingOf(context).top;
@@ -351,10 +359,8 @@ class _SelectionStep extends StatelessWidget {
                       Text(
                         title,
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: AppTypography.heroTitle(textTheme).copyWith(
                           fontSize: metrics.titleFontSize,
-                          height: 1.12,
-                          fontWeight: FontWeight.w700,
                           color: Colors.white,
                         ),
                       ),
@@ -365,10 +371,9 @@ class _SelectionStep extends StatelessWidget {
                           selectedMood.moodTitle,
                           key: ValueKey<NightMood>(selectedMood),
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: Color(0xFFB8B8BD),
-                          ),
+                          style: AppTypography.body(
+                            textTheme,
+                          ).copyWith(color: const Color(0xFFB8B8BD)),
                         ),
                       ),
                       const Spacer(),
@@ -419,6 +424,7 @@ class _ReasonsStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final List<String> reasons = selectedMood.reasons;
     final bool canContinue = selectedReasons.isNotEmpty;
+    final TextTheme textTheme = Theme.of(context).textTheme;
 
     return SafeArea(
       child: Padding(
@@ -431,10 +437,8 @@ class _ReasonsStep extends StatelessWidget {
             Text(
               selectedMood.reasonPrompt,
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: AppTypography.heroTitle(textTheme).copyWith(
                 fontSize: metrics.reasonTitleFontSize,
-                height: 1.2,
-                fontWeight: FontWeight.w700,
                 color: Colors.white,
               ),
             ),
@@ -458,22 +462,23 @@ class _ReasonsStep extends StatelessWidget {
                               onTap: isSubmitting
                                   ? null
                                   : () async {
-                                      _triggerHaptic(
-                                        HapticFeedback.selectionClick,
-                                      );
+                                      unawaited(AppHaptics.selection());
                                       onToggleReason(reason);
                                     },
                               child: AnimatedContainer(
+                                key: ValueKey<String>(
+                                  'night-mood-reason-$reason',
+                                ),
                                 duration: const Duration(milliseconds: 260),
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 16,
+                                  horizontal: AppSpacing.md,
+                                  vertical: AppSpacing.md,
                                 ),
                                 decoration: BoxDecoration(
                                   color: isSelected
                                       ? palette.welcomeAccentColor
                                       : palette.welcomeSurfaceColor,
-                                  borderRadius: BorderRadius.circular(999),
+                                  borderRadius: AppRadius.control,
                                 ),
                                 child: SizedBox(
                                   width: double.infinity,
@@ -484,15 +489,15 @@ class _ReasonsStep extends StatelessWidget {
                                       maxLines: 1,
                                       softWrap: false,
                                       textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: isSelected
-                                            ? palette.welcomeTextOnAccent
-                                            : Colors.white,
-                                        fontSize: 15,
-                                        fontWeight: isSelected
-                                            ? FontWeight.w700
-                                            : FontWeight.w500,
-                                      ),
+                                      style: AppTypography.body(textTheme)
+                                          .copyWith(
+                                            color: isSelected
+                                                ? palette.welcomeTextOnAccent
+                                                : Colors.white,
+                                            fontWeight: isSelected
+                                                ? FontWeight.w700
+                                                : FontWeight.w500,
+                                          ),
                                     ),
                                   ),
                                 ),
@@ -532,6 +537,7 @@ class _WelcomeStep extends StatelessWidget {
     required this.metrics,
     required this.selectedReasons,
     required this.isSubmitting,
+    required this.completeButtonLabel,
     required this.onBack,
     required this.onEnter,
   });
@@ -541,12 +547,14 @@ class _WelcomeStep extends StatelessWidget {
   final _WelcomeLayoutMetrics metrics;
   final List<String> selectedReasons;
   final bool isSubmitting;
+  final String completeButtonLabel;
   final VoidCallback onBack;
   final AsyncVoidCallback onEnter;
 
   @override
   Widget build(BuildContext context) {
     final String reasonSummary = '已选择 ${selectedReasons.length} 个今晚感受来源';
+    final TextTheme textTheme = Theme.of(context).textTheme;
 
     return SafeArea(
       child: Padding(
@@ -582,20 +590,17 @@ class _WelcomeStep extends StatelessWidget {
                     const SizedBox(height: 20),
                     Text(
                       '准备就绪',
-                      style: TextStyle(
+                      style: AppTypography.heroTitle(textTheme).copyWith(
                         color: palette.welcomeTextOnAccent,
                         fontSize: metrics.welcomeTitleFontSize,
-                        height: 1.1,
-                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 12),
                     Text(
                       selectedMood.welcomeCopy,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: AppTypography.body(textTheme).copyWith(
                         color: palette.welcomeTextOnAccent.withAlpha(184),
-                        fontSize: 16,
                         height: 1.4,
                       ),
                     ),
@@ -603,9 +608,8 @@ class _WelcomeStep extends StatelessWidget {
                     Text(
                       reasonSummary,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: AppTypography.body(textTheme).copyWith(
                         color: palette.welcomeTextOnAccent.withAlpha(235),
-                        fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -615,7 +619,7 @@ class _WelcomeStep extends StatelessWidget {
             ),
             const Spacer(),
             _BottomActionBar(
-              primaryLabel: '进入今晚首页',
+              primaryLabel: completeButtonLabel,
               primaryBackgroundColor: Colors.white,
               primaryTextColor: Colors.black,
               onPrimaryPressed: isSubmitting ? null : () => onEnter(),
@@ -664,6 +668,7 @@ class _MoodSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: LayoutBuilder(
@@ -703,11 +708,10 @@ class _MoodSelector extends StatelessWidget {
                             alignment: Alignment.center,
                             child: Text(
                               mood.label,
-                              style: TextStyle(
+                              style: AppTypography.meta(textTheme).copyWith(
                                 color: isSelected
                                     ? palette.welcomeTextOnAccent
                                     : Colors.white70,
-                                fontSize: 14,
                                 fontWeight: isSelected
                                     ? FontWeight.w600
                                     : FontWeight.w400,
@@ -750,6 +754,13 @@ class _BottomActionBar extends StatelessWidget {
   final String? secondaryLabel;
   final AsyncVoidCallback? onSecondaryPressed;
 
+  void _invokeAsync(AsyncVoidCallback callback) {
+    final FutureOr<void> result = callback();
+    if (result is Future<void>) {
+      unawaited(result);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -760,49 +771,25 @@ class _BottomActionBar extends StatelessWidget {
             width: 72,
             child: secondaryLabel == null
                 ? null
-                : TextButton(
+                : AppTextAction(
+                    label: secondaryLabel!,
+                    foregroundColor: Colors.white,
                     onPressed: onSecondaryPressed == null
                         ? null
-                        : () async {
-                            _triggerHaptic(HapticFeedback.lightImpact);
-                            await onSecondaryPressed?.call();
-                          },
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      textStyle: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                    child: Text(secondaryLabel!),
+                        : () => _invokeAsync(onSecondaryPressed!),
                   ),
           ),
           SizedBox(width: buttonSpacing),
           Expanded(
-            child: SizedBox(
-              height: 52,
-              child: FilledButton(
-                onPressed: onPrimaryPressed == null
-                    ? null
-                    : () async {
-                        _triggerHaptic(HapticFeedback.lightImpact);
-                        await onPrimaryPressed?.call();
-                      },
-                style: FilledButton.styleFrom(
-                  backgroundColor: primaryBackgroundColor,
-                  foregroundColor: primaryTextColor,
-                  disabledBackgroundColor: primaryBackgroundColor.withAlpha(
-                    140,
-                  ),
-                  disabledForegroundColor: primaryTextColor.withAlpha(153),
-                  shape: const StadiumBorder(),
-                  textStyle: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                child: Text(primaryLabel),
-              ),
+            child: PrimaryButton(
+              label: primaryLabel,
+              backgroundColor: primaryBackgroundColor,
+              foregroundColor: primaryTextColor,
+              disabledForegroundColor: primaryTextColor.withAlpha(153),
+              hapticRole: AppHapticRole.navigation,
+              onPressed: onPrimaryPressed == null
+                  ? null
+                  : () => _invokeAsync(onPrimaryPressed!),
             ),
           ),
         ],
@@ -875,26 +862,5 @@ _WelcomeLayoutMetrics _metricsForHeight(double height) {
     reasonTitleFontSize: 32,
     welcomeTitleFontSize: 34,
     bottomActionPadding: EdgeInsets.fromLTRB(24, 24, 24, 30),
-  );
-}
-
-void _triggerHaptic(Future<void> Function() action) {
-  if (kIsWeb) {
-    return;
-  }
-  unawaited(
-    (() async {
-      try {
-        if (defaultTargetPlatform == TargetPlatform.android) {
-          await HapticFeedback.vibrate();
-          return;
-        }
-        await action();
-      } catch (_) {
-        try {
-          await HapticFeedback.vibrate();
-        } catch (_) {}
-      }
-    })(),
   );
 }

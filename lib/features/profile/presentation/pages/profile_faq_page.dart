@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
-import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
-import 'package:sleep_dorm_app/core/widgets/home_metric_card.dart';
-import 'package:sleep_dorm_app/core/widgets/section_title.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
+import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 class ProfileFaqPage extends StatelessWidget {
   const ProfileFaqPage({super.key});
@@ -16,11 +17,15 @@ class ProfileFaqPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('常见问题')),
+      backgroundColor: appColors.pageBackground,
+      appBar: AppDetailPageAppBar(
+        title: '常见问题',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.md,
@@ -31,18 +36,17 @@ class ProfileFaqPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            SectionTitle(
-              title: '帮助主题',
-              titleStyle: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-              ),
+            Text(
+              '帮助主题',
+              style: AppTypography.sectionTitle(
+                textTheme,
+              ).copyWith(color: appColors.textPrimary),
             ),
             const SizedBox(height: AppSpacing.sm),
             const Row(
               children: <Widget>[
                 Expanded(
-                  child: HomeMetricCard(
+                  child: _FaqTopicCard(
                     icon: Icons.person_outline_rounded,
                     label: '账号资料',
                     value: '头像与昵称',
@@ -50,7 +54,7 @@ class ProfileFaqPage extends StatelessWidget {
                 ),
                 SizedBox(width: AppSpacing.md),
                 Expanded(
-                  child: HomeMetricCard(
+                  child: _FaqTopicCard(
                     icon: Icons.bedtime_outlined,
                     label: '睡眠记录',
                     value: '报告与打卡',
@@ -62,7 +66,7 @@ class ProfileFaqPage extends StatelessWidget {
             const Row(
               children: <Widget>[
                 Expanded(
-                  child: HomeMetricCard(
+                  child: _FaqTopicCard(
                     icon: Icons.menu_book_rounded,
                     label: '夜间记录',
                     value: '梦记与仓库',
@@ -70,7 +74,7 @@ class ProfileFaqPage extends StatelessWidget {
                 ),
                 SizedBox(width: AppSpacing.md),
                 Expanded(
-                  child: HomeMetricCard(
+                  child: _FaqTopicCard(
                     icon: Icons.help_center_outlined,
                     label: '使用支持',
                     value: '常见处理',
@@ -81,42 +85,43 @@ class ProfileFaqPage extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
             AppCard(
               onTap: () => _showComingSoon(context),
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(20),
+              color: appColors.surface,
+              border: Border.all(color: appColors.borderSubtle),
+              borderRadius: AppRadius.surfacePrimary,
               padding: const EdgeInsets.all(AppSpacing.md),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
                     '常见问题速览',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: AppTypography.panelTitle(
+                      textTheme,
+                    ).copyWith(color: appColors.textPrimary),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
                     '这里会整理头像设置、睡眠报告查看、打卡热力说明，以及梦记与事记仓库的使用方式。',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFF888888),
-                      fontWeight: FontWeight.w400,
-                    ),
+                    style: AppTypography.body(
+                      textTheme,
+                    ).copyWith(color: appColors.textSecondary),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
             AppCard(
-              color: AppColors.legacyCardSurface,
-              borderRadius: BorderRadius.circular(20),
+              color: appColors.surfaceMuted,
+              border: Border.all(color: appColors.borderSubtle),
+              borderRadius: AppRadius.surfacePrimary,
               padding: const EdgeInsets.all(AppSpacing.md),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
                     '本页将逐步补全',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: AppTypography.cardTitle(
+                      textTheme,
+                    ).copyWith(color: appColors.textPrimary),
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   for (final String point in const <String>[
@@ -132,18 +137,16 @@ class ProfileFaqPage extends StatelessWidget {
                           child: Icon(
                             Icons.brightness_1_rounded,
                             size: 8,
-                            color: palette.primary,
+                            color: appColors.accentDeep,
                           ),
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         Expanded(
                           child: Text(
                             point,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: AppColors.textSecondary,
-                                  fontWeight: FontWeight.w400,
-                                ),
+                            style: AppTypography.bodyMuted(
+                              textTheme,
+                            ).copyWith(color: appColors.textSecondary),
                           ),
                         ),
                       ],
@@ -154,28 +157,72 @@ class ProfileFaqPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: FilledButton.icon(
-                onPressed: () => _showComingSoon(context),
-                style: FilledButton.styleFrom(
-                  backgroundColor: palette.welcomeAccentColor,
-                  foregroundColor: palette.welcomeTextOnAccent,
-                  elevation: 0,
-                  shadowColor: Colors.transparent,
-                  shape: const StadiumBorder(),
-                  textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                icon: const Icon(Icons.help_outline_rounded, size: 18),
-                label: const Text('常见问题内容将继续补充'),
-              ),
+            PrimaryButton(
+              label: '常见问题内容将继续补充',
+              icon: Icons.help_outline_rounded,
+              size: PrimaryButtonSize.compact,
+              onPressed: () => _showComingSoon(context),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _FaqTopicCard extends StatelessWidget {
+  const _FaqTopicCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    return AppCard(
+      color: appColors.surface,
+      border: Border.all(color: appColors.borderSubtle),
+      borderRadius: AppRadius.compactCard,
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      boxShadow: const <BoxShadow>[],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: appColors.accentSoft,
+              borderRadius: AppRadius.control,
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, color: appColors.accentDeep, size: 18),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.cardTitle(
+              textTheme,
+            ).copyWith(color: appColors.textPrimary),
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.chip(
+              textTheme,
+            ).copyWith(color: appColors.textSecondary),
+          ),
+        ],
       ),
     );
   }

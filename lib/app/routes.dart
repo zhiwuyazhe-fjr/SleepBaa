@@ -13,6 +13,7 @@ import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_member_deta
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_rules_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_status_page.dart';
+import 'package:sleep_dorm_app/features/dream/presentation/dream_content.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_detail_page.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_journal_page.dart';
 import 'package:sleep_dorm_app/features/feedback/presentation/pages/morning_feedback_page.dart';
@@ -20,6 +21,7 @@ import 'package:sleep_dorm_app/features/home/presentation/pages/home_quick_actio
 import 'package:sleep_dorm_app/features/home/presentation/pages/home_post_sleep_page.dart';
 import 'package:sleep_dorm_app/features/intervention/presentation/pages/micro_intervention_task_page.dart';
 import 'package:sleep_dorm_app/features/logs/presentation/pages/night_awakening_log_page.dart';
+import 'package:sleep_dorm_app/features/night_mood/presentation/pages/manual_night_mood_page.dart';
 import 'package:sleep_dorm_app/features/night_mood/presentation/pages/night_welcome_gate_page.dart';
 import 'package:sleep_dorm_app/features/notifications/presentation/pages/notifications_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/calendar_checkin_page.dart';
@@ -46,6 +48,7 @@ abstract final class AppRoutes {
   static const String homePreSleep = '/home/pre_sleep';
   static const String homePostSleep = '/home/post_sleep';
   static const String homeQuickActionsEdit = '/home/quick_actions/edit';
+  static const String manualNightMood = '/night_mood/select';
   static const String feedbackReceivedNotice = 'feedback_received';
   static const String feedbackSubmittedNotice = 'feedback_submitted';
   static const String analysisInterferenceFactors =
@@ -63,6 +66,7 @@ abstract final class AppRoutes {
   static const String sleepEncyclopediaTopic = '/sleep/encyclopedia/topic';
   static const String dorm = '/dorm';
   static const String dormRules = '/dorm/rules';
+  static const String dormRulesEdit = kDormRulesEditPath;
   static const String dormInvite = '/dorm/invite';
   static const String dormMember = '/dorm/member';
   static const String dormStatus = '/dorm/status';
@@ -159,6 +163,13 @@ abstract final class AppRoutes {
     return Uri(
       path: dormMember,
       queryParameters: <String, String>{'uid': memberUid},
+    ).toString();
+  }
+
+  static String dreamDetailListLocation() {
+    return Uri(
+      path: dreamDetail,
+      queryParameters: const <String, String>{'view': 'list'},
     ).toString();
   }
 }
@@ -266,6 +277,11 @@ GoRouter createRouter({
             const HomeQuickActionsEditPage(),
       ),
       GoRoute(
+        path: AppRoutes.manualNightMood,
+        builder: (BuildContext context, GoRouterState state) =>
+            const ManualNightMoodPage(),
+      ),
+      GoRoute(
         path: AppRoutes.analysisInterferenceFactors,
         builder: (BuildContext context, GoRouterState state) =>
             const InterferenceFactorPage(),
@@ -293,8 +309,16 @@ GoRouter createRouter({
       ),
       GoRoute(
         path: AppRoutes.dreamDetail,
-        builder: (BuildContext context, GoRouterState state) =>
-            const DreamDetailPage(),
+        builder: (BuildContext context, GoRouterState state) {
+          final Object? extra = state.extra;
+          return DreamDetailPage(
+            showList: state.uri.queryParameters['view'] == 'list',
+            entry: extra is DreamEntryData ? extra : null,
+            entries: extra is List<DreamEntryData>
+                ? extra
+                : DreamContent.entries,
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.dreamJournal,
@@ -335,6 +359,11 @@ GoRouter createRouter({
         builder: (BuildContext context, GoRouterState state) => DormRulesPage(
           showReviewOverlayOnOpen: state.uri.queryParameters['review'] == '1',
         ),
+      ),
+      GoRoute(
+        path: AppRoutes.dormRulesEdit,
+        builder: (BuildContext context, GoRouterState state) =>
+            const DormRulesEditPage(),
       ),
       GoRoute(
         path: AppRoutes.dormInvite,

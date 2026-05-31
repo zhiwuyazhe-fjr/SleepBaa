@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 
@@ -17,10 +17,11 @@ class SimpleBarChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
+        color: appColors.surfaceMuted,
         borderRadius: AppRadius.card,
       ),
       child: SizedBox(
@@ -42,7 +43,7 @@ class SimpleBarChart extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: highlighted
                             ? palette.primarySoft
-                            : AppColors.surfaceBorder,
+                            : appColors.borderSubtle,
                         borderRadius: const BorderRadius.vertical(
                           top: Radius.circular(AppRadius.xl),
                         ),
