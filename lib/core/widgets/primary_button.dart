@@ -7,7 +7,7 @@ import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 
 enum PrimaryButtonVariant { filled, soft, ghost }
 
-enum PrimaryButtonSize { regular, compact }
+enum PrimaryButtonSize { regular, compact, mini }
 
 class PrimaryButton extends StatelessWidget {
   const PrimaryButton({
@@ -20,9 +20,15 @@ class PrimaryButton extends StatelessWidget {
     this.size = PrimaryButtonSize.regular,
     this.hapticRole,
     this.foregroundColor,
+    this.disabledForegroundColor,
     this.backgroundColor,
+    this.pressedBackgroundColor,
+    this.disabledBackgroundColor,
     this.borderColor,
     this.borderRadius,
+    this.elevation,
+    this.shadowColor,
+    this.textStyle,
     this.isLoading = false,
     this.loadingLabel,
   });
@@ -35,9 +41,15 @@ class PrimaryButton extends StatelessWidget {
   final PrimaryButtonSize size;
   final AppHapticRole? hapticRole;
   final Color? foregroundColor;
+  final Color? disabledForegroundColor;
   final Color? backgroundColor;
+  final Color? pressedBackgroundColor;
+  final Color? disabledBackgroundColor;
   final Color? borderColor;
   final BorderRadiusGeometry? borderRadius;
+  final double? elevation;
+  final Color? shadowColor;
+  final TextStyle? textStyle;
   final bool isLoading;
   final String? loadingLabel;
 
@@ -55,30 +67,75 @@ class PrimaryButton extends StatelessWidget {
     final VoidCallback? resolvedOnPressed = onPressed == null || isLoading
         ? null
         : AppHaptics.handler(onPressed, role: resolvedHapticRole);
-    final TextStyle? buttonTextStyle = Theme.of(context).textTheme.labelLarge
-        ?.copyWith(
-          fontSize: size == PrimaryButtonSize.regular ? 15 : 14,
+    final Color resolvedBackground = _backgroundColor(palette, appColors);
+    final Color resolvedForeground =
+        foregroundColor ?? _foregroundColor(palette, appColors);
+    final Color resolvedDisabledBackground =
+        disabledBackgroundColor ?? _disabledBackgroundColor(appColors);
+    final Color resolvedDisabledForeground =
+        disabledForegroundColor ?? appColors.textSecondary.withAlpha(170);
+    final TextStyle? buttonTextStyle =
+        textStyle ??
+        Theme.of(context).textTheme.labelLarge?.copyWith(
+          fontSize: switch (size) {
+            PrimaryButtonSize.regular => 15,
+            PrimaryButtonSize.compact => 14,
+            PrimaryButtonSize.mini => 12,
+          },
           fontWeight: FontWeight.w700,
         );
-    final ButtonStyle style = FilledButton.styleFrom(
-      minimumSize: Size(0, _height),
-      padding: EdgeInsets.symmetric(horizontal: _horizontalPadding),
-      shape: RoundedRectangleBorder(
-        borderRadius: borderRadius ?? AppRadius.button,
-      ),
-      elevation: variant == PrimaryButtonVariant.filled ? 3 : 0,
-      shadowColor: variant == PrimaryButtonVariant.filled
-          ? appColors.accent.withAlpha(82)
-          : Colors.transparent,
-      backgroundColor: _backgroundColor(palette, appColors),
-      foregroundColor: foregroundColor ?? _foregroundColor(palette, appColors),
-      disabledBackgroundColor: _disabledBackgroundColor(appColors),
-      disabledForegroundColor: appColors.textSecondary.withAlpha(170),
-      side: _borderSide(appColors),
-      textStyle: buttonTextStyle,
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      visualDensity: VisualDensity.standard,
-    );
+    final ButtonStyle style =
+        FilledButton.styleFrom(
+          minimumSize: Size(0, _height),
+          padding: EdgeInsets.symmetric(horizontal: _horizontalPadding),
+          shape: RoundedRectangleBorder(
+            borderRadius: borderRadius ?? AppRadius.button,
+          ),
+          elevation:
+              elevation ?? (variant == PrimaryButtonVariant.filled ? 3 : 0),
+          shadowColor:
+              shadowColor ??
+              (variant == PrimaryButtonVariant.filled
+                  ? appColors.accent.withAlpha(82)
+                  : Colors.transparent),
+          backgroundColor: resolvedBackground,
+          foregroundColor: resolvedForeground,
+          disabledBackgroundColor: resolvedDisabledBackground,
+          disabledForegroundColor: resolvedDisabledForeground,
+          side: _borderSide(appColors),
+          textStyle: buttonTextStyle,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: VisualDensity.standard,
+        ).copyWith(
+          backgroundColor: WidgetStateProperty.resolveWith<Color>((
+            Set<WidgetState> states,
+          ) {
+            if (states.contains(WidgetState.disabled)) {
+              return resolvedDisabledBackground;
+            }
+            if (pressedBackgroundColor != null &&
+                states.contains(WidgetState.pressed)) {
+              return pressedBackgroundColor!;
+            }
+            return resolvedBackground;
+          }),
+          foregroundColor: WidgetStateProperty.resolveWith<Color>((
+            Set<WidgetState> states,
+          ) {
+            if (states.contains(WidgetState.disabled)) {
+              return resolvedDisabledForeground;
+            }
+            return resolvedForeground;
+          }),
+          overlayColor: WidgetStateProperty.resolveWith<Color?>((
+            Set<WidgetState> states,
+          ) {
+            if (states.contains(WidgetState.pressed)) {
+              return resolvedForeground.withValues(alpha: 0.08);
+            }
+            return null;
+          }),
+        );
 
     final String resolvedLabel = isLoading ? (loadingLabel ?? label) : label;
     final Widget child;
@@ -87,12 +144,10 @@ class PrimaryButton extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           SizedBox.square(
-            dimension: size == PrimaryButtonSize.regular ? 18 : 16,
+            dimension: _iconSize,
             child: CircularProgressIndicator(
               strokeWidth: 2.2,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                foregroundColor ?? _foregroundColor(palette, appColors),
-              ),
+              valueColor: AlwaysStoppedAnimation<Color>(resolvedForeground),
             ),
           ),
           const SizedBox(width: AppSpacing.xs),
@@ -104,7 +159,7 @@ class PrimaryButton extends StatelessWidget {
           ? Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Icon(icon, size: size == PrimaryButtonSize.regular ? 18 : 16),
+                Icon(icon, size: _iconSize),
                 const SizedBox(width: AppSpacing.xs),
                 Text(resolvedLabel),
               ],
@@ -123,8 +178,9 @@ class PrimaryButton extends StatelessWidget {
 
   double get _height {
     return switch (size) {
-      PrimaryButtonSize.regular => 56,
+      PrimaryButtonSize.regular => 48,
       PrimaryButtonSize.compact => 44,
+      PrimaryButtonSize.mini => 36,
     };
   }
 
@@ -132,6 +188,15 @@ class PrimaryButton extends StatelessWidget {
     return switch (size) {
       PrimaryButtonSize.regular => AppSpacing.xl,
       PrimaryButtonSize.compact => AppSpacing.md,
+      PrimaryButtonSize.mini => AppSpacing.sm,
+    };
+  }
+
+  double get _iconSize {
+    return switch (size) {
+      PrimaryButtonSize.regular => 18,
+      PrimaryButtonSize.compact => 16,
+      PrimaryButtonSize.mini => 14,
     };
   }
 

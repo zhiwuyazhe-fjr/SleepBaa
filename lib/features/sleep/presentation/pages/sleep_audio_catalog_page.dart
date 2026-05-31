@@ -11,6 +11,7 @@ import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
+import 'package:sleep_dorm_app/core/widgets/app_text_action.dart';
 
 class SleepAudioCatalogPage extends StatefulWidget {
   const SleepAudioCatalogPage({super.key});
@@ -231,10 +232,7 @@ class _EmptyAudioCatalog extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          TextButton(
-            onPressed: () => unawaited(onRefresh()),
-            child: const Text('重新同步'),
-          ),
+          AppTextAction(label: '重新同步', onPressed: () => unawaited(onRefresh())),
         ],
       ),
     );

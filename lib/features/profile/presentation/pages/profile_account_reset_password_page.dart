@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
-import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
+import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 enum _AccountResetStep { verify, password, success }
 
@@ -951,59 +951,26 @@ class _AccountPencilFilledButton extends StatelessWidget {
             ),
           ],
         ),
-        child: FilledButton(
-          onPressed: AppHaptics.confirmHandler(onPressed),
-          style:
-              FilledButton.styleFrom(
-                padding: EdgeInsets.zero,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18 * unit),
-                ),
-                textStyle: Theme.of(context).textTheme.bodyLarge!.copyWith(
-                  fontSize: 16 * unit,
-                  fontWeight: FontWeight.w700,
-                ),
-              ).copyWith(
-                backgroundColor: WidgetStateProperty.resolveWith<Color>((
-                  Set<WidgetState> states,
-                ) {
-                  if (states.contains(WidgetState.disabled)) {
-                    return _AccountResetPasswordPageState._accentBlueDisabled;
-                  }
-                  if (states.contains(WidgetState.pressed)) {
-                    return _AccountResetPasswordPageState._accentBluePressed;
-                  }
-                  return _AccountResetPasswordPageState._accentBlue;
-                }),
-                foregroundColor: WidgetStateProperty.resolveWith<Color>((
-                  Set<WidgetState> states,
-                ) {
-                  if (states.contains(WidgetState.disabled)) {
-                    return _AccountResetPasswordPageState
-                        ._accentBlueDisabledText;
-                  }
-                  return _AccountResetPasswordPageState._accentBlueDeep;
-                }),
-              ),
-          child: isLoading
-              ? Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    SizedBox.square(
-                      dimension: 18 * unit,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.2,
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                          _AccountResetPasswordPageState._accentBlueDeep,
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 12 * unit),
-                    Text(resolvedLabel),
-                  ],
-                )
-              : Text(label),
+        child: PrimaryButton(
+          label: label,
+          loadingLabel: resolvedLabel,
+          isLoading: isLoading,
+          onPressed: onPressed,
+          backgroundColor: _AccountResetPasswordPageState._accentBlue,
+          pressedBackgroundColor:
+              _AccountResetPasswordPageState._accentBluePressed,
+          disabledBackgroundColor:
+              _AccountResetPasswordPageState._accentBlueDisabled,
+          foregroundColor: _AccountResetPasswordPageState._accentBlueDeep,
+          disabledForegroundColor:
+              _AccountResetPasswordPageState._accentBlueDisabledText,
+          borderRadius: BorderRadius.circular(18 * unit),
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          textStyle: Theme.of(context).textTheme.bodyLarge!.copyWith(
+            fontSize: 16 * unit,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );
@@ -1039,43 +1006,21 @@ class _AccountPencilSoftButton extends StatelessWidget {
     return SizedBox(
       key: buttonKey,
       height: 56 * unit,
-      child: FilledButton(
-        onPressed: AppHaptics.confirmHandler(onPressed),
-        style:
-            FilledButton.styleFrom(
-              padding: EdgeInsets.symmetric(horizontal: 10 * unit),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18 * unit),
-              ),
-              textStyle: Theme.of(context).textTheme.bodyMedium!.copyWith(
-                fontSize: 13 * unit,
-                fontWeight: FontWeight.w700,
-              ),
-            ).copyWith(
-              backgroundColor: WidgetStateProperty.resolveWith<Color>((
-                Set<WidgetState> states,
-              ) {
-                if (states.contains(WidgetState.disabled)) {
-                  return appColors.surfaceMuted;
-                }
-                if (states.contains(WidgetState.pressed)) {
-                  return pressed;
-                }
-                return background;
-              }),
-              foregroundColor: WidgetStateProperty.resolveWith<Color>((
-                Set<WidgetState> states,
-              ) {
-                if (states.contains(WidgetState.disabled)) {
-                  return appColors.textSecondary;
-                }
-                return foreground;
-              }),
-            ),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(label, maxLines: 1),
+      child: PrimaryButton(
+        label: label,
+        onPressed: onPressed,
+        size: PrimaryButtonSize.compact,
+        backgroundColor: background,
+        pressedBackgroundColor: pressed,
+        disabledBackgroundColor: appColors.surfaceMuted,
+        foregroundColor: foreground,
+        disabledForegroundColor: appColors.textSecondary,
+        borderRadius: BorderRadius.circular(18 * unit),
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        textStyle: Theme.of(context).textTheme.bodyMedium!.copyWith(
+          fontSize: 13 * unit,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

@@ -12,6 +12,7 @@ import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
+import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/widgets/profile_badge_support.dart';
 
 enum BadgeCatalogMode { profile, dorm }
@@ -574,14 +575,9 @@ class _CatalogSummaryCard extends StatelessWidget {
           AppSpacing.xs,
           AppSpacing.sm,
         );
-        final double actionHeight = (constraints.maxWidth * 0.052).clamp(
-          32,
-          38,
-        );
+        const double actionHeight = 36;
         final double chipHorizontalPadding = (constraints.maxWidth * 0.024)
             .clamp(AppSpacing.xs, AppSpacing.sm);
-        final double buttonHorizontalPadding = (constraints.maxWidth * 0.03)
-            .clamp(AppSpacing.sm, AppSpacing.md);
 
         return Material(
           color: Colors.transparent,
@@ -664,8 +660,6 @@ class _CatalogSummaryCard extends StatelessWidget {
                             backgroundColor: appColors.surfaceMuted,
                             foregroundColor: appColors.accentDeep,
                             disabledForegroundColor: appColors.textSecondary,
-                            horizontalPadding: buttonHorizontalPadding,
-                            height: actionHeight,
                           ),
                         ),
                       ],
@@ -769,8 +763,6 @@ class _SummaryActionButton extends StatelessWidget {
     required this.backgroundColor,
     required this.foregroundColor,
     required this.disabledForegroundColor,
-    required this.horizontalPadding,
-    required this.height,
   });
 
   final String label;
@@ -778,28 +770,19 @@ class _SummaryActionButton extends StatelessWidget {
   final Color backgroundColor;
   final Color foregroundColor;
   final Color disabledForegroundColor;
-  final double horizontalPadding;
-  final double height;
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton(
-      onPressed: AppHaptics.confirmHandler(onPressed),
-      style: FilledButton.styleFrom(
-        backgroundColor: backgroundColor,
-        foregroundColor: foregroundColor,
-        disabledBackgroundColor: backgroundColor,
-        disabledForegroundColor: disabledForegroundColor,
-        elevation: 0,
-        shadowColor: Colors.transparent,
-        minimumSize: Size.fromHeight(height),
-        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
-        textStyle: AppTypography.meta(
-          Theme.of(context).textTheme,
-        ).copyWith(fontWeight: FontWeight.w700),
-      ),
-      child: Text(label),
+    return PrimaryButton(
+      label: label,
+      onPressed: onPressed,
+      size: PrimaryButtonSize.mini,
+      variant: PrimaryButtonVariant.soft,
+      expand: true,
+      backgroundColor: backgroundColor,
+      foregroundColor: foregroundColor,
+      disabledForegroundColor: disabledForegroundColor,
+      borderRadius: AppRadius.pill,
     );
   }
 }

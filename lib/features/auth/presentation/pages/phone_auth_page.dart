@@ -13,6 +13,7 @@ import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
+import 'package:sleep_dorm_app/core/widgets/app_text_action.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
@@ -2130,66 +2131,23 @@ class _PencilFilledButton extends StatelessWidget {
             ),
           ],
         ),
-        child: FilledButton(
+        child: PrimaryButton(
+          label: label,
+          loadingLabel: resolvedLabel,
+          isLoading: isLoading,
           onPressed: onPressed,
-          style:
-              FilledButton.styleFrom(
-                padding: EdgeInsets.zero,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18 * unit),
-                ),
-                textStyle: Theme.of(context).textTheme.bodyLarge!.copyWith(
-                  fontSize: 16 * unit,
-                  fontWeight: FontWeight.w700,
-                ),
-              ).copyWith(
-                backgroundColor: WidgetStateProperty.resolveWith<Color>((
-                  Set<WidgetState> states,
-                ) {
-                  if (states.contains(WidgetState.disabled)) {
-                    return accents.disabled;
-                  }
-                  if (states.contains(WidgetState.pressed)) {
-                    return accents.pressed;
-                  }
-                  return accents.accent;
-                }),
-                foregroundColor: WidgetStateProperty.resolveWith<Color>((
-                  Set<WidgetState> states,
-                ) {
-                  if (states.contains(WidgetState.disabled)) {
-                    return accents.disabledForeground;
-                  }
-                  return accents.foreground;
-                }),
-                overlayColor: WidgetStateProperty.resolveWith<Color?>((
-                  Set<WidgetState> states,
-                ) {
-                  if (states.contains(WidgetState.pressed)) {
-                    return accents.foreground.withValues(alpha: 0.08);
-                  }
-                  return null;
-                }),
-              ),
-          child: isLoading
-              ? Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    SizedBox.square(
-                      dimension: 18 * unit,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          accents.foreground,
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 12 * unit),
-                    Text(resolvedLabel),
-                  ],
-                )
-              : Text(label),
+          backgroundColor: accents.accent,
+          pressedBackgroundColor: accents.pressed,
+          disabledBackgroundColor: accents.disabled,
+          foregroundColor: accents.foreground,
+          disabledForegroundColor: accents.disabledForeground,
+          borderRadius: BorderRadius.circular(18 * unit),
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          textStyle: Theme.of(context).textTheme.bodyLarge!.copyWith(
+            fontSize: 16 * unit,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );
@@ -2216,43 +2174,21 @@ class _PencilSoftButton extends StatelessWidget {
     return SizedBox(
       key: buttonKey,
       height: 56 * unit,
-      child: FilledButton(
+      child: PrimaryButton(
+        label: label,
         onPressed: onPressed,
-        style:
-            FilledButton.styleFrom(
-              padding: EdgeInsets.symmetric(horizontal: 10 * unit),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18 * unit),
-              ),
-              textStyle: Theme.of(context).textTheme.bodyMedium!.copyWith(
-                fontSize: 13 * unit,
-                fontWeight: FontWeight.w700,
-              ),
-            ).copyWith(
-              backgroundColor: WidgetStateProperty.resolveWith<Color>((
-                Set<WidgetState> states,
-              ) {
-                if (states.contains(WidgetState.disabled)) {
-                  return appColors.surfaceMuted;
-                }
-                if (states.contains(WidgetState.pressed)) {
-                  return accents.codeButtonPressed;
-                }
-                return accents.codeButtonBackground;
-              }),
-              foregroundColor: WidgetStateProperty.resolveWith<Color>((
-                Set<WidgetState> states,
-              ) {
-                if (states.contains(WidgetState.disabled)) {
-                  return appColors.textSecondary;
-                }
-                return accents.codeButtonForeground;
-              }),
-            ),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(label, maxLines: 1),
+        size: PrimaryButtonSize.compact,
+        backgroundColor: accents.codeButtonBackground,
+        pressedBackgroundColor: accents.codeButtonPressed,
+        disabledBackgroundColor: appColors.surfaceMuted,
+        foregroundColor: accents.codeButtonForeground,
+        disabledForegroundColor: appColors.textSecondary,
+        borderRadius: BorderRadius.circular(18 * unit),
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        textStyle: Theme.of(context).textTheme.bodyMedium!.copyWith(
+          fontSize: 13 * unit,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -2742,9 +2678,9 @@ class _CaptchaVerifyDialogState extends State<_CaptchaVerifyDialog> {
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerRight,
-            child: TextButton(
+            child: AppTextAction(
+              label: _isRefreshing ? '刷新中...' : '换一张',
               onPressed: _isRefreshing || _isVerifying ? null : _refresh,
-              child: Text(_isRefreshing ? '刷新中...' : '换一张'),
             ),
           ),
           TextField(

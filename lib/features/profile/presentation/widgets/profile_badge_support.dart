@@ -5,6 +5,7 @@ import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/app_text_action.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
@@ -358,7 +359,8 @@ Future<void> showProfileBadgeDetailsSheet(
                       if (profile.equippedBadgeId != null) ...<Widget>[
                         SizedBox(height: blockGap * 0.45),
                         Center(
-                          child: TextButton(
+                          child: AppTextAction(
+                            label: '恢复最新获得',
                             onPressed: () async {
                               await services.profileFacade.saveEquippedBadge(
                                 null,
@@ -367,10 +369,7 @@ Future<void> showProfileBadgeDetailsSheet(
                                 Navigator.of(sheetContext).pop();
                               }
                             },
-                            style: TextButton.styleFrom(
-                              foregroundColor: appColors.accentDeep,
-                            ),
-                            child: const Text('恢复最新获得'),
+                            foregroundColor: appColors.accentDeep,
                           ),
                         ),
                       ],
@@ -585,7 +584,8 @@ Future<void> showDormBadgeDetailsSheet(
                       if (profile.selectedDormBadgeId != null) ...<Widget>[
                         SizedBox(height: blockGap * 0.45),
                         Center(
-                          child: TextButton(
+                          child: AppTextAction(
+                            label: '恢复最新获得',
                             onPressed: () async {
                               await services.profileFacade
                                   .saveDormBadgeSelection(null);
@@ -593,10 +593,7 @@ Future<void> showDormBadgeDetailsSheet(
                                 Navigator.of(sheetContext).pop();
                               }
                             },
-                            style: TextButton.styleFrom(
-                              foregroundColor: appColors.accentDeep,
-                            ),
-                            child: const Text('恢复最新获得'),
+                            foregroundColor: appColors.accentDeep,
                           ),
                         ),
                       ],

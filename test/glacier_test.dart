@@ -17,6 +17,7 @@ import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
+import 'package:sleep_dorm_app/core/widgets/app_text_action.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/widgets/assistant_surface.dart';
@@ -426,8 +427,44 @@ void main() {
     expect(shape.borderRadius, AppRadius.button);
     expect(
       button.style?.minimumSize?.resolve(<WidgetState>{}),
-      const Size(0, 56),
+      const Size(0, 48),
     );
+  });
+
+  testWidgets('app text action stays lightweight and uses tap haptics', (
+    WidgetTester tester,
+  ) async {
+    final NightMoodPalette palette = NightMoodPalette.fromMood(NightMood.calm);
+    final AppSemanticColors appColors = AppSemanticColors.light(palette);
+    int taps = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+          extensions: <ThemeExtension<dynamic>>[palette, appColors],
+        ),
+        home: Scaffold(
+          body: Center(
+            child: AppTextAction(label: '恢复最新获得', onPressed: () => taps += 1),
+          ),
+        ),
+      ),
+    );
+
+    final TextButton button = tester.widget<TextButton>(
+      find.byType(TextButton),
+    );
+    expect(button.style?.backgroundColor?.resolve(<WidgetState>{}), isNull);
+    expect(
+      button.style?.foregroundColor?.resolve(<WidgetState>{}),
+      appColors.accentDeep,
+    );
+
+    await tester.tap(find.text('恢复最新获得'));
+    await tester.pump();
+
+    expect(taps, 1);
+    expect(_platformHapticTypes.last, 'HapticFeedbackType.lightImpact');
   });
 
   testWidgets('primary button haptic role follows visual priority', (

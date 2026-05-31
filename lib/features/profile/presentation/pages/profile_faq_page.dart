@@ -160,6 +160,7 @@ class ProfileFaqPage extends StatelessWidget {
             PrimaryButton(
               label: '常见问题内容将继续补充',
               icon: Icons.help_outline_rounded,
+              size: PrimaryButtonSize.compact,
               onPressed: () => _showComingSoon(context),
             ),
           ],

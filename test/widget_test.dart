@@ -34,6 +34,7 @@ import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
 import 'package:sleep_dorm_app/core/widgets/bottom_nav_shell.dart';
+import 'package:sleep_dorm_app/core/widgets/app_text_action.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 import 'package:sleep_dorm_app/features/analysis/presentation/pages/interference_factor_page.dart';
@@ -641,8 +642,15 @@ void main() {
       ),
     );
 
+    final Finder loginSubmit = find.byKey(
+      const ValueKey<String>('auth-login-submit'),
+    );
+    expect(
+      find.descendant(of: loginSubmit, matching: find.byType(PrimaryButton)),
+      findsOneWidget,
+    );
     final Finder submitFinder = find.descendant(
-      of: find.byKey(const ValueKey<String>('auth-login-submit')),
+      of: loginSubmit,
       matching: find.byType(FilledButton),
     );
     final FilledButton submitButton = tester.widget<FilledButton>(submitFinder);
@@ -1026,15 +1034,15 @@ void main() {
 
     await tester.tap(find.text('开心'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '下一步'));
+    await tester.tap(find.widgetWithText(PrimaryButton, '下一步'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '继续'));
+    await tester.tap(find.widgetWithText(PrimaryButton, '继续'));
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(FilledButton, '保存心情主题'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, '进入今晚首页'), findsNothing);
+    expect(find.widgetWithText(PrimaryButton, '保存心情主题'), findsOneWidget);
+    expect(find.widgetWithText(PrimaryButton, '进入今晚首页'), findsNothing);
 
-    await tester.tap(find.widgetWithText(FilledButton, '保存心情主题'));
+    await tester.tap(find.widgetWithText(PrimaryButton, '保存心情主题'));
     await tester.pumpAndSettle();
 
     final AppServices services = AppScope.of(
@@ -1420,7 +1428,7 @@ void main() {
   ) async {
     await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
 
-    await tester.tap(find.widgetWithText(TextButton, 'Skip'));
+    await tester.tap(find.widgetWithText(AppTextAction, 'Skip'));
     await tester.pumpAndSettle();
 
     expect(find.byType(HomePreSleepPage), findsOneWidget);
@@ -1443,11 +1451,11 @@ void main() {
 
     await tester.tap(find.text('开心'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '下一步'));
+    await tester.tap(find.widgetWithText(PrimaryButton, '下一步'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '继续'));
+    await tester.tap(find.widgetWithText(PrimaryButton, '继续'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '进入今晚首页'));
+    await tester.tap(find.widgetWithText(PrimaryButton, '进入今晚首页'));
     await tester.pumpAndSettle();
 
     expect(find.byType(HomePreSleepPage), findsOneWidget);
@@ -1486,7 +1494,7 @@ void main() {
   testWidgets('legacy welcome skip behavior', (WidgetTester tester) async {
     await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
 
-    await tester.tap(find.widgetWithText(TextButton, 'Skip'));
+    await tester.tap(find.widgetWithText(AppTextAction, 'Skip'));
     await tester.pumpAndSettle();
 
     expect(find.byType(HomePreSleepPage), findsOneWidget);
@@ -1506,7 +1514,7 @@ void main() {
   ) async {
     await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
 
-    await tester.tap(find.widgetWithText(TextButton, 'Skip'));
+    await tester.tap(find.widgetWithText(AppTextAction, 'Skip'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.night_shelter_rounded));
@@ -1517,7 +1525,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(HomePreSleepPage), findsOneWidget);
-    expect(find.widgetWithText(TextButton, 'Skip'), findsNothing);
+    expect(find.widgetWithText(AppTextAction, 'Skip'), findsNothing);
   });
 
   testWidgets('bottom navigation switches between shell tabs', (
@@ -2003,6 +2011,13 @@ void main() {
       ),
     );
     expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('auth-login-code-send')),
+        matching: find.byType(PrimaryButton),
+      ),
+      findsOneWidget,
+    );
+    expect(
       sendButton.style?.backgroundColor?.resolve(<WidgetState>{}),
       const Color(0xFFBFE6F0),
     );
@@ -2028,12 +2043,26 @@ void main() {
         ),
       );
       expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('account-reset-send')),
+          matching: find.byType(PrimaryButton),
+        ),
+        findsOneWidget,
+      );
+      expect(
         sendButton.style?.backgroundColor?.resolve(<WidgetState>{}),
         const Color(0xFFBFE6F0),
       );
       expect(
         sendButton.style?.foregroundColor?.resolve(<WidgetState>{}),
         const Color(0xFF004F5D),
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('account-reset-verify')),
+          matching: find.byType(PrimaryButton),
+        ),
+        findsOneWidget,
       );
     },
   );
@@ -2310,6 +2339,10 @@ void main() {
 
       final TextField phoneTextField = tester.widget<TextField>(phoneField);
       expect(phoneTextField.controller?.text, '13900139000');
+      final PrimaryButton primaryButton = tester.widget<PrimaryButton>(
+        find.descendant(of: submitButton, matching: find.byType(PrimaryButton)),
+      );
+      expect(primaryButton.isLoading, isFalse);
       final FilledButton button = tester.widget<FilledButton>(
         find.descendant(of: submitButton, matching: find.byType(FilledButton)),
       );
@@ -4835,7 +4868,7 @@ void main() {
     expect(find.text('当前佩戴：安睡大师'), findsNothing);
     expect(find.text('当前展示：安睡大师'), findsNothing);
     expect(find.text('点击任意勋章可查看说明，并把已获得勋章切换为当前展示。'), findsNothing);
-    expect(find.widgetWithText(FilledButton, '已同步最新'), findsOneWidget);
+    expect(find.widgetWithText(PrimaryButton, '已同步最新'), findsOneWidget);
     expect(find.text('佩戴最新获得'), findsNothing);
     final UserProfile defaultProfile = buildDefaultUserProfile();
     final String countLabel =
@@ -4956,24 +4989,16 @@ void main() {
     final Finder dormSummaryCard = find.byKey(
       const ValueKey<String>('dorm-badge-summary-card'),
     );
-    final FilledButton dormSummaryAction = tester.widget<FilledButton>(
+    final PrimaryButton dormSummaryAction = tester.widget<PrimaryButton>(
       find.descendant(
         of: find.byKey(const ValueKey<String>('badge-summary-action-button')),
-        matching: find.byType(FilledButton),
+        matching: find.byType(PrimaryButton),
       ),
     );
-    expect(
-      dormSummaryAction.style?.backgroundColor?.resolve(const <WidgetState>{
-        WidgetState.disabled,
-      }),
-      AppColors.surfaceMuted,
-    );
-    expect(
-      dormSummaryAction.style?.foregroundColor?.resolve(const <WidgetState>{
-        WidgetState.disabled,
-      }),
-      AppColors.textSecondary,
-    );
+    expect(dormSummaryAction.size, PrimaryButtonSize.mini);
+    expect(dormSummaryAction.variant, PrimaryButtonVariant.soft);
+    expect(dormSummaryAction.backgroundColor, appColors.surfaceMuted);
+    expect(dormSummaryAction.disabledForegroundColor, appColors.textSecondary);
     expect(
       find.descendant(of: dormSummaryCard, matching: find.text('不醒人室')),
       findsOneWidget,
@@ -5174,7 +5199,7 @@ void main() {
     );
     expect(find.text('当前佩戴：安睡大师'), findsNothing);
     expect(find.text('自动同步最新'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, '已同步最新'), findsOneWidget);
+    expect(find.widgetWithText(PrimaryButton, '已同步最新'), findsOneWidget);
     expect(find.text('当前展示：安睡大师'), findsNothing);
     expect(find.text('佩戴最新获得'), findsNothing);
   });
@@ -5211,7 +5236,7 @@ void main() {
       await tester.ensureVisible(earlySleeperTile);
       await tester.tap(earlySleeperTile);
       await tester.pumpAndSettle();
-      final Finder equipButton = find.widgetWithText(FilledButton, '佩戴此勋章');
+      final Finder equipButton = find.widgetWithText(PrimaryButton, '佩戴此勋章');
       await tester.ensureVisible(equipButton);
       await tester.tap(equipButton);
       await tester.pumpAndSettle();
@@ -5231,8 +5256,8 @@ void main() {
         findsNothing,
       );
       expect(find.text('手动佩戴中'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, '恢复默认最新'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, '已同步最新'), findsNothing);
+      expect(find.widgetWithText(PrimaryButton, '恢复默认最新'), findsOneWidget);
+      expect(find.widgetWithText(PrimaryButton, '已同步最新'), findsNothing);
       expect(
         tester.getSize(
           find.byKey(const ValueKey<String>('badge-summary-mode-chip')),
@@ -5259,7 +5284,7 @@ void main() {
       await tester.tap(find.text('我的勋章'));
       await tester.pumpAndSettle();
       final Finder restoreLatestButton = find.widgetWithText(
-        FilledButton,
+        PrimaryButton,
         '恢复默认最新',
       );
       await tester.ensureVisible(restoreLatestButton);
@@ -5268,8 +5293,8 @@ void main() {
 
       expect(find.text('安睡大师'), findsWidgets);
       expect(find.text('自动同步最新'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, '已同步最新'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, '恢复默认最新'), findsNothing);
+      expect(find.widgetWithText(PrimaryButton, '已同步最新'), findsOneWidget);
+      expect(find.widgetWithText(PrimaryButton, '恢复默认最新'), findsNothing);
 
       await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
       await tester.pumpAndSettle();
@@ -5302,6 +5327,10 @@ void main() {
     expect(find.text('常见问题速览'), findsOneWidget);
     expect(find.text('常见问题内容将继续补充'), findsOneWidget);
     expect(find.widgetWithText(PrimaryButton, '常见问题内容将继续补充'), findsOneWidget);
+    final PrimaryButton faqButton = tester.widget<PrimaryButton>(
+      find.widgetWithText(PrimaryButton, '常见问题内容将继续补充'),
+    );
+    expect(faqButton.size, PrimaryButtonSize.compact);
 
     await tester.tap(find.text('常见问题速览'));
     await tester.pump();

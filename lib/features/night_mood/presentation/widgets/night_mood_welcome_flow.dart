@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/app_text_action.dart';
 import 'package:sleep_dorm_app/core/widgets/mood_avatar.dart';
+import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 class NightMoodWelcomeFlow extends StatefulWidget {
   const NightMoodWelcomeFlow({
@@ -752,6 +754,13 @@ class _BottomActionBar extends StatelessWidget {
   final String? secondaryLabel;
   final AsyncVoidCallback? onSecondaryPressed;
 
+  void _invokeAsync(AsyncVoidCallback callback) {
+    final FutureOr<void> result = callback();
+    if (result is Future<void>) {
+      unawaited(result);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -762,49 +771,25 @@ class _BottomActionBar extends StatelessWidget {
             width: 72,
             child: secondaryLabel == null
                 ? null
-                : TextButton(
+                : AppTextAction(
+                    label: secondaryLabel!,
+                    foregroundColor: Colors.white,
                     onPressed: onSecondaryPressed == null
                         ? null
-                        : () async {
-                            unawaited(AppHaptics.tap());
-                            await onSecondaryPressed?.call();
-                          },
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      textStyle: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                    child: Text(secondaryLabel!),
+                        : () => _invokeAsync(onSecondaryPressed!),
                   ),
           ),
           SizedBox(width: buttonSpacing),
           Expanded(
-            child: SizedBox(
-              height: 52,
-              child: FilledButton(
-                onPressed: onPrimaryPressed == null
-                    ? null
-                    : () async {
-                        unawaited(AppHaptics.navigation());
-                        await onPrimaryPressed?.call();
-                      },
-                style: FilledButton.styleFrom(
-                  backgroundColor: primaryBackgroundColor,
-                  foregroundColor: primaryTextColor,
-                  disabledBackgroundColor: primaryBackgroundColor.withAlpha(
-                    140,
-                  ),
-                  disabledForegroundColor: primaryTextColor.withAlpha(153),
-                  shape: const StadiumBorder(),
-                  textStyle: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                child: Text(primaryLabel),
-              ),
+            child: PrimaryButton(
+              label: primaryLabel,
+              backgroundColor: primaryBackgroundColor,
+              foregroundColor: primaryTextColor,
+              disabledForegroundColor: primaryTextColor.withAlpha(153),
+              hapticRole: AppHapticRole.navigation,
+              onPressed: onPrimaryPressed == null
+                  ? null
+                  : () => _invokeAsync(onPrimaryPressed!),
             ),
           ),
         ],
