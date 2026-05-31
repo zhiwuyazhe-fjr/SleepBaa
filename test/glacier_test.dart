@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
@@ -309,10 +311,31 @@ void main() {
     );
 
     await tester.tap(find.text('查看全部'));
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
 
     expect(taps, 1);
-    expect(_platformHapticTypes, contains('HapticFeedbackType.mediumImpact'));
+    expect(
+      _platformHapticTypes,
+      containsAllInOrder(<String>[
+        'HapticFeedbackType.selectionClick',
+        'HapticFeedbackType.lightImpact',
+      ]),
+    );
+  });
+
+  testWidgets('flow-start haptic uses a distinct entry rhythm', (
+    WidgetTester tester,
+  ) async {
+    unawaited(AppHaptics.flowStart());
+    await tester.pump(const Duration(milliseconds: 90));
+
+    expect(
+      _platformHapticTypes,
+      containsAllInOrder(<String>[
+        'HapticFeedbackType.mediumImpact',
+        'HapticFeedbackType.selectionClick',
+      ]),
+    );
   });
 
   testWidgets('settings page exposes assistant reply motion entry', (
@@ -331,6 +354,22 @@ void main() {
       tester.getTopLeft(find.text('AI陪伴')).dy,
       lessThan(tester.getTopLeft(find.text('睡眠偏好')).dy),
     );
+  });
+
+  testWidgets('sleep settings save action uses the primary button treatment', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
+    await _scrollToSleepPreferences(tester);
+
+    final PrimaryButton saveButton = tester.widget<PrimaryButton>(
+      find.widgetWithText(PrimaryButton, '保存睡眠设置'),
+    );
+    expect(saveButton.variant, PrimaryButtonVariant.filled);
+    expect(saveButton.hapticRole, isNull);
   });
 
   testWidgets('filled primary button uses semantic action colors', (
@@ -433,12 +472,20 @@ void main() {
     );
 
     await tester.tap(find.text('主要操作'));
-    await tester.pump();
-    expect(_platformHapticTypes.last, 'HapticFeedbackType.mediumImpact');
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(
+      _platformHapticTypes,
+      containsAllInOrder(<String>[
+        'HapticFeedbackType.lightImpact',
+        'HapticFeedbackType.mediumImpact',
+      ]),
+    );
+    _platformMethodCalls.clear();
 
     await tester.tap(find.text('次要操作'));
     await tester.pump();
     expect(_platformHapticTypes.last, 'HapticFeedbackType.lightImpact');
+    _platformMethodCalls.clear();
 
     await tester.tap(find.text('安静操作'));
     await tester.pump();
@@ -1100,6 +1147,24 @@ void main() {
       expect(
         find.byKey(const ValueKey<String>('app-bottom-sheet-selection')),
         findsOneWidget,
+      );
+      final Finder sheetSurface = find.descendant(
+        of: find.byKey(const ValueKey<String>('app-bottom-sheet-selection')),
+        matching: find.byType(DecoratedBox),
+      );
+      final DecoratedBox sheetDecoratedBox = tester.widget<DecoratedBox>(
+        sheetSurface.first,
+      );
+      final BoxDecoration sheetDecoration =
+          sheetDecoratedBox.decoration as BoxDecoration;
+      expect(
+        sheetDecoration.color,
+        tester
+            .element(
+              find.byKey(const ValueKey<String>('app-bottom-sheet-selection')),
+            )
+            .appColors
+            .surface,
       );
       expect(find.text('更克制，存在感最低。'), findsNothing);
       expect(find.text('默认档，柔和但能感知到呼吸感。'), findsNothing);

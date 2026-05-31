@@ -1,10 +1,9 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/mood_avatar.dart';
 
@@ -39,7 +38,7 @@ class _NightMoodWelcomeFlowState extends State<NightMoodWelcomeFlow> {
     _selectedMood = widget.initialMood ?? NightMood.calm;
     _selectedReasons = <String>{_selectedMood.reasons.first};
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _triggerHaptic(HapticFeedback.mediumImpact);
+      unawaited(AppHaptics.flowStart());
     });
   }
 
@@ -141,7 +140,7 @@ class _NightMoodWelcomeFlowState extends State<NightMoodWelcomeFlow> {
     if (mood == _selectedMood || _isSubmitting) {
       return;
     }
-    _triggerHaptic(HapticFeedback.selectionClick);
+    unawaited(AppHaptics.selection());
     if (!mounted) {
       return;
     }
@@ -461,9 +460,7 @@ class _ReasonsStep extends StatelessWidget {
                               onTap: isSubmitting
                                   ? null
                                   : () async {
-                                      _triggerHaptic(
-                                        HapticFeedback.selectionClick,
-                                      );
+                                      unawaited(AppHaptics.selection());
                                       onToggleReason(reason);
                                     },
                               child: AnimatedContainer(
@@ -769,7 +766,7 @@ class _BottomActionBar extends StatelessWidget {
                     onPressed: onSecondaryPressed == null
                         ? null
                         : () async {
-                            _triggerHaptic(HapticFeedback.lightImpact);
+                            unawaited(AppHaptics.tap());
                             await onSecondaryPressed?.call();
                           },
                     style: TextButton.styleFrom(
@@ -790,7 +787,7 @@ class _BottomActionBar extends StatelessWidget {
                 onPressed: onPrimaryPressed == null
                     ? null
                     : () async {
-                        _triggerHaptic(HapticFeedback.lightImpact);
+                        unawaited(AppHaptics.navigation());
                         await onPrimaryPressed?.call();
                       },
                 style: FilledButton.styleFrom(
@@ -880,26 +877,5 @@ _WelcomeLayoutMetrics _metricsForHeight(double height) {
     reasonTitleFontSize: 32,
     welcomeTitleFontSize: 34,
     bottomActionPadding: EdgeInsets.fromLTRB(24, 24, 24, 30),
-  );
-}
-
-void _triggerHaptic(Future<void> Function() action) {
-  if (kIsWeb) {
-    return;
-  }
-  unawaited(
-    (() async {
-      try {
-        if (defaultTargetPlatform == TargetPlatform.android) {
-          await HapticFeedback.vibrate();
-          return;
-        }
-        await action();
-      } catch (_) {
-        try {
-          await HapticFeedback.vibrate();
-        } catch (_) {}
-      }
-    })(),
   );
 }

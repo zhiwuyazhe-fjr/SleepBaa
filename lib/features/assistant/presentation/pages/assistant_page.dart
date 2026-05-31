@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/controllers/assistant_conversation_controller.dart';
@@ -217,7 +217,7 @@ class _AssistantPageState extends State<AssistantPage>
   }
 
   Future<void> _emitReplyHaptics({required bool hasStatuses}) async {
-    await HapticFeedback.lightImpact();
+    await AppHaptics.tap();
     if (!hasStatuses) {
       return;
     }
@@ -225,7 +225,7 @@ class _AssistantPageState extends State<AssistantPage>
     if (!mounted) {
       return;
     }
-    await HapticFeedback.selectionClick();
+    await AppHaptics.selection();
   }
 
   void _resetArchiveState() {

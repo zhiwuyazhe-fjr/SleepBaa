@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 enum AppHapticRole {
@@ -12,15 +13,49 @@ enum AppHapticRole {
 class AppHaptics {
   const AppHaptics._();
 
-  static Future<void> trigger(AppHapticRole role) {
+  static Future<void> trigger(AppHapticRole role) async {
+    if (kIsWeb) {
+      return;
+    }
+    try {
+      await _perform(role);
+    } catch (_) {
+      try {
+        await HapticFeedback.vibrate();
+      } catch (_) {}
+    }
+  }
+
+  static Future<void> _perform(AppHapticRole role) {
     return switch (role) {
       AppHapticRole.tap => HapticFeedback.lightImpact(),
-      AppHapticRole.navigation => HapticFeedback.mediumImpact(),
-      AppHapticRole.flowStart => HapticFeedback.mediumImpact(),
-      AppHapticRole.confirm => HapticFeedback.mediumImpact(),
+      AppHapticRole.navigation => _runPattern(<_HapticPulse>[
+        const _HapticPulse.selection(),
+        const _HapticPulse.light(after: Duration(milliseconds: 28)),
+      ]),
+      AppHapticRole.flowStart => _runPattern(<_HapticPulse>[
+        const _HapticPulse.medium(),
+        const _HapticPulse.selection(after: Duration(milliseconds: 64)),
+      ]),
+      AppHapticRole.confirm => _runPattern(<_HapticPulse>[
+        const _HapticPulse.light(),
+        const _HapticPulse.medium(after: Duration(milliseconds: 44)),
+      ]),
       AppHapticRole.selection => HapticFeedback.selectionClick(),
-      AppHapticRole.destructive => HapticFeedback.heavyImpact(),
+      AppHapticRole.destructive => _runPattern(<_HapticPulse>[
+        const _HapticPulse.medium(),
+        const _HapticPulse.heavy(after: Duration(milliseconds: 72)),
+      ]),
     };
+  }
+
+  static Future<void> _runPattern(List<_HapticPulse> pulses) async {
+    for (final _HapticPulse pulse in pulses) {
+      if (pulse.after > Duration.zero) {
+        await Future<void>.delayed(pulse.after);
+      }
+      await pulse.trigger();
+    }
   }
 
   static Future<void> tap() => trigger(AppHapticRole.tap);
@@ -72,3 +107,33 @@ class AppHaptics {
     return handler(onTap, role: AppHapticRole.destructive);
   }
 }
+
+class _HapticPulse {
+  const _HapticPulse._(this.type, {this.after = Duration.zero});
+
+  const _HapticPulse.light({Duration after = Duration.zero})
+    : this._(_HapticPulseType.light, after: after);
+
+  const _HapticPulse.medium({Duration after = Duration.zero})
+    : this._(_HapticPulseType.medium, after: after);
+
+  const _HapticPulse.heavy({Duration after = Duration.zero})
+    : this._(_HapticPulseType.heavy, after: after);
+
+  const _HapticPulse.selection({Duration after = Duration.zero})
+    : this._(_HapticPulseType.selection, after: after);
+
+  final _HapticPulseType type;
+  final Duration after;
+
+  Future<void> trigger() {
+    return switch (type) {
+      _HapticPulseType.light => HapticFeedback.lightImpact(),
+      _HapticPulseType.medium => HapticFeedback.mediumImpact(),
+      _HapticPulseType.heavy => HapticFeedback.heavyImpact(),
+      _HapticPulseType.selection => HapticFeedback.selectionClick(),
+    };
+  }
+}
+
+enum _HapticPulseType { light, medium, heavy, selection }

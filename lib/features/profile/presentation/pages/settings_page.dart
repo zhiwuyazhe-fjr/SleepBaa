@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
@@ -511,7 +510,6 @@ class _SettingsPageState extends State<SettingsPage> {
                             isLoading: _isSavingSettings,
                             loadingLabel: '保存中...',
                             size: PrimaryButtonSize.compact,
-                            variant: PrimaryButtonVariant.soft,
                             onPressed: () => _saveSleepSettings(services),
                           ),
                         ),
@@ -728,12 +726,7 @@ class _MoodAssistantFabSlot extends StatelessWidget {
         label: label,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: enabled
-              ? () {
-                  HapticFeedback.selectionClick();
-                  onTap();
-                }
-              : null,
+          onTap: enabled ? AppHaptics.selectionHandler(onTap) : null,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[

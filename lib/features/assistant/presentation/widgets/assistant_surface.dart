@@ -2,9 +2,9 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 
 class AssistantSurfaceMetrics {
@@ -956,12 +956,7 @@ class _AssistantActionIconButton extends StatelessWidget {
           disabledForegroundColor: _alpha(color, 0.34),
           overlayColor: _alpha(color, 0.18),
         ),
-        onPressed: onTap == null
-            ? null
-            : () {
-                HapticFeedback.selectionClick();
-                onTap!();
-              },
+        onPressed: AppHaptics.selectionHandler(onTap),
         icon: child ?? Icon(icon, size: size, color: color),
       ),
     );

@@ -66,11 +66,14 @@ class PrimaryButton extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: borderRadius ?? AppRadius.button,
       ),
-      elevation: 0,
+      elevation: variant == PrimaryButtonVariant.filled ? 3 : 0,
+      shadowColor: variant == PrimaryButtonVariant.filled
+          ? appColors.accent.withAlpha(82)
+          : Colors.transparent,
       backgroundColor: _backgroundColor(palette, appColors),
       foregroundColor: foregroundColor ?? _foregroundColor(palette, appColors),
       disabledBackgroundColor: _disabledBackgroundColor(appColors),
-      disabledForegroundColor: appColors.textSecondary,
+      disabledForegroundColor: appColors.textSecondary.withAlpha(170),
       side: _borderSide(appColors),
       textStyle: buttonTextStyle,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,

@@ -9,6 +9,7 @@ Future<T?> showAppBottomSheet<T>(
   BuildContext context, {
   required AppBottomSheetSpec<T> spec,
 }) {
+  final bool usesSharedSheetSurface = spec is AppSelectionSheetSpec<T>;
   return showModalBottomSheet<T>(
     context: context,
     useSafeArea: spec.useSafeArea,
@@ -16,8 +17,10 @@ Future<T?> showAppBottomSheet<T>(
     isScrollControlled: spec.isScrollControlled,
     isDismissible: spec.isDismissible,
     enableDrag: spec.enableDrag,
-    showDragHandle: spec.showDragHandle,
-    backgroundColor: spec.backgroundColor,
+    showDragHandle: usesSharedSheetSurface ? false : spec.showDragHandle,
+    backgroundColor: usesSharedSheetSurface
+        ? Colors.transparent
+        : spec.backgroundColor,
     shape: spec.shape,
     constraints: spec.constraints,
     routeSettings: spec.routeSettings,
@@ -34,6 +37,7 @@ Future<T?> showAppBottomSheet<T>(
           padding: spec.padding,
           title: spec.title,
           description: spec.description,
+          showHandle: spec.showDragHandle,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
@@ -80,6 +84,7 @@ class AppBottomSheetScaffold extends StatelessWidget {
     this.padding = const EdgeInsets.fromLTRB(20, 12, 20, 24),
     this.crossAxisAlignment = CrossAxisAlignment.start,
     this.includeBottomViewInsets = false,
+    this.showHandle = false,
   });
 
   final String? title;
@@ -89,10 +94,12 @@ class AppBottomSheetScaffold extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final CrossAxisAlignment crossAxisAlignment;
   final bool includeBottomViewInsets;
+  final bool showHandle;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final AppSemanticColors appColors = context.appColors;
     final EdgeInsets resolvedPadding = padding.resolve(
       Directionality.of(context),
     );
@@ -102,33 +109,47 @@ class AppBottomSheetScaffold extends StatelessWidget {
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: resolvedPadding,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: crossAxisAlignment,
-            children: <Widget>[
-              if (header != null) ...<Widget>[
-                header!,
-                const SizedBox(height: AppSpacing.md),
-              ] else if (title != null) ...<Widget>[
-                Text(title!, style: theme.textTheme.titleLarge),
-                if (description != null &&
-                    description!.trim().isNotEmpty) ...<Widget>[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    description!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      height: 1.45,
-                    ),
-                  ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: appColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          border: Border.all(color: appColors.borderSubtle),
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: resolvedPadding,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: crossAxisAlignment,
+                children: <Widget>[
+                  if (showHandle) ...<Widget>[
+                    _AppSheetHandle(color: appColors.borderSubtle),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
+                  if (header != null) ...<Widget>[
+                    header!,
+                    const SizedBox(height: AppSpacing.md),
+                  ] else if (title != null) ...<Widget>[
+                    Text(title!, style: theme.textTheme.titleLarge),
+                    if (description != null &&
+                        description!.trim().isNotEmpty) ...<Widget>[
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        description!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: appColors.textSecondary,
+                          height: 1.45,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                  child,
                 ],
-                const SizedBox(height: AppSpacing.md),
-              ],
-              child,
-            ],
+              ),
+            ),
           ),
         ),
       ),
@@ -218,13 +239,10 @@ class AppRichDetailSheetScaffold extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: AppSpacing.sm),
                       child: Center(
-                        child: Container(
+                        child: _AppSheetHandle(
+                          color: appColors.borderSubtle,
                           width: handleWidth,
                           height: handleHeight,
-                          decoration: BoxDecoration(
-                            color: appColors.borderSubtle,
-                            borderRadius: BorderRadius.circular(handleHeight),
-                          ),
                         ),
                       ),
                     ),
@@ -234,6 +252,32 @@ class AppRichDetailSheetScaffold extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _AppSheetHandle extends StatelessWidget {
+  const _AppSheetHandle({
+    required this.color,
+    this.width = 44,
+    this.height = 4,
+  });
+
+  final Color color;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(height),
+        ),
       ),
     );
   }
