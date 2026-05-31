@@ -979,6 +979,7 @@ class _AssistantPrimaryStage extends StatelessWidget {
         key: stageKey,
         metrics: metrics,
         palette: palette,
+        motionLevel: replyMotionLevel,
         captureModeEnabled: captureModeEnabled,
         selectedCaptureTab: selectedCaptureTab,
         onCaptureTabChanged: onCaptureTabChanged,
@@ -1108,6 +1109,7 @@ class _AssistantEmptyStage extends StatelessWidget {
     super.key,
     required this.metrics,
     required this.palette,
+    required this.motionLevel,
     required this.captureModeEnabled,
     required this.selectedCaptureTab,
     required this.onCaptureTabChanged,
@@ -1115,6 +1117,7 @@ class _AssistantEmptyStage extends StatelessWidget {
 
   final AssistantSurfaceMetrics metrics;
   final AssistantSurfacePalette palette;
+  final AssistantReplyMotionLevel motionLevel;
   final bool captureModeEnabled;
   final AssistantCaptureTab selectedCaptureTab;
   final ValueChanged<AssistantCaptureTab> onCaptureTabChanged;
@@ -1125,6 +1128,7 @@ class _AssistantEmptyStage extends StatelessWidget {
       return _AssistantCaptureEmptyStage(
         metrics: metrics,
         palette: palette,
+        motionLevel: motionLevel,
         selectedTab: selectedCaptureTab,
         onTabChanged: onCaptureTabChanged,
       );
@@ -1140,8 +1144,8 @@ class _AssistantEmptyStage extends StatelessWidget {
               transformKey: const ValueKey<String>(
                 'assistant-empty-floating-motion',
               ),
-              travelDistance: metrics.unit(6),
-              duration: const Duration(milliseconds: 3800),
+              travelDistance: _replyFloatingDistance(metrics, motionLevel),
+              duration: _replyFloatingDuration(motionLevel),
               child: Column(
                 key: const ValueKey<String>('assistant-empty-stage'),
                 mainAxisSize: MainAxisSize.min,
@@ -1181,12 +1185,14 @@ class _AssistantCaptureEmptyStage extends StatelessWidget {
   const _AssistantCaptureEmptyStage({
     required this.metrics,
     required this.palette,
+    required this.motionLevel,
     required this.selectedTab,
     required this.onTabChanged,
   });
 
   final AssistantSurfaceMetrics metrics;
   final AssistantSurfacePalette palette;
+  final AssistantReplyMotionLevel motionLevel;
   final AssistantCaptureTab selectedTab;
   final ValueChanged<AssistantCaptureTab> onTabChanged;
 
@@ -1205,8 +1211,8 @@ class _AssistantCaptureEmptyStage extends StatelessWidget {
               transformKey: const ValueKey<String>(
                 'assistant-capture-empty-floating-motion',
               ),
-              travelDistance: metrics.unit(5),
-              duration: const Duration(milliseconds: 3800),
+              travelDistance: _replyFloatingDistance(metrics, motionLevel),
+              duration: _replyFloatingDuration(motionLevel),
               child: Column(
                 key: const ValueKey<String>('assistant-capture-empty-stage'),
                 mainAxisSize: MainAxisSize.min,

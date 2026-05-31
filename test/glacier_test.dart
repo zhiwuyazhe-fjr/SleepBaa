@@ -1104,7 +1104,7 @@ void main() {
   testWidgets('assistant empty stage floats as a single text group', (
     WidgetTester tester,
   ) async {
-    await _pumpGlacierApp(tester);
+    await _openAssistantEmptyStage(tester);
 
     final Finder floatingFinder = find.byKey(
       const ValueKey<String>('assistant-empty-floating-motion'),
@@ -1122,7 +1122,41 @@ void main() {
     expect(movedDy, isNot(initialDy));
     expect(find.text('你好，我是小眠'), findsOneWidget);
     expect(find.text('今晚想聊点什么'), findsOneWidget);
+    expect(
+      find.descendant(of: floatingFinder, matching: find.text('你好，我是小眠')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: floatingFinder, matching: find.text('今晚想聊点什么')),
+      findsOneWidget,
+    );
     expect(find.text('可以和小眠聊聊睡不着的原因，也可以把脑海里还没放下的念头交给我。'), findsOneWidget);
+  });
+
+  testWidgets('assistant empty greeting follows reply motion setting', (
+    WidgetTester tester,
+  ) async {
+    final AssistantFloatingMotion lowMotion =
+        await _emptyFloatingMotionForLevel(
+          tester,
+          buildDefaultUserSettings().copyWith(
+            assistantReplyMotionLevel: AssistantReplyMotionLevel.low,
+          ),
+        );
+
+    final AssistantFloatingMotion highMotion =
+        await _emptyFloatingMotionForLevel(
+          tester,
+          buildDefaultUserSettings().copyWith(
+            assistantReplyMotionLevel: AssistantReplyMotionLevel.high,
+          ),
+        );
+
+    expect(
+      highMotion.travelDistance,
+      greaterThan(lowMotion.travelDistance * 3),
+    );
+    expect(highMotion.duration, lessThan(lowMotion.duration));
   });
 
   testWidgets('assistant reply reveal triggers gentle haptics', (
@@ -1334,6 +1368,15 @@ Future<void> _pumpGlacierApp(
   );
 }
 
+Future<void> _openAssistantEmptyStage(
+  WidgetTester tester, {
+  UserSettings? initialSettings,
+}) async {
+  await _pumpGlacierApp(tester, initialSettings: initialSettings);
+  await tester.tap(find.byKey(const ValueKey<String>('assistant-header-add')));
+  await _pumpAssistantFrames(tester);
+}
+
 Future<void> _pumpRouteApp(
   WidgetTester tester,
   String route, {
@@ -1424,6 +1467,25 @@ Future<AssistantFloatingMotion> _replyFloatingMotionForLevel(
 
   final Finder floatingFinder = find.byKey(
     const ValueKey<String>('assistant-current-floating-motion'),
+  );
+  return tester.widget<AssistantFloatingMotion>(
+    find.ancestor(
+      of: floatingFinder,
+      matching: find.byType(AssistantFloatingMotion),
+    ),
+  );
+}
+
+Future<AssistantFloatingMotion> _emptyFloatingMotionForLevel(
+  WidgetTester tester,
+  UserSettings settings,
+) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump();
+  await _openAssistantEmptyStage(tester, initialSettings: settings);
+
+  final Finder floatingFinder = find.byKey(
+    const ValueKey<String>('assistant-empty-floating-motion'),
   );
   return tester.widget<AssistantFloatingMotion>(
     find.ancestor(
