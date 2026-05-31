@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
@@ -21,14 +22,17 @@ class AccountResetPasswordPage extends StatefulWidget {
 class _AccountResetPasswordPageState extends State<AccountResetPasswordPage> {
   static const double _designWidth = 390;
   static const Color _accentBlue = Color(0xFF90DDF2);
-  static const Color _accentBlueSoft = Color(0xFFE8F7FB);
   static const Color _accentBlueDeep = Color(0xFF004F5D);
   static const Color _accentBluePressed = Color(0xFF7CCDE5);
   static const Color _accentBlueDisabled = Color(0xFFCFE4EB);
   static const Color _accentBlueDisabledText = Color(0xFF6F8890);
+  static const Color _codeButtonBackground = Color(0xFFBFE6F0);
+  static const Color _codeButtonPressed = Color(0xFFA8D9E6);
+  static const Color _codeButtonForeground = Color(0xFF004F5D);
+  static const Color _darkCodeButtonBackground = Color(0xFF2C5C69);
+  static const Color _darkCodeButtonPressed = Color(0xFF347084);
+  static const Color _darkCodeButtonForeground = Color(0xFFEAFBFF);
   static const Color _successBlue = Color(0xFF4EA8C2);
-  static const Color _surfaceSoftDisabled = Color(0xFFE9EFF2);
-  static const Color _actionText = Color(0xFF00697A);
   static const Color _buttonShadow = Color(0x4A90DDF2);
 
   final TextEditingController _phoneController = TextEditingController();
@@ -322,10 +326,7 @@ class _AccountResetPasswordPageState extends State<AccountResetPasswordPage> {
     return _AccountPencilSplitPage(
       unit: unit,
       bodyChildren: <Widget>[
-        AppDetailPageHeader(
-          title: '找回密码',
-          onBack: _handleBack,
-        ),
+        AppDetailPageHeader(title: '找回密码', onBack: _handleBack),
         SizedBox(height: 10 * unit),
         Text(
           _hasBoundInitialPhone
@@ -405,10 +406,7 @@ class _AccountResetPasswordPageState extends State<AccountResetPasswordPage> {
     return _AccountPencilSplitPage(
       unit: unit,
       bodyChildren: <Widget>[
-        AppDetailPageHeader(
-          title: '重置密码',
-          onBack: _handleBack,
-        ),
+        AppDetailPageHeader(title: '重置密码', onBack: _handleBack),
         SizedBox(height: 10 * unit),
         Text(
           '短信验证已通过，现在请设置一个新的登录密码。',
@@ -954,12 +952,7 @@ class _AccountPencilFilledButton extends StatelessWidget {
           ],
         ),
         child: FilledButton(
-          onPressed: onPressed == null
-              ? null
-              : () {
-                  HapticFeedback.lightImpact();
-                  onPressed!();
-                },
+          onPressed: AppHaptics.confirmHandler(onPressed),
           style:
               FilledButton.styleFrom(
                 padding: EdgeInsets.zero,
@@ -1033,32 +1026,53 @@ class _AccountPencilSoftButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppSemanticColors appColors = context.appColors;
+    final bool dark = Theme.of(context).brightness == Brightness.dark;
+    final Color background = dark
+        ? _AccountResetPasswordPageState._darkCodeButtonBackground
+        : _AccountResetPasswordPageState._codeButtonBackground;
+    final Color pressed = dark
+        ? _AccountResetPasswordPageState._darkCodeButtonPressed
+        : _AccountResetPasswordPageState._codeButtonPressed;
+    final Color foreground = dark
+        ? _AccountResetPasswordPageState._darkCodeButtonForeground
+        : _AccountResetPasswordPageState._codeButtonForeground;
     return SizedBox(
       key: buttonKey,
       height: 56 * unit,
       child: FilledButton(
-        onPressed: onPressed == null
-            ? null
-            : () {
-                HapticFeedback.lightImpact();
-                onPressed!();
-              },
-        style: FilledButton.styleFrom(
-          padding: EdgeInsets.symmetric(horizontal: 10 * unit),
-          elevation: 0,
-          backgroundColor: _AccountResetPasswordPageState._accentBlueSoft,
-          disabledBackgroundColor:
-              _AccountResetPasswordPageState._surfaceSoftDisabled,
-          foregroundColor: _AccountResetPasswordPageState._actionText,
-          disabledForegroundColor: appColors.textSecondary,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18 * unit),
-          ),
-          textStyle: Theme.of(context).textTheme.bodyMedium!.copyWith(
-            fontSize: 13 * unit,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        onPressed: AppHaptics.confirmHandler(onPressed),
+        style:
+            FilledButton.styleFrom(
+              padding: EdgeInsets.symmetric(horizontal: 10 * unit),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18 * unit),
+              ),
+              textStyle: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                fontSize: 13 * unit,
+                fontWeight: FontWeight.w700,
+              ),
+            ).copyWith(
+              backgroundColor: WidgetStateProperty.resolveWith<Color>((
+                Set<WidgetState> states,
+              ) {
+                if (states.contains(WidgetState.disabled)) {
+                  return appColors.surfaceMuted;
+                }
+                if (states.contains(WidgetState.pressed)) {
+                  return pressed;
+                }
+                return background;
+              }),
+              foregroundColor: WidgetStateProperty.resolveWith<Color>((
+                Set<WidgetState> states,
+              ) {
+                if (states.contains(WidgetState.disabled)) {
+                  return appColors.textSecondary;
+                }
+                return foreground;
+              }),
+            ),
         child: FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(label, maxLines: 1),

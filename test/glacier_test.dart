@@ -312,7 +312,7 @@ void main() {
     await tester.pump();
 
     expect(taps, 1);
-    expect(_platformHapticTypes, contains('HapticFeedbackType.lightImpact'));
+    expect(_platformHapticTypes, contains('HapticFeedbackType.mediumImpact'));
   });
 
   testWidgets('settings page exposes assistant reply motion entry', (

@@ -41,11 +41,13 @@ class _DormMemberAvatarState extends State<DormMemberAvatar> {
   void _rememberLatestAvatar() {
     if (widget.avatarBytes != null && widget.avatarBytes!.isNotEmpty) {
       _lastAvatarBytes = widget.avatarBytes;
+      _lastAvatarUrl = null;
       return;
     }
     final String? nextUrl = widget.avatarUrl?.trim();
     if (nextUrl != null && nextUrl.isNotEmpty) {
-      _lastAvatarUrl = widget.avatarUrl;
+      _lastAvatarUrl = nextUrl;
+      _lastAvatarBytes = null;
     }
   }
 
@@ -64,13 +66,15 @@ class _DormMemberAvatarState extends State<DormMemberAvatar> {
   }
 
   Widget _buildContent(BuildContext context) {
-    final Uint8List? displayedBytes =
+    final Uint8List? currentBytes =
         widget.avatarBytes != null && widget.avatarBytes!.isNotEmpty
         ? widget.avatarBytes
-        : _lastAvatarBytes;
-    final String? displayedUrl = widget.avatarUrl?.trim().isNotEmpty == true
-        ? widget.avatarUrl
-        : _lastAvatarUrl;
+        : null;
+    final String? currentUrl = widget.avatarUrl?.trim();
+    final String? normalizedCurrentUrl =
+        currentUrl != null && currentUrl.isNotEmpty ? currentUrl : null;
+    final Uint8List? displayedBytes = currentBytes ?? _lastAvatarBytes;
+    final String? displayedUrl = normalizedCurrentUrl ?? _lastAvatarUrl;
 
     if (displayedBytes != null && displayedBytes.isNotEmpty) {
       return Image.memory(

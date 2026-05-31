@@ -941,11 +941,25 @@ void main() {
   testWidgets('settings can open manual night mood flow during daytime', (
     WidgetTester tester,
   ) async {
+    final List<MethodCall> platformCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall call,
+        ) async {
+          platformCalls.add(call);
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
     await _pumpApp(
       tester,
       initialLocation: AppRoutes.profileSettings,
       clock: _dayClock,
     );
+    platformCalls.clear();
 
     expect(find.text('显示与首页'), findsOneWidget);
     expect(find.text('重新选择心情'), findsOneWidget);
@@ -957,6 +971,10 @@ void main() {
     expect(
       find.byKey(const ValueKey<String>('night-mood-top-card')),
       findsOneWidget,
+    );
+    expect(
+      _hapticTypesFrom(platformCalls),
+      contains('HapticFeedbackType.mediumImpact'),
     );
     expect(find.byKey(BottomNavShell.navBarKey), findsNothing);
   });
@@ -1993,6 +2011,32 @@ void main() {
       const Color(0xFF004F5D),
     );
   });
+
+  testWidgets(
+    'account reset send code button uses stronger verification color',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profileAccountPassword,
+        clock: _dayClock,
+      );
+
+      final FilledButton sendButton = tester.widget<FilledButton>(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('account-reset-send')),
+          matching: find.byType(FilledButton),
+        ),
+      );
+      expect(
+        sendButton.style?.backgroundColor?.resolve(<WidgetState>{}),
+        const Color(0xFFBFE6F0),
+      );
+      expect(
+        sendButton.style?.foregroundColor?.resolve(<WidgetState>{}),
+        const Color(0xFF004F5D),
+      );
+    },
+  );
 
   testWidgets(
     'phone auth password login shows required phone toast on empty submit',
@@ -3941,6 +3985,118 @@ void main() {
 
     expect(find.byType(Image), findsOneWidget);
     expect(find.text('A'), findsNothing);
+  });
+
+  testWidgets('dorm member avatar prefers a fresh url over cached bytes', (
+    WidgetTester tester,
+  ) async {
+    const ValueKey<String> avatarKey = ValueKey<String>('fresh-url-avatar');
+    final Uint8List avatarBytes = Uint8List.fromList(const <int>[
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      0x0D,
+      0x0A,
+      0x1A,
+      0x0A,
+      0x00,
+      0x00,
+      0x00,
+      0x0D,
+      0x49,
+      0x48,
+      0x44,
+      0x52,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x08,
+      0x06,
+      0x00,
+      0x00,
+      0x00,
+      0x1F,
+      0x15,
+      0xC4,
+      0x89,
+      0x00,
+      0x00,
+      0x00,
+      0x0A,
+      0x49,
+      0x44,
+      0x41,
+      0x54,
+      0x78,
+      0x9C,
+      0x63,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x05,
+      0x00,
+      0x01,
+      0x0D,
+      0x0A,
+      0x2D,
+      0xB4,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x49,
+      0x45,
+      0x4E,
+      0x44,
+      0xAE,
+      0x42,
+      0x60,
+      0x82,
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DormMemberAvatar(
+          key: avatarKey,
+          size: 44,
+          accentColor: Colors.green,
+          avatarBytes: avatarBytes,
+          fallbackSeed: 'Alice',
+        ),
+      ),
+    );
+
+    Image image = tester.widget<Image>(find.byType(Image));
+    expect(image.image, isA<MemoryImage>());
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: DormMemberAvatar(
+          key: avatarKey,
+          size: 44,
+          accentColor: Colors.green,
+          avatarUrl: 'https://example.com/avatar-a.png',
+          fallbackSeed: 'Alice',
+        ),
+      ),
+    );
+
+    image = tester.widget<Image>(find.byType(Image));
+    expect(
+      image.image,
+      isA<NetworkImage>().having(
+        (NetworkImage provider) => provider.url,
+        'url',
+        'https://example.com/avatar-a.png',
+      ),
+    );
   });
 
   testWidgets('dorm gentle reminder opens the shared rich action sheet', (
