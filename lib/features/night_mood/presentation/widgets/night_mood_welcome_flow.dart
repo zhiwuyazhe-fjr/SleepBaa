@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
@@ -278,6 +281,7 @@ class _SelectionStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double mediaTop = MediaQuery.paddingOf(context).top;
@@ -355,10 +359,8 @@ class _SelectionStep extends StatelessWidget {
                       Text(
                         title,
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: AppTypography.heroTitle(textTheme).copyWith(
                           fontSize: metrics.titleFontSize,
-                          height: 1.12,
-                          fontWeight: FontWeight.w700,
                           color: Colors.white,
                         ),
                       ),
@@ -369,10 +371,9 @@ class _SelectionStep extends StatelessWidget {
                           selectedMood.moodTitle,
                           key: ValueKey<NightMood>(selectedMood),
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: Color(0xFFB8B8BD),
-                          ),
+                          style: AppTypography.body(
+                            textTheme,
+                          ).copyWith(color: const Color(0xFFB8B8BD)),
                         ),
                       ),
                       const Spacer(),
@@ -423,6 +424,7 @@ class _ReasonsStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final List<String> reasons = selectedMood.reasons;
     final bool canContinue = selectedReasons.isNotEmpty;
+    final TextTheme textTheme = Theme.of(context).textTheme;
 
     return SafeArea(
       child: Padding(
@@ -435,10 +437,8 @@ class _ReasonsStep extends StatelessWidget {
             Text(
               selectedMood.reasonPrompt,
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: AppTypography.heroTitle(textTheme).copyWith(
                 fontSize: metrics.reasonTitleFontSize,
-                height: 1.2,
-                fontWeight: FontWeight.w700,
                 color: Colors.white,
               ),
             ),
@@ -466,16 +466,19 @@ class _ReasonsStep extends StatelessWidget {
                                       onToggleReason(reason);
                                     },
                               child: AnimatedContainer(
+                                key: ValueKey<String>(
+                                  'night-mood-reason-$reason',
+                                ),
                                 duration: const Duration(milliseconds: 260),
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 16,
+                                  horizontal: AppSpacing.md,
+                                  vertical: AppSpacing.md,
                                 ),
                                 decoration: BoxDecoration(
                                   color: isSelected
                                       ? palette.welcomeAccentColor
                                       : palette.welcomeSurfaceColor,
-                                  borderRadius: BorderRadius.circular(999),
+                                  borderRadius: AppRadius.control,
                                 ),
                                 child: SizedBox(
                                   width: double.infinity,
@@ -486,15 +489,15 @@ class _ReasonsStep extends StatelessWidget {
                                       maxLines: 1,
                                       softWrap: false,
                                       textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: isSelected
-                                            ? palette.welcomeTextOnAccent
-                                            : Colors.white,
-                                        fontSize: 15,
-                                        fontWeight: isSelected
-                                            ? FontWeight.w700
-                                            : FontWeight.w500,
-                                      ),
+                                      style: AppTypography.body(textTheme)
+                                          .copyWith(
+                                            color: isSelected
+                                                ? palette.welcomeTextOnAccent
+                                                : Colors.white,
+                                            fontWeight: isSelected
+                                                ? FontWeight.w700
+                                                : FontWeight.w500,
+                                          ),
                                     ),
                                   ),
                                 ),
@@ -551,6 +554,7 @@ class _WelcomeStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String reasonSummary = '已选择 ${selectedReasons.length} 个今晚感受来源';
+    final TextTheme textTheme = Theme.of(context).textTheme;
 
     return SafeArea(
       child: Padding(
@@ -586,20 +590,17 @@ class _WelcomeStep extends StatelessWidget {
                     const SizedBox(height: 20),
                     Text(
                       '准备就绪',
-                      style: TextStyle(
+                      style: AppTypography.heroTitle(textTheme).copyWith(
                         color: palette.welcomeTextOnAccent,
                         fontSize: metrics.welcomeTitleFontSize,
-                        height: 1.1,
-                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 12),
                     Text(
                       selectedMood.welcomeCopy,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: AppTypography.body(textTheme).copyWith(
                         color: palette.welcomeTextOnAccent.withAlpha(184),
-                        fontSize: 16,
                         height: 1.4,
                       ),
                     ),
@@ -607,9 +608,8 @@ class _WelcomeStep extends StatelessWidget {
                     Text(
                       reasonSummary,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: AppTypography.body(textTheme).copyWith(
                         color: palette.welcomeTextOnAccent.withAlpha(235),
-                        fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -668,6 +668,7 @@ class _MoodSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: LayoutBuilder(
@@ -707,11 +708,10 @@ class _MoodSelector extends StatelessWidget {
                             alignment: Alignment.center,
                             child: Text(
                               mood.label,
-                              style: TextStyle(
+                              style: AppTypography.meta(textTheme).copyWith(
                                 color: isSelected
                                     ? palette.welcomeTextOnAccent
                                     : Colors.white70,
-                                fontSize: 14,
                                 fontWeight: isSelected
                                     ? FontWeight.w600
                                     : FontWeight.w400,

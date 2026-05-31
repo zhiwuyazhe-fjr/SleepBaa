@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
@@ -8,7 +9,7 @@ import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/dream_content.dart';
 
-class DreamDetailPage extends StatelessWidget {
+class DreamDetailPage extends StatefulWidget {
   const DreamDetailPage({
     super.key,
     this.entry,
@@ -21,12 +22,34 @@ class DreamDetailPage extends StatelessWidget {
   final bool showList;
 
   @override
+  State<DreamDetailPage> createState() => _DreamDetailPageState();
+}
+
+class _DreamDetailPageState extends State<DreamDetailPage> {
+  DreamEntryData? _cachedEntry;
+
+  @override
+  void initState() {
+    super.initState();
+    _cachedEntry = widget.entry;
+  }
+
+  @override
+  void didUpdateWidget(covariant DreamDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.entry != null && widget.entry != _cachedEntry) {
+      _cachedEntry = widget.entry;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final AppSemanticColors appColors = context.appColors;
-    final List<DreamEntryData> resolvedEntries = entries.isEmpty
+    final List<DreamEntryData> resolvedEntries = widget.entries.isEmpty
         ? DreamContent.entries
-        : entries;
-    final DreamEntryData resolvedEntry = entry ?? resolvedEntries.first;
+        : widget.entries;
+    final DreamEntryData resolvedEntry =
+        _cachedEntry ?? widget.entry ?? resolvedEntries.first;
 
     return Scaffold(
       backgroundColor: appColors.pageBackground,
@@ -51,11 +74,11 @@ class DreamDetailPage extends StatelessWidget {
             ),
             children: <Widget>[
               AppDetailPageHeader(
-                title: showList ? '全部梦境' : '梦境详情',
+                title: widget.showList ? '全部梦境' : '梦境详情',
                 onBack: () => context.pop(),
               ),
               const SizedBox(height: AppSpacing.md),
-              if (showList)
+              if (widget.showList)
                 _DreamEntryList(entries: resolvedEntries)
               else
                 _SingleDreamDetail(entry: resolvedEntry),
@@ -75,7 +98,7 @@ class _SingleDreamDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         _DreamOverviewCard(entry: entry),
         const SizedBox(height: AppSpacing.md),
@@ -108,6 +131,7 @@ class _DreamEntryList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: entries
           .map(
             (DreamEntryData entry) => Padding(
@@ -180,6 +204,7 @@ class _DreamListCard extends StatelessWidget {
     final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
+      onTap: () => context.push(AppRoutes.dreamDetail, extra: entry),
       color: appColors.surface,
       border: Border.all(color: appColors.borderSubtle),
       borderRadius: AppRadius.compactCard,

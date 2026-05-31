@@ -1030,6 +1030,7 @@ class _DormRulesDisplayGroupCard extends StatelessWidget {
               ],
             ),
             onTap: onTap,
+            hapticRole: AppHapticRole.selection,
           ),
           KeyedSubtree(
             key: ValueKey<String>(
@@ -1710,6 +1711,7 @@ class _DormRulesEditableQuietHoursCard extends StatelessWidget {
       titleStyle: _dormRulesEditItemTitleStyle(context),
       padding: _dormRulesEditItemPadding,
       onTap: onTap,
+      hapticRole: AppHapticRole.selection,
       trailing: AppSettingsValueTrailing(
         key: const ValueKey<String>('dorm-rules-trailing-quiet-hours'),
         value:
@@ -1804,6 +1806,7 @@ class _DormRulesEditableLightsCard extends StatelessWidget {
       titleStyle: _dormRulesEditItemTitleStyle(context),
       padding: _dormRulesEditItemPadding,
       onTap: onTap,
+      hapticRole: AppHapticRole.selection,
       trailing: AppSettingsValueTrailing(
         key: const ValueKey<String>('dorm-rules-trailing-lights-off'),
         value: lightsOffCopy,
@@ -1867,6 +1870,7 @@ class _DormRulesCompactValueCard extends StatelessWidget {
       titleStyle: _dormRulesEditItemTitleStyle(context),
       padding: _dormRulesEditItemPadding,
       onTap: onTap,
+      hapticRole: AppHapticRole.selection,
       trailing: AppSettingsValueTrailing(
         key: ValueKey<String>('dorm-rules-trailing-$title'),
         value: value,

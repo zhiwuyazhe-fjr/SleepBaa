@@ -47,6 +47,8 @@ import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_rules_page.
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_status_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/widgets/dorm_member_avatar.dart';
+import 'package:sleep_dorm_app/features/dream/presentation/dream_content.dart';
+import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_detail_page.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_journal_page.dart';
 import 'package:sleep_dorm_app/features/feedback/presentation/pages/morning_feedback_page.dart';
 import 'package:sleep_dorm_app/features/home/presentation/pages/home_post_sleep_page.dart';
@@ -736,6 +738,9 @@ void main() {
 
     final TabBar tabBar = tester.widget<TabBar>(find.byType(TabBar));
     expect(tabBar.unselectedLabelColor, appColors.textSecondary);
+    expect(tabBar.labelColor, appColors.accentDeep);
+    final BoxDecoration indicator = tabBar.indicator! as BoxDecoration;
+    expect(indicator.color, appColors.accentSoft);
   });
 
   test('user settings persist the selected app theme mode', () {
@@ -791,6 +796,113 @@ void main() {
     expect(appColors.accent, expected.accent);
     expect(theme.textTheme.titleMedium?.color, expected.textPrimary);
     expect(theme.textTheme.bodySmall?.color, expected.textSecondary);
+  });
+
+  testWidgets('home notification bell swaps contrast by brightness', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.light,
+        selectedNightMood: NightMood.happy,
+      ),
+    );
+
+    BuildContext context = tester.element(find.byType(HomePreSleepPage));
+    AppSemanticColors appColors = context.appColors;
+    Finder surfaceFinder = find.byKey(
+      const ValueKey<String>('home-notification-bell-surface'),
+    );
+    Container bellSurface = tester.widget<Container>(surfaceFinder);
+    BoxDecoration bellDecoration = bellSurface.decoration! as BoxDecoration;
+    expect(bellDecoration.color, appColors.accentSoft);
+    expect(
+      tester
+          .widget<Icon>(
+            find.descendant(
+              of: surfaceFinder,
+              matching: find.byIcon(Icons.notifications_none_rounded),
+            ),
+          )
+          .color,
+      appColors.accentDeep,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.happy,
+      ),
+    );
+
+    context = tester.element(find.byType(HomePreSleepPage));
+    appColors = context.appColors;
+    surfaceFinder = find.byKey(
+      const ValueKey<String>('home-notification-bell-surface'),
+    );
+    bellSurface = tester.widget<Container>(surfaceFinder);
+    bellDecoration = bellSurface.decoration! as BoxDecoration;
+    expect(bellDecoration.color, appColors.accent);
+    expect(
+      tester
+          .widget<Icon>(
+            find.descendant(
+              of: surfaceFinder,
+              matching: find.byIcon(Icons.notifications_none_rounded),
+            ),
+          )
+          .color,
+      appColors.textOnAccent,
+    );
+  });
+
+  testWidgets('bottom nav selected tab uses visible semantic selected state', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      ),
+    );
+
+    final BuildContext context = tester.element(find.byType(HomePreSleepPage));
+    final AppSemanticColors appColors = context.appColors;
+    final Finder homePillFinder = find.byKey(
+      const ValueKey<String>('bottom-nav-首页-pill'),
+    );
+    final AnimatedContainer homePill = tester.widget<AnimatedContainer>(
+      homePillFinder,
+    );
+    final BoxDecoration decoration = homePill.decoration! as BoxDecoration;
+    expect(decoration.color, appColors.accentSoft);
+    expect(decoration.border, Border.all(color: appColors.accent, width: 1.2));
+    expect(
+      tester
+          .widget<Icon>(
+            find.descendant(
+              of: homePillFinder,
+              matching: find.byIcon(Icons.home_rounded),
+            ),
+          )
+          .color,
+      appColors.accentDeep,
+    );
+    final Text label = tester.widget<Text>(
+      find.descendant(of: homePillFinder, matching: find.text('首页')),
+    );
+    expect(label.style?.color, appColors.accentDeep);
+    expect(label.style?.fontWeight, FontWeight.w700);
   });
 
   test('app typography exposes approved home font roles', () {
@@ -984,6 +1096,16 @@ void main() {
       _hapticTypesFrom(platformCalls),
       contains('HapticFeedbackType.mediumImpact'),
     );
+    expect(
+      _hapticTypesFrom(platformCalls),
+      isNot(contains('HapticFeedbackType.lightImpact')),
+    );
+    expect(
+      _hapticTypesFrom(platformCalls)
+          .where((String? type) => type == 'HapticFeedbackType.mediumImpact')
+          .length,
+      1,
+    );
     expect(find.byKey(BottomNavShell.navBarKey), findsNothing);
   });
 
@@ -1022,6 +1144,38 @@ void main() {
     );
   });
 
+  testWidgets('settings sheet rows use single selection haptic', (
+    WidgetTester tester,
+  ) async {
+    final List<MethodCall> platformCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall call,
+        ) async {
+          platformCalls.add(call);
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileSettings,
+      clock: _dayClock,
+    );
+    platformCalls.clear();
+
+    await tester.ensureVisible(find.text('回复文字浮动'));
+    await tester.tap(find.text('回复文字浮动'));
+    await tester.pump(const Duration(milliseconds: 90));
+
+    final Iterable<String?> haptics = _hapticTypesFrom(platformCalls);
+    expect(haptics, contains('HapticFeedbackType.selectionClick'));
+    expect(haptics, isNot(contains('HapticFeedbackType.lightImpact')));
+  });
+
   testWidgets('manual night mood flow saves mood and returns to settings', (
     WidgetTester tester,
   ) async {
@@ -1036,6 +1190,18 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(PrimaryButton, '下一步'));
     await tester.pumpAndSettle();
+
+    final Finder firstReason = find.byKey(
+      const ValueKey<String>('night-mood-reason-睡得还不错'),
+    );
+    expect(firstReason, findsOneWidget);
+    final AnimatedContainer reasonContainer = tester.widget<AnimatedContainer>(
+      firstReason,
+    );
+    final BoxDecoration reasonDecoration =
+        reasonContainer.decoration! as BoxDecoration;
+    expect(reasonDecoration.borderRadius, AppRadius.control);
+
     await tester.tap(find.widgetWithText(PrimaryButton, '继续'));
     await tester.pumpAndSettle();
 
@@ -1053,6 +1219,75 @@ void main() {
       services.settingsRepository.currentSettings.selectedNightMood,
       NightMood.happy,
     );
+  });
+
+  testWidgets('settings manual night mood save returns to settings page', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileSettings,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(NightMood.calm),
+    );
+
+    await tester.tap(find.text('重新选择心情'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('开心'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(PrimaryButton, '下一步'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(PrimaryButton, '继续'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(PrimaryButton, '保存心情主题'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(find.byType(NightMoodWelcomeFlow), findsNothing);
+    final AppServices services = AppScope.of(
+      tester.element(find.byType(SettingsPage)),
+    );
+    expect(
+      services.settingsRepository.currentSettings.selectedNightMood,
+      NightMood.happy,
+    );
+  });
+
+  testWidgets('manual night mood save preserves profile settings back stack', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(NightMood.calm),
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey<String>('profile-settings-card')),
+    );
+    await tester.tap(find.text('设置').last);
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsPage), findsOneWidget);
+
+    await tester.tap(find.text('重新选择心情'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('开心'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(PrimaryButton, '下一步'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(PrimaryButton, '继续'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(PrimaryButton, '保存心情主题'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(find.byType(NightMoodWelcomeFlow), findsNothing);
+
+    final bool handledBack = await tester.binding.handlePopRoute();
+    expect(handledBack, isTrue);
+    await tester.pumpAndSettle();
+    expect(find.byType(ProfilePage), findsOneWidget);
   });
 
   testWidgets(
@@ -2706,9 +2941,9 @@ void main() {
     final NightMoodPalette palette = NightMoodPalette.fromMood(NightMood.calm);
     final AppSemanticColors appColors = AppSemanticColors.light(palette);
 
-    expect(gradient.colors.first, appColors.heroStart);
+    expect(gradient.colors.first, appColors.heroEnd);
     expect(gradient.colors[1], appColors.heroMid);
-    expect(gradient.colors.last, appColors.heroEnd);
+    expect(gradient.colors.last, appColors.heroStart);
 
     final Finder dormHubCard = find
         .ancestor(of: find.text('宿舍公约'), matching: find.byType(AppCard))
@@ -2814,6 +3049,39 @@ void main() {
     final BoxDecoration checkDecoration =
         checkContainer.decoration! as BoxDecoration;
     expect(checkDecoration.color, appColors.surfaceMuted);
+  });
+
+  testWidgets('dorm rules expandable groups use single selection haptic', (
+    WidgetTester tester,
+  ) async {
+    final List<MethodCall> platformCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall call,
+        ) async {
+          platformCalls.add(call);
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormRules,
+      clock: _dayClock,
+    );
+    platformCalls.clear();
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('dorm-rules-display-group-routine')),
+    );
+    await tester.pump(const Duration(milliseconds: 90));
+
+    final Iterable<String?> haptics = _hapticTypesFrom(platformCalls);
+    expect(haptics, contains('HapticFeedbackType.selectionClick'));
+    expect(haptics, isNot(contains('HapticFeedbackType.lightImpact')));
   });
 
   testWidgets(
@@ -4646,7 +4914,58 @@ void main() {
     expect(find.text('漂浮柑橘岛'), findsOneWidget);
     expect(find.text('水下图书馆'), findsOneWidget);
     expect(find.text('会说话的风'), findsOneWidget);
+
+    await tester.tap(find.text('水下图书馆'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('梦境详情'), findsOneWidget);
+    expect(find.text('水下图书馆'), findsOneWidget);
+    expect(find.text('漂浮柑橘岛'), findsNothing);
   });
+
+  testWidgets(
+    'dream detail keeps selected entry across router refresh rebuilds',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final DreamEntryData selectedEntry = DreamContent.entries[1];
+
+      await tester.pumpWidget(_dreamDetailHarness(entry: selectedEntry));
+      await tester.pumpAndSettle();
+
+      expect(find.text('水下图书馆'), findsOneWidget);
+      expect(find.text('漂浮柑橘岛'), findsNothing);
+
+      final Finder overviewCard = find.ancestor(
+        of: find.text('水下图书馆'),
+        matching: find.byType(AppCard),
+      );
+      final Finder mappingCard = find.ancestor(
+        of: find.text('梦境映射'),
+        matching: find.byType(AppCard),
+      );
+      final Finder sleepLinkCard = find.ancestor(
+        of: find.text('睡前关联'),
+        matching: find.byType(AppCard),
+      );
+      expect(tester.getSize(overviewCard).width, greaterThan(320));
+      expect(
+        tester.getSize(mappingCard).width,
+        closeTo(tester.getSize(overviewCard).width, 0.1),
+      );
+      expect(
+        tester.getSize(sleepLinkCard).width,
+        closeTo(tester.getSize(overviewCard).width, 0.1),
+      );
+
+      await tester.pumpWidget(_dreamDetailHarness());
+      await tester.pumpAndSettle();
+
+      expect(find.text('水下图书馆'), findsOneWidget);
+      expect(find.text('漂浮柑橘岛'), findsNothing);
+    },
+  );
 
   testWidgets('dream mapping tab uses compact visual hierarchy', (
     WidgetTester tester,
@@ -4673,6 +4992,7 @@ void main() {
     final AppCard mappingCard = tester.widget<AppCard>(mappingCardFinder);
     final Text mappingTitle = tester.widget<Text>(find.text('学会梦的语言，解锁梦的启示'));
 
+    expect(find.textContaining('从反复出现的场景'), findsNothing);
     expect(mappingCard.padding, const EdgeInsets.all(AppSpacing.md));
     expect(
       mappingTitle.style?.fontSize,
@@ -4690,6 +5010,19 @@ void main() {
   testWidgets(
     'dream journal top tabs suppress default rectangular press overlay',
     (WidgetTester tester) async {
+      final List<MethodCall> platformCalls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (
+            MethodCall call,
+          ) async {
+            platformCalls.add(call);
+            return null;
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, null);
+      });
+
       await _pumpApp(
         tester,
         initialLocation: AppRoutes.dreamJournal,
@@ -4703,6 +5036,14 @@ void main() {
 
       expect(pressedOverlay, Colors.transparent);
       expect(tabBar.splashFactory, NoSplash.splashFactory);
+
+      platformCalls.clear();
+      await tester.tap(find.text('映射'));
+      await tester.pumpAndSettle();
+      expect(
+        _hapticTypesFrom(platformCalls),
+        contains('HapticFeedbackType.selectionClick'),
+      );
     },
   );
 
@@ -5525,6 +5866,9 @@ void main() {
   testWidgets('interference detail page uses home typography roles', (
     WidgetTester tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await _pumpApp(
       tester,
       initialLocation: AppRoutes.analysisInterferenceFactors,
@@ -5561,6 +5905,8 @@ void main() {
     final Text noiseTitle = tester.widget<Text>(find.text('宿舍噪声'));
     expect(noiseTitle.style?.fontSize, 15);
     expect(noiseTitle.style?.fontWeight, FontWeight.w700);
+    expect(noiseTitle.maxLines, 2);
+    expect(noiseTitle.overflow, TextOverflow.visible);
 
     final Text statusChip = tester.widget<Text>(
       find.textContaining('状态').first,
@@ -5581,7 +5927,63 @@ void main() {
     );
     final AppCard noise = tester.widget<AppCard>(noiseCard);
     expect(noise.borderRadius, AppRadius.surfacePrimary);
-    expect(tester.getSize(noiseCard).height, lessThan(230));
+    expect(tester.getSize(noiseCard).width, greaterThanOrEqualTo(280));
+    expect(tester.getSize(noiseCard).height, greaterThan(250));
+
+    final Finder retestButton = find.ancestor(
+      of: find.text('再次检测').first,
+      matching: find.byType(PrimaryButton),
+    );
+    expect(
+      tester.getBottomLeft(retestButton).dy,
+      lessThanOrEqualTo(tester.getBottomLeft(noiseCard).dy),
+    );
+    expect(
+      tester.getSize(retestButton).width,
+      greaterThanOrEqualTo(
+        tester.getSize(noiseCard).width - (AppSpacing.md * 2) - 2,
+      ),
+    );
+  });
+
+  testWidgets('interference overview uses responsive equal-height cards', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(840, 1180));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.analysisInterferenceFactors,
+      clock: _dayClock,
+    );
+
+    final List<String> titles = <String>['宿舍噪声', '灯光环境', '手机使用', '情绪压力'];
+    final List<Finder> cards = titles
+        .map(
+          (String title) => find.ancestor(
+            of: find.text(title),
+            matching: find.byType(AppCard),
+          ),
+        )
+        .toList(growable: false);
+
+    for (final Finder card in cards) {
+      expect(card, findsOneWidget);
+    }
+
+    final double firstHeight = tester.getSize(cards.first).height;
+    for (final Finder card in cards.skip(1)) {
+      expect(tester.getSize(card).height, closeTo(firstHeight, 0.1));
+    }
+    expect(
+      tester.getTopLeft(cards[1]).dy,
+      closeTo(tester.getTopLeft(cards[0]).dy, 0.1),
+    );
+    expect(
+      tester.getTopLeft(cards[2]).dy,
+      greaterThan(tester.getTopLeft(cards[0]).dy),
+    );
   });
 
   testWidgets('notification center uses home typography roles', (
@@ -6163,6 +6565,19 @@ void main() {
   testWidgets('sleep risk card separates tap and long press feedback', (
     WidgetTester tester,
   ) async {
+    final List<MethodCall> platformCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall call,
+        ) async {
+          platformCalls.add(call);
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
     await _pumpApp(
       tester,
       initialLocation: AppRoutes.homePreSleep,
@@ -6192,6 +6607,10 @@ void main() {
     await quickTapGesture.up();
     await tester.pump();
     expect(riskScale().scale, 1);
+    expect(
+      _hapticTypesFrom(platformCalls),
+      contains('HapticFeedbackType.lightImpact'),
+    );
 
     await tester.pump(const Duration(milliseconds: 260));
     expect(riskScale().scale, 1);
@@ -7334,6 +7753,20 @@ Future<void> _pumpAssistantSurface(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 120));
   await tester.pump(const Duration(milliseconds: 220));
   await tester.pump(const Duration(milliseconds: 320));
+}
+
+Widget _dreamDetailHarness({DreamEntryData? entry}) {
+  final NightMoodPalette palette = NightMoodPalette.fromMood(null);
+  return MaterialApp(
+    theme: ThemeData(
+      useMaterial3: true,
+      extensions: <ThemeExtension<dynamic>>[
+        palette,
+        AppSemanticColors.light(palette),
+      ],
+    ),
+    home: DreamDetailPage(entry: entry),
+  );
 }
 
 Future<void> _pumpApp(

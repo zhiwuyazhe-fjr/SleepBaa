@@ -356,9 +356,10 @@ class _HomePreSleepPageState extends State<HomePreSleepPage> {
                             const SizedBox(height: AppSpacing.sm),
                             Text(
                               '点击卡片更新最新结果',
-                              style: AppTypography.bodyMuted(
-                                textTheme,
-                              ).copyWith(color: context.appColors.textSecondary),
+                              style: AppTypography.bodyMuted(textTheme)
+                                  .copyWith(
+                                    color: context.appColors.textSecondary,
+                                  ),
                             ),
                             const SizedBox(height: AppSpacing.xl),
                             SectionTitle(
@@ -664,14 +665,22 @@ class _NotificationBell extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color buttonBackground = isDark
+        ? appColors.accent
+        : appColors.accentSoft;
+    final Color iconColor = isDark
+        ? appColors.textOnAccent
+        : appColors.accentDeep;
     return InkWell(
       borderRadius: BorderRadius.circular(999),
       onTap: AppHaptics.navigationHandler(onTap),
       child: Container(
+        key: const ValueKey<String>('home-notification-bell-surface'),
         width: 52,
         height: 52,
         decoration: BoxDecoration(
-          color: appColors.accentDeep,
+          color: buttonBackground,
           shape: BoxShape.circle,
           boxShadow: AppColors.cardShadow,
         ),
@@ -679,7 +688,7 @@ class _NotificationBell extends StatelessWidget {
           clipBehavior: Clip.none,
           alignment: Alignment.center,
           children: <Widget>[
-            Icon(Icons.notifications_none_rounded, color: AppColors.onDark),
+            Icon(Icons.notifications_none_rounded, color: iconColor),
             if (unread > 0)
               Positioned(
                 top: 8,

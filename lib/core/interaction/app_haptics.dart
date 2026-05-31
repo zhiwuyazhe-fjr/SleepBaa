@@ -7,6 +7,7 @@ enum AppHapticRole {
   flowStart,
   confirm,
   selection,
+  messageSend,
   destructive,
 }
 
@@ -42,6 +43,12 @@ class AppHaptics {
         const _HapticPulse.medium(after: Duration(milliseconds: 44)),
       ]),
       AppHapticRole.selection => HapticFeedback.selectionClick(),
+      AppHapticRole.messageSend => _runPattern(<_HapticPulse>[
+        const _HapticPulse.light(),
+        const _HapticPulse.selection(after: Duration(milliseconds: 30)),
+        const _HapticPulse.medium(after: Duration(milliseconds: 42)),
+        const _HapticPulse.selection(after: Duration(milliseconds: 56)),
+      ]),
       AppHapticRole.destructive => _runPattern(<_HapticPulse>[
         const _HapticPulse.medium(),
         const _HapticPulse.heavy(after: Duration(milliseconds: 72)),
@@ -67,6 +74,8 @@ class AppHaptics {
   static Future<void> confirm() => trigger(AppHapticRole.confirm);
 
   static Future<void> selection() => trigger(AppHapticRole.selection);
+
+  static Future<void> messageSend() => trigger(AppHapticRole.messageSend);
 
   static Future<void> destructive() => trigger(AppHapticRole.destructive);
 
@@ -101,6 +110,10 @@ class AppHaptics {
 
   static VoidCallback? selectionHandler(VoidCallback? onTap) {
     return handler(onTap, role: AppHapticRole.selection);
+  }
+
+  static VoidCallback? messageSendHandler(VoidCallback? onTap) {
+    return handler(onTap, role: AppHapticRole.messageSend);
   }
 
   static VoidCallback? destructiveHandler(VoidCallback? onTap) {

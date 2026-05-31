@@ -13,14 +13,14 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     companion object {
-        private const val CHANNEL_NAME = "com.dormsleep.app/usage_stats"
+        private const val USAGE_STATS_CHANNEL_NAME = "com.dormsleep.app/usage_stats"
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            CHANNEL_NAME,
+            USAGE_STATS_CHANNEL_NAME,
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "hasPermission" -> result.success(hasUsageStatsPermission())

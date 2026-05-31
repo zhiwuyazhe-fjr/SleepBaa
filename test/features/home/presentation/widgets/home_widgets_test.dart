@@ -51,6 +51,39 @@ void main() {
     );
   });
 
+  testWidgets('sleep risk card meta pills use readable semantic contrast', (
+    WidgetTester tester,
+  ) async {
+    final NightMoodPalette palette = NightMoodPalette.fromMood(NightMood.happy);
+    final AppSemanticColors tokens = AppSemanticColors.dark(palette).copyWith(
+      accentSoft: const Color(0xFF352530),
+      accentDeep: const Color(0xFFE5B4C8),
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        const SleepRiskCard(riskLabel: '偏高', primaryValue: '62 dB'),
+        dark: true,
+        tokens: tokens,
+      ),
+    );
+
+    final Container riskPill = tester.widget<Container>(
+      find
+          .ancestor(of: find.text('偏高'), matching: find.byType(Container))
+          .first,
+    );
+    final BoxDecoration riskDecoration = riskPill.decoration! as BoxDecoration;
+    expect(riskDecoration.color, tokens.accentSoft);
+
+    final Text riskText = tester.widget<Text>(find.text('偏高'));
+    expect(riskText.style?.color, tokens.accentDeep);
+    expect(
+      riskText.style!.color!.computeLuminance(),
+      greaterThan(riskDecoration.color!.computeLuminance()),
+    );
+  });
+
   testWidgets('home quick action uses semantic accent tokens', (
     WidgetTester tester,
   ) async {

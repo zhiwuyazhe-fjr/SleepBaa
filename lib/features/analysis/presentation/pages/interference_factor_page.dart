@@ -61,9 +61,9 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl,
+                AppSpacing.md,
                 AppSpacing.lg,
-                AppSpacing.xl,
+                AppSpacing.md,
                 140,
               ),
               children: <Widget>[
@@ -102,7 +102,7 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
                   titleStyle: AppTypography.sectionTitle(textTheme),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                _FactorOverviewGrid(
+                _FactorOverviewScroller(
                   factors: state.factors,
                   onRetest: (InterferenceFactorSnapshot factor) =>
                       factor.type == InterferenceFactorType.emotion
@@ -147,8 +147,11 @@ class _InterferenceFactorPageState extends State<InterferenceFactorPage> {
   }
 }
 
-class _FactorOverviewGrid extends StatelessWidget {
-  const _FactorOverviewGrid({required this.factors, required this.onRetest});
+class _FactorOverviewScroller extends StatelessWidget {
+  const _FactorOverviewScroller({
+    required this.factors,
+    required this.onRetest,
+  });
 
   final List<InterferenceFactorSnapshot> factors;
   final VoidCallback? Function(InterferenceFactorSnapshot factor) onRetest;
@@ -157,35 +160,49 @@ class _FactorOverviewGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final double spacing = constraints.maxWidth < 360
-            ? AppSpacing.xs
-            : AppSpacing.sm;
-        final double childAspectRatio = constraints.maxWidth >= 560
-            ? 1.22
-            : 0.82;
-        return Align(
-          alignment: Alignment.center,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: GridView.builder(
-              shrinkWrap: true,
-              primary: false,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: factors.length,
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: spacing,
-                mainAxisSpacing: spacing,
-                childAspectRatio: childAspectRatio,
-              ),
-              itemBuilder: (BuildContext context, int index) {
-                final InterferenceFactorSnapshot factor = factors[index];
-                return _FactorDetailCard(
+        if (constraints.maxWidth >= 720) {
+          return GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: factors.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: AppSpacing.md,
+              mainAxisSpacing: AppSpacing.md,
+              mainAxisExtent: 308,
+            ),
+            itemBuilder: (BuildContext context, int index) {
+              final InterferenceFactorSnapshot factor = factors[index];
+              return _FactorDetailCard(
+                factor: factor,
+                onRetest: onRetest(factor),
+              );
+            },
+          );
+        }
+
+        final double cardWidth = (constraints.maxWidth * 0.86).clamp(
+          300.0,
+          336.0,
+        );
+        return SizedBox(
+          height: 332,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            itemCount: factors.length,
+            separatorBuilder: (BuildContext context, int index) =>
+                const SizedBox(width: AppSpacing.md),
+            itemBuilder: (BuildContext context, int index) {
+              final InterferenceFactorSnapshot factor = factors[index];
+              return SizedBox(
+                width: cardWidth,
+                child: _FactorDetailCard(
                   factor: factor,
                   onRetest: onRetest(factor),
-                );
-              },
-            ),
+                ),
+              );
+            },
           ),
         );
       },
@@ -208,7 +225,7 @@ class _FactorDetailCard extends StatelessWidget {
 
     return AppCard(
       color: appColors.surface,
-      padding: const EdgeInsets.all(AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md),
       borderRadius: AppRadius.surfacePrimary,
       border: Border.all(color: visual.borderColor),
       child: Column(
@@ -222,7 +239,7 @@ class _FactorDetailCard extends StatelessWidget {
                 backgroundColor: visual.badgeBackground,
                 iconColor: visual.badgeForeground,
                 borderRadius: BorderRadius.circular(AppRadius.xl),
-                size: 36,
+                size: 40,
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -231,14 +248,14 @@ class _FactorDetailCard extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       factor.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      maxLines: 2,
+                      overflow: TextOverflow.visible,
                       style: AppTypography.cardTitle(textTheme),
                     ),
                     const SizedBox(height: AppSpacing.xxs),
                     Text(
                       _headlineFor(factor),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.bodyMuted(
                         textTheme,
@@ -277,7 +294,8 @@ class _FactorDetailCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Expanded(
+          Flexible(
+            fit: FlexFit.loose,
             child: Text(
               factor.detail,
               maxLines: 3,
@@ -287,22 +305,19 @@ class _FactorDetailCard extends StatelessWidget {
               ).copyWith(color: appColors.textPrimary, height: 1.42),
             ),
           ),
+          if (onRetest != null) const Spacer(),
           if (isWorking) ...<Widget>[
             const SizedBox(height: AppSpacing.xs),
             const LinearProgressIndicator(minHeight: 6),
           ],
           if (onRetest != null) ...<Widget>[
             const SizedBox(height: AppSpacing.xs),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: PrimaryButton(
-                label: isWorking ? '检测中' : '再次检测',
-                icon: Icons.refresh_rounded,
-                variant: PrimaryButtonVariant.soft,
-                size: PrimaryButtonSize.compact,
-                expand: false,
-                onPressed: isWorking ? null : onRetest,
-              ),
+            PrimaryButton(
+              label: isWorking ? '检测中' : '再次检测',
+              icon: Icons.refresh_rounded,
+              variant: PrimaryButtonVariant.soft,
+              size: PrimaryButtonSize.compact,
+              onPressed: isWorking ? null : onRetest,
             ),
           ],
         ],

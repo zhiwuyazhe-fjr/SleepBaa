@@ -347,12 +347,12 @@ void main() {
 
     await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
 
-    expect(find.text('AI陪伴'), findsOneWidget);
+    expect(find.text('小眠Agent'), findsOneWidget);
     await tester.ensureVisible(find.text('睡眠偏好'));
     expect(find.text('睡眠偏好'), findsOneWidget);
     expect(find.text('回复文字浮动'), findsOneWidget);
     expect(
-      tester.getTopLeft(find.text('AI陪伴')).dy,
+      tester.getTopLeft(find.text('小眠Agent')).dy,
       lessThan(tester.getTopLeft(find.text('睡眠偏好')).dy),
     );
   });
@@ -1137,28 +1137,79 @@ void main() {
     expect(hapticCalls, isNotEmpty);
   });
 
+  testWidgets('assistant successful send emits a multi-step haptic pattern', (
+    WidgetTester tester,
+  ) async {
+    await _pumpGlacierApp(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('assistant-composer-field')),
+      '我有点累，但脑子还是停不下来。',
+    );
+    await tester.pump();
+    _platformMethodCalls.clear();
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('assistant-composer-submit')),
+    );
+    await tester.pump(const Duration(milliseconds: 180));
+
+    expect(_platformHapticTypes.take(4).toList(), <String>[
+      'HapticFeedbackType.lightImpact',
+      'HapticFeedbackType.selectionClick',
+      'HapticFeedbackType.mediumImpact',
+      'HapticFeedbackType.selectionClick',
+    ]);
+    await tester.pump(const Duration(milliseconds: 260));
+  });
+
   testWidgets('assistant reply motion level changes floating amplitude', (
     WidgetTester tester,
   ) async {
     final UserSettings baseSettings = buildDefaultUserSettings();
-    final double lowDy = await _replyFloatingDistanceForLevel(
-      tester,
-      baseSettings.copyWith(
-        assistantReplyMotionLevel: AssistantReplyMotionLevel.low,
-      ),
-    );
+    final AssistantFloatingMotion lowMotion =
+        await _replyFloatingMotionForLevel(
+          tester,
+          baseSettings.copyWith(
+            assistantReplyMotionLevel: AssistantReplyMotionLevel.low,
+          ),
+        );
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
 
-    final double highDy = await _replyFloatingDistanceForLevel(
-      tester,
-      baseSettings.copyWith(
-        assistantReplyMotionLevel: AssistantReplyMotionLevel.high,
-      ),
-    );
+    final AssistantFloatingMotion mediumMotion =
+        await _replyFloatingMotionForLevel(
+          tester,
+          baseSettings.copyWith(
+            assistantReplyMotionLevel: AssistantReplyMotionLevel.medium,
+          ),
+        );
 
-    expect(highDy.abs(), greaterThan(lowDy.abs()));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    final AssistantFloatingMotion highMotion =
+        await _replyFloatingMotionForLevel(
+          tester,
+          baseSettings.copyWith(
+            assistantReplyMotionLevel: AssistantReplyMotionLevel.high,
+          ),
+        );
+
+    expect(
+      mediumMotion.travelDistance,
+      greaterThan(lowMotion.travelDistance * 2),
+    );
+    expect(mediumMotion.travelDistance, greaterThanOrEqualTo(14));
+    expect(highMotion.travelDistance, greaterThanOrEqualTo(24));
+    expect(
+      highMotion.travelDistance,
+      greaterThan(mediumMotion.travelDistance * 1.6),
+    );
+    expect(
+      highMotion.duration.inMilliseconds,
+      lessThan(mediumMotion.duration.inMilliseconds),
+    );
   });
 
   testWidgets(
@@ -1173,7 +1224,7 @@ void main() {
       );
 
       expect(find.byType(SettingsPage), findsOneWidget);
-      expect(find.text('AI陪伴'), findsOneWidget);
+      expect(find.text('小眠Agent'), findsOneWidget);
       expect(find.text('回复文字浮动'), findsOneWidget);
       expect(find.text('低'), findsOneWidget);
 
@@ -1364,7 +1415,7 @@ Future<void> _pumpAssistantFrames(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 1000));
 }
 
-Future<double> _replyFloatingDistanceForLevel(
+Future<AssistantFloatingMotion> _replyFloatingMotionForLevel(
   WidgetTester tester,
   UserSettings settings,
 ) async {
@@ -1374,10 +1425,12 @@ Future<double> _replyFloatingDistanceForLevel(
   final Finder floatingFinder = find.byKey(
     const ValueKey<String>('assistant-current-floating-motion'),
   );
-  await tester.pump(const Duration(milliseconds: 900));
-
-  final Transform movedTransform = tester.widget<Transform>(floatingFinder);
-  return movedTransform.transform.getTranslation().y;
+  return tester.widget<AssistantFloatingMotion>(
+    find.ancestor(
+      of: floatingFinder,
+      matching: find.byType(AssistantFloatingMotion),
+    ),
+  );
 }
 
 double _effectiveAncestorOpacity(WidgetTester tester, Finder finder) {

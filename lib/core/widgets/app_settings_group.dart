@@ -95,7 +95,7 @@ class AppSettingsItem extends StatelessWidget {
   final double leadingWidth;
   final double? minHeight;
   final BorderRadius? borderRadius;
-  final AppHapticRole hapticRole;
+  final AppHapticRole? hapticRole;
 
   @override
   Widget build(BuildContext context) {
@@ -154,7 +154,9 @@ class AppSettingsItem extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: borderRadius ?? AppRadius.control,
-        onTap: AppHaptics.handler(onTap, role: hapticRole),
+        onTap: hapticRole == null
+            ? onTap
+            : AppHaptics.handler(onTap, role: hapticRole!),
         child: row,
       ),
     );

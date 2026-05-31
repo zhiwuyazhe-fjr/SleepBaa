@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -24,6 +26,7 @@ class DreamJournalPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppSemanticColors appColors = context.appColors;
+    final bool dark = Theme.of(context).brightness == Brightness.dark;
     return DefaultTabController(
       length: 3,
       child: Scaffold(
@@ -91,12 +94,17 @@ class DreamJournalPage extends StatelessWidget {
                                     ),
                                 splashFactory: NoSplash.splashFactory,
                                 indicator: BoxDecoration(
-                                  color: appColors.accent,
+                                  color: dark
+                                      ? appColors.accentSoft
+                                      : appColors.accent,
                                   borderRadius: AppRadius.pill,
                                 ),
-                                labelColor: appColors.textOnAccent,
+                                labelColor: dark
+                                    ? appColors.accentDeep
+                                    : appColors.textOnAccent,
                                 unselectedLabelColor: appColors.textSecondary,
                                 indicatorSize: TabBarIndicatorSize.tab,
+                                onTap: (_) => unawaited(AppHaptics.selection()),
                                 tabs: const <Widget>[
                                   Tab(text: '梦境'),
                                   Tab(text: '映射'),
@@ -617,14 +625,6 @@ class _DreamMappingTab extends StatelessWidget {
                       textTheme,
                     ).copyWith(color: appColors.textPrimary),
                     textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    analysis.mappingDescription,
-                    textAlign: TextAlign.center,
-                    style: AppTypography.bodyMuted(
-                      textTheme,
-                    ).copyWith(color: appColors.textSecondary),
                   ),
                 ],
               ),

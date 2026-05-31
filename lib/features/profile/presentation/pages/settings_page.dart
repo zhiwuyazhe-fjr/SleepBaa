@@ -383,7 +383,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 AppSettingsGroup(
-                  title: 'AI陪伴',
+                  title: '小眠Agent',
                   children: <Widget>[
                     AppSettingsItem(
                       icon: Icons.auto_awesome_rounded,
@@ -395,6 +395,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           _assistantReplyMotionLevel,
                         ),
                       ),
+                      hapticRole: AppHapticRole.selection,
                       onTap: () => _showAssistantMotionSheet(services),
                     ),
                   ],
@@ -411,7 +412,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       titleStyle: textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
-                      hapticRole: AppHapticRole.flowStart,
+                      hapticRole: null,
                       onTap: () => context.push(AppRoutes.manualNightMood),
                     ),
                     AppSettingsItem(
@@ -422,6 +423,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       trailing: AppSettingsValueTrailing(
                         value: _themeModeTitle(_themeMode),
                       ),
+                      hapticRole: AppHapticRole.selection,
                       onTap: () => _showThemeModeSheet(services),
                     ),
                     _SettingsSwitchRow(
@@ -463,6 +465,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           trailing: _SettingsValueTrailing(
                             value: Formatters.formatClock(_bedtimeReminder),
                           ),
+                          hapticRole: AppHapticRole.selection,
                           onTap: _pickReminderTime,
                         ),
                         _SettingsSwitchRow(
@@ -666,7 +669,7 @@ class _SettingsSwitchRow extends StatelessWidget {
       onTap: () => onChanged(!value),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
-        vertical: 11,
+        vertical: AppSpacing.sm,
       ),
     );
   }

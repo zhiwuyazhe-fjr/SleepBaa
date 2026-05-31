@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
@@ -22,12 +24,16 @@ class ManualNightMoodPage extends StatelessWidget {
             .copyWith(selectedNightMood: mood);
         services.settingsRepository.replaceLocalSettings(nextSettings);
         services.nightWelcomeController.releaseNightMoodThemeOverride();
-        await services.profileFacade.saveNightMood(mood);
-        if (context.mounted) {
-          _leaveFlow(context);
-        }
+        unawaited(_persistNightMood(services, mood));
+        _leaveFlow(context);
       },
     );
+  }
+
+  Future<void> _persistNightMood(AppServices services, NightMood mood) async {
+    try {
+      await services.profileFacade.saveNightMood(mood);
+    } catch (_) {}
   }
 
   void _leaveFlow(BuildContext context) {

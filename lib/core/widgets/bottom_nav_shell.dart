@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -196,12 +195,18 @@ class _NavPillButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
     final AppSemanticColors appColors = context.appColors;
+    final Color selectedColor = appColors.accentSoft;
+    final Color selectedForeground = appColors.accentDeep;
     return AnimatedContainer(
+      key: ValueKey<String>('bottom-nav-${item.label}-pill'),
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
-        color: selected ? AppColors.darkPill : Colors.transparent,
+        color: selected ? selectedColor : Colors.transparent,
         borderRadius: BorderRadius.circular(20),
+        border: selected
+            ? Border.all(color: appColors.accent, width: 1.2)
+            : null,
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
@@ -216,15 +221,17 @@ class _NavPillButton extends StatelessWidget {
             children: <Widget>[
               Icon(
                 item.icon,
-                color: selected ? AppColors.onDark : appColors.textSecondary,
+                color: selected ? selectedForeground : appColors.textSecondary,
                 size: 20,
               ),
               const SizedBox(height: 2),
               Text(
                 item.label,
                 style: textTheme.labelSmall?.copyWith(
-                  color: selected ? AppColors.onDark : appColors.textSecondary,
-                  fontWeight: FontWeight.w400,
+                  color: selected
+                      ? selectedForeground
+                      : appColors.textSecondary,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
                 ),
               ),
             ],

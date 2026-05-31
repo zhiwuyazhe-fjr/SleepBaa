@@ -80,6 +80,11 @@ class _SleepRiskCardState extends State<SleepRiskCard> {
     _setPressed(false);
   }
 
+  void _handleTap() {
+    unawaited(AppHaptics.tap());
+    widget.onTap?.call();
+  }
+
   @override
   void dispose() {
     _longPressTimer?.cancel();
@@ -99,7 +104,7 @@ class _SleepRiskCardState extends State<SleepRiskCard> {
     return Semantics(
       button: true,
       label: '睡眠风险',
-      onTap: widget.onTap,
+      onTap: _handleTap,
       child: Listener(
         key: const ValueKey<String>('home-sleep-risk-feedback-surface'),
         behavior: HitTestBehavior.opaque,
@@ -108,7 +113,7 @@ class _SleepRiskCardState extends State<SleepRiskCard> {
         onPointerCancel: _handlePointerCancel,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: AppHaptics.tapHandler(widget.onTap),
+          onTap: _handleTap,
           child: AnimatedScale(
             scale: scale,
             duration: Duration(
@@ -165,16 +170,16 @@ class _SleepRiskCardState extends State<SleepRiskCard> {
                           Flexible(
                             child: _CardMetaPill(
                               label: widget.riskLabel,
-                              backgroundColor: appColors.accentDeep,
-                              foregroundColor: AppColors.onDark,
+                              backgroundColor: appColors.accentSoft,
+                              foregroundColor: appColors.accentDeep,
                             ),
                           ),
                           const SizedBox(width: AppSpacing.xs),
                           Flexible(
                             child: _CardMetaPill(
                               label: widget.primaryValue,
-                              backgroundColor: appColors.accentDeep,
-                              foregroundColor: AppColors.onDark,
+                              backgroundColor: appColors.accentSoft,
+                              foregroundColor: appColors.accentDeep,
                             ),
                           ),
                         ],

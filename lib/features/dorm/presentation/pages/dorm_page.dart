@@ -568,9 +568,9 @@ class _DormHeroCard extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: <Color>[
-              appColors.heroStart,
-              appColors.heroMid,
               appColors.heroEnd,
+              appColors.heroMid,
+              appColors.heroStart,
             ],
           ),
         ),

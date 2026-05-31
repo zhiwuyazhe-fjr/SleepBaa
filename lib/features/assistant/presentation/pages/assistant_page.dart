@@ -160,6 +160,7 @@ class _AssistantPageState extends State<AssistantPage>
 
     switch (result) {
       case AssistantConversationSubmitResult.sent:
+        unawaited(AppHaptics.messageSend());
         if (mounted) {
           setState(() {
             _inputController.clear();
@@ -1649,7 +1650,7 @@ class _AssistantReplyStage extends StatelessWidget {
                   transformKey: const ValueKey<String>(
                     'assistant-current-floating-motion',
                   ),
-                  duration: const Duration(milliseconds: 3600),
+                  duration: _replyFloatingDuration(motionLevel),
                   travelDistance: _replyFloatingDistance(metrics, motionLevel),
                   child: Text(
                     replyText,
@@ -1686,9 +1687,17 @@ double _replyFloatingDistance(
   AssistantReplyMotionLevel level,
 ) {
   return switch (level) {
-    AssistantReplyMotionLevel.low => metrics.unit(4),
-    AssistantReplyMotionLevel.medium => metrics.unit(6),
-    AssistantReplyMotionLevel.high => metrics.unit(8),
+    AssistantReplyMotionLevel.low => metrics.unit(5),
+    AssistantReplyMotionLevel.medium => metrics.unit(14),
+    AssistantReplyMotionLevel.high => metrics.unit(26),
+  };
+}
+
+Duration _replyFloatingDuration(AssistantReplyMotionLevel level) {
+  return switch (level) {
+    AssistantReplyMotionLevel.low => const Duration(milliseconds: 5200),
+    AssistantReplyMotionLevel.medium => const Duration(milliseconds: 3000),
+    AssistantReplyMotionLevel.high => const Duration(milliseconds: 1800),
   };
 }
 
