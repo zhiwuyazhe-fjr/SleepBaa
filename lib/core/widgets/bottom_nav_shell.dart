@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
@@ -63,12 +64,15 @@ class _BottomNavShellState extends State<BottomNavShell> {
         services.settingsRepository,
       ]),
       builder: (BuildContext context, Widget? child) {
+        final AppSemanticColors appColors = context.appColors;
         final bool hideShellChrome =
             widget.navigationShell.currentIndex == 0 &&
             services.nightWelcomeController.shouldShowWelcome(
               homeMode: HomeMode.preSleep,
               persistedEveningWelcomePeriodKey: services
-                  .settingsRepository.currentSettings.eveningEncouragementPeriodKey,
+                  .settingsRepository
+                  .currentSettings
+                  .eveningEncouragementPeriodKey,
             );
 
         return Scaffold(
@@ -101,9 +105,12 @@ class _BottomNavShellState extends State<BottomNavShell> {
                         22,
                       ),
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
+                        color: appColors.surface,
                         border: Border(
-                          top: BorderSide(color: AppColors.divider, width: 1),
+                          top: BorderSide(
+                            color: appColors.borderSubtle,
+                            width: 1,
+                          ),
                         ),
                       ),
                       child: Row(
@@ -187,16 +194,23 @@ class _NavPillButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
+    final Color selectedColor = appColors.accentSoft;
+    final Color selectedForeground = appColors.accentDeep;
     return AnimatedContainer(
+      key: ValueKey<String>('bottom-nav-${item.label}-pill'),
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
-        color: selected ? AppColors.darkPill : Colors.transparent,
+        color: selected ? selectedColor : Colors.transparent,
         borderRadius: BorderRadius.circular(20),
+        border: selected
+            ? Border.all(color: appColors.accent, width: 1.2)
+            : null,
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
+        onTap: AppHaptics.selectionHandler(onTap),
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: selected ? 22 : 16,
@@ -207,15 +221,17 @@ class _NavPillButton extends StatelessWidget {
             children: <Widget>[
               Icon(
                 item.icon,
-                color: selected ? AppColors.onDark : AppColors.textHint,
+                color: selected ? selectedForeground : appColors.textSecondary,
                 size: 20,
               ),
               const SizedBox(height: 2),
               Text(
                 item.label,
                 style: textTheme.labelSmall?.copyWith(
-                  color: selected ? AppColors.onDark : AppColors.textHint,
-                  fontWeight: FontWeight.w400,
+                  color: selected
+                      ? selectedForeground
+                      : appColors.textSecondary,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
                 ),
               ),
             ],

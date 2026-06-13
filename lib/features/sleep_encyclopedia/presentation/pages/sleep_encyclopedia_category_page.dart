@@ -5,6 +5,7 @@ import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/features/sleep_encyclopedia/data/sleep_encyclopedia_content.dart';
 import 'package:sleep_dorm_app/features/sleep_encyclopedia/presentation/sleep_encyclopedia_text.dart';
 
@@ -26,7 +27,10 @@ class SleepEncyclopediaCategoryPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: Text(category.title)),
+      appBar: AppDetailPageAppBar(
+        title: category.title,
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.md,
@@ -187,7 +191,10 @@ class _SleepEncyclopediaNotFoundPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppDetailPageAppBar(
+        title: title,
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),

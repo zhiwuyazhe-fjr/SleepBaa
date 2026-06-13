@@ -9,6 +9,7 @@ import 'package:sleep_dorm_app/core/backend/cloudbase_auth_profile_cache_store.d
 import 'package:sleep_dorm_app/core/backend/cloudbase_auth_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_session_store.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_snapshot_store.dart';
+import 'package:sleep_dorm_app/core/backend/user_settings_cache_store.dart';
 import 'package:sleep_dorm_app/core/backend/verified_phone_identity_store.dart';
 import 'package:sleep_dorm_app/core/data/backend_contract.dart';
 import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
@@ -350,6 +351,47 @@ class _PendingDormMemberStatusOverride {
       presenceStatus: presenceStatus,
       sleepModeActive: sleepModeActive,
       note: note,
+    );
+  }
+}
+
+class _PendingDormEnvironmentOverride {
+  const _PendingDormEnvironmentOverride({
+    this.noiseDb,
+    this.lightLabel,
+    this.quietLabel,
+  });
+
+  final int? noiseDb;
+  final String? lightLabel;
+  final String? quietLabel;
+
+  _PendingDormEnvironmentOverride merge(_PendingDormEnvironmentOverride next) {
+    return _PendingDormEnvironmentOverride(
+      noiseDb: next.noiseDb ?? noiseDb,
+      lightLabel: next.lightLabel ?? lightLabel,
+      quietLabel: next.quietLabel ?? quietLabel,
+    );
+  }
+
+  bool matches(Dorm dorm) {
+    if (noiseDb != null && dorm.noiseDb != noiseDb) {
+      return false;
+    }
+    if (lightLabel != null && dorm.lightLabel != lightLabel) {
+      return false;
+    }
+    if (quietLabel != null && dorm.quietLabel != quietLabel) {
+      return false;
+    }
+    return true;
+  }
+
+  Dorm apply(Dorm dorm) {
+    return dorm.copyWith(
+      noiseDb: noiseDb,
+      lightLabel: lightLabel,
+      quietLabel: quietLabel,
     );
   }
 }
@@ -921,6 +963,10 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   VerifiedPhoneIdentity? _cachedVerifiedIdentity;
   UserProfile? _cachedAuthProfile;
   bool _currentUserRestoredFromAuthProfileCache = false;
+  bool _hasPendingEquippedBadgeId = false;
+  String? _pendingEquippedBadgeId;
+  bool _hasPendingSelectedDormBadgeId = false;
+  String? _pendingSelectedDormBadgeId;
   static const Duration _authRevalidationInterval = Duration(minutes: 5);
 
   @override
@@ -1435,6 +1481,10 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
               equippedBadgeId: equippedBadgeId,
               clearEquippedBadge: clearEquippedBadge,
             );
+    if (_appApiClient.isConfigured) {
+      _hasPendingEquippedBadgeId = true;
+      _pendingEquippedBadgeId = next.equippedBadgeId;
+    }
     _currentUser = next;
     notifyListeners();
     if (_appApiClient.isConfigured) {
@@ -1510,6 +1560,10 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
               selectedDormBadgeId: selectedDormBadgeId,
               clearSelectedDormBadgeId: clearSelectedDormBadgeId,
             );
+    if (_appApiClient.isConfigured) {
+      _hasPendingSelectedDormBadgeId = true;
+      _pendingSelectedDormBadgeId = next.selectedDormBadgeId;
+    }
     _currentUser = next;
     notifyListeners();
     if (_appApiClient.isConfigured) {
@@ -2263,6 +2317,43 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       preferFreshSnapshotForCachedProfile:
           _currentUserRestoredFromAuthProfileCache,
     );
+    final bool hasEquippedBadgeSnapshot = rawUser.containsKey(
+      'equippedBadgeId',
+    );
+    String? nextEquippedBadgeId = hasEquippedBadgeSnapshot
+        ? snapshot.user.equippedBadgeId
+        : _currentUser.equippedBadgeId;
+    bool clearEquippedBadge =
+        hasEquippedBadgeSnapshot && snapshot.user.equippedBadgeId == null;
+    if (_hasPendingEquippedBadgeId) {
+      if (hasEquippedBadgeSnapshot &&
+          snapshot.user.equippedBadgeId == _pendingEquippedBadgeId) {
+        _hasPendingEquippedBadgeId = false;
+        _pendingEquippedBadgeId = null;
+      } else {
+        nextEquippedBadgeId = _pendingEquippedBadgeId;
+        clearEquippedBadge = _pendingEquippedBadgeId == null;
+      }
+    }
+    final bool hasSelectedDormBadgeSnapshot = rawUser.containsKey(
+      'selectedDormBadgeId',
+    );
+    String? nextSelectedDormBadgeId = hasSelectedDormBadgeSnapshot
+        ? snapshot.user.selectedDormBadgeId
+        : _currentUser.selectedDormBadgeId;
+    bool clearSelectedDormBadgeId =
+        hasSelectedDormBadgeSnapshot &&
+        snapshot.user.selectedDormBadgeId == null;
+    if (_hasPendingSelectedDormBadgeId) {
+      if (hasSelectedDormBadgeSnapshot &&
+          snapshot.user.selectedDormBadgeId == _pendingSelectedDormBadgeId) {
+        _hasPendingSelectedDormBadgeId = false;
+        _pendingSelectedDormBadgeId = null;
+      } else {
+        nextSelectedDormBadgeId = _pendingSelectedDormBadgeId;
+        clearSelectedDormBadgeId = _pendingSelectedDormBadgeId == null;
+      }
+    }
     _currentUser = _currentUser.copyWith(
       uid: snapshot.user.uid,
       displayName: snapshot.user.displayName,
@@ -2271,21 +2362,13 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       earnedBadgeIds: rawUser.containsKey('earnedBadgeIds')
           ? snapshot.user.earnedBadgeIds
           : _currentUser.earnedBadgeIds,
-      equippedBadgeId: rawUser.containsKey('equippedBadgeId')
-          ? snapshot.user.equippedBadgeId
-          : _currentUser.equippedBadgeId,
-      clearEquippedBadge:
-          rawUser.containsKey('equippedBadgeId') &&
-          snapshot.user.equippedBadgeId == null,
+      equippedBadgeId: nextEquippedBadgeId,
+      clearEquippedBadge: clearEquippedBadge,
       showDormPulseBadge: rawUser.containsKey('showDormPulseBadge')
           ? snapshot.user.showDormPulseBadge
           : _currentUser.showDormPulseBadge,
-      selectedDormBadgeId: rawUser.containsKey('selectedDormBadgeId')
-          ? snapshot.user.selectedDormBadgeId
-          : _currentUser.selectedDormBadgeId,
-      clearSelectedDormBadgeId:
-          rawUser.containsKey('selectedDormBadgeId') &&
-          snapshot.user.selectedDormBadgeId == null,
+      selectedDormBadgeId: nextSelectedDormBadgeId,
+      clearSelectedDormBadgeId: clearSelectedDormBadgeId,
       dormId: snapshot.user.dormId,
       phoneNumber: snapshotPhone?.trim().isNotEmpty == true
           ? snapshotPhone
@@ -2315,20 +2398,28 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
     required AuthRepository authRepository,
     required CloudBaseSnapshotStore snapshotStore,
     required CloudBaseAppApiClient appApiClient,
+    UserSettings? initialSettings,
+    UserSettingsCacheStore? cacheStore,
   }) : _authRepository = authRepository,
        _snapshotStore = snapshotStore,
-       _appApiClient = appApiClient {
+       _appApiClient = appApiClient,
+       _cacheStore = cacheStore {
     _snapshotStore.addListener(_applySnapshot);
-    _settings = buildDefaultUserSettings();
+    _settings = initialSettings ?? buildDefaultUserSettings();
+    _lastSnapshotSettings = _settings;
   }
 
   final AuthRepository _authRepository;
   final CloudBaseSnapshotStore _snapshotStore;
   final CloudBaseAppApiClient _appApiClient;
+  final UserSettingsCacheStore? _cacheStore;
 
   late UserSettings _settings;
+  UserSettings? _lastSnapshotSettings;
+  UserSettings? _pendingSettingsSave;
   NightMood? _pendingMoodOverride;
   List<String>? _pendingHomeQuickActionIds;
+  bool? _pendingShowHomeQuickActions;
 
   @override
   UserSettings get currentSettings => _settings;
@@ -2336,20 +2427,28 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
   @override
   void replaceLocalSettings(UserSettings settings) {
     _settings = settings;
+    _cacheSettings(settings);
     notifyListeners();
   }
 
   @override
   Future<void> saveSettings(UserSettings settings) async {
-    final NightMood? previousMood = _settings.selectedNightMood;
+    final UserSettings previousRemoteSettings =
+        _lastSnapshotSettings ?? _settings;
+    final NightMood? previousMood = previousRemoteSettings.selectedNightMood;
     final List<String> previousQuickActionIds = _settings.homeQuickActionIds;
+    final bool previousShowHomeQuickActions = _settings.showHomeQuickActions;
     if (previousMood != settings.selectedNightMood) {
       _pendingMoodOverride = settings.selectedNightMood;
     }
+    _pendingSettingsSave = settings;
     if (!_sameStringList(previousQuickActionIds, settings.homeQuickActionIds)) {
       _pendingHomeQuickActionIds = normalizeHomeQuickActionIds(
         settings.homeQuickActionIds,
       );
+    }
+    if (previousShowHomeQuickActions != settings.showHomeQuickActions) {
+      _pendingShowHomeQuickActions = settings.showHomeQuickActions;
     }
     replaceLocalSettings(settings);
     if (!_appApiClient.isConfigured) {
@@ -2392,7 +2491,10 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
     UserSettings incoming = _mergeEveningEncouragementIfServerOmitted(
       snapshot.settings,
     );
+    _lastSnapshotSettings = incoming;
+    incoming = _mergePendingSettingsSave(incoming);
     incoming = _mergePendingHomeQuickActionsIfServerOmitted(incoming);
+    incoming = _mergePendingHomeQuickActionsVisibilityIfServerOmitted(incoming);
     if (_pendingMoodOverride != null &&
         incoming.selectedNightMood != _pendingMoodOverride &&
         _settings.selectedNightMood == _pendingMoodOverride) {
@@ -2403,7 +2505,32 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
         _pendingMoodOverride = null;
       }
     }
+    _cacheSettings(_settings);
     notifyListeners();
+  }
+
+  void _cacheSettings(UserSettings settings) {
+    final UserSettingsCacheStore? cacheStore = _cacheStore;
+    if (cacheStore == null) {
+      return;
+    }
+    unawaited(cacheStore.write(settings));
+  }
+
+  UserSettings _mergePendingSettingsSave(UserSettings incoming) {
+    final UserSettings? pending = _pendingSettingsSave;
+    if (pending == null) {
+      return incoming;
+    }
+    if (_sameUserSettings(incoming, pending)) {
+      _pendingSettingsSave = null;
+      return incoming;
+    }
+    if (_sameUserSettings(_settings, pending)) {
+      return pending;
+    }
+    _pendingSettingsSave = null;
+    return incoming;
   }
 
   /// Remote snapshot may omit `eveningEncouragement*` until the backend persists them;
@@ -2444,6 +2571,24 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
     return incoming;
   }
 
+  UserSettings _mergePendingHomeQuickActionsVisibilityIfServerOmitted(
+    UserSettings incoming,
+  ) {
+    final bool? pending = _pendingShowHomeQuickActions;
+    if (pending == null) {
+      return incoming;
+    }
+    if (incoming.showHomeQuickActions == pending) {
+      _pendingShowHomeQuickActions = null;
+      return incoming;
+    }
+    if (_settings.showHomeQuickActions == pending) {
+      return incoming.copyWith(showHomeQuickActions: pending);
+    }
+    _pendingShowHomeQuickActions = null;
+    return incoming;
+  }
+
   bool _sameStringList(List<String> first, List<String> second) {
     if (first.length != second.length) {
       return false;
@@ -2454,6 +2599,26 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
       }
     }
     return true;
+  }
+
+  bool _sameUserSettings(UserSettings first, UserSettings second) {
+    return first.sleepGoalHours == second.sleepGoalHours &&
+        first.bedtimeReminderEnabled == second.bedtimeReminderEnabled &&
+        first.morningReminderEnabled == second.morningReminderEnabled &&
+        first.dormAlertsEnabled == second.dormAlertsEnabled &&
+        first.bedtimeReminder == second.bedtimeReminder &&
+        first.preferredTrackTitle == second.preferredTrackTitle &&
+        first.smartSuggestionsEnabled == second.smartSuggestionsEnabled &&
+        _sameStringList(first.homeQuickActionIds, second.homeQuickActionIds) &&
+        first.showHomeQuickActions == second.showHomeQuickActions &&
+        first.themeMode == second.themeMode &&
+        first.assistantReplyMotionLevel == second.assistantReplyMotionLevel &&
+        first.selectedNightMood == second.selectedNightMood &&
+        first.eveningEncouragementPeriodKey ==
+            second.eveningEncouragementPeriodKey &&
+        first.eveningEncouragementLine == second.eveningEncouragementLine &&
+        first.eveningEncouragementMoodSnapshot ==
+            second.eveningEncouragementMoodSnapshot;
   }
 
   @override
@@ -3848,6 +4013,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
   int _latestStatusSyncId = 0;
   final Map<String, _PendingDormMemberStatusOverride> _pendingStatusOverrides =
       <String, _PendingDormMemberStatusOverride>{};
+  _PendingDormEnvironmentOverride? _pendingEnvironmentOverride;
 
   @override
   Dorm get currentDorm => _currentDorm;
@@ -4127,6 +4293,17 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
     if (_currentDorm.id.isEmpty) {
       return;
     }
+    final _PendingDormEnvironmentOverride nextEnvironment =
+        _PendingDormEnvironmentOverride(
+          noiseDb: noiseDb,
+          lightLabel: lightLabel,
+          quietLabel: quietLabel,
+        );
+    _pendingEnvironmentOverride =
+        _pendingEnvironmentOverride?.merge(nextEnvironment) ?? nextEnvironment;
+    _currentDorm = nextEnvironment.apply(_currentDorm);
+    _emitCurrentState();
+    notifyListeners();
     if (_appApiClient.isConfigured) {
       try {
         await _appApiClient.post(
@@ -4143,17 +4320,11 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
         );
         await _snapshotStore.refresh();
         return;
-      } catch (_) {
-        // Fall back to local state when the backend is unavailable.
+      } catch (error) {
+        debugPrint('CloudBase dorm environment sync failed: $error');
+        return;
       }
     }
-    _currentDorm = _currentDorm.copyWith(
-      noiseDb: noiseDb,
-      lightLabel: lightLabel,
-      quietLabel: quietLabel,
-    );
-    _emitCurrentState();
-    notifyListeners();
   }
 
   @override
@@ -4568,10 +4739,11 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
       _snapshotStore.payload,
       _authRepository.currentUser.uid,
     );
-    final Dorm mergedDorm = _mergeNewerDormHeartbeatFields(
+    Dorm mergedDorm = _mergeNewerDormHeartbeatFields(
       _currentDorm,
       _mergeStableDormAvatarUrls(_currentDorm, snapshot.dorm),
     );
+    mergedDorm = _mergePendingDormEnvironment(mergedDorm);
     final Map<String, _PendingDormMemberStatusOverride> remainingOverrides =
         _retainUnacknowledgedDormStatusOverrides(
           snapshot.dorm,
@@ -4586,6 +4758,23 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
     );
     _emitCurrentState();
     notifyListeners();
+  }
+
+  Dorm _mergePendingDormEnvironment(Dorm incoming) {
+    final _PendingDormEnvironmentOverride? pending =
+        _pendingEnvironmentOverride;
+    if (pending == null) {
+      return incoming;
+    }
+    if (pending.matches(incoming)) {
+      _pendingEnvironmentOverride = null;
+      return incoming;
+    }
+    if (pending.matches(_currentDorm)) {
+      return pending.apply(incoming);
+    }
+    _pendingEnvironmentOverride = null;
+    return incoming;
   }
 
   void _emitCurrentState() {

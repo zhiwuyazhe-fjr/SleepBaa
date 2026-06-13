@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/evening_period.dart';
-import 'package:sleep_dorm_app/core/utils/avatar_picker.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/widgets/profile_badge_support.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/widgets/profile_page_sections.dart';
 
@@ -24,15 +23,17 @@ class ProfilePage extends StatelessWidget {
         services.settingsRepository,
       ]),
       builder: (BuildContext context, Widget? child) {
+        final AppSemanticColors appColors = context.appColors;
         final UserProfile profile = services.authRepository.currentUser;
-        final UserSettings settings = services.settingsRepository.currentSettings;
+        final UserSettings settings =
+            services.settingsRepository.currentSettings;
         final String currentPeriodKey = eveningPeriodKey(DateTime.now());
         final String encouragementQuote =
             settings.eveningEncouragementPeriodKey == currentPeriodKey &&
-                    settings.eveningEncouragementLine != null &&
-                    settings.eveningEncouragementLine!.isNotEmpty
-                ? settings.eveningEncouragementLine!
-                : '完成今晚心情选择，解锁一句陪伴语';
+                settings.eveningEncouragementLine != null &&
+                settings.eveningEncouragementLine!.isNotEmpty
+            ? settings.eveningEncouragementLine!
+            : '完成今晚心情选择，解锁一句陪伴语';
         final DateTime now = DateTime.now();
         final DateTime currentMonth = DateTime(now.year, now.month);
         final List<SleepSession> monthSessions = services.sleepSessionRepository
@@ -46,7 +47,7 @@ class ProfilePage extends StatelessWidget {
             buildProfileBadgePreview(profile);
 
         return Scaffold(
-          backgroundColor: AppColors.background,
+          backgroundColor: appColors.pageBackground,
           body: SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(0, AppSpacing.sm, 0, 128),
@@ -59,15 +60,18 @@ class ProfilePage extends StatelessWidget {
                     ),
                     child: ProfileHeaderSection(
                       profile: profile,
-                      onAvatarTap: () => pickAndSaveAvatar(context),
+                      onProfileTap: () =>
+                          context.push(AppRoutes.profileAccountCenter),
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.xl),
+                  const SizedBox(height: AppSpacing.md),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.xl,
+                    ),
                     child: ProfileQuoteCard(quote: encouragementQuote),
                   ),
-                  const SizedBox(height: AppSpacing.xl),
+                  const SizedBox(height: AppSpacing.md),
                   ProfileDataCarousel(
                     durationTrend: durationTrend,
                     qualityTrend: qualityTrend,

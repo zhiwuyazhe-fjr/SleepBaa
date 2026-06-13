@@ -2,12 +2,12 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/backend/assistant_reply_gateway.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/passive_toast_notification.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/controllers/assistant_conversation_controller.dart';
@@ -121,8 +121,18 @@ class _AssistantPageState extends State<AssistantPage>
         return;
       }
       final AppServices services = context.appServices;
-      await services.assistantConversationController.bootstrap();
+      final AssistantConversationController controller =
+          services.assistantConversationController;
+      await controller.bootstrap();
       if (!mounted) {
+        return;
+      }
+      if (widget.captureModeEnabled) {
+        await controller.startNewConversation(
+          title: widget.initialCaptureTab == AssistantCaptureTab.dream
+              ? '梦记收纳'
+              : '事记收纳',
+        );
         return;
       }
       await _applyInitialPrompt(services);
@@ -162,6 +172,7 @@ class _AssistantPageState extends State<AssistantPage>
 
     switch (result) {
       case AssistantConversationSubmitResult.sent:
+        unawaited(AppHaptics.messageSend());
         if (mounted) {
           setState(() {
             _inputController.clear();
@@ -313,7 +324,7 @@ class _AssistantPageState extends State<AssistantPage>
   }
 
   Future<void> _emitReplyHaptics({required bool hasStatuses}) async {
-    await HapticFeedback.lightImpact();
+    await AppHaptics.tap();
     if (!hasStatuses) {
       return;
     }
@@ -321,7 +332,7 @@ class _AssistantPageState extends State<AssistantPage>
     if (!mounted) {
       return;
     }
-    await HapticFeedback.selectionClick();
+    await AppHaptics.selection();
   }
 
   void _resetArchiveState() {
@@ -1091,6 +1102,7 @@ class _AssistantPrimaryStage extends StatelessWidget {
         key: stageKey,
         metrics: metrics,
         palette: palette,
+        motionLevel: replyMotionLevel,
         captureModeEnabled: captureModeEnabled,
         selectedCaptureTab: selectedCaptureTab,
         onCaptureTabChanged: onCaptureTabChanged,
@@ -1222,6 +1234,7 @@ class _AssistantEmptyStage extends StatelessWidget {
     super.key,
     required this.metrics,
     required this.palette,
+    required this.motionLevel,
     required this.captureModeEnabled,
     required this.selectedCaptureTab,
     required this.onCaptureTabChanged,
@@ -1229,6 +1242,7 @@ class _AssistantEmptyStage extends StatelessWidget {
 
   final AssistantSurfaceMetrics metrics;
   final AssistantSurfacePalette palette;
+  final AssistantReplyMotionLevel motionLevel;
   final bool captureModeEnabled;
   final AssistantCaptureTab selectedCaptureTab;
   final ValueChanged<AssistantCaptureTab> onCaptureTabChanged;
@@ -1239,6 +1253,7 @@ class _AssistantEmptyStage extends StatelessWidget {
       return _AssistantCaptureEmptyStage(
         metrics: metrics,
         palette: palette,
+        motionLevel: motionLevel,
         selectedTab: selectedCaptureTab,
         onTabChanged: onCaptureTabChanged,
       );
@@ -1254,8 +1269,8 @@ class _AssistantEmptyStage extends StatelessWidget {
               transformKey: const ValueKey<String>(
                 'assistant-empty-floating-motion',
               ),
-              travelDistance: metrics.unit(6),
-              duration: const Duration(milliseconds: 3800),
+              travelDistance: _replyFloatingDistance(metrics, motionLevel),
+              duration: _replyFloatingDuration(motionLevel),
               child: Column(
                 key: const ValueKey<String>('assistant-empty-stage'),
                 mainAxisSize: MainAxisSize.min,
@@ -1295,12 +1310,14 @@ class _AssistantCaptureEmptyStage extends StatelessWidget {
   const _AssistantCaptureEmptyStage({
     required this.metrics,
     required this.palette,
+    required this.motionLevel,
     required this.selectedTab,
     required this.onTabChanged,
   });
 
   final AssistantSurfaceMetrics metrics;
   final AssistantSurfacePalette palette;
+  final AssistantReplyMotionLevel motionLevel;
   final AssistantCaptureTab selectedTab;
   final ValueChanged<AssistantCaptureTab> onTabChanged;
 
@@ -1319,8 +1336,8 @@ class _AssistantCaptureEmptyStage extends StatelessWidget {
               transformKey: const ValueKey<String>(
                 'assistant-capture-empty-floating-motion',
               ),
-              travelDistance: metrics.unit(5),
-              duration: const Duration(milliseconds: 3800),
+              travelDistance: _replyFloatingDistance(metrics, motionLevel),
+              duration: _replyFloatingDuration(motionLevel),
               child: Column(
                 key: const ValueKey<String>('assistant-capture-empty-stage'),
                 mainAxisSize: MainAxisSize.min,
@@ -1768,7 +1785,7 @@ class _AssistantReplyStage extends StatelessWidget {
                   transformKey: const ValueKey<String>(
                     'assistant-current-floating-motion',
                   ),
-                  duration: const Duration(milliseconds: 3600),
+                  duration: _replyFloatingDuration(motionLevel),
                   travelDistance: _replyFloatingDistance(metrics, motionLevel),
                   child: Text(
                     replyText,
@@ -1807,9 +1824,17 @@ double _replyFloatingDistance(
   AssistantReplyMotionLevel level,
 ) {
   return switch (level) {
-    AssistantReplyMotionLevel.low => metrics.unit(4),
-    AssistantReplyMotionLevel.medium => metrics.unit(6),
-    AssistantReplyMotionLevel.high => metrics.unit(8),
+    AssistantReplyMotionLevel.low => metrics.unit(5),
+    AssistantReplyMotionLevel.medium => metrics.unit(14),
+    AssistantReplyMotionLevel.high => metrics.unit(26),
+  };
+}
+
+Duration _replyFloatingDuration(AssistantReplyMotionLevel level) {
+  return switch (level) {
+    AssistantReplyMotionLevel.low => const Duration(milliseconds: 5200),
+    AssistantReplyMotionLevel.medium => const Duration(milliseconds: 3000),
+    AssistantReplyMotionLevel.high => const Duration(milliseconds: 1800),
   };
 }
 

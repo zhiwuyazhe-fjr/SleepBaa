@@ -720,6 +720,102 @@ void main() {
   );
 
   test(
+    'cloudbase auth repository keeps pending badge selections during stale snapshot refresh',
+    () async {
+      final Completer<void> staleBootstrapCompleter = Completer<void>();
+      final Completer<void> saveCompleter = Completer<void>();
+      int bootstrapCount = 0;
+      final _AuthHarness harness = _buildHarness(
+        MockClient((http.Request request) async {
+          if (request.url.path == '/auth/v1/user/me') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'sub': 'tester',
+                'name': 'Tester',
+                'phone_number': '+86 13800138000',
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/app/bootstrap') {
+            bootstrapCount += 1;
+            if (bootstrapCount == 2) {
+              await staleBootstrapCompleter.future;
+            }
+            final bool confirmed = bootstrapCount >= 3;
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'user': <String, dynamic>{
+                  'uid': 'tester',
+                  'displayName': 'Tester',
+                  'tagline': 'tagline',
+                  'role': 'role',
+                  'earnedBadgeIds': <String>['sleep-master', 'early-sleeper'],
+                  'equippedBadgeId': confirmed
+                      ? 'early-sleeper'
+                      : 'sleep-master',
+                  'earnedDormBadgeIds': <String>[
+                    'no-wake-room',
+                    'no-trouble-room',
+                  ],
+                  'selectedDormBadgeId': confirmed
+                      ? 'no-trouble-room'
+                      : 'no-wake-room',
+                },
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/profile/save') {
+            final Map<String, dynamic> body =
+                jsonDecode(request.body) as Map<String, dynamic>;
+            final Map<String, dynamic> profile =
+                body['profile'] as Map<String, dynamic>;
+            expect(
+              profile['equippedBadgeId'] ?? profile['selectedDormBadgeId'],
+              isIn(<String>['early-sleeper', 'no-trouble-room']),
+            );
+            await saveCompleter.future;
+            return http.Response(
+              jsonEncode(<String, dynamic>{'ok': true}),
+              200,
+            );
+          }
+          throw StateError('Unexpected path: ${request.url.path}');
+        }),
+      );
+      final CloudBaseAuthRepository repository = harness.repository;
+      await repository.ensureAuthenticated();
+      expect(repository.currentUser.equippedBadgeId, 'sleep-master');
+      expect(repository.currentUser.selectedDormBadgeId, 'no-wake-room');
+
+      final Future<void> backgroundRefresh = harness.snapshotStore.refresh();
+      final Future<void> badgeSave = repository.updateBadgePreferences(
+        earnedBadgeIds: const <String>['sleep-master', 'early-sleeper'],
+        equippedBadgeId: 'early-sleeper',
+      );
+      final Future<void> dormBadgeSave = repository.updateDormBadgeSelection(
+        selectedDormBadgeId: 'no-trouble-room',
+      );
+
+      expect(repository.currentUser.equippedBadgeId, 'early-sleeper');
+      expect(repository.currentUser.selectedDormBadgeId, 'no-trouble-room');
+
+      staleBootstrapCompleter.complete();
+      await backgroundRefresh;
+
+      expect(repository.currentUser.equippedBadgeId, 'early-sleeper');
+      expect(repository.currentUser.selectedDormBadgeId, 'no-trouble-room');
+
+      saveCompleter.complete();
+      await Future.wait(<Future<void>>[badgeSave, dormBadgeSave]);
+
+      expect(repository.currentUser.equippedBadgeId, 'early-sleeper');
+      expect(repository.currentUser.selectedDormBadgeId, 'no-trouble-room');
+    },
+  );
+
+  test(
     'cloudbase auth repository applies persisted avatar response after upload',
     () async {
       bool avatarSaved = false;

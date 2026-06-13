@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/widgets/assistant_surface.dart';
 
@@ -196,10 +196,7 @@ class _AssistantThreadHistoryIconButton extends StatelessWidget {
     return IconButton(
       padding: EdgeInsets.zero,
       constraints: BoxConstraints.tightFor(width: size, height: size),
-      onPressed: () {
-        HapticFeedback.selectionClick();
-        onPressed();
-      },
+      onPressed: AppHaptics.navigationHandler(onPressed),
       icon: child,
     );
   }

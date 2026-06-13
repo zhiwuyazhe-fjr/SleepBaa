@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/utils/formatters.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
 class CalendarCheckinPage extends StatefulWidget {
@@ -37,8 +40,13 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
     final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('睡眠打卡日历')),
+      appBar: AppDetailPageAppBar(
+        title: '睡眠打卡日历',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
       body: ListenableBuilder(
         listenable: Listenable.merge(<Listenable>[
           services.sleepSessionRepository,
@@ -63,9 +71,16 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
               .length;
 
           return ListView(
-            padding: const EdgeInsets.all(AppSpacing.xl),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl,
+              AppSpacing.md,
+              AppSpacing.xl,
+              120,
+            ),
             children: <Widget>[
               AppCard(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                borderRadius: AppRadius.surfacePrimary,
                 child: Column(
                   children: <Widget>[
                     Row(
@@ -85,7 +100,7 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
                           child: Text(
                             Formatters.formatMonthLabel(_visibleMonth),
                             textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.headlineSmall,
+                            style: AppTypography.panelTitle(textTheme),
                           ),
                         ),
                         IconButton(
@@ -127,18 +142,21 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
                   ],
                 ),
               ),
-              const SizedBox(height: AppSpacing.xl),
+              const SizedBox(height: AppSpacing.md),
               AppCard(
-                color: AppColors.surfaceMuted,
+                color: appColors.surfaceMuted,
+                padding: const EdgeInsets.all(AppSpacing.md),
+                borderRadius: AppRadius.surfacePrimary,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text('连续记录', style: Theme.of(context).textTheme.titleLarge),
+                    Text('连续记录', style: AppTypography.cardTitle(textTheme)),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       '${_buildStreak(services.sleepSessionRepository.sessions)} 天连续打卡',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(color: palette.primary),
+                      style: AppTypography.panelTitle(
+                        textTheme,
+                      ).copyWith(color: palette.primary),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Wrap(
@@ -152,16 +170,17 @@ class _CalendarCheckinPageState extends State<CalendarCheckinPage> {
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       '同一睡眠日多次退出或再次进入都会累计到同一天，晨间反馈完成后该日时长会锁定。',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
-                        height: 1.45,
-                      ),
+                      style: AppTypography.bodyMuted(
+                        textTheme,
+                      ).copyWith(color: appColors.textSecondary, height: 1.45),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: AppSpacing.xl),
+              const SizedBox(height: AppSpacing.md),
               AppCard(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                borderRadius: AppRadius.surfacePrimary,
                 child: _SelectedSessionDetail(
                   session: selectedSession,
                   sleepGoalHours: settings.sleepGoalHours,
@@ -213,8 +232,15 @@ class _SelectedSessionDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
     if (session == null) {
-      return const Text('这一天还没有睡眠记录。');
+      return Text(
+        '这一天还没有睡眠记录。',
+        style: AppTypography.bodyMuted(
+          textTheme,
+        ).copyWith(color: appColors.textSecondary),
+      );
     }
 
     final MorningSummary? summary = session!.summary;
@@ -225,7 +251,7 @@ class _SelectedSessionDetail extends StatelessWidget {
     final bool sleepGoalMet =
         _sleepGoalMetForSession(session!, sleepGoalHours) == true;
     final String stageLabel = _sessionStageLabel(session!);
-    final Color stageColor = _sessionStageColor(session!);
+    final Color stageColor = _sessionStageColor(session!, appColors);
     final String durationLabel =
         '${session!.displaySleepHours().toStringAsFixed(1)} h';
 
@@ -237,7 +263,7 @@ class _SelectedSessionDetail extends StatelessWidget {
             Expanded(
               child: Text(
                 Formatters.formatDateLabel(session!.sleepDayDate),
-                style: Theme.of(context).textTheme.titleLarge,
+                style: AppTypography.cardTitle(textTheme),
               ),
             ),
             _StateBadge(label: stageLabel, color: stageColor),
@@ -256,20 +282,20 @@ class _SelectedSessionDetail extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: AppSpacing.lg),
-        Text('当晚摘要', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.md),
+        Text('当晚摘要', style: AppTypography.cardTitle(textTheme)),
         const SizedBox(height: AppSpacing.sm),
         Text(
           summary?.note ?? _summaryFallback(session!),
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppColors.textSecondary,
-            height: 1.5,
-          ),
+          style: AppTypography.bodyMuted(
+            textTheme,
+          ).copyWith(color: appColors.textSecondary, height: 1.5),
         ),
         if (canSupplementFeedback) ...<Widget>[
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
           PrimaryButton(
             label: '补充晨间反馈',
+            size: PrimaryButtonSize.compact,
             onPressed: () {
               context.push(
                 AppRoutes.feedbackMorningLocation(sessionId: session!.id),
@@ -278,7 +304,7 @@ class _SelectedSessionDetail extends StatelessWidget {
           ),
         ],
         if (summary != null) ...<Widget>[
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
           Wrap(
             spacing: AppSpacing.sm,
             runSpacing: AppSpacing.sm,
@@ -317,7 +343,7 @@ class _SelectedSessionDetail extends StatelessWidget {
     };
   }
 
-  Color _sessionStageColor(SleepSession session) {
+  Color _sessionStageColor(SleepSession session, AppSemanticColors appColors) {
     if (session.summary != null ||
         session.status == SleepSessionStatus.completed) {
       return const Color(0xFF2D9272);
@@ -327,7 +353,7 @@ class _SelectedSessionDetail extends StatelessWidget {
       SleepSessionStatus.paused => const Color(0xFF8B7CF6),
       SleepSessionStatus.awaitingFeedback => const Color(0xFFF39A3C),
       SleepSessionStatus.completed => const Color(0xFF2D9272),
-      SleepSessionStatus.drafted => AppColors.textSecondary,
+      SleepSessionStatus.drafted => appColors.textSecondary,
     };
   }
 }
@@ -339,13 +365,14 @@ class _WeekdayLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Expanded(
       child: Center(
         child: Text(
           label,
-          style: Theme.of(
-            context,
-          ).textTheme.labelMedium?.copyWith(color: AppColors.textSecondary),
+          style: AppTypography.chip(
+            Theme.of(context).textTheme,
+          ).copyWith(color: appColors.textSecondary),
         ),
       ),
     );
@@ -391,8 +418,9 @@ class _CalendarGrid extends StatelessWidget {
       crossAxisCount: 7,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: AppSpacing.xs,
-      crossAxisSpacing: AppSpacing.xs,
+      mainAxisSpacing: AppSpacing.xxs,
+      crossAxisSpacing: AppSpacing.xxs,
+      childAspectRatio: 1,
       children: cells,
     );
   }
@@ -422,16 +450,25 @@ class _DayCell extends StatelessWidget {
     final bool sleepGoalMet =
         session != null &&
         _sleepGoalMetForSession(session!, sleepGoalHours) == true;
+    final AppSemanticColors appColors = context.appColors;
+    final Color selectedFill = appColors.accent;
+    final Color selectedForeground = appColors.textOnAccent;
+    final Border cellBorder = selected
+        ? Border.all(color: appColors.accentDeep, width: 2)
+        : pending
+        ? Border.all(color: appColors.accent.withAlpha(180))
+        : Border.all(color: appColors.borderSubtle.withAlpha(120));
     final Color fill = switch (quality) {
       5 => palette.primary,
       4 => palette.primarySoft,
       3 => palette.primarySoft.withAlpha(150),
       2 => palette.primarySoft.withAlpha(90),
       1 => palette.primarySoft.withAlpha(50),
-      _ => pending ? palette.primarySoft.withAlpha(72) : AppColors.surfaceSoft,
+      _ => pending ? palette.primarySoft.withAlpha(72) : appColors.surfaceMuted,
     };
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
+      key: ValueKey<String>('calendar-day-cell-${date.day}'),
+      borderRadius: AppRadius.surfaceSecondary,
       onTap: () {
         final SleepSession? currentSession = session;
         if (currentSession != null &&
@@ -447,13 +484,18 @@ class _DayCell extends StatelessWidget {
       },
       child: Ink(
         decoration: BoxDecoration(
-          color: selected ? AppColors.darkSurface : fill,
-          borderRadius: BorderRadius.circular(14),
-          border: pending
-              ? Border.all(
-                  color: palette.primary.withAlpha(selected ? 255 : 180),
-                )
-              : null,
+          color: selected ? selectedFill : fill,
+          borderRadius: AppRadius.surfaceSecondary,
+          border: cellBorder,
+          boxShadow: selected
+              ? <BoxShadow>[
+                  BoxShadow(
+                    color: appColors.accent.withAlpha(70),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : const <BoxShadow>[],
         ),
         child: Stack(
           children: <Widget>[
@@ -466,24 +508,26 @@ class _DayCell extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       '${date.day}',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: selected
-                            ? AppColors.onDark
-                            : quality > 3
-                            ? palette.primaryDeep
-                            : AppColors.textPrimary,
-                      ),
+                      style: AppTypography.meta(Theme.of(context).textTheme)
+                          .copyWith(
+                            color: selected
+                                ? selectedForeground
+                                : quality > 3
+                                ? appColors.accentDeep
+                                : appColors.textPrimary,
+                          ),
                     ),
                     if (pending) ...<Widget>[
                       const SizedBox(height: 2),
                       Text(
                         '待',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: selected
-                              ? AppColors.onDark
-                              : palette.primaryDeep,
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: AppTypography.chip(Theme.of(context).textTheme)
+                            .copyWith(
+                              color: selected
+                                  ? selectedForeground
+                                  : appColors.accentDeep,
+                              fontWeight: FontWeight.w700,
+                            ),
                       ),
                     ],
                   ],
@@ -499,7 +543,7 @@ class _DayCell extends StatelessWidget {
                   height: 7,
                   decoration: BoxDecoration(
                     color: selected
-                        ? AppColors.onDark
+                        ? selectedForeground
                         : const Color(0xFF2D9272),
                     shape: BoxShape.circle,
                   ),
@@ -523,16 +567,20 @@ class _DetailChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
+        color: appColors.surfaceMuted,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(label, style: Theme.of(context).textTheme.labelMedium),
+      child: Text(
+        label,
+        style: AppTypography.chip(Theme.of(context).textTheme),
+      ),
     );
   }
 }
@@ -547,8 +595,8 @@ class _StateBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
         color: color.withAlpha(18),
@@ -556,10 +604,9 @@ class _StateBadge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w700,
-        ),
+        style: AppTypography.meta(
+          Theme.of(context).textTheme,
+        ).copyWith(color: color, fontWeight: FontWeight.w700),
       ),
     );
   }

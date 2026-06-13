@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -7,13 +8,18 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:sleep_dorm_app/app/app.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
+import 'package:sleep_dorm_app/core/widgets/app_text_action.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
+import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/widgets/assistant_surface.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/settings_page.dart';
 
@@ -161,21 +167,24 @@ void main() {
   testWidgets(
     'sleep preference action rows keep shared settings item baseline',
     (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
+      await _scrollToSleepPreferences(tester);
 
-      final Iterable<AppSettingsItem> settingsItems = tester.widgetList(
-        find.byType(AppSettingsItem),
-      );
       final List<String> sleepItemTitles = <String>[
         '睡前提醒时间',
         '睡前提醒',
         '晨间反馈提醒',
-        '宿舍动态提醒',
+        '寝室动态提醒',
         '智能建议',
       ];
+      final List<AppSettingsItem> settingsItems = tester
+          .widgetList<AppSettingsItem>(find.byType(AppSettingsItem))
+          .toList(growable: false);
 
       for (final String title in sleepItemTitles) {
-        final AppSettingsItem item = settingsItems.singleWhere(
+        final AppSettingsItem item = settingsItems.firstWhere(
           (AppSettingsItem candidate) => candidate.title == title,
         );
         expect(item.leadingWidth, 28, reason: title);
@@ -189,6 +198,9 @@ void main() {
   testWidgets('sleep preference rows match account and dorm entry heights', (
     WidgetTester tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await _pumpApp(tester, initialLocation: AppRoutes.profileAccountCenter);
     final double accountEntryHeight = tester
         .getSize(
@@ -204,11 +216,12 @@ void main() {
         .height;
 
     await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
+    await _scrollToSleepPreferences(tester);
     final List<String> sleepItemTitles = <String>[
       '睡前提醒时间',
       '睡前提醒',
       '晨间反馈提醒',
-      '宿舍动态提醒',
+      '寝室动态提醒',
       '智能建议',
     ];
 
@@ -226,12 +239,16 @@ void main() {
   testWidgets('sleep preference toggles are wider without stretching rows', (
     WidgetTester tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
+    await _scrollToSleepPreferences(tester);
 
     final List<String> switchItemTitles = <String>[
       '睡前提醒',
       '晨间反馈提醒',
-      '宿舍动态提醒',
+      '寝室动态提醒',
       '智能建议',
     ];
 
@@ -248,21 +265,115 @@ void main() {
     }
   });
 
+  testWidgets('shared app card tap emits light haptic feedback', (
+    WidgetTester tester,
+  ) async {
+    int taps = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: AppCard(
+              onTap: () {
+                taps += 1;
+              },
+              child: const Text('打开详情'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('打开详情'));
+    await tester.pump();
+
+    expect(taps, 1);
+    expect(_platformHapticTypes, contains('HapticFeedbackType.lightImpact'));
+  });
+
+  testWidgets('section title action emits navigation haptic feedback', (
+    WidgetTester tester,
+  ) async {
+    int taps = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SectionTitle(
+              title: '今晚行动建议',
+              actionLabel: '查看全部',
+              onAction: () {
+                taps += 1;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('查看全部'));
+    await tester.pump(const Duration(milliseconds: 80));
+
+    expect(taps, 1);
+    expect(
+      _platformHapticTypes,
+      containsAllInOrder(<String>[
+        'HapticFeedbackType.selectionClick',
+        'HapticFeedbackType.lightImpact',
+      ]),
+    );
+  });
+
+  testWidgets('flow-start haptic uses a distinct entry rhythm', (
+    WidgetTester tester,
+  ) async {
+    unawaited(AppHaptics.flowStart());
+    await tester.pump(const Duration(milliseconds: 90));
+
+    expect(
+      _platformHapticTypes,
+      containsAllInOrder(<String>[
+        'HapticFeedbackType.mediumImpact',
+        'HapticFeedbackType.selectionClick',
+      ]),
+    );
+  });
+
   testWidgets('settings page exposes assistant reply motion entry', (
     WidgetTester tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
 
-    expect(find.text('AI陪伴'), findsOneWidget);
+    expect(find.text('小眠Agent'), findsOneWidget);
+    await tester.ensureVisible(find.text('睡眠偏好'));
     expect(find.text('睡眠偏好'), findsOneWidget);
     expect(find.text('回复文字浮动'), findsOneWidget);
     expect(
-      tester.getTopLeft(find.text('AI陪伴')).dy,
+      tester.getTopLeft(find.text('小眠Agent')).dy,
       lessThan(tester.getTopLeft(find.text('睡眠偏好')).dy),
     );
   });
 
-  testWidgets('filled primary button uses welcome accent colors', (
+  testWidgets('sleep settings save action uses the primary button treatment', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(tester, initialLocation: AppRoutes.profileSettings);
+    await _scrollToSleepPreferences(tester);
+
+    final PrimaryButton saveButton = tester.widget<PrimaryButton>(
+      find.widgetWithText(PrimaryButton, '保存睡眠设置'),
+    );
+    expect(saveButton.variant, PrimaryButtonVariant.filled);
+    expect(saveButton.hapticRole, isNull);
+  });
+
+  testWidgets('filled primary button uses semantic action colors', (
     WidgetTester tester,
   ) async {
     const NightMoodPalette palette = NightMoodPalette(
@@ -285,9 +396,13 @@ void main() {
       moonGradientEnd: Color(0xFFEEEEEE),
     );
 
+    final AppSemanticColors appColors = AppSemanticColors.light(palette);
+
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData(extensions: const <ThemeExtension<dynamic>>[palette]),
+        theme: ThemeData(
+          extensions: <ThemeExtension<dynamic>>[palette, appColors],
+        ),
         home: const Scaffold(
           body: Center(child: PrimaryButton(label: '保存')),
         ),
@@ -300,11 +415,11 @@ void main() {
 
     expect(
       button.style?.backgroundColor?.resolve(<WidgetState>{}),
-      palette.welcomeAccentColor,
+      appColors.accent,
     );
     expect(
       button.style?.foregroundColor?.resolve(<WidgetState>{}),
-      palette.welcomeTextOnAccent,
+      appColors.textOnAccent,
     );
 
     final RoundedRectangleBorder shape =
@@ -312,8 +427,107 @@ void main() {
     expect(shape.borderRadius, AppRadius.button);
     expect(
       button.style?.minimumSize?.resolve(<WidgetState>{}),
-      const Size(0, 56),
+      const Size(0, 48),
     );
+  });
+
+  testWidgets('app text action stays lightweight and uses tap haptics', (
+    WidgetTester tester,
+  ) async {
+    final NightMoodPalette palette = NightMoodPalette.fromMood(NightMood.calm);
+    final AppSemanticColors appColors = AppSemanticColors.light(palette);
+    int taps = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+          extensions: <ThemeExtension<dynamic>>[palette, appColors],
+        ),
+        home: Scaffold(
+          body: Center(
+            child: AppTextAction(label: '恢复最新获得', onPressed: () => taps += 1),
+          ),
+        ),
+      ),
+    );
+
+    final TextButton button = tester.widget<TextButton>(
+      find.byType(TextButton),
+    );
+    expect(button.style?.backgroundColor?.resolve(<WidgetState>{}), isNull);
+    expect(
+      button.style?.foregroundColor?.resolve(<WidgetState>{}),
+      appColors.accentDeep,
+    );
+
+    await tester.tap(find.text('恢复最新获得'));
+    await tester.pump();
+
+    expect(taps, 1);
+    expect(_platformHapticTypes.last, 'HapticFeedbackType.lightImpact');
+  });
+
+  testWidgets('primary button haptic role follows visual priority', (
+    WidgetTester tester,
+  ) async {
+    final NightMoodPalette palette = NightMoodPalette.fromMood(NightMood.happy);
+    final AppSemanticColors appColors = AppSemanticColors.light(palette);
+    int taps = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+          extensions: <ThemeExtension<dynamic>>[palette, appColors],
+        ),
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                PrimaryButton(
+                  label: '主要操作',
+                  expand: false,
+                  onPressed: () => taps += 1,
+                ),
+                PrimaryButton(
+                  label: '次要操作',
+                  expand: false,
+                  variant: PrimaryButtonVariant.soft,
+                  onPressed: () => taps += 1,
+                ),
+                PrimaryButton(
+                  label: '安静操作',
+                  expand: false,
+                  variant: PrimaryButtonVariant.ghost,
+                  onPressed: () => taps += 1,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('主要操作'));
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(
+      _platformHapticTypes,
+      containsAllInOrder(<String>[
+        'HapticFeedbackType.lightImpact',
+        'HapticFeedbackType.mediumImpact',
+      ]),
+    );
+    _platformMethodCalls.clear();
+
+    await tester.tap(find.text('次要操作'));
+    await tester.pump();
+    expect(_platformHapticTypes.last, 'HapticFeedbackType.lightImpact');
+    _platformMethodCalls.clear();
+
+    await tester.tap(find.text('安静操作'));
+    await tester.pump();
+    expect(_platformHapticTypes.last, 'HapticFeedbackType.lightImpact');
+    expect(taps, 3);
   });
 
   testWidgets('assistant glacier empty stage matches the pencil shell', (
@@ -890,7 +1104,7 @@ void main() {
   testWidgets('assistant empty stage floats as a single text group', (
     WidgetTester tester,
   ) async {
-    await _pumpGlacierApp(tester);
+    await _openAssistantEmptyStage(tester);
 
     final Finder floatingFinder = find.byKey(
       const ValueKey<String>('assistant-empty-floating-motion'),
@@ -908,7 +1122,41 @@ void main() {
     expect(movedDy, isNot(initialDy));
     expect(find.text('你好，我是小眠'), findsOneWidget);
     expect(find.text('今晚想聊点什么'), findsOneWidget);
+    expect(
+      find.descendant(of: floatingFinder, matching: find.text('你好，我是小眠')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: floatingFinder, matching: find.text('今晚想聊点什么')),
+      findsOneWidget,
+    );
     expect(find.text('可以和小眠聊聊睡不着的原因，也可以把脑海里还没放下的念头交给我。'), findsOneWidget);
+  });
+
+  testWidgets('assistant empty greeting follows reply motion setting', (
+    WidgetTester tester,
+  ) async {
+    final AssistantFloatingMotion lowMotion =
+        await _emptyFloatingMotionForLevel(
+          tester,
+          buildDefaultUserSettings().copyWith(
+            assistantReplyMotionLevel: AssistantReplyMotionLevel.low,
+          ),
+        );
+
+    final AssistantFloatingMotion highMotion =
+        await _emptyFloatingMotionForLevel(
+          tester,
+          buildDefaultUserSettings().copyWith(
+            assistantReplyMotionLevel: AssistantReplyMotionLevel.high,
+          ),
+        );
+
+    expect(
+      highMotion.travelDistance,
+      greaterThan(lowMotion.travelDistance * 3),
+    );
+    expect(highMotion.duration, lessThan(lowMotion.duration));
   });
 
   testWidgets('assistant reply reveal triggers gentle haptics', (
@@ -923,28 +1171,79 @@ void main() {
     expect(hapticCalls, isNotEmpty);
   });
 
+  testWidgets('assistant successful send emits a multi-step haptic pattern', (
+    WidgetTester tester,
+  ) async {
+    await _pumpGlacierApp(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('assistant-composer-field')),
+      '我有点累，但脑子还是停不下来。',
+    );
+    await tester.pump();
+    _platformMethodCalls.clear();
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('assistant-composer-submit')),
+    );
+    await tester.pump(const Duration(milliseconds: 180));
+
+    expect(_platformHapticTypes.take(4).toList(), <String>[
+      'HapticFeedbackType.lightImpact',
+      'HapticFeedbackType.selectionClick',
+      'HapticFeedbackType.mediumImpact',
+      'HapticFeedbackType.selectionClick',
+    ]);
+    await tester.pump(const Duration(milliseconds: 260));
+  });
+
   testWidgets('assistant reply motion level changes floating amplitude', (
     WidgetTester tester,
   ) async {
     final UserSettings baseSettings = buildDefaultUserSettings();
-    final double lowDy = await _replyFloatingDistanceForLevel(
-      tester,
-      baseSettings.copyWith(
-        assistantReplyMotionLevel: AssistantReplyMotionLevel.low,
-      ),
-    );
+    final AssistantFloatingMotion lowMotion =
+        await _replyFloatingMotionForLevel(
+          tester,
+          baseSettings.copyWith(
+            assistantReplyMotionLevel: AssistantReplyMotionLevel.low,
+          ),
+        );
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
 
-    final double highDy = await _replyFloatingDistanceForLevel(
-      tester,
-      baseSettings.copyWith(
-        assistantReplyMotionLevel: AssistantReplyMotionLevel.high,
-      ),
-    );
+    final AssistantFloatingMotion mediumMotion =
+        await _replyFloatingMotionForLevel(
+          tester,
+          baseSettings.copyWith(
+            assistantReplyMotionLevel: AssistantReplyMotionLevel.medium,
+          ),
+        );
 
-    expect(highDy.abs(), greaterThan(lowDy.abs()));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    final AssistantFloatingMotion highMotion =
+        await _replyFloatingMotionForLevel(
+          tester,
+          baseSettings.copyWith(
+            assistantReplyMotionLevel: AssistantReplyMotionLevel.high,
+          ),
+        );
+
+    expect(
+      mediumMotion.travelDistance,
+      greaterThan(lowMotion.travelDistance * 2),
+    );
+    expect(mediumMotion.travelDistance, greaterThanOrEqualTo(14));
+    expect(highMotion.travelDistance, greaterThanOrEqualTo(24));
+    expect(
+      highMotion.travelDistance,
+      greaterThan(mediumMotion.travelDistance * 1.6),
+    );
+    expect(
+      highMotion.duration.inMilliseconds,
+      lessThan(mediumMotion.duration.inMilliseconds),
+    );
   });
 
   testWidgets(
@@ -959,7 +1258,7 @@ void main() {
       );
 
       expect(find.byType(SettingsPage), findsOneWidget);
-      expect(find.text('AI陪伴'), findsOneWidget);
+      expect(find.text('小眠Agent'), findsOneWidget);
       expect(find.text('回复文字浮动'), findsOneWidget);
       expect(find.text('低'), findsOneWidget);
 
@@ -970,6 +1269,24 @@ void main() {
       expect(
         find.byKey(const ValueKey<String>('app-bottom-sheet-selection')),
         findsOneWidget,
+      );
+      final Finder sheetSurface = find.descendant(
+        of: find.byKey(const ValueKey<String>('app-bottom-sheet-selection')),
+        matching: find.byType(DecoratedBox),
+      );
+      final DecoratedBox sheetDecoratedBox = tester.widget<DecoratedBox>(
+        sheetSurface.first,
+      );
+      final BoxDecoration sheetDecoration =
+          sheetDecoratedBox.decoration as BoxDecoration;
+      expect(
+        sheetDecoration.color,
+        tester
+            .element(
+              find.byKey(const ValueKey<String>('app-bottom-sheet-selection')),
+            )
+            .appColors
+            .surface,
       );
       expect(find.text('更克制，存在感最低。'), findsNothing);
       expect(find.text('默认档，柔和但能感知到呼吸感。'), findsNothing);
@@ -991,7 +1308,11 @@ void main() {
   testWidgets('sleep goal slider expands and collapses from the settings row', (
     WidgetTester tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await _pumpRouteApp(tester, AppRoutes.profileSettings);
+    await _scrollToSleepPreferences(tester);
 
     expect(find.byType(SettingsPage), findsOneWidget);
     expect(find.text('目标睡眠时长'), findsOneWidget);
@@ -1031,6 +1352,11 @@ Future<void> _pumpApp(
   await _pumpRouteApp(tester, initialLocation);
 }
 
+Future<void> _scrollToSleepPreferences(WidgetTester tester) async {
+  await tester.ensureVisible(find.text('睡眠偏好'));
+  await tester.pumpAndSettle();
+}
+
 Future<void> _pumpGlacierApp(
   WidgetTester tester, {
   UserSettings? initialSettings,
@@ -1040,6 +1366,15 @@ Future<void> _pumpGlacierApp(
     AppRoutes.assistant,
     initialSettings: initialSettings,
   );
+}
+
+Future<void> _openAssistantEmptyStage(
+  WidgetTester tester, {
+  UserSettings? initialSettings,
+}) async {
+  await _pumpGlacierApp(tester, initialSettings: initialSettings);
+  await tester.tap(find.byKey(const ValueKey<String>('assistant-header-add')));
+  await _pumpAssistantFrames(tester);
 }
 
 Future<void> _pumpRouteApp(
@@ -1123,7 +1458,7 @@ Future<void> _pumpAssistantFrames(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 1000));
 }
 
-Future<double> _replyFloatingDistanceForLevel(
+Future<AssistantFloatingMotion> _replyFloatingMotionForLevel(
   WidgetTester tester,
   UserSettings settings,
 ) async {
@@ -1133,10 +1468,31 @@ Future<double> _replyFloatingDistanceForLevel(
   final Finder floatingFinder = find.byKey(
     const ValueKey<String>('assistant-current-floating-motion'),
   );
-  await tester.pump(const Duration(milliseconds: 900));
+  return tester.widget<AssistantFloatingMotion>(
+    find.ancestor(
+      of: floatingFinder,
+      matching: find.byType(AssistantFloatingMotion),
+    ),
+  );
+}
 
-  final Transform movedTransform = tester.widget<Transform>(floatingFinder);
-  return movedTransform.transform.getTranslation().y;
+Future<AssistantFloatingMotion> _emptyFloatingMotionForLevel(
+  WidgetTester tester,
+  UserSettings settings,
+) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump();
+  await _openAssistantEmptyStage(tester, initialSettings: settings);
+
+  final Finder floatingFinder = find.byKey(
+    const ValueKey<String>('assistant-empty-floating-motion'),
+  );
+  return tester.widget<AssistantFloatingMotion>(
+    find.ancestor(
+      of: floatingFinder,
+      matching: find.byType(AssistantFloatingMotion),
+    ),
+  );
 }
 
 double _effectiveAncestorOpacity(WidgetTester tester, Finder finder) {
@@ -1180,6 +1536,10 @@ Future<dynamic> _handlePlatformCall(MethodCall call) async {
   _platformMethodCalls.add(call);
   return null;
 }
+
+Iterable<String?> get _platformHapticTypes => _platformMethodCalls
+    .where((MethodCall call) => call.method == 'HapticFeedback.vibrate')
+    .map((MethodCall call) => call.arguments as String?);
 
 DateTime _dayClock() => DateTime(2026, 4, 5, 14);
 

@@ -8,6 +8,7 @@ import 'package:sleep_dorm_app/core/backend/cloudbase_app_api_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_auth_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_session_store.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_snapshot_store.dart';
+import 'package:sleep_dorm_app/core/backend/user_settings_cache_store.dart';
 import 'package:sleep_dorm_app/core/data/cloudbase_repositories.dart';
 import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
@@ -316,6 +317,8 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
         authRepository: _authRepository,
         snapshotStore: snapshotStore,
         appApiClient: appApiClient,
+        initialSettings: widget.initialSettings,
+        cacheStore: UserSettingsCacheStore(),
       );
       _recommendationRepository = CloudBaseRecommendationRepository(
         authRepository: _authRepository,

@@ -3,7 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -15,58 +17,101 @@ class ProfileHeaderSection extends StatelessWidget {
   const ProfileHeaderSection({
     super.key,
     required this.profile,
-    required this.onAvatarTap,
+    required this.onProfileTap,
   });
 
   final UserProfile profile;
-  final VoidCallback onAvatarTap;
+  final VoidCallback onProfileTap;
 
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
 
-    return Column(
-      children: <Widget>[
-        UserAvatar(
-          profile: profile,
-          size: 96,
-          editable: true,
-          onTap: onAvatarTap,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          profile.displayName,
-          textAlign: TextAlign.center,
-          style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          profile.tagline,
-          textAlign: TextAlign.center,
-          style: textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-        ),
-        if (profile.role.isNotEmpty) ...<Widget>[
-          const SizedBox(height: AppSpacing.sm),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: AppSpacing.xs,
-            ),
-            decoration: BoxDecoration(
-              color: palette.primaryHighlight,
-              borderRadius: AppRadius.pill,
-            ),
-            child: Text(
-              profile.role,
-              style: textTheme.labelMedium?.copyWith(
-                color: palette.primary,
-                fontWeight: FontWeight.w600,
+    return Material(
+      key: const ValueKey<String>('profile-header-section'),
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: AppRadius.surfacePrimary,
+        onTap: onProfileTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+          child: Row(
+            children: <Widget>[
+              UserAvatar(profile: profile, size: 68),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      profile.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.sectionTitle(
+                        textTheme,
+                      ).copyWith(color: appColors.textPrimary),
+                    ),
+                    if (profile.tagline.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(
+                        profile.tagline,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodyMuted(
+                          textTheme,
+                        ).copyWith(color: appColors.textSecondary),
+                      ),
+                    ],
+                    if (profile.role.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: AppSpacing.xs),
+                      _ProfileRoleChip(role: profile.role),
+                    ],
+                  ],
+                ),
               ),
-            ),
+              const SizedBox(width: AppSpacing.sm),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: appColors.textSecondary.withAlpha(150),
+              ),
+            ],
           ),
-        ],
-      ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileRoleChip extends StatelessWidget {
+  const _ProfileRoleChip({required this.role});
+
+  final String role;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 230),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xxs,
+      ),
+      decoration: BoxDecoration(
+        color: appColors.accentSoft,
+        borderRadius: AppRadius.pill,
+      ),
+      child: Text(
+        role,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.chip(
+          textTheme,
+        ).copyWith(color: appColors.accentDeep, fontWeight: FontWeight.w600),
+      ),
     );
   }
 }
@@ -78,32 +123,42 @@ class ProfileQuoteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
     final NightMoodPalette palette = context.nightMoodPalette;
     return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
       borderRadius: AppRadius.surfacePrimary,
-      color: palette.primarySoft,
+      color: palette.primary,
+      boxShadow: const <BoxShadow>[],
       child: Row(
         children: <Widget>[
           Container(
-            width: 48,
-            height: 48,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-              color: palette.primaryDeep,
+              color: AppColors.onDark.withAlpha(48),
               borderRadius: AppRadius.iconContainer,
             ),
             child: Icon(
               Icons.format_quote_rounded,
-              color: palette.primaryHighlight,
+              size: 20,
+              color: AppColors.onDark,
             ),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Text(
               quote,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.copyWith(color: palette.primaryDeep),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.body(textTheme).copyWith(
+                color: AppColors.onDark,
+                height: 1.35,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -150,11 +205,12 @@ class _ProfileDataCarouselState extends State<ProfileDataCarousel> {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Column(
       children: <Widget>[
         AspectRatio(
           key: const ValueKey<String>('profile-data-carousel'),
-          aspectRatio: 1.62,
+          aspectRatio: 1.82,
           child: PageView(
             clipBehavior: Clip.none,
             controller: _controller,
@@ -197,7 +253,7 @@ class _ProfileDataCarouselState extends State<ProfileDataCarousel> {
               decoration: BoxDecoration(
                 color: active
                     ? context.nightMoodPalette.primary
-                    : AppColors.surfaceBorder,
+                    : appColors.borderSubtle,
                 borderRadius: BorderRadius.circular(AppRadius.xl),
               ),
             );
@@ -305,14 +361,14 @@ class ProfileSettingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
 
     return AppMenuGroupCard(
       cardKey: const ValueKey<String>('profile-settings-card'),
       items: <AppMenuGroupCardItem>[
         AppMenuGroupCardItem(
           icon: Icons.settings_outlined,
-          iconColor: palette.primaryDeep,
+          iconColor: appColors.accentDeep,
           title: '设置',
           titleStyle: Theme.of(
             context,
@@ -321,7 +377,7 @@ class ProfileSettingsCard extends StatelessWidget {
         ),
         AppMenuGroupCardItem(
           icon: Icons.help_outline_rounded,
-          iconColor: palette.primaryDeep,
+          iconColor: appColors.accentDeep,
           title: '常见问题',
           titleStyle: Theme.of(
             context,
@@ -340,6 +396,8 @@ class _SleepQualityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
     final List<_ChartPoint> points = series.points
         .map(
           (SleepTrendPoint point) => _ChartPoint(
@@ -365,9 +423,9 @@ class _SleepQualityCard extends StatelessWidget {
         children: <Widget>[
           Text(
             '睡眠质量(分)',
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(color: AppColors.textSecondary),
+            style: AppTypography.meta(
+              textTheme,
+            ).copyWith(color: appColors.textSecondary),
           ),
           const SizedBox(height: AppSpacing.sm),
           Expanded(
@@ -412,13 +470,12 @@ class _SleepQualityCard extends StatelessWidget {
                                     painter: _SleepQualityChartPainter(
                                       points: offsets,
                                       palette: context.nightMoodPalette,
+                                      gridColor: appColors.borderSubtle,
                                     ),
                                   ),
                                 ),
                                 if (!hasAnyValue)
-                                  const Positioned.fill(
-                                    child: _TrendEmptyState(),
-                                  ),
+                                  Positioned.fill(child: _TrendEmptyState()),
                                 if (bestIndex != null &&
                                     latestIndex != null &&
                                     offsets[bestIndex] != null &&
@@ -445,10 +502,11 @@ class _SleepQualityCard extends StatelessWidget {
                                   .map(
                                     (SleepTrendPoint point) => Text(
                                       point.weekdayLabel,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelSmall
-                                          ?.copyWith(color: AppColors.textHint),
+                                      style: AppTypography.chip(textTheme)
+                                          .copyWith(
+                                            color: appColors.textSecondary
+                                                .withAlpha(150),
+                                          ),
                                     ),
                                   )
                                   .toList(),
@@ -475,6 +533,8 @@ class _SleepDurationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
     final List<double> hours = series.points
         .map((SleepTrendPoint point) => point.value ?? 0)
         .where((double value) => value > 0)
@@ -489,7 +549,7 @@ class _SleepDurationCard extends StatelessWidget {
     return AppCard(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
-        AppSpacing.sm,
+        AppSpacing.md,
         AppSpacing.md,
         AppSpacing.sm,
       ),
@@ -499,9 +559,9 @@ class _SleepDurationCard extends StatelessWidget {
         children: <Widget>[
           Text(
             '睡眠时长(小时)',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            style: AppTypography.meta(
+              textTheme,
+            ).copyWith(color: appColors.textSecondary),
           ),
           const SizedBox(height: AppSpacing.sm),
           Expanded(
@@ -546,6 +606,8 @@ class _CheckInHeatmapCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
     final List<int> cells = heatmapValues;
     final int rowCount = math.max(1, (cells.length / 7).ceil());
 
@@ -557,18 +619,20 @@ class _CheckInHeatmapCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Expanded(
                 child: Text(
                   '本月打卡热力',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                  style: AppTypography.meta(
+                    textTheme,
+                  ).copyWith(color: appColors.textSecondary),
                 ),
               ),
-              const Icon(
+              Icon(
                 Icons.chevron_right_rounded,
-                color: AppColors.textHint,
+                size: AppSpacing.md,
+                color: appColors.textSecondary.withAlpha(150),
               ),
             ],
           ),
@@ -587,40 +651,40 @@ class _CheckInHeatmapCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xs),
           Expanded(
-            child: Column(
-              children: <Widget>[
-                for (int row = 0; row < rowCount; row++) ...<Widget>[
-                  Expanded(
-                    child: Row(
-                      children: <Widget>[
-                        for (int column = 0; column < 7; column++) ...<Widget>[
-                          Expanded(
-                            child: Container(
-                              margin: EdgeInsets.only(
-                                right: column == 6 ? 0 : AppSpacing.xs / 2,
-                                bottom: row == rowCount - 1
-                                    ? 0
-                                    : AppSpacing.xs / 2,
+            child: LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                const double gap = AppSpacing.xs / 2;
+                final double cellWidth = (constraints.maxWidth - gap * 6) / 7;
+                final double cellHeight =
+                    (constraints.maxHeight - gap * math.max(0, rowCount - 1)) /
+                    rowCount;
+
+                return SizedBox.expand(
+                  key: const ValueKey<String>('profile-heatmap-grid'),
+                  child: Wrap(
+                    spacing: gap,
+                    runSpacing: gap,
+                    children: <Widget>[
+                      for (int index = 0; index < cells.length; index++)
+                        SizedBox(
+                          key: ValueKey<String>('profile-heatmap-cell-$index'),
+                          width: cellWidth,
+                          height: cellHeight,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: _heatColor(
+                                context.nightMoodPalette,
+                                appColors,
+                                cells[index],
                               ),
-                              decoration: BoxDecoration(
-                                color: _heatColor(
-                                  context.nightMoodPalette,
-                                  cells[row * 7 + column],
-                                ),
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.xs,
-                                ),
-                              ),
+                              borderRadius: BorderRadius.circular(AppRadius.xs),
                             ),
                           ),
-                        ],
-                      ],
-                    ),
+                        ),
+                    ],
                   ),
-                  if (row != rowCount - 1)
-                    const SizedBox(height: AppSpacing.xs / 2),
-                ],
-              ],
+                );
+              },
             ),
           ),
         ],
@@ -641,7 +705,8 @@ class _ReportInsightCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
     final String summary = report.highlights.isNotEmpty
         ? report.highlights.first
         : '洞察你的睡眠习惯变化';
@@ -662,9 +727,9 @@ class _ReportInsightCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             summary,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+            style: AppTypography.meta(
+              textTheme,
+            ).copyWith(color: appColors.textSecondary),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -676,7 +741,7 @@ class _ReportInsightCard extends StatelessWidget {
               vertical: AppSpacing.sm,
             ),
             decoration: BoxDecoration(
-              color: palette.primaryHighlight,
+              color: appColors.accentSoft,
               borderRadius: AppRadius.surfaceSecondary,
             ),
             child: Text(
@@ -686,7 +751,7 @@ class _ReportInsightCard extends StatelessWidget {
               textAlign: TextAlign.center,
               style: Theme.of(
                 context,
-              ).textTheme.labelLarge?.copyWith(color: palette.primaryDeep),
+              ).textTheme.labelLarge?.copyWith(color: appColors.accentDeep),
             ),
           ),
         ],
@@ -710,7 +775,8 @@ class _MiniInsightCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final AppSemanticColors appColors = context.appColors;
 
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.sm),
@@ -735,9 +801,9 @@ class _MiniInsightCard extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xxs),
                 Text(
                   subtitle,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+                  style: AppTypography.meta(
+                    textTheme,
+                  ).copyWith(color: appColors.textSecondary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -745,7 +811,7 @@ class _MiniInsightCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          Icon(icon, color: palette.primaryDeep),
+          Icon(icon, color: appColors.accentDeep),
         ],
       ),
     );
@@ -765,6 +831,7 @@ class _BadgePreviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return AppCard(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.lg,
@@ -789,14 +856,14 @@ class _BadgePreviewCard extends StatelessWidget {
               Text(
                 '全部',
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: AppColors.textSecondary,
+                  color: appColors.textSecondary,
                 ),
               ),
               const SizedBox(width: AppSpacing.xxs),
-              const Icon(
+              Icon(
                 Icons.chevron_right_rounded,
                 size: 18,
-                color: AppColors.textHint,
+                color: appColors.textSecondary.withAlpha(150),
               ),
             ],
           ),
@@ -836,6 +903,7 @@ class _BadgePreviewItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     return Material(
       key: ValueKey<String>('profile-badge-preview-slot-$index'),
       color: Colors.transparent,
@@ -853,23 +921,23 @@ class _BadgePreviewItem extends StatelessWidget {
                   shape: BoxShape.circle,
                   color: badge.unlocked
                       ? badge.selected
-                            ? palette.primaryHighlight
-                            : palette.primary.withAlpha(20)
-                      : AppColors.surfaceSoft,
+                            ? appColors.accentSoft
+                            : appColors.accentSoft.withAlpha(96)
+                      : appColors.surfaceMuted,
                   border: Border.all(
                     color: badge.selected
                         ? palette.primary
                         : badge.unlocked
-                        ? palette.primarySoft
-                        : AppColors.surfaceBorder,
+                        ? appColors.accentSoft
+                        : appColors.borderSubtle,
                     width: badge.selected ? 2.5 : 2,
                   ),
                 ),
                 child: Icon(
                   badge.unlocked ? badge.badge.icon : Icons.lock_rounded,
                   color: badge.unlocked
-                      ? palette.primaryDeep
-                      : AppColors.textHint,
+                      ? appColors.accentDeep
+                      : appColors.textSecondary,
                 ),
               ),
               const SizedBox(height: AppSpacing.xs),
@@ -878,8 +946,8 @@ class _BadgePreviewItem extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: badge.unlocked
-                      ? AppColors.textPrimary
-                      : AppColors.textHint,
+                      ? appColors.textPrimary
+                      : appColors.textSecondary,
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -906,6 +974,7 @@ class _DurationBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     final bool hasValue = hours != null;
     final double value = hours ?? 0;
     final double factor = hasValue
@@ -918,7 +987,7 @@ class _DurationBar extends StatelessWidget {
         Text(
           hasValue ? value.toStringAsFixed(1) : '--',
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: hasValue ? AppColors.textPrimary : AppColors.textHint,
+            color: hasValue ? appColors.textPrimary : appColors.textSecondary,
           ),
         ),
         const SizedBox(height: AppSpacing.xs),
@@ -939,8 +1008,8 @@ class _DurationBar extends StatelessWidget {
                           begin: Alignment.bottomCenter,
                           end: Alignment.topCenter,
                           colors: <Color>[
-                            AppColors.surfaceBorder,
-                            AppColors.surfaceSubtle,
+                            appColors.borderSubtle,
+                            appColors.surfaceMuted,
                           ],
                         ),
                   borderRadius: AppRadius.pill,
@@ -954,7 +1023,7 @@ class _DurationBar extends StatelessWidget {
           label,
           style: Theme.of(
             context,
-          ).textTheme.labelSmall?.copyWith(color: AppColors.textHint),
+          ).textTheme.labelSmall?.copyWith(color: appColors.textSecondary),
         ),
       ],
     );
@@ -968,11 +1037,12 @@ class _AxisLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Text(
       label,
       style: Theme.of(
         context,
-      ).textTheme.labelSmall?.copyWith(color: AppColors.textHint),
+      ).textTheme.labelSmall?.copyWith(color: appColors.textSecondary),
     );
   }
 }
@@ -984,11 +1054,12 @@ class _WeekdayChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Text(
       label,
       style: Theme.of(
         context,
-      ).textTheme.labelSmall?.copyWith(color: AppColors.textHint),
+      ).textTheme.labelSmall?.copyWith(color: appColors.textSecondary),
     );
   }
 }
@@ -1008,6 +1079,7 @@ class _ChartBadgeMarker extends StatelessWidget {
   Widget build(BuildContext context) {
     final double left = (offset.dx - 18).clamp(0, double.infinity);
     final double top = (offset.dy - 32).clamp(0, double.infinity);
+    final AppSemanticColors appColors = context.appColors;
 
     return Positioned(
       left: left,
@@ -1018,7 +1090,7 @@ class _ChartBadgeMarker extends StatelessWidget {
           vertical: AppSpacing.xs,
         ),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: appColors.surface,
           borderRadius: AppRadius.surfaceSecondary,
           boxShadow: const <BoxShadow>[
             BoxShadow(
@@ -1041,7 +1113,7 @@ class _ChartBadgeMarker extends StatelessWidget {
               label,
               style: Theme.of(
                 context,
-              ).textTheme.labelSmall?.copyWith(color: AppColors.textPrimary),
+              ).textTheme.labelSmall?.copyWith(color: appColors.textPrimary),
             ),
           ],
         ),
@@ -1055,6 +1127,7 @@ class _TrendEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Center(
       child: Container(
         padding: const EdgeInsets.symmetric(
@@ -1062,13 +1135,13 @@ class _TrendEmptyState extends StatelessWidget {
           vertical: AppSpacing.sm,
         ),
         decoration: BoxDecoration(
-          color: AppColors.surface.withAlpha(220),
+          color: appColors.surface.withAlpha(220),
           borderRadius: AppRadius.surfaceSecondary,
         ),
         child: Text(
           '待录入',
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: AppColors.textSecondary,
+            color: appColors.textSecondary,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -1081,15 +1154,17 @@ class _SleepQualityChartPainter extends CustomPainter {
   const _SleepQualityChartPainter({
     required this.points,
     required this.palette,
+    required this.gridColor,
   });
 
   final List<Offset?> points;
   final NightMoodPalette palette;
+  final Color gridColor;
 
   @override
   void paint(Canvas canvas, Size size) {
     final Paint gridPaint = Paint()
-      ..color = AppColors.divider
+      ..color = gridColor
       ..strokeWidth = 1;
     for (final double factor in const <double>[0, 0.5, 1]) {
       final double y = size.height * factor;
@@ -1150,7 +1225,9 @@ class _SleepQualityChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SleepQualityChartPainter oldDelegate) {
-    return oldDelegate.points != points || oldDelegate.palette != palette;
+    return oldDelegate.points != points ||
+        oldDelegate.palette != palette ||
+        oldDelegate.gridColor != gridColor;
   }
 }
 
@@ -1251,9 +1328,13 @@ int? _latestPointIndex(List<_ChartPoint> values) {
   return null;
 }
 
-Color _heatColor(NightMoodPalette palette, int intensity) {
+Color _heatColor(
+  NightMoodPalette palette,
+  AppSemanticColors appColors,
+  int intensity,
+) {
   return switch (intensity) {
-    <= 0 => AppColors.surfaceSubtle,
+    <= 0 => appColors.surfaceMuted,
     1 => palette.primarySoft.withAlpha(70),
     2 => palette.primarySoft.withAlpha(130),
     _ => palette.primary,

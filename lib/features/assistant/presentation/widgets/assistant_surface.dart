@@ -2,9 +2,9 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 
 class AssistantSurfaceMetrics {
@@ -461,6 +461,17 @@ class _AssistantFloatingMotionState extends State<AssistantFloatingMotion>
   );
 
   @override
+  void didUpdateWidget(covariant AssistantFloatingMotion oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.duration != widget.duration) {
+      _controller.duration = widget.duration;
+      if (!_controller.isAnimating) {
+        _controller.repeat(reverse: true);
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     super.dispose();
@@ -636,6 +647,7 @@ class AssistantComposer extends StatelessWidget {
                       size: metrics.unit(20),
                       color: palette.headerIcon,
                       onTap: canSubmit ? onSubmit : null,
+                      hapticRole: null,
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 220),
                         switchInCurve: Curves.easeOutCubic,
@@ -1163,6 +1175,7 @@ class _AssistantActionIconButton extends StatelessWidget {
     required this.size,
     required this.color,
     required this.onTap,
+    this.hapticRole = AppHapticRole.selection,
     this.icon,
     this.child,
     this.tooltip,
@@ -1174,6 +1187,7 @@ class _AssistantActionIconButton extends StatelessWidget {
   final Color color;
   final VoidCallback? onTap;
   final String? tooltip;
+  final AppHapticRole? hapticRole;
 
   @override
   Widget build(BuildContext context) {
@@ -1191,12 +1205,9 @@ class _AssistantActionIconButton extends StatelessWidget {
           disabledForegroundColor: _alpha(color, 0.34),
           overlayColor: _alpha(color, 0.18),
         ),
-        onPressed: onTap == null
-            ? null
-            : () {
-                HapticFeedback.selectionClick();
-                onTap!();
-              },
+        onPressed: hapticRole == null
+            ? onTap
+            : AppHaptics.handler(onTap, role: hapticRole!),
         icon: child ?? Icon(icon, size: size, color: color),
       ),
     );

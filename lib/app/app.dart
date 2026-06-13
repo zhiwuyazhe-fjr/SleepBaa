@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/app_brand.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_text_styles.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
@@ -76,7 +76,9 @@ class _SleepDormAppState extends State<SleepDormApp> {
                 usesCloudBase: resolvedEnvironment.usesCloudBase,
                 homeMode: widget.homeMode,
                 initialLocation: widget.initialLocation,
-                theme: _buildTheme(effectiveMood),
+                theme: _buildTheme(effectiveMood, Brightness.light),
+                darkTheme: _buildTheme(effectiveMood, Brightness.dark),
+                themeMode: _themeModeFromSettings(settings.themeMode),
                 title: AppBrand.displayName,
               );
             },
@@ -86,35 +88,54 @@ class _SleepDormAppState extends State<SleepDormApp> {
     );
   }
 
-  ThemeData _buildTheme(NightMood? mood) {
+  ThemeData _buildTheme(NightMood? mood, Brightness brightness) {
     final NightMoodPalette palette = NightMoodPalette.fromMood(mood);
-    final ColorScheme colorScheme = const ColorScheme.light().copyWith(
-      primary: palette.primary,
-      onPrimary: AppColors.onDark,
-      secondary: palette.primarySoft,
-      surface: AppColors.surface,
-      onSurface: AppColors.textPrimary,
-      outline: AppColors.surfaceBorder,
+    final bool isDark = brightness == Brightness.dark;
+    final AppSemanticColors appColors = isDark
+        ? AppSemanticColors.dark(palette)
+        : AppSemanticColors.light(palette);
+    final ColorScheme colorScheme =
+        ColorScheme.fromSeed(
+          seedColor: appColors.accent,
+          brightness: brightness,
+        ).copyWith(
+      primary: appColors.accent,
+      onPrimary: appColors.textOnAccent,
+      secondary: appColors.accentSoft,
+      surface: appColors.surface,
+      onSurface: appColors.textPrimary,
+      outline: appColors.borderSubtle,
     );
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: AppColors.background,
-      textTheme: AppTextStyles.buildTextTheme(),
+      scaffoldBackgroundColor: appColors.pageBackground,
+      textTheme: AppTextStyles.buildTextTheme(
+        textPrimary: appColors.textPrimary,
+        textSecondary: appColors.textSecondary,
+      ),
       fontFamilyFallback: AppTextStyles.cjkFallbackFonts,
-      extensions: <ThemeExtension<dynamic>>[palette],
-      appBarTheme: const AppBarTheme(
+      extensions: <ThemeExtension<dynamic>>[palette, appColors],
+      appBarTheme: AppBarTheme(
         centerTitle: false,
         elevation: 0,
-        backgroundColor: AppColors.background,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: appColors.pageBackground,
+        foregroundColor: appColors.textPrimary,
         surfaceTintColor: Colors.transparent,
       ),
-      dividerColor: AppColors.divider,
-      splashColor: palette.primarySoft.withAlpha(38),
+      dividerColor: appColors.borderSubtle,
+      splashColor: appColors.accentSoft.withAlpha(38),
       highlightColor: Colors.transparent,
     );
+  }
+
+  ThemeMode _themeModeFromSettings(AppThemeMode themeMode) {
+    return switch (themeMode) {
+      AppThemeMode.system => ThemeMode.system,
+      AppThemeMode.light => ThemeMode.light,
+      AppThemeMode.dark => ThemeMode.dark,
+    };
   }
 }
 
@@ -187,6 +208,8 @@ class _RoutedSleepDormApp extends StatefulWidget {
     required this.homeMode,
     required this.initialLocation,
     required this.theme,
+    required this.darkTheme,
+    required this.themeMode,
     required this.title,
   });
 
@@ -195,6 +218,8 @@ class _RoutedSleepDormApp extends StatefulWidget {
   final HomeMode homeMode;
   final String initialLocation;
   final ThemeData theme;
+  final ThemeData darkTheme;
+  final ThemeMode themeMode;
   final String title;
 
   @override
@@ -240,6 +265,8 @@ class _RoutedSleepDormAppState extends State<_RoutedSleepDormApp> {
       title: widget.title,
       debugShowCheckedModeBanner: false,
       theme: widget.theme,
+      darkTheme: widget.darkTheme,
+      themeMode: widget.themeMode,
       routerConfig: _router,
       builder: (BuildContext context, Widget? child) {
         final Widget routedChild = child ?? const SizedBox.shrink();
@@ -293,9 +320,10 @@ class _AuthLoadingOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return ColoredBox(
-      color: AppColors.background.withAlpha(214),
-      child: const Center(child: CircularProgressIndicator()),
+      color: appColors.pageBackground.withAlpha(224),
+      child: Center(child: CircularProgressIndicator(color: appColors.accent)),
     );
   }
 }

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -23,11 +23,12 @@ class MetricTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     final TextTheme textTheme = Theme.of(context).textTheme;
     return AppCard(
       padding: EdgeInsets.zero,
       onTap: onTap,
-      border: Border.all(color: AppColors.divider),
+      border: Border.all(color: appColors.borderSubtle),
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
@@ -43,7 +44,7 @@ class MetricTile extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: textTheme.labelSmall?.copyWith(
-                color: AppColors.textSecondary,
+                color: appColors.textSecondary,
               ),
             ),
             Text(
@@ -52,7 +53,7 @@ class MetricTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+                color: appColors.textPrimary,
               ),
             ),
             Text(
@@ -60,7 +61,7 @@ class MetricTile extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: textTheme.labelSmall?.copyWith(
-                color: AppColors.textSecondary,
+                color: appColors.textSecondary,
               ),
             ),
           ],

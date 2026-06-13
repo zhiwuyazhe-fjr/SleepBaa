@@ -1,6 +1,6 @@
 # Components
 
-最后核验日期：2026-04-29。本文以 `lib/core/widgets/**` 当前文件为准。
+最后核验日期：2026-05-28。本文以 `lib/core/widgets/**` 当前文件为准。
 
 ## 基础容器
 
@@ -22,6 +22,13 @@
 | `AssistantFab` | `lib/core/widgets/assistant_fab.dart` | 全局助手悬浮入口。 |
 | `AssistantFabDock` | `lib/core/widgets/assistant_fab_dock.dart` | 助手 FAB 与页面底部区域对齐。 |
 | `BottomNavShell` | `lib/core/widgets/bottom_nav_shell.dart` | 三 Tab 底部导航壳层。 |
+
+## 页面导航
+
+| Component | 文件 | 用途 |
+| --- | --- | --- |
+| `AppDetailPageHeader` | `lib/core/widgets/app_detail_page_header.dart` | 二级页/详情页内嵌顶部返回标题行，统一左箭头、标题字号、字重、颜色和 8px 箭头标题间距，可带 trailing。 |
+| `AppDetailPageAppBar` | `lib/core/widgets/app_detail_page_header.dart` | `Scaffold.appBar` 版本的详情页返回标题，适合普通浅色页面。 |
 
 ## 数据展示
 
@@ -75,3 +82,4 @@
 - 可复用的弹窗优先用 `AppModalSpec`，不要每页复制一套 `showDialog` 样式。
 - 页面中出现第三个相似卡片时，优先抽成私有组件；跨 feature 复用时再提升到 `core/widgets`。
 - 新组件必须使用 `AppSpacing`、`AppRadius` 和 `Theme.of(context).textTheme`。
+- 二级页/详情页的左上角返回箭头 + 标题必须优先使用 `AppDetailPageHeader` 或 `AppDetailPageAppBar`；深色页面通过 `foregroundColor` 指定前景色，不要再复制私有 `IconButton + Text` 组合。

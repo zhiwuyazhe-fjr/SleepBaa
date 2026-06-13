@@ -3,8 +3,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
-import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal_spec.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
@@ -192,14 +192,14 @@ class AppCenterDialogScaffold extends StatelessWidget {
     this.icon,
     this.body,
     this.content,
-    this.backgroundColor = AppColors.surface,
+    this.backgroundColor,
     this.border,
     this.boxShadow = AppColors.cardShadow,
     this.maxWidth = 320,
     this.padding = const EdgeInsets.fromLTRB(24, 24, 24, 20),
     this.crossAxisAlignment = CrossAxisAlignment.center,
-    this.titleColor = AppColors.textPrimary,
-    this.bodyColor = AppColors.textSecondary,
+    this.titleColor,
+    this.bodyColor,
     this.textAlign = TextAlign.center,
     this.showDivider = true,
   });
@@ -209,19 +209,20 @@ class AppCenterDialogScaffold extends StatelessWidget {
   final String? body;
   final Widget? content;
   final List<Widget> actions;
-  final Color backgroundColor;
+  final Color? backgroundColor;
   final BoxBorder? border;
   final List<BoxShadow> boxShadow;
   final double maxWidth;
   final EdgeInsetsGeometry padding;
   final CrossAxisAlignment crossAxisAlignment;
-  final Color titleColor;
-  final Color bodyColor;
+  final Color? titleColor;
+  final Color? bodyColor;
   final TextAlign textAlign;
   final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
@@ -230,7 +231,7 @@ class AppCenterDialogScaffold extends StatelessWidget {
         constraints: BoxConstraints(maxWidth: maxWidth),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: backgroundColor,
+            color: backgroundColor ?? appColors.surface,
             borderRadius: AppRadius.card,
             border: border,
             boxShadow: boxShadow,
@@ -247,14 +248,20 @@ class AppCenterDialogScaffold extends StatelessWidget {
                 ],
                 Text(
                   title,
-                  style: _titleStyle(context, color: titleColor),
+                  style: _titleStyle(
+                    context,
+                    color: titleColor ?? appColors.textPrimary,
+                  ),
                   textAlign: textAlign,
                 ),
                 if (body != null && body!.trim().isNotEmpty) ...<Widget>[
                   const SizedBox(height: AppSpacing.sm),
                   Text(
                     body!,
-                    style: _bodyStyle(context, color: bodyColor),
+                    style: _bodyStyle(
+                      context,
+                      color: bodyColor ?? appColors.textSecondary,
+                    ),
                     textAlign: textAlign,
                   ),
                 ],
@@ -265,8 +272,8 @@ class AppCenterDialogScaffold extends StatelessWidget {
                 if (actions.isNotEmpty) ...<Widget>[
                   const SizedBox(height: AppSpacing.sm),
                   if (showDivider)
-                    const Divider(
-                      color: AppColors.divider,
+                    Divider(
+                      color: appColors.borderSubtle,
                       height: 1,
                       thickness: 1,
                     ),
@@ -480,18 +487,18 @@ class _DialogIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     return Container(
       width: spec.containerSize,
       height: spec.containerSize,
       decoration: BoxDecoration(
-        color: spec.backgroundColor ?? palette.welcomeCardColor,
+        color: spec.backgroundColor ?? appColors.accentSoft,
         shape: BoxShape.circle,
       ),
       child: Icon(
         spec.icon,
         size: spec.iconSize,
-        color: spec.foregroundColor ?? palette.welcomeTextOnAccent,
+        color: spec.foregroundColor ?? appColors.accentDeep,
       ),
     );
   }

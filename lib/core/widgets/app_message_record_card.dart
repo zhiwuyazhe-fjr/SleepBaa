@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
-import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 
 class AppMessageRecordCard extends StatelessWidget {
@@ -35,7 +35,8 @@ class AppMessageRecordCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     final Widget? trailingWidget = trailing ?? _buildTimeLabel(context);
     return AppCard(
       onTap: onTap,
@@ -43,7 +44,7 @@ class AppMessageRecordCard extends StatelessWidget {
           padding ??
           const EdgeInsets.symmetric(horizontal: 10, vertical: AppSpacing.sm),
       borderRadius: borderRadius ?? AppRadius.compactCard,
-      color: highlighted ? AppColors.legacyCardSurface : AppColors.surface,
+      color: highlighted ? appColors.surfaceMuted : appColors.surface,
       boxShadow: const <BoxShadow>[],
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -52,13 +53,13 @@ class AppMessageRecordCard extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: iconBackgroundColor ?? palette.primaryHighlight,
+              color: iconBackgroundColor ?? appColors.accentSoft,
               borderRadius: BorderRadius.circular(12),
             ),
             alignment: Alignment.center,
             child: Icon(
               icon,
-              color: iconColor ?? AppColors.textStrong,
+              color: iconColor ?? appColors.accentDeep,
               size: 18,
             ),
           ),
@@ -71,20 +72,18 @@ class AppMessageRecordCard extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: AppTypography.cardTitle(
+                    textTheme,
+                  ).copyWith(color: appColors.textPrimary),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   detail,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 12,
-                    color: AppColors.textSubtle,
-                    fontWeight: FontWeight.w400,
-                  ),
+                  style: AppTypography.bodyMuted(
+                    textTheme,
+                  ).copyWith(color: appColors.textSecondary),
                 ),
               ],
             ),
@@ -102,12 +101,13 @@ class AppMessageRecordCard extends StatelessWidget {
     if (timeLabel == null) {
       return null;
     }
+    final AppSemanticColors appColors = context.appColors;
     return Padding(
       padding: const EdgeInsets.only(top: 2),
       child: Text(
         timeLabel!,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: highlighted ? AppColors.textStrong : AppColors.textSecondary,
+        style: AppTypography.chip(Theme.of(context).textTheme).copyWith(
+          color: highlighted ? appColors.textPrimary : appColors.textSecondary,
           fontWeight: highlighted ? FontWeight.w700 : FontWeight.w500,
         ),
       ),

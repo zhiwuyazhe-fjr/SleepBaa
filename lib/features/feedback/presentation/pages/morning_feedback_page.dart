@@ -3,14 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
 
@@ -95,6 +96,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
   @override
   Widget build(BuildContext context) {
     final AppServices services = context.appServices;
+    final AppSemanticColors appColors = context.appColors;
     final NightMoodPalette palette = context.nightMoodPalette;
     return ListenableBuilder(
       listenable: Listenable.merge(<Listenable>[
@@ -136,18 +138,16 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
             _triggerReturnToSleep();
           },
           child: Scaffold(
-            appBar: AppBar(
-              title: const Text('晨间反馈'),
-              leading: usesReturnFlow
-                  ? IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                      onPressed: _isReturningToSleep
-                          ? null
-                          : isLiveMode
-                          ? _triggerDiscardLiveFeedback
-                          : _triggerReturnToSleep,
-                    )
-                  : null,
+            backgroundColor: appColors.pageBackground,
+            appBar: AppDetailPageAppBar(
+              title: '晨间反馈',
+              onBack: _isReturningToSleep
+                  ? () {}
+                  : usesReturnFlow
+                  ? isLiveMode
+                        ? _triggerDiscardLiveFeedback
+                        : _triggerReturnToSleep
+                  : () => Navigator.of(context).maybePop(),
             ),
             body: _buildBody(
               context,
@@ -205,6 +205,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
     );
     final int actualSleepMinutes = (totalRecordMinutes - _estimatedSleepLatency)
         .clamp(0, 24 * 60);
+    final AppSemanticColors appColors = context.appColors;
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
@@ -216,7 +217,8 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
         AppCard(
           padding: const EdgeInsets.all(AppSpacing.md),
           borderRadius: AppRadius.compactCard,
-          border: Border.all(color: AppColors.surfaceBorder),
+          color: appColors.surface,
+          border: Border.all(color: appColors.borderSubtle),
           boxShadow: const <BoxShadow>[],
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -237,7 +239,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                     '${_formatDateLabel(startAt)} ${_formatClock(startAt)} - '
                     '${_formatDateLabel(endAt)} ${_formatClock(endAt)}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
+                      color: appColors.textSecondary,
                     ),
                   ),
                 ],
@@ -324,7 +326,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
             Text(
               '${session.recommendations.length} 条',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
+                color: appColors.textSecondary,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -347,7 +349,8 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
             child: AppCard(
               padding: const EdgeInsets.all(AppSpacing.md),
               borderRadius: AppRadius.compactCard,
-              border: Border.all(color: AppColors.surfaceBorder),
+              color: appColors.surface,
+              border: Border.all(color: appColors.borderSubtle),
               boxShadow: const <BoxShadow>[],
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -362,7 +365,7 @@ class _MorningFeedbackPageState extends State<MorningFeedbackPage> {
                   Text(
                     recommendation.subtitle,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
+                      color: appColors.textSecondary,
                       height: 1.35,
                     ),
                   ),
@@ -899,6 +902,7 @@ class _MetricSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -926,7 +930,7 @@ class _MetricSlider extends StatelessWidget {
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
             activeTrackColor: palette.primarySoft,
-            inactiveTrackColor: AppColors.surfaceSoft,
+            inactiveTrackColor: appColors.surfaceMuted,
             overlayShape: SliderComponentShape.noOverlay,
             thumbColor: palette.primary,
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
@@ -961,6 +965,7 @@ class _MetricSummaryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(
@@ -968,7 +973,7 @@ class _MetricSummaryTile extends StatelessWidget {
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
+        color: appColors.surfaceMuted,
         borderRadius: AppRadius.surfaceSecondary,
       ),
       child: Column(
@@ -977,7 +982,7 @@ class _MetricSummaryTile extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
+              color: appColors.textSecondary,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -994,7 +999,7 @@ class _MetricSummaryTile extends StatelessWidget {
             Text(
               detail!,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
+                color: appColors.textSecondary,
                 height: 1.35,
               ),
             ),
@@ -1021,12 +1026,13 @@ class _CompactActionPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     final Color background = highlight
         ? palette.primaryHighlight
-        : AppColors.surfaceMuted;
+        : appColors.surfaceMuted;
     final Color foreground = highlight
         ? palette.primaryDeep
-        : AppColors.textPrimary;
+        : appColors.textPrimary;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1038,17 +1044,17 @@ class _CompactActionPill extends StatelessWidget {
             vertical: AppSpacing.xs,
           ),
           decoration: BoxDecoration(
-            color: background,
-            borderRadius: AppRadius.surfaceSecondary,
-            border: Border.all(
-              color: highlight ? palette.primarySoft : AppColors.surfaceBorder,
+              color: background,
+              borderRadius: AppRadius.surfaceSecondary,
+              border: Border.all(
+              color: highlight ? palette.primarySoft : appColors.borderSubtle,
             ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               if (icon != null) ...<Widget>[
-                Icon(icon, size: 14, color: AppColors.textSecondary),
+                Icon(icon, size: 14, color: appColors.textSecondary),
                 const SizedBox(width: AppSpacing.xxs),
               ],
               Text(
@@ -1080,12 +1086,13 @@ class _CompactStatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     final Color background = highlight
         ? palette.primaryHighlight
-        : AppColors.surfaceMuted;
+        : appColors.surfaceMuted;
     final Color foreground = highlight
         ? palette.primaryDeep
-        : AppColors.textSecondary;
+        : appColors.textSecondary;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
@@ -1095,7 +1102,7 @@ class _CompactStatusPill extends StatelessWidget {
         color: background,
         borderRadius: AppRadius.surfaceSecondary,
         border: Border.all(
-          color: highlight ? palette.primarySoft : AppColors.surfaceBorder,
+          color: highlight ? palette.primarySoft : appColors.borderSubtle,
         ),
       ),
       child: Row(

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
-import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_message_record_card.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_live_status_scope.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_member_status_presenter.dart';
@@ -27,12 +29,13 @@ class _DormCurrentStatusPageState extends State<DormCurrentStatusPage> {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     return DormLiveStatusScope(
       pageId: 'dorm-current-status-page',
       builder: (BuildContext context) {
         final AppServices services = context.appServices;
         return Scaffold(
-          backgroundColor: AppColors.background,
+          backgroundColor: appColors.pageBackground,
           body: SafeArea(
             child: ListenableBuilder(
               listenable: Listenable.merge(<Listenable>[
@@ -90,7 +93,7 @@ class _DormCurrentStatusPageState extends State<DormCurrentStatusPage> {
                                         .textTheme
                                         .labelLarge
                                         ?.copyWith(
-                                          color: AppColors.textSecondary,
+                                          color: appColors.textSecondary,
                                           fontWeight: FontWeight.w700,
                                         ),
                                   ),
@@ -142,29 +145,7 @@ class _CurrentStatusHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: AppRadius.button,
-            onTap: onBack,
-            child: const SizedBox.square(
-              dimension: AppSpacing.xxxl,
-              child: Icon(Icons.chevron_left_rounded),
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        Text(
-          '当前室友状态',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
-    );
+    return AppDetailPageHeader(title: '当前室友状态', onBack: onBack);
   }
 }
 
@@ -176,7 +157,7 @@ class _CurrentStatusOverviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
     final int onlineCount = dormAppOnlineMemberCount(dorm.members, now: now);
     final int quietCount = dorm.members
         .where((DormMember member) => member.status != DormMemberStatus.active)
@@ -187,8 +168,8 @@ class _CurrentStatusOverviewCard extends StatelessWidget {
       title: '今晚 ${dorm.members.length} 位室友有状态',
       detail: '$onlineCount 位在线 · $quietCount 位安静中 · $pendingCount 位待确认',
       highlighted: false,
-      iconBackgroundColor: palette.primaryHighlight,
-      iconColor: AppColors.textStrong,
+      iconBackgroundColor: appColors.accentSoft,
+      iconColor: appColors.accentDeep,
     );
   }
 }
@@ -201,31 +182,22 @@ class _CurrentStatusFilters extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: _CurrentStatusFilter.values
             .map((_CurrentStatusFilter filter) {
-              final bool selected = value == filter;
               return Padding(
                 padding: const EdgeInsets.only(right: AppSpacing.xs),
-                child: ChoiceChip(
-                  selected: selected,
-                  showCheckmark: false,
-                  label: Text(_filterLabel(filter)),
-                  color: _currentStatusChipColor(palette),
-                  selectedColor: palette.welcomeAccentColor,
-                  backgroundColor: AppColors.surfaceMuted,
-                  side: BorderSide.none,
-                  shape: RoundedRectangleBorder(borderRadius: AppRadius.pill),
-                  labelStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: selected
-                        ? AppColors.textStrong
-                        : AppColors.textSecondary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                  onSelected: (_) => onChanged(filter),
+                child: _FeedbackFilterPill(
+                  key: ValueKey<String>(_filterKey(filter)),
+                  label: _filterLabel(filter),
+                  selected: value == filter,
+                  appColors: appColors,
+                  textTheme: textTheme,
+                  onTap: () => onChanged(filter),
                 ),
               );
             })
@@ -241,15 +213,125 @@ class _CurrentStatusFilters extends StatelessWidget {
       _CurrentStatusFilter.pending => '待确认',
     };
   }
+
+  String _filterKey(_CurrentStatusFilter filter) {
+    final String suffix = switch (filter) {
+      _CurrentStatusFilter.all => 'all',
+      _CurrentStatusFilter.quiet => 'quiet',
+      _CurrentStatusFilter.pending => 'pending',
+    };
+    return 'dorm-current-status-filter-$suffix';
+  }
 }
 
-WidgetStateProperty<Color?> _currentStatusChipColor(NightMoodPalette palette) {
-  return WidgetStateProperty.resolveWith((Set<WidgetState> states) {
-    if (states.contains(WidgetState.selected)) {
-      return palette.welcomeAccentColor;
-    }
-    return AppColors.surfaceMuted;
+class _FeedbackFilterPill extends StatefulWidget {
+  const _FeedbackFilterPill({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.appColors,
+    required this.textTheme,
+    required this.onTap,
   });
+
+  final String label;
+  final bool selected;
+  final AppSemanticColors appColors;
+  final TextTheme textTheme;
+  final VoidCallback onTap;
+
+  @override
+  State<_FeedbackFilterPill> createState() => _FeedbackFilterPillState();
+}
+
+class _FeedbackFilterPillState extends State<_FeedbackFilterPill> {
+  bool _pressed = false;
+  bool _longPressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value) {
+      return;
+    }
+    setState(() {
+      _pressed = value;
+    });
+  }
+
+  void _setLongPressed(bool value) {
+    if (_longPressed == value) {
+      return;
+    }
+    setState(() {
+      _longPressed = value;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppSemanticColors appColors = widget.appColors;
+    final double scale = _longPressed
+        ? 1.025
+        : _pressed
+        ? 0.98
+        : 1;
+    final Color backgroundColor = widget.selected
+        ? appColors.accent
+        : appColors.surfaceMuted;
+    final Color foregroundColor = widget.selected
+        ? appColors.textOnAccent
+        : appColors.textSecondary;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: AppHaptics.selectionHandler(widget.onTap),
+      onTapDown: (_) => _setPressed(true),
+      onTapCancel: () => _setPressed(false),
+      onTapUp: (_) => _setPressed(false),
+      onLongPressStart: (_) {
+        _setPressed(false);
+        _setLongPressed(true);
+      },
+      onLongPressEnd: (_) => _setLongPressed(false),
+      child: AnimatedScale(
+        scale: scale,
+        duration: const Duration(milliseconds: 110),
+        curve: Curves.easeOutCubic,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOutCubic,
+          constraints: const BoxConstraints(minHeight: 36),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.xs,
+          ),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: AppRadius.pill,
+            boxShadow: _longPressed
+                ? <BoxShadow>[
+                    BoxShadow(
+                      color: appColors.accent.withAlpha(
+                        widget.selected ? 52 : 30,
+                      ),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ]
+                : const <BoxShadow>[],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            widget.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.meta(
+              widget.textTheme,
+            ).copyWith(color: foregroundColor, fontWeight: FontWeight.w800),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _CurrentStatusList extends StatelessWidget {
@@ -291,6 +373,7 @@ class _CurrentStatusMemberCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppSemanticColors appColors = context.appColors;
     final String presenceLabel = dormPresenceSleepLabel(
       member,
       showPresence: showPresence,
@@ -304,6 +387,10 @@ class _CurrentStatusMemberCard extends StatelessWidget {
       title: member.name,
       detail: '${member.note} · $presenceLabel',
       highlighted: needsConfirmation,
+      iconBackgroundColor: needsConfirmation
+          ? appColors.accentSoft
+          : appColors.surfaceMuted,
+      iconColor: appColors.accentDeep,
       trailing: _StatusPill(
         label: needsConfirmation ? '待确认' : activityLabel,
         emphasized: needsConfirmation,
@@ -320,20 +407,21 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final NightMoodPalette palette = context.nightMoodPalette;
+    final AppSemanticColors appColors = context.appColors;
+    final TextTheme textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: emphasized ? palette.welcomeAccentColor : AppColors.surfaceMuted,
+        color: emphasized ? appColors.accent : appColors.surfaceMuted,
         borderRadius: AppRadius.pill,
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: emphasized ? AppColors.textStrong : AppColors.textSecondary,
+        style: AppTypography.chip(textTheme).copyWith(
+          color: emphasized ? appColors.textOnAccent : appColors.textSecondary,
           fontWeight: FontWeight.w800,
         ),
       ),
@@ -346,10 +434,13 @@ class _CurrentStatusEmpty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const AppMessageRecordCard(
+    final AppSemanticColors appColors = context.appColors;
+    return AppMessageRecordCard(
       icon: Icons.people_alt_outlined,
       title: '暂无符合条件的室友状态',
       detail: '切换其他筛选看看室友的当前状态',
+      iconBackgroundColor: appColors.surfaceMuted,
+      iconColor: appColors.accentDeep,
     );
   }
 }

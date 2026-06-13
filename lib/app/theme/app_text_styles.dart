@@ -47,40 +47,43 @@ abstract final class AppTextStyles {
     );
   }
 
-  static TextTheme buildTextTheme() {
+  static TextTheme buildTextTheme({
+    Color textPrimary = AppColors.textPrimary,
+    Color textSecondary = AppColors.textSecondary,
+  }) {
     final TextTheme bodyTheme = const TextTheme().copyWith(
       bodyLarge: _inter(
         fontSize: 16,
         fontWeight: FontWeight.w500,
-        color: AppColors.textPrimary,
+        color: textPrimary,
         height: 1.45,
       ),
       bodyMedium: _inter(
         fontSize: 14,
         fontWeight: FontWeight.w500,
-        color: AppColors.textPrimary,
+        color: textPrimary,
         height: 1.5,
       ),
       bodySmall: _inter(
         fontSize: 12,
         fontWeight: FontWeight.w500,
-        color: AppColors.textSecondary,
+        color: textSecondary,
         height: 1.4,
       ),
       labelLarge: _inter(
         fontSize: 14,
         fontWeight: FontWeight.w700,
-        color: AppColors.textPrimary,
+        color: textPrimary,
       ),
       labelMedium: _inter(
         fontSize: 12,
         fontWeight: FontWeight.w700,
-        color: AppColors.textSecondary,
+        color: textSecondary,
       ),
       labelSmall: _inter(
         fontSize: 10,
         fontWeight: FontWeight.w700,
-        color: AppColors.textSecondary,
+        color: textSecondary,
         letterSpacing: 0.4,
       ),
     );
@@ -89,48 +92,48 @@ abstract final class AppTextStyles {
       displayLarge: _manrope(
         fontSize: 40,
         fontWeight: FontWeight.w800,
-        color: AppColors.textPrimary,
+        color: textPrimary,
         height: 1.05,
       ),
       displayMedium: _manrope(
         fontSize: 32,
         fontWeight: FontWeight.w800,
-        color: AppColors.textPrimary,
+        color: textPrimary,
         height: 1.1,
       ),
       headlineLarge: _manrope(
         fontSize: 28,
         fontWeight: FontWeight.w800,
-        color: AppColors.textPrimary,
+        color: textPrimary,
         height: 1.12,
       ),
       headlineMedium: _manrope(
         fontSize: 24,
         fontWeight: FontWeight.w800,
-        color: AppColors.textPrimary,
+        color: textPrimary,
         height: 1.15,
       ),
       headlineSmall: _manrope(
         fontSize: 20,
         fontWeight: FontWeight.w700,
-        color: AppColors.textPrimary,
+        color: textPrimary,
         height: 1.2,
       ),
       titleLarge: _manrope(
         fontSize: 18,
         fontWeight: FontWeight.w700,
-        color: AppColors.textPrimary,
+        color: textPrimary,
         height: 1.2,
       ),
       titleMedium: _manrope(
         fontSize: 16,
         fontWeight: FontWeight.w700,
-        color: AppColors.textPrimary,
+        color: textPrimary,
       ),
       titleSmall: _manrope(
         fontSize: 14,
         fontWeight: FontWeight.w700,
-        color: AppColors.textPrimary,
+        color: textPrimary,
       ),
     );
   }

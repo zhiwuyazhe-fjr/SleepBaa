@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,19 +16,28 @@ import 'package:sleep_dorm_app/main.dart' as app_main;
 import 'package:sleep_dorm_app/app/routes.dart';
 import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
+import 'package:sleep_dorm_app/app/theme/app_text_styles.dart';
+import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
+import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
+import 'package:sleep_dorm_app/core/data/model_serializers.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
+import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_message_record_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_settings_group.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab.dart';
 import 'package:sleep_dorm_app/core/widgets/assistant_fab_dock.dart';
 import 'package:sleep_dorm_app/core/widgets/bottom_nav_shell.dart';
+import 'package:sleep_dorm_app/core/widgets/app_text_action.dart';
+import 'package:sleep_dorm_app/core/widgets/modals/app_modal.dart';
 import 'package:sleep_dorm_app/core/widgets/primary_button.dart';
+import 'package:sleep_dorm_app/features/analysis/presentation/pages/interference_factor_page.dart';
 import 'package:sleep_dorm_app/features/assistant/presentation/pages/assistant_page.dart';
 import 'package:sleep_dorm_app/features/auth/presentation/pages/phone_auth_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_current_status_page.dart';
@@ -36,17 +46,25 @@ import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_member_deta
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_rules_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/pages/dorm_status_page.dart';
 import 'package:sleep_dorm_app/features/dorm/presentation/support/dorm_event_records.dart';
+import 'package:sleep_dorm_app/features/dorm/presentation/widgets/dorm_member_avatar.dart';
+import 'package:sleep_dorm_app/features/dream/presentation/dream_content.dart';
+import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_detail_page.dart';
 import 'package:sleep_dorm_app/features/dream/presentation/pages/dream_journal_page.dart';
 import 'package:sleep_dorm_app/features/feedback/presentation/pages/morning_feedback_page.dart';
 import 'package:sleep_dorm_app/features/home/presentation/pages/home_post_sleep_page.dart';
 import 'package:sleep_dorm_app/features/home/presentation/pages/home_pre_sleep_page.dart';
 import 'package:sleep_dorm_app/features/home/presentation/widgets/home_widgets.dart';
 import 'package:sleep_dorm_app/features/intervention/presentation/pages/micro_intervention_task_page.dart';
+import 'package:sleep_dorm_app/features/night_mood/presentation/widgets/night_mood_welcome_flow.dart';
 import 'package:sleep_dorm_app/features/notifications/presentation/pages/notifications_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/calendar_checkin_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_account_pages.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/profile_account_reset_password_page.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/settings_page.dart';
 import 'package:sleep_dorm_app/features/profile/presentation/pages/sleep_report_page.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/thought_note_detail_page.dart';
+import 'package:sleep_dorm_app/features/profile/presentation/pages/thought_vault_page.dart';
 import 'package:sleep_dorm_app/features/sleep/presentation/pages/cant_sleep_page.dart';
 
 void main() {
@@ -73,13 +91,17 @@ void main() {
     'night mood palette uses new hero gradients and neutral dark surface',
     () {
       expect(AppColors.darkCard, const Color(0xFF1A1A1A));
+      expect(AppColors.primary, const Color(0xFF357E92));
+      expect(AppColors.primarySoft, const Color(0xFF90DDF2));
+      expect(AppColors.primaryDeep, const Color(0xFF3F5962));
+      expect(AppColors.primary, isNot(AppColors.primarySoft));
 
       final Map<NightMood?, List<Color>> expectedHeroGradients =
           <NightMood?, List<Color>>{
             null: const <Color>[
-              Color(0xFF8EDDF2),
-              Color(0xFF8EDDF2),
-              Color(0xFF8EDDF2),
+              Color(0xFF90DDF2),
+              Color(0xFF90DDF2),
+              Color(0xFF357E92),
             ],
             NightMood.happy: const <Color>[
               Color(0xFFFFA6C9),
@@ -119,6 +141,790 @@ void main() {
       }
     },
   );
+
+  test('app semantic colors expose tokenized home palette values', () {
+    final NightMoodPalette calm = NightMoodPalette.fromMood(NightMood.calm);
+
+    final AppSemanticColors light = AppSemanticColors.light(calm);
+    expect(light.pageBackground, AppColors.background);
+    expect(light.surface, AppColors.surface);
+    expect(light.surfaceMuted, AppColors.surfaceMuted);
+    expect(light.textPrimary, AppColors.textPrimary);
+    expect(light.textSecondary, AppColors.textSecondary);
+    expect(light.accent, calm.welcomeAccentColor);
+    expect(light.textOnAccent, calm.welcomeTextOnAccent);
+    expect(light.accentDeep, const Color(0xFF516B64));
+    expect(light.heroStart, calm.heroGradientStart);
+    expect(light.heroMid, calm.heroGradientMid);
+    expect(light.heroEnd, calm.heroGradientEnd);
+
+    final AppSemanticColors dark = AppSemanticColors.dark(calm);
+    expect(dark.pageBackground, AppColors.darkBackground);
+    expect(dark.surface, const Color(0xFF1D2023));
+    expect(dark.surfaceMuted, const Color(0xFF252A2E));
+    expect(dark.surfaceRaised, const Color(0xFF2D3338));
+    expect(dark.textPrimary, const Color(0xFFF3F5F4));
+    expect(dark.textSecondary, const Color(0xFFC4CBC8));
+    expect(dark.accent, const Color(0xFF4D9B86));
+    expect(dark.textOnAccent, AppColors.onDark);
+    expect(dark.accentSoft, const Color(0xFF233530));
+    expect(dark.accentDeep, const Color(0xFFA7DDCC));
+    expect(dark.heroStart, const Color(0xFF315F55));
+    expect(dark.heroMid, const Color(0xFF294D46));
+    expect(dark.heroEnd, const Color(0xFF1E2A28));
+  });
+
+  testWidgets('dorm page uses dark semantic neutral surfaces', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dorm,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      ),
+    );
+
+    final BuildContext context = tester.element(find.byType(DormPage));
+    final AppSemanticColors appColors = context.appColors;
+    final Scaffold scaffold = tester.widget<Scaffold>(
+      find.ancestor(of: find.byType(DormPage), matching: find.byType(Scaffold)),
+    );
+
+    expect(appColors.pageBackground, AppColors.darkBackground);
+    expect(
+      scaffold.backgroundColor ?? Theme.of(context).scaffoldBackgroundColor,
+      appColors.pageBackground,
+    );
+    expect(
+      appColors.textPrimary.computeLuminance(),
+      greaterThan(appColors.pageBackground.computeLuminance()),
+    );
+
+    final Text dormTitle = tester.widget<Text>(find.text('宿舍脉搏').first);
+    expect(dormTitle.style?.color, AppColors.onDark);
+  });
+
+  testWidgets('profile page uses dark semantic neutral surfaces', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      ),
+    );
+
+    final BuildContext context = tester.element(find.byType(ProfilePage));
+    final AppSemanticColors appColors = context.appColors;
+    final Scaffold scaffold = tester.widget<Scaffold>(
+      find.ancestor(
+        of: find.byType(ProfilePage),
+        matching: find.byType(Scaffold),
+      ),
+    );
+
+    expect(appColors.pageBackground, AppColors.darkBackground);
+    expect(
+      scaffold.backgroundColor ?? Theme.of(context).scaffoldBackgroundColor,
+      appColors.pageBackground,
+    );
+    expect(
+      appColors.textPrimary.computeLuminance(),
+      greaterThan(appColors.pageBackground.computeLuminance()),
+    );
+
+    final Text quoteText = tester.widget<Text>(find.text('完成今晚心情选择，解锁一句陪伴语'));
+    expect(quoteText.style?.color, AppColors.onDark);
+  });
+
+  testWidgets('settings mood options avoid dark fixed mood text colors', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileSettings,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      ),
+    );
+
+    final BuildContext context = tester.element(find.byType(SettingsPage));
+    final AppSemanticColors appColors = context.appColors;
+    final Text moodLabel = tester.widget<Text>(find.text('开心'));
+
+    expect(moodLabel.style?.color, appColors.textPrimary);
+  });
+
+  testWidgets(
+    'settings and profile navigation icons use dark semantic accent',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final UserSettings darkCalmSettings = buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      );
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profileSettings,
+        clock: _dayClock,
+        initialSettings: darkCalmSettings,
+      );
+
+      final AppSemanticColors settingsColors = tester
+          .element(find.byType(SettingsPage))
+          .appColors;
+      final AppSettingsItem accountItem = tester.widget<AppSettingsItem>(
+        find.widgetWithText(AppSettingsItem, '账号管理'),
+      );
+      final AppSettingsItem appearanceItem = tester.widget<AppSettingsItem>(
+        find.widgetWithText(AppSettingsItem, '外观模式'),
+      );
+
+      expect(accountItem.iconColor, settingsColors.accentDeep);
+      expect(appearanceItem.iconColor, settingsColors.accentDeep);
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profileAccountCenter,
+        clock: _dayClock,
+        initialSettings: darkCalmSettings,
+      );
+
+      final AppSemanticColors accountColors = tester
+          .element(find.byType(AccountManagementPage))
+          .appColors;
+      final AppSettingsItem profileItem = tester.widget<AppSettingsItem>(
+        find.widgetWithText(AppSettingsItem, '个人资料'),
+      );
+
+      expect(profileItem.iconColor, accountColors.accentDeep);
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profile,
+        clock: _dayClock,
+        initialSettings: darkCalmSettings,
+      );
+
+      await tester.ensureVisible(find.text('设置'));
+
+      final AppSemanticColors profileColors = tester
+          .element(find.byType(ProfilePage))
+          .appColors;
+      final Icon settingsIcon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('profile-settings-card')),
+          matching: find.byIcon(Icons.settings_outlined),
+        ),
+      );
+      final Icon dreamIcon = tester.widget<Icon>(
+        find.descendant(
+          of: find.ancestor(
+            of: find.text('梦记'),
+            matching: find.byType(AppCard),
+          ),
+          matching: find.byIcon(Icons.menu_book_outlined),
+        ),
+      );
+
+      expect(settingsIcon.color, profileColors.accentDeep);
+      expect(dreamIcon.color, profileColors.accentDeep);
+    },
+  );
+
+  testWidgets('shared avatar and dialog icons use dark semantic colors', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      ),
+    );
+
+    final AppSemanticColors appColors = tester
+        .element(find.byType(ProfilePage))
+        .appColors;
+    final Text avatarFallback = tester.widget<Text>(find.text('P').first);
+
+    expect(avatarFallback.style?.color, appColors.accentDeep);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+          extensions: <ThemeExtension<dynamic>>[
+            NightMoodPalette.fromMood(NightMood.calm),
+            appColors,
+          ],
+        ),
+        home: Builder(
+          builder: (BuildContext context) {
+            return Scaffold(
+              body: TextButton(
+                onPressed: () {
+                  showAppModal<void>(
+                    context,
+                    spec: const AppInfoDialogSpec(title: '提示', body: '测试内容'),
+                  );
+                },
+                child: const Text('打开弹窗'),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('打开弹窗'));
+    await tester.pumpAndSettle();
+
+    final Icon dialogIcon = tester.widget<Icon>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey<String>('app-center-dialog-info')),
+            matching: find.byIcon(Icons.info_outline_rounded),
+          )
+          .first,
+    );
+
+    expect(dialogIcon.color, appColors.accentDeep);
+  });
+
+  testWidgets('dorm management uses dark semantic settings colors', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileAccountDorm,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      ),
+    );
+
+    final BuildContext context = tester.element(
+      find.byType(DormManagementPage),
+    );
+    final AppSemanticColors appColors = context.appColors;
+    final AppSettingsItem inviteItem = tester.widget<AppSettingsItem>(
+      find.widgetWithText(AppSettingsItem, '邀请舍友'),
+    );
+    final Text dormName = tester.widget<Text>(find.text('梅苑 2 栋 204').first);
+
+    expect(inviteItem.iconColor, appColors.accentDeep);
+    expect(inviteItem.titleStyle?.color, appColors.textPrimary);
+    expect(dormName.style?.color, appColors.textPrimary);
+  });
+
+  testWidgets('remaining detail pages use dark semantic surfaces', (
+    WidgetTester tester,
+  ) async {
+    final UserSettings darkCalmSettings = buildDefaultUserSettings().copyWith(
+      themeMode: AppThemeMode.dark,
+      selectedNightMood: NightMood.calm,
+    );
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.notifications,
+      clock: _dayClock,
+      initialSettings: darkCalmSettings,
+    );
+
+    AppSemanticColors appColors = tester
+        .element(find.byType(NotificationsPage))
+        .appColors;
+    Scaffold scaffold = tester.widget<Scaffold>(
+      find.descendant(
+        of: find.byType(NotificationsPage),
+        matching: find.byType(Scaffold),
+      ),
+    );
+    BuildContext pageContext = tester.element(find.byType(NotificationsPage));
+    expect(
+      scaffold.backgroundColor ?? Theme.of(pageContext).scaffoldBackgroundColor,
+      appColors.pageBackground,
+    );
+    AppCard overviewCard = tester.widget<AppCard>(
+      find.ancestor(
+        of: find.textContaining('待处理消息').first,
+        matching: find.byType(AppCard),
+      ),
+    );
+    expect(overviewCard.color, appColors.surface);
+    Text overviewBody = tester.widget<Text>(find.text('建议先查看「待处理」分组'));
+    expect(overviewBody.style?.color, appColors.textSecondary);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.analysisInterferenceFactors,
+      clock: _dayClock,
+      initialSettings: darkCalmSettings,
+    );
+
+    appColors = tester.element(find.byType(InterferenceFactorPage)).appColors;
+    scaffold = tester.widget<Scaffold>(
+      find.descendant(
+        of: find.byType(InterferenceFactorPage),
+        matching: find.byType(Scaffold),
+      ),
+    );
+    pageContext = tester.element(find.byType(InterferenceFactorPage));
+    expect(
+      scaffold.backgroundColor ?? Theme.of(pageContext).scaffoldBackgroundColor,
+      appColors.pageBackground,
+    );
+    final AppCard introCard = tester.widget<AppCard>(
+      find.ancestor(
+        of: find.text('今晚先一起看看，哪些细小因素正在悄悄影响你的安睡。'),
+        matching: find.byType(AppCard),
+      ),
+    );
+    expect(introCard.color, appColors.surface);
+    await tester.dragUntilVisible(
+      find.text('和小眠说一说，看看还有哪些因素影响了今晚的安睡……'),
+      find
+          .descendant(
+            of: find.byType(InterferenceFactorPage),
+            matching: find.byType(ListView),
+          )
+          .first,
+      const Offset(0, -260),
+    );
+    final AppCard assistantCard = tester.widget<AppCard>(
+      find.ancestor(
+        of: find.text('和小眠说一说，看看还有哪些因素影响了今晚的安睡……'),
+        matching: find.byType(AppCard),
+      ),
+    );
+    expect(assistantCard.color, appColors.surfaceMuted);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.feedbackMorning,
+      clock: _feedbackClock,
+      initialSettings: darkCalmSettings,
+    );
+    final AppServices services = AppScope.of(
+      tester.element(find.byType(MorningFeedbackPage)),
+    );
+    final SleepSession targetSession = _buildPendingFeedbackSession(
+      uid: services.authRepository.currentUser.uid,
+      id: 'dark-feedback-target-session',
+      startedAt: DateTime(2026, 4, 17, 23, 18),
+      recommendationTitle: 'Dark feedback session',
+    );
+    await services.sleepSessionRepository.saveSession(targetSession);
+    GoRouter.of(
+      tester.element(find.byType(MorningFeedbackPage)),
+    ).go(AppRoutes.feedbackMorningLocation(sessionId: targetSession.id));
+    await tester.pumpAndSettle();
+
+    appColors = tester.element(find.byType(MorningFeedbackPage)).appColors;
+    scaffold = tester.widget<Scaffold>(
+      find.descendant(
+        of: find.byType(MorningFeedbackPage),
+        matching: find.byType(Scaffold),
+      ),
+    );
+    pageContext = tester.element(find.byType(MorningFeedbackPage));
+    expect(
+      scaffold.backgroundColor ?? Theme.of(pageContext).scaffoldBackgroundColor,
+      appColors.pageBackground,
+    );
+    final AppCard summaryCard = tester.widget<AppCard>(
+      find.ancestor(of: find.text('睡眠摘要'), matching: find.byType(AppCard)),
+    );
+    expect(summaryCard.color, appColors.surface);
+    final Text feedbackCount = tester.widget<Text>(find.text('1 条'));
+    expect(feedbackCount.style?.color, appColors.textSecondary);
+  });
+
+  testWidgets('auth recovery pages use dark semantic neutral colors', (
+    WidgetTester tester,
+  ) async {
+    final UserSettings darkCalmSettings = buildDefaultUserSettings().copyWith(
+      themeMode: AppThemeMode.dark,
+      selectedNightMood: NightMood.calm,
+    );
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.authPhone,
+      clock: _dayClock,
+      initialSettings: darkCalmSettings,
+    );
+
+    AppSemanticColors appColors = tester
+        .element(find.byType(PhoneAuthPage))
+        .appColors;
+    Scaffold scaffold = tester.widget<Scaffold>(
+      find.descendant(
+        of: find.byType(PhoneAuthPage),
+        matching: find.byType(Scaffold),
+      ),
+    );
+    BuildContext pageContext = tester.element(find.byType(PhoneAuthPage));
+    expect(
+      scaffold.backgroundColor ?? Theme.of(pageContext).scaffoldBackgroundColor,
+      appColors.pageBackground,
+    );
+    Text loginTitle = tester.widget<Text>(find.text(AppBrand.loginTitle));
+    expect(loginTitle.style?.color, appColors.textPrimary);
+    Text loginLabel = tester.widget<Text>(find.text('手机号').first);
+    expect(loginLabel.style?.color, appColors.textSecondary);
+    TextField loginInput = tester.widget<TextField>(
+      find.byKey(const ValueKey<String>('auth-login-phone-0')),
+    );
+    expect(loginInput.style?.color, appColors.textPrimary);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('auth-forgot-password')),
+    );
+    await tester.pumpAndSettle();
+
+    final Text resetTitle = tester.widget<Text>(find.text('找回密码'));
+    expect(resetTitle.style?.color, appColors.textPrimary);
+    final Text resetLabel = tester.widget<Text>(find.text('短信验证码').first);
+    expect(resetLabel.style?.color, appColors.textSecondary);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileAccountPassword,
+      clock: _dayClock,
+      initialSettings: darkCalmSettings,
+    );
+
+    appColors = tester.element(find.byType(AccountResetPasswordPage)).appColors;
+    scaffold = tester.widget<Scaffold>(
+      find.descendant(
+        of: find.byType(AccountResetPasswordPage),
+        matching: find.byType(Scaffold),
+      ),
+    );
+    pageContext = tester.element(find.byType(AccountResetPasswordPage));
+    expect(
+      scaffold.backgroundColor ?? Theme.of(pageContext).scaffoldBackgroundColor,
+      appColors.pageBackground,
+    );
+    final Text accountResetTitle = tester.widget<Text>(find.text('找回密码'));
+    expect(accountResetTitle.style?.color, appColors.textPrimary);
+    final Text accountResetLabel = tester.widget<Text>(find.text('手机号').first);
+    expect(accountResetLabel.style?.color, appColors.textSecondary);
+  });
+
+  testWidgets('phone auth dark mode only mutes unselected login method blue', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.authPhone,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      ),
+    );
+
+    final Finder loginSubmit = find.byKey(
+      const ValueKey<String>('auth-login-submit'),
+    );
+    expect(
+      find.descendant(of: loginSubmit, matching: find.byType(PrimaryButton)),
+      findsOneWidget,
+    );
+    final Finder submitFinder = find.descendant(
+      of: loginSubmit,
+      matching: find.byType(FilledButton),
+    );
+    final FilledButton submitButton = tester.widget<FilledButton>(submitFinder);
+    expect(
+      submitButton.style?.backgroundColor?.resolve(<WidgetState>{}),
+      const Color(0xFF90DDF2),
+    );
+    expect(
+      submitButton.style?.backgroundColor?.resolve(<WidgetState>{
+        WidgetState.pressed,
+      }),
+      const Color(0xFF7CCDE5),
+    );
+    expect(
+      submitButton.style?.foregroundColor?.resolve(<WidgetState>{}),
+      const Color(0xFF004F5D),
+    );
+
+    final Material passwordSegment = tester.widget<Material>(
+      find.byKey(const ValueKey<String>('auth-login-method-password')),
+    );
+    final Material codeSegment = tester.widget<Material>(
+      find.byKey(const ValueKey<String>('auth-login-method-code')),
+    );
+    expect(passwordSegment.color, const Color(0xFF90DDF2));
+    expect(codeSegment.color, const Color(0xFFBFD1D8));
+
+    final Text forgotPassword = tester.widget<Text>(find.text('忘记密码？'));
+    expect(forgotPassword.style?.color, const Color(0xFF00697A));
+  });
+
+  testWidgets('cloudbase auth loading overlay follows dark app background', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.home,
+      clock: _dayClock,
+      environment: _cloudBaseTestEnvironment,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      ),
+      settle: false,
+    );
+
+    final ColoredBox loadingBackdrop = tester.widget<ColoredBox>(
+      find
+          .ancestor(
+            of: find.byType(CircularProgressIndicator),
+            matching: find.byType(ColoredBox),
+          )
+          .last,
+    );
+    expect(loadingBackdrop.color, const Color(0xFF050505).withAlpha(224));
+  });
+
+  testWidgets('dream journal uses dark semantic surfaces', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dreamJournal,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      ),
+    );
+
+    final BuildContext context = tester.element(find.byType(DreamJournalPage));
+    final AppSemanticColors appColors = context.appColors;
+    final Scaffold scaffold = tester.widget<Scaffold>(
+      find
+          .descendant(
+            of: find.byType(DreamJournalPage),
+            matching: find.byType(Scaffold),
+          )
+          .first,
+    );
+
+    expect(scaffold.backgroundColor, appColors.pageBackground);
+
+    final TabBar tabBar = tester.widget<TabBar>(find.byType(TabBar));
+    expect(tabBar.unselectedLabelColor, appColors.textSecondary);
+    expect(tabBar.labelColor, appColors.accentDeep);
+    final BoxDecoration indicator = tabBar.indicator! as BoxDecoration;
+    expect(indicator.color, appColors.accentSoft);
+  });
+
+  test('user settings persist the selected app theme mode', () {
+    final UserSettings defaults = buildDefaultUserSettings();
+    expect(defaults.themeMode, AppThemeMode.system);
+
+    final Map<String, dynamic> encoded = ModelSerializers.userSettingsToMap(
+      defaults.copyWith(themeMode: AppThemeMode.dark),
+    );
+    expect(encoded['themeMode'], 'dark');
+
+    final UserSettings decoded = ModelSerializers.userSettingsFromMap(encoded);
+    expect(decoded.themeMode, AppThemeMode.dark);
+
+    expect(
+      ModelSerializers.userSettingsFromMap(<String, dynamic>{
+        'themeMode': 'light',
+      }).themeMode,
+      AppThemeMode.light,
+    );
+    expect(
+      ModelSerializers.userSettingsFromMap(<String, dynamic>{
+        'themeMode': 'unknown',
+      }).themeMode,
+      AppThemeMode.system,
+    );
+  });
+
+  testWidgets('app applies dark semantic colors from user theme mode', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileSettings,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      ),
+    );
+
+    final BuildContext context = tester.element(find.byType(SettingsPage));
+    final ThemeData theme = Theme.of(context);
+    final AppSemanticColors appColors = context.appColors;
+    final AppSemanticColors expected = AppSemanticColors.dark(
+      NightMoodPalette.fromMood(NightMood.calm),
+    );
+
+    expect(theme.brightness, Brightness.dark);
+    expect(theme.scaffoldBackgroundColor, expected.pageBackground);
+    expect(appColors.pageBackground, expected.pageBackground);
+    expect(appColors.surface, expected.surface);
+    expect(appColors.accent, expected.accent);
+    expect(theme.textTheme.titleMedium?.color, expected.textPrimary);
+    expect(theme.textTheme.bodySmall?.color, expected.textSecondary);
+  });
+
+  testWidgets('home notification bell swaps contrast by brightness', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.light,
+        selectedNightMood: NightMood.happy,
+      ),
+    );
+
+    BuildContext context = tester.element(find.byType(HomePreSleepPage));
+    AppSemanticColors appColors = context.appColors;
+    Finder surfaceFinder = find.byKey(
+      const ValueKey<String>('home-notification-bell-surface'),
+    );
+    Container bellSurface = tester.widget<Container>(surfaceFinder);
+    BoxDecoration bellDecoration = bellSurface.decoration! as BoxDecoration;
+    expect(bellDecoration.color, appColors.accentSoft);
+    expect(
+      tester
+          .widget<Icon>(
+            find.descendant(
+              of: surfaceFinder,
+              matching: find.byIcon(Icons.notifications_none_rounded),
+            ),
+          )
+          .color,
+      appColors.accentDeep,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.happy,
+      ),
+    );
+
+    context = tester.element(find.byType(HomePreSleepPage));
+    appColors = context.appColors;
+    surfaceFinder = find.byKey(
+      const ValueKey<String>('home-notification-bell-surface'),
+    );
+    bellSurface = tester.widget<Container>(surfaceFinder);
+    bellDecoration = bellSurface.decoration! as BoxDecoration;
+    expect(bellDecoration.color, appColors.accent);
+    expect(
+      tester
+          .widget<Icon>(
+            find.descendant(
+              of: surfaceFinder,
+              matching: find.byIcon(Icons.notifications_none_rounded),
+            ),
+          )
+          .color,
+      appColors.textOnAccent,
+    );
+  });
+
+  testWidgets('bottom nav selected tab uses visible semantic selected state', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      ),
+    );
+
+    final BuildContext context = tester.element(find.byType(HomePreSleepPage));
+    final AppSemanticColors appColors = context.appColors;
+    final Finder homePillFinder = find.byKey(
+      const ValueKey<String>('bottom-nav-首页-pill'),
+    );
+    final AnimatedContainer homePill = tester.widget<AnimatedContainer>(
+      homePillFinder,
+    );
+    final BoxDecoration decoration = homePill.decoration! as BoxDecoration;
+    expect(decoration.color, appColors.accentSoft);
+    expect(decoration.border, Border.all(color: appColors.accent, width: 1.2));
+    expect(
+      tester
+          .widget<Icon>(
+            find.descendant(
+              of: homePillFinder,
+              matching: find.byIcon(Icons.home_rounded),
+            ),
+          )
+          .color,
+      appColors.accentDeep,
+    );
+    final Text label = tester.widget<Text>(
+      find.descendant(of: homePillFinder, matching: find.text('首页')),
+    );
+    expect(label.style?.color, appColors.accentDeep);
+    expect(label.style?.fontWeight, FontWeight.w700);
+  });
+
+  test('app typography exposes approved home font roles', () {
+    final TextTheme textTheme = AppTextStyles.buildTextTheme();
+
+    expect(AppTypography.heroTitle(textTheme).fontSize, 24);
+    expect(AppTypography.heroTitle(textTheme).fontWeight, FontWeight.w800);
+    expect(AppTypography.sectionTitle(textTheme).fontSize, 18);
+    expect(AppTypography.sectionTitle(textTheme).fontWeight, FontWeight.w800);
+    expect(AppTypography.panelTitle(textTheme).fontSize, 16);
+    expect(AppTypography.panelTitle(textTheme).fontWeight, FontWeight.w700);
+    expect(AppTypography.cardTitle(textTheme).fontSize, 15);
+    expect(AppTypography.cardTitle(textTheme).fontWeight, FontWeight.w700);
+    expect(AppTypography.body(textTheme).fontSize, 14);
+    expect(AppTypography.body(textTheme).fontWeight, FontWeight.w500);
+    expect(AppTypography.bodyMuted(textTheme).fontSize, 13);
+    expect(AppTypography.bodyMuted(textTheme).fontWeight, FontWeight.w400);
+    expect(AppTypography.meta(textTheme).fontSize, 12);
+    expect(AppTypography.meta(textTheme).fontWeight, FontWeight.w600);
+    expect(AppTypography.chip(textTheme).fontSize, 11);
+    expect(AppTypography.chip(textTheme).fontWeight, FontWeight.w500);
+  });
 
   test('cloudbase auth gate only blocks before bootstrap completes', () {
     expect(
@@ -191,7 +997,7 @@ void main() {
     },
   );
 
-  testWidgets('home quick actions show defaults and editor catalog', (
+  testWidgets('home quick actions are hidden by default', (
     WidgetTester tester,
   ) async {
     await _pumpApp(
@@ -200,29 +1006,326 @@ void main() {
       clock: _dayClock,
     );
 
+    expect(find.text('快捷功能'), findsNothing);
+    expect(find.text('音乐'), findsNothing);
+    expect(find.text('梦记一则'), findsNothing);
+    expect(find.text('打卡日历'), findsNothing);
+    expect(find.text('思绪清理'), findsNothing);
+  });
+
+  testWidgets('settings switch shows home quick actions when enabled', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileSettings,
+      clock: _dayClock,
+    );
+
+    expect(find.text('显示与首页'), findsOneWidget);
+    expect(find.text('首页显示'), findsNothing);
+    expect(find.text('快捷功能'), findsOneWidget);
+
+    final Finder quickActionsToggle = find.byKey(
+      const ValueKey<String>('settings-toggle-快捷功能'),
+    );
+    await tester.ensureVisible(quickActionsToggle);
+    await tester.tap(quickActionsToggle);
+    await tester.pump();
+
+    final AppServices services = AppScope.of(
+      tester.element(find.byType(SettingsPage)),
+    );
+    expect(
+      services.settingsRepository.currentSettings.showHomeQuickActions,
+      isTrue,
+    );
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+      initialSettings: services.settingsRepository.currentSettings,
+    );
+
+    expect(find.text('快捷功能'), findsOneWidget);
     expect(find.text('音乐'), findsOneWidget);
     expect(find.text('梦记一则'), findsOneWidget);
     expect(find.text('打卡日历'), findsOneWidget);
     expect(find.text('思绪清理'), findsOneWidget);
+  });
 
-    await tester.tap(find.text('编辑').first);
+  testWidgets('settings can open manual night mood flow during daytime', (
+    WidgetTester tester,
+  ) async {
+    final List<MethodCall> platformCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall call,
+        ) async {
+          platformCalls.add(call);
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileSettings,
+      clock: _dayClock,
+    );
+    platformCalls.clear();
+
+    expect(find.text('显示与首页'), findsOneWidget);
+    expect(find.text('重新选择心情'), findsOneWidget);
+
+    await tester.tap(find.text('重新选择心情'));
     await tester.pumpAndSettle();
 
-    expect(find.text('编辑快捷功能'), findsOneWidget);
-    expect(find.text('睡眠百科'), findsOneWidget);
-    await _scrollToHomeQuickActionCandidate(
-      tester,
-      HomeQuickActionIds.thoughtVault,
+    expect(find.byType(NightMoodWelcomeFlow), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('night-mood-top-card')),
+      findsOneWidget,
     );
-    expect(find.text('事记仓库'), findsOneWidget);
-    expect(find.text('我的勋章'), findsOneWidget);
-    await _scrollToHomeQuickActionCandidate(
-      tester,
-      HomeQuickActionIds.profileReport,
+    expect(
+      _hapticTypesFrom(platformCalls),
+      contains('HapticFeedbackType.mediumImpact'),
     );
-    expect(find.text('实验报告'), findsOneWidget);
-    expect(find.text('设置'), findsOneWidget);
+    expect(
+      _hapticTypesFrom(platformCalls),
+      isNot(contains('HapticFeedbackType.lightImpact')),
+    );
+    expect(
+      _hapticTypesFrom(platformCalls)
+          .where((String? type) => type == 'HapticFeedbackType.mediumImpact')
+          .length,
+      1,
+    );
+    expect(find.byKey(BottomNavShell.navBarKey), findsNothing);
   });
+
+  testWidgets('settings can switch app appearance mode immediately', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileSettings,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.system,
+      ),
+    );
+
+    expect(find.text('显示与首页'), findsOneWidget);
+    expect(find.text('外观模式'), findsOneWidget);
+    expect(find.text('跟随系统'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('外观模式'));
+    await tester.tap(find.text('外观模式'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 240));
+    await tester.tap(find.text('深色').last);
+    await tester.pump();
+
+    final AppServices services = AppScope.of(
+      tester.element(find.byType(SettingsPage)),
+    );
+    expect(
+      services.settingsRepository.currentSettings.themeMode,
+      AppThemeMode.dark,
+    );
+  });
+
+  testWidgets('settings sheet rows use single selection haptic', (
+    WidgetTester tester,
+  ) async {
+    final List<MethodCall> platformCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall call,
+        ) async {
+          platformCalls.add(call);
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileSettings,
+      clock: _dayClock,
+    );
+    platformCalls.clear();
+
+    await tester.ensureVisible(find.text('回复文字浮动'));
+    await tester.tap(find.text('回复文字浮动'));
+    await tester.pump(const Duration(milliseconds: 90));
+
+    final Iterable<String?> haptics = _hapticTypesFrom(platformCalls);
+    expect(haptics, contains('HapticFeedbackType.selectionClick'));
+    expect(haptics, isNot(contains('HapticFeedbackType.lightImpact')));
+  });
+
+  testWidgets('manual night mood flow saves mood and returns to settings', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.manualNightMood,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(NightMood.calm),
+    );
+
+    await tester.tap(find.text('开心'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(PrimaryButton, '下一步'));
+    await tester.pumpAndSettle();
+
+    final Finder firstReason = find.byKey(
+      const ValueKey<String>('night-mood-reason-睡得还不错'),
+    );
+    expect(firstReason, findsOneWidget);
+    final AnimatedContainer reasonContainer = tester.widget<AnimatedContainer>(
+      firstReason,
+    );
+    final BoxDecoration reasonDecoration =
+        reasonContainer.decoration! as BoxDecoration;
+    expect(reasonDecoration.borderRadius, AppRadius.control);
+
+    await tester.tap(find.widgetWithText(PrimaryButton, '继续'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(PrimaryButton, '保存心情主题'), findsOneWidget);
+    expect(find.widgetWithText(PrimaryButton, '进入今晚首页'), findsNothing);
+
+    await tester.tap(find.widgetWithText(PrimaryButton, '保存心情主题'));
+    await tester.pumpAndSettle();
+
+    final AppServices services = AppScope.of(
+      tester.element(find.byType(SettingsPage)),
+    );
+    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(
+      services.settingsRepository.currentSettings.selectedNightMood,
+      NightMood.happy,
+    );
+  });
+
+  testWidgets('settings manual night mood save returns to settings page', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileSettings,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(NightMood.calm),
+    );
+
+    await tester.tap(find.text('重新选择心情'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('开心'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(PrimaryButton, '下一步'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(PrimaryButton, '继续'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(PrimaryButton, '保存心情主题'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(find.byType(NightMoodWelcomeFlow), findsNothing);
+    final AppServices services = AppScope.of(
+      tester.element(find.byType(SettingsPage)),
+    );
+    expect(
+      services.settingsRepository.currentSettings.selectedNightMood,
+      NightMood.happy,
+    );
+  });
+
+  testWidgets('manual night mood save preserves profile settings back stack', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(NightMood.calm),
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey<String>('profile-settings-card')),
+    );
+    await tester.tap(find.text('设置').last);
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsPage), findsOneWidget);
+
+    await tester.tap(find.text('重新选择心情'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('开心'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(PrimaryButton, '下一步'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(PrimaryButton, '继续'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(PrimaryButton, '保存心情主题'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(find.byType(NightMoodWelcomeFlow), findsNothing);
+
+    final bool handledBack = await tester.binding.handlePopRoute();
+    expect(handledBack, isTrue);
+    await tester.pumpAndSettle();
+    expect(find.byType(ProfilePage), findsOneWidget);
+  });
+
+  testWidgets(
+    'home quick actions show defaults and editor catalog when enabled',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.homePreSleep,
+        clock: _dayClock,
+        initialSettings: buildDefaultUserSettings().copyWith(
+          showHomeQuickActions: true,
+        ),
+      );
+
+      expect(find.text('音乐'), findsOneWidget);
+      expect(find.text('梦记一则'), findsOneWidget);
+      expect(find.text('打卡日历'), findsOneWidget);
+      expect(find.text('思绪清理'), findsOneWidget);
+
+      await tester.tap(find.text('编辑').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('编辑快捷功能'), findsOneWidget);
+      expect(find.text('睡眠百科'), findsOneWidget);
+      await _scrollToHomeQuickActionCandidate(
+        tester,
+        HomeQuickActionIds.thoughtVault,
+      );
+      expect(find.text('事记仓库'), findsOneWidget);
+      expect(find.text('我的勋章'), findsOneWidget);
+      await _scrollToHomeQuickActionCandidate(
+        tester,
+        HomeQuickActionIds.profileReport,
+      );
+      expect(find.text('实验报告'), findsOneWidget);
+      expect(find.text('设置'), findsOneWidget);
+    },
+  );
 
   testWidgets('home section header typography matches dorm standard', (
     WidgetTester tester,
@@ -231,6 +1334,9 @@ void main() {
       tester,
       initialLocation: AppRoutes.homePreSleep,
       clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        showHomeQuickActions: true,
+      ),
     );
 
     final Text quickTitle = tester.widget<Text>(find.text('快捷功能'));
@@ -240,11 +1346,11 @@ void main() {
 
     final Finder editFinder = find.text('编辑').first;
     final BuildContext editContext = tester.element(editFinder);
-    final NightMoodPalette palette = editContext.nightMoodPalette;
+    final AppSemanticColors appColors = editContext.appColors;
     final Text editText = tester.widget<Text>(editFinder);
     expect(editText.style?.fontSize, 12);
-    expect(editText.style?.fontWeight, FontWeight.w700);
-    expect(editText.style?.color, palette.welcomeAccentColor);
+    expect(editText.style?.fontWeight, FontWeight.w600);
+    expect(editText.style?.color, appColors.accentDeep);
 
     final Finder editButton = find
         .ancestor(of: editFinder, matching: find.byType(TextButton))
@@ -258,6 +1364,7 @@ void main() {
           .first,
     );
     expect(editChevron.size, 16);
+    expect(editChevron.color, appColors.accentDeep);
   });
 
   testWidgets('home quick action editor saves a selected four item set', (
@@ -267,6 +1374,9 @@ void main() {
       tester,
       initialLocation: AppRoutes.homePreSleep,
       clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        showHomeQuickActions: true,
+      ),
     );
 
     await tester.tap(find.text('编辑').first);
@@ -306,6 +1416,9 @@ void main() {
       tester,
       initialLocation: AppRoutes.homePreSleep,
       clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        showHomeQuickActions: true,
+      ),
     );
 
     await tester.tap(find.text('编辑').first);
@@ -338,12 +1451,9 @@ void main() {
 
     await _pumpApp(
       tester,
-      initialLocation: AppRoutes.homePreSleep,
+      initialLocation: AppRoutes.homeQuickActionsEdit,
       clock: _dayClock,
     );
-
-    await tester.tap(find.text('编辑').first);
-    await tester.pumpAndSettle();
 
     final Finder selectedFinder = find.byKey(
       const ValueKey<String>(
@@ -372,18 +1482,152 @@ void main() {
 
       await _pumpApp(
         tester,
-        initialLocation: AppRoutes.homePreSleep,
+        initialLocation: AppRoutes.homeQuickActionsEdit,
         clock: _dayClock,
       );
-
-      await tester.tap(find.text('编辑').first);
-      await tester.pumpAndSettle();
 
       final Finder saveButton = find.widgetWithText(FilledButton, '保存快捷功能');
       final double buttonBottom = tester.getBottomLeft(saveButton).dy;
       expect(844 - buttonBottom, closeTo(16, 0.1));
     },
   );
+
+  testWidgets('home quick action editor uses approved typography roles', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homeQuickActionsEdit,
+      clock: _dayClock,
+    );
+
+    expect(tester.widget<Text>(find.text('已选择')).style?.fontSize, 18);
+    expect(
+      tester.widget<Text>(find.text('已选择')).style?.fontWeight,
+      FontWeight.w800,
+    );
+    expect(tester.widget<Text>(find.text('4/4')).style?.fontSize, 12);
+    expect(
+      tester.widget<Text>(find.text('4/4')).style?.fontWeight,
+      FontWeight.w600,
+    );
+    expect(tester.widget<Text>(find.text('梦记一则')).style?.fontSize, 15);
+    expect(
+      tester.widget<Text>(find.text('梦记一则')).style?.fontWeight,
+      FontWeight.w600,
+    );
+
+    final BuildContext context = tester.element(find.text('梦记一则'));
+    final AppSemanticColors appColors = context.appColors;
+    final Icon dreamIcon = tester.widget<Icon>(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey<String>(
+            'home-quick-action-selected-${HomeQuickActionIds.dreamJournal}',
+          ),
+        ),
+        matching: find.byIcon(Icons.auto_stories_rounded),
+      ),
+    );
+    expect(dreamIcon.color, appColors.accentDeep);
+  });
+
+  testWidgets('routed detail pages share the same back title header', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormStatus,
+      clock: _dayClock,
+    );
+    final double baselineGap =
+        tester.getTopLeft(find.text('寝室状态记录')).dx -
+        tester.getTopRight(find.byIcon(Icons.chevron_left_rounded).first).dx;
+
+    Future<void> expectHeaderForRoute(
+      String route,
+      String title, {
+      Color expectedColor = AppColors.textPrimary,
+    }) async {
+      await _pumpApp(tester, initialLocation: route, clock: _dayClock);
+      expect(tester.takeException(), isNull, reason: route);
+
+      expect(find.byType(AppDetailPageHeader), findsOneWidget);
+      final Finder titleFinder = find.text(title).first;
+      final Text titleText = tester.widget<Text>(titleFinder);
+      final TextTheme textTheme = Theme.of(
+        tester.element(titleFinder),
+      ).textTheme;
+      expect(
+        titleText.style?.fontSize,
+        AppTypography.sectionTitle(textTheme).fontSize,
+      );
+      expect(
+        titleText.style?.fontWeight,
+        AppTypography.sectionTitle(textTheme).fontWeight,
+      );
+      expect(titleText.style?.color, expectedColor);
+
+      final double gap =
+          tester.getTopLeft(titleFinder).dx -
+          tester.getTopRight(find.byIcon(Icons.chevron_left_rounded).first).dx;
+      expect(gap, closeTo(baselineGap, 0.1), reason: title);
+    }
+
+    await expectHeaderForRoute(AppRoutes.homeQuickActionsEdit, '编辑快捷功能');
+    await expectHeaderForRoute(AppRoutes.dormRules, '宿舍公约');
+    await expectHeaderForRoute(AppRoutes.dormCurrentStatus, '当前室友状态');
+    await expectHeaderForRoute(
+      AppRoutes.dormMemberLocation('roommate-a'),
+      '舍友详情',
+    );
+    await expectHeaderForRoute(AppRoutes.dormInvite, '邀请舍友');
+    await expectHeaderForRoute(AppRoutes.profileAccountPassword, '找回密码');
+    await expectHeaderForRoute(AppRoutes.dreamJournal, '梦记');
+    await expectHeaderForRoute(AppRoutes.dreamDetail, '梦境详情');
+    await expectHeaderForRoute(
+      AppRoutes.sleepAudioCatalog,
+      '睡前放松音频',
+      expectedColor: AppColors.onDark,
+    );
+    await expectHeaderForRoute(
+      AppRoutes.sleepCantSleep,
+      '难以入睡',
+      expectedColor: AppColors.onDark,
+    );
+    await expectHeaderForRoute(
+      AppRoutes.logNightAwakening,
+      '记录夜醒',
+      expectedColor: AppColors.onDark,
+    );
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormRules,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(NightMood.calm),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('dorm-rules-edit-entry')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppDetailPageHeader), findsOneWidget);
+    final Text editTitle = tester.widget<Text>(find.text('编辑宿舍公约'));
+    final TextTheme editTheme = Theme.of(
+      tester.element(find.text('编辑宿舍公约')),
+    ).textTheme;
+    expect(
+      editTitle.style?.fontSize,
+      AppTypography.sectionTitle(editTheme).fontSize,
+    );
+    expect(editTitle.style?.color, AppColors.textPrimary);
+    expect(find.byType(DormRulesEditPage), findsOneWidget);
+    expect(find.byType(DormRulesPage), findsNothing);
+  });
 
   testWidgets('night entry from /home opens the welcome flow first', (
     WidgetTester tester,
@@ -419,7 +1663,7 @@ void main() {
   ) async {
     await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
 
-    await tester.tap(find.widgetWithText(TextButton, 'Skip'));
+    await tester.tap(find.widgetWithText(AppTextAction, 'Skip'));
     await tester.pumpAndSettle();
 
     expect(find.byType(HomePreSleepPage), findsOneWidget);
@@ -442,11 +1686,11 @@ void main() {
 
     await tester.tap(find.text('开心'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '下一步'));
+    await tester.tap(find.widgetWithText(PrimaryButton, '下一步'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '继续'));
+    await tester.tap(find.widgetWithText(PrimaryButton, '继续'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '进入今晚首页'));
+    await tester.tap(find.widgetWithText(PrimaryButton, '进入今晚首页'));
     await tester.pumpAndSettle();
 
     expect(find.byType(HomePreSleepPage), findsOneWidget);
@@ -485,7 +1729,7 @@ void main() {
   testWidgets('legacy welcome skip behavior', (WidgetTester tester) async {
     await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
 
-    await tester.tap(find.widgetWithText(TextButton, 'Skip'));
+    await tester.tap(find.widgetWithText(AppTextAction, 'Skip'));
     await tester.pumpAndSettle();
 
     expect(find.byType(HomePreSleepPage), findsOneWidget);
@@ -505,7 +1749,7 @@ void main() {
   ) async {
     await _pumpApp(tester, initialLocation: AppRoutes.home, clock: _nightClock);
 
-    await tester.tap(find.widgetWithText(TextButton, 'Skip'));
+    await tester.tap(find.widgetWithText(AppTextAction, 'Skip'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.night_shelter_rounded));
@@ -516,25 +1760,48 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(HomePreSleepPage), findsOneWidget);
-    expect(find.widgetWithText(TextButton, 'Skip'), findsNothing);
+    expect(find.widgetWithText(AppTextAction, 'Skip'), findsNothing);
   });
 
   testWidgets('bottom navigation switches between shell tabs', (
     WidgetTester tester,
   ) async {
+    final List<MethodCall> platformCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall call,
+        ) async {
+          platformCalls.add(call);
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
     await _pumpApp(
       tester,
       initialLocation: AppRoutes.homePreSleep,
       clock: _dayClock,
     );
+    platformCalls.clear();
 
     await tester.tap(find.byIcon(Icons.night_shelter_rounded));
     await tester.pumpAndSettle();
     expect(find.byType(DormPage), findsOneWidget);
+    expect(
+      _hapticTypesFrom(platformCalls),
+      contains('HapticFeedbackType.selectionClick'),
+    );
+    platformCalls.clear();
 
     await tester.tap(find.byIcon(Icons.person_rounded).last);
     await tester.pumpAndSettle();
     expect(find.byType(ProfilePage), findsOneWidget);
+    expect(
+      _hapticTypesFrom(platformCalls),
+      contains('HapticFeedbackType.selectionClick'),
+    );
   });
 
   testWidgets('bottom navigation stays fixed when the keyboard appears', (
@@ -783,6 +2050,7 @@ void main() {
     );
     await _pumpAssistantSurface(tester);
 
+    await _pumpUntilFound(tester, find.text('把梦先轻轻记下来'));
     expect(find.text('把梦先轻轻记下来'), findsOneWidget);
     expect(find.text('会保存到“我的 / 梦境记录”。'), findsOneWidget);
     expect(find.text('例如：我梦见自己站在很高的桥上...'), findsOneWidget);
@@ -920,6 +2188,7 @@ void main() {
         find.byKey(const ValueKey<String>('auth-reset-phone-0')),
         findsOneWidget,
       );
+      expect(find.byType(AppDetailPageHeader), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('auth-reset-verify')),
         findsOneWidget,
@@ -942,6 +2211,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('重置密码'), findsOneWidget);
+      expect(find.byType(AppDetailPageHeader), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('auth-reset-password-0')),
         findsOneWidget,
@@ -983,6 +2253,83 @@ void main() {
       expect(
         find.byKey(const ValueKey<String>('auth-reset-success-resend')),
         findsNothing,
+      );
+    },
+  );
+
+  testWidgets('phone auth send code button uses stronger verification color', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.authPhone,
+      clock: _dayClock,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('auth-login-method-code')),
+    );
+    await tester.pumpAndSettle();
+
+    final FilledButton sendButton = tester.widget<FilledButton>(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('auth-login-code-send')),
+        matching: find.byType(FilledButton),
+      ),
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('auth-login-code-send')),
+        matching: find.byType(PrimaryButton),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      sendButton.style?.backgroundColor?.resolve(<WidgetState>{}),
+      const Color(0xFFBFE6F0),
+    );
+    expect(
+      sendButton.style?.foregroundColor?.resolve(<WidgetState>{}),
+      const Color(0xFF004F5D),
+    );
+  });
+
+  testWidgets(
+    'account reset send code button uses stronger verification color',
+    (WidgetTester tester) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profileAccountPassword,
+        clock: _dayClock,
+      );
+
+      final FilledButton sendButton = tester.widget<FilledButton>(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('account-reset-send')),
+          matching: find.byType(FilledButton),
+        ),
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('account-reset-send')),
+          matching: find.byType(PrimaryButton),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        sendButton.style?.backgroundColor?.resolve(<WidgetState>{}),
+        const Color(0xFFBFE6F0),
+      );
+      expect(
+        sendButton.style?.foregroundColor?.resolve(<WidgetState>{}),
+        const Color(0xFF004F5D),
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('account-reset-verify')),
+          matching: find.byType(PrimaryButton),
+        ),
+        findsOneWidget,
       );
     },
   );
@@ -1259,6 +2606,10 @@ void main() {
 
       final TextField phoneTextField = tester.widget<TextField>(phoneField);
       expect(phoneTextField.controller?.text, '13900139000');
+      final PrimaryButton primaryButton = tester.widget<PrimaryButton>(
+        find.descendant(of: submitButton, matching: find.byType(PrimaryButton)),
+      );
+      expect(primaryButton.isLoading, isFalse);
       final FilledButton button = tester.widget<FilledButton>(
         find.descendant(of: submitButton, matching: find.byType(FilledButton)),
       );
@@ -1620,10 +2971,149 @@ void main() {
     final BoxDecoration decoration = heroContainer.decoration! as BoxDecoration;
     final LinearGradient gradient = decoration.gradient! as LinearGradient;
     final NightMoodPalette palette = NightMoodPalette.fromMood(NightMood.calm);
+    final AppSemanticColors appColors = AppSemanticColors.light(palette);
 
-    expect(gradient.colors.first, palette.heroGradientStart);
-    expect(gradient.colors[1], palette.heroGradientMid);
-    expect(gradient.colors.last, palette.heroGradientEnd);
+    expect(gradient.colors.first, appColors.heroEnd);
+    expect(gradient.colors[1], appColors.heroMid);
+    expect(gradient.colors.last, appColors.heroStart);
+
+    final Finder dormHubCard = find
+        .ancestor(of: find.text('宿舍公约'), matching: find.byType(AppCard))
+        .first;
+    final Icon dormHubIcon = tester.widget<Icon>(
+      find
+          .descendant(
+            of: dormHubCard,
+            matching: find.byIcon(Icons.calendar_today_rounded),
+          )
+          .first,
+    );
+    expect(dormHubIcon.color, appColors.accentDeep);
+  });
+
+  testWidgets('dorm routed intro surfaces use semantic accent tokens', (
+    WidgetTester tester,
+  ) async {
+    const NightMood mood = NightMood.calm;
+    final NightMoodPalette palette = NightMoodPalette.fromMood(mood);
+    final AppSemanticColors appColors = AppSemanticColors.light(palette);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormInvite,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(mood),
+    );
+
+    final Finder inviteTitle = find.text('梅苑 2 栋 204').first;
+    final Text inviteTitleText = tester.widget<Text>(inviteTitle);
+    expect(inviteTitleText.style?.color, appColors.accentDeep);
+    final AppCard inviteIntroCard = tester.widget<AppCard>(
+      find.ancestor(of: inviteTitle, matching: find.byType(AppCard)).first,
+    );
+    expect(inviteIntroCard.color, appColors.accentSoft);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormRules,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(mood),
+    );
+
+    final Text rulesTitle = tester.widget<Text>(find.text('共同维护良好宿舍环境'));
+    expect(rulesTitle.style?.color, appColors.accentDeep);
+    final Icon rulesIntroIcon = tester.widget<Icon>(
+      find.byIcon(Icons.shield_outlined),
+    );
+    expect(rulesIntroIcon.color, appColors.accentDeep);
+  });
+
+  testWidgets('dorm rules display uses quiet semantic color tokens', (
+    WidgetTester tester,
+  ) async {
+    const NightMood mood = NightMood.calm;
+    final NightMoodPalette palette = NightMoodPalette.fromMood(mood);
+    final AppSemanticColors appColors = AppSemanticColors.light(palette);
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormRules,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(mood),
+    );
+
+    final AppCard introCard = tester.widget<AppCard>(
+      find
+          .ancestor(of: find.text('共同维护良好宿舍环境'), matching: find.byType(AppCard))
+          .first,
+    );
+    expect(introCard.color, appColors.accentSoft);
+
+    final Finder displayGroupFinder = find.byKey(
+      const ValueKey<String>('dorm-rules-display-group-basic'),
+    );
+    final AppSettingsItem displayGroup = tester.widget<AppSettingsItem>(
+      displayGroupFinder,
+    );
+    expect(displayGroup.iconColor, appColors.accentDeep);
+    expect(displayGroup.iconBackgroundColor, appColors.surfaceMuted);
+
+    final AppCard displayGroupCard = tester.widget<AppCard>(
+      find.ancestor(of: displayGroupFinder, matching: find.byType(AppCard)),
+    );
+    expect(displayGroupCard.color, appColors.surface);
+
+    await tester.tap(displayGroupFinder);
+    await tester.pumpAndSettle();
+
+    final Text rowTitle = tester.widget<Text>(find.text('23:00后保持安静'));
+    final Text rowDescription = tester.widget<Text>(find.text('请使用耳机，避免外放声音'));
+    expect(rowTitle.style?.color, appColors.textPrimary);
+    expect(rowDescription.style?.color, appColors.textSecondary);
+
+    final Finder rowCheckIcon = find.byIcon(Icons.check_rounded).first;
+    final Icon checkIcon = tester.widget<Icon>(rowCheckIcon);
+    expect(checkIcon.color, appColors.accentDeep);
+
+    final Container checkContainer = tester.widget<Container>(
+      find.ancestor(of: rowCheckIcon, matching: find.byType(Container)).first,
+    );
+    final BoxDecoration checkDecoration =
+        checkContainer.decoration! as BoxDecoration;
+    expect(checkDecoration.color, appColors.surfaceMuted);
+  });
+
+  testWidgets('dorm rules expandable groups use single selection haptic', (
+    WidgetTester tester,
+  ) async {
+    final List<MethodCall> platformCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall call,
+        ) async {
+          platformCalls.add(call);
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormRules,
+      clock: _dayClock,
+    );
+    platformCalls.clear();
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('dorm-rules-display-group-routine')),
+    );
+    await tester.pump(const Duration(milliseconds: 90));
+
+    final Iterable<String?> haptics = _hapticTypesFrom(platformCalls);
+    expect(haptics, contains('HapticFeedbackType.selectionClick'));
+    expect(haptics, isNot(contains('HapticFeedbackType.lightImpact')));
   });
 
   testWidgets(
@@ -1652,6 +3142,39 @@ void main() {
       expect(find.text('请使用耳机，避免外放声音'), findsNothing);
       expect(find.text('请使用台灯或小夜灯'), findsNothing);
       expect(find.text('每天至少开窗通风30分钟'), findsNothing);
+
+      final TextTheme rulesTextTheme = Theme.of(
+        tester.element(find.byType(DormRulesPage)),
+      ).textTheme;
+      final Text displayHeaderTitle = tester.widget<Text>(
+        find.text('宿舍公约').first,
+      );
+      expect(
+        displayHeaderTitle.style?.fontSize,
+        AppTypography.sectionTitle(rulesTextTheme).fontSize,
+      );
+      expect(
+        displayHeaderTitle.style?.fontWeight,
+        AppTypography.sectionTitle(rulesTextTheme).fontWeight,
+      );
+      final Text displayIntroTitle = tester.widget<Text>(
+        find.text('共同维护良好宿舍环境'),
+      );
+      expect(
+        displayIntroTitle.style?.fontSize,
+        AppTypography.sectionTitle(rulesTextTheme).fontSize,
+      );
+      expect(
+        displayIntroTitle.style?.fontWeight,
+        AppTypography.sectionTitle(rulesTextTheme).fontWeight,
+      );
+      final AppSettingsItem displayBasicGroup = tester.widget<AppSettingsItem>(
+        find.byKey(const ValueKey<String>('dorm-rules-display-group-basic')),
+      );
+      expect(
+        displayBasicGroup.titleStyle?.fontSize,
+        AppTypography.body(rulesTextTheme).fontSize,
+      );
       expect(
         find.byKey(const ValueKey<String>('dorm-rules-display-group-basic')),
         findsOneWidget,
@@ -1702,40 +3225,44 @@ void main() {
         find.descendant(of: editButton, matching: find.byType(PrimaryButton)),
       );
       expect(editEntryButton.size, PrimaryButtonSize.compact);
-      expect(editEntryButton.variant, PrimaryButtonVariant.soft);
+      expect(editEntryButton.variant, PrimaryButtonVariant.filled);
       expect(editEntryButton.backgroundColor, isNull);
       expect(editEntryButton.foregroundColor, isNull);
       expect(
         tester.getTopRight(editButton).dx,
         lessThanOrEqualTo(390 - AppSpacing.md),
       );
-      final double displayHeaderTop = tester.getTopLeft(find.text('宿舍公约')).dy;
 
       await tester.tap(editButton);
-      await tester.pump();
-      expect(
-        tester.getTopLeft(find.text('宿舍公约')).dy,
-        lessThanOrEqualTo(displayHeaderTop + AppSpacing.xs),
-      );
-
-      final SlideTransition editSlideTransition = tester
-          .widget<SlideTransition>(
-            find
-                .ancestor(
-                  of: find.byKey(
-                    const ValueKey<String>('dorm-rules-edit-view'),
-                  ),
-                  matching: find.byType(SlideTransition),
-                )
-                .first,
-          );
-      expect(editSlideTransition.position.value.dx, greaterThan(0));
-      expect(editSlideTransition.position.value.dy, 0);
       await tester.pumpAndSettle();
 
+      expect(find.byType(DormRulesPage), findsNothing);
+      expect(find.byType(DormRulesEditPage), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('dorm-rules-edit-view')),
+        findsOneWidget,
+      );
       expect(find.text('编辑宿舍公约'), findsOneWidget);
       expect(find.text('修改后需要室友确认'), findsOneWidget);
       expect(find.text('本页保存的是调整草案，不会立即覆盖当前正式公约。'), findsOneWidget);
+      final Text editHeaderTitle = tester.widget<Text>(find.text('编辑宿舍公约'));
+      expect(
+        editHeaderTitle.style?.fontSize,
+        AppTypography.sectionTitle(rulesTextTheme).fontSize,
+      );
+      expect(
+        editHeaderTitle.style?.fontWeight,
+        AppTypography.sectionTitle(rulesTextTheme).fontWeight,
+      );
+      final Text editIntroTitle = tester.widget<Text>(find.text('修改后需要室友确认'));
+      expect(
+        editIntroTitle.style?.fontSize,
+        AppTypography.cardTitle(rulesTextTheme).fontSize,
+      );
+      expect(
+        editIntroTitle.style?.fontWeight,
+        AppTypography.cardTitle(rulesTextTheme).fontWeight,
+      );
       expect(find.byType(AppSettingsGroup), findsNWidgets(4));
       expect(
         find.byKey(const ValueKey<String>('dorm-rules-edit-intro-icon')),
@@ -1759,10 +3286,13 @@ void main() {
           matching: find.byIcon(Icons.chevron_right_rounded),
         ),
       );
+      final AppSemanticColors editAppColors = tester
+          .element(find.byType(DormRulesEditPage))
+          .appColors;
       expect(quietTrailingText.style?.color, AppColors.textSecondary);
       expect(quietTrailingText.style?.fontWeight, FontWeight.w500);
       expect(quietTrailingChevron.size, 18);
-      expect(quietTrailingChevron.color, AppColors.textHint);
+      expect(quietTrailingChevron.color, editAppColors.textSecondary);
       expect(find.text('开始'), findsNothing);
       expect(find.text('结束'), findsNothing);
       expect(find.text('熄灯提醒'), findsOneWidget);
@@ -1813,26 +3343,23 @@ void main() {
         greaterThanOrEqualTo(AppSpacing.lg),
       );
 
-      final BuildContext buttonContext = tester.element(
-        find.byKey(const ValueKey<String>('dorm-rules-submit-button')),
-      );
       final PrimaryButton submitButton = tester.widget<PrimaryButton>(
         find.byKey(const ValueKey<String>('dorm-rules-submit-button')),
       );
       final PrimaryButton cancelButton = tester.widget<PrimaryButton>(
         find.byKey(const ValueKey<String>('dorm-rules-cancel-button')),
       );
-
       final NightMoodPalette editPalette = Theme.of(
-        buttonContext,
+        tester.element(find.byType(DormRulesEditPage)),
       ).extension<NightMoodPalette>()!;
+
       expect(cancelButton.size, PrimaryButtonSize.compact);
       expect(cancelButton.variant, PrimaryButtonVariant.ghost);
       expect(cancelButton.backgroundColor, AppColors.surface);
       expect(cancelButton.foregroundColor, AppColors.textPrimary);
       expect(cancelButton.borderColor, AppColors.surfaceBorder);
       expect(submitButton.size, PrimaryButtonSize.compact);
-      expect(submitButton.variant, PrimaryButtonVariant.soft);
+      expect(submitButton.variant, PrimaryButtonVariant.filled);
       expect(submitButton.backgroundColor, isNull);
       expect(submitButton.foregroundColor, isNull);
       final Container quietIconContainer = tester.widget<Container>(
@@ -1853,6 +3380,14 @@ void main() {
 
       final Finder examToggleFinder = find.byKey(
         const ValueKey<String>('dorm-rules-switch-exam-week'),
+      );
+      final Finder examWeekItem = find.ancestor(
+        of: find.text('考试周模式'),
+        matching: find.byType(AppSettingsItem),
+      );
+      expect(
+        tester.getTopRight(examToggleFinder).dx,
+        closeTo(tester.getTopRight(examWeekItem).dx - AppSpacing.md, 2),
       );
       final AppSettingsToggle examToggle = tester.widget<AppSettingsToggle>(
         examToggleFinder,
@@ -2019,6 +3554,102 @@ void main() {
     },
   );
 
+  testWidgets('dorm rules long routine note expands instead of ellipsizing', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const String longRoutineNote =
+        '平日室友之间起床时间差异较大，如果需要提前出门，请提前一晚确认闹钟音量并优先使用震动提醒，避免影响还在休息的室友。';
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormRules,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(NightMood.calm),
+    );
+
+    final AppServices services = AppScope.of(
+      tester.element(find.byType(DormRulesPage)),
+    );
+    await services.dormRepository.createDorm(
+      name: '长备注测试寝室',
+      rulesSettings: services.dormRepository.currentDorm.rulesSettings.copyWith(
+        routineNote: longRoutineNote,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('dorm-rules-display-group-routine')),
+    );
+    await tester.pumpAndSettle();
+
+    final Finder displayRoutineText = find.descendant(
+      of: find.byKey(
+        const ValueKey<String>('dorm-rules-display-group-routine-body'),
+      ),
+      matching: find.text(longRoutineNote),
+    );
+    expect(displayRoutineText, findsOneWidget);
+    final Text displayRoutineNote = tester.widget<Text>(displayRoutineText);
+    expect(displayRoutineNote.overflow, isNot(TextOverflow.ellipsis));
+    expect(displayRoutineNote.maxLines, isNull);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('dorm-rules-edit-entry')),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey<String>('dorm-rules-trailing-作息习惯备注')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+
+    final Finder editRoutineTrailing = find.byKey(
+      const ValueKey<String>('dorm-rules-trailing-作息习惯备注'),
+    );
+    final Text editRoutineNote = tester.widget<Text>(
+      find.descendant(
+        of: editRoutineTrailing,
+        matching: find.text(longRoutineNote),
+      ),
+    );
+    expect(editRoutineNote.overflow, isNot(TextOverflow.ellipsis));
+    expect(editRoutineNote.maxLines, isNull);
+    expect(
+      tester.getSize(editRoutineTrailing).height,
+      greaterThan(AppSpacing.xxxl),
+    );
+  });
+
+  testWidgets('dorm rules edit route opens as a standalone page', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormRulesEdit,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(NightMood.calm),
+    );
+
+    expect(find.byType(DormRulesEditPage), findsOneWidget);
+    expect(find.byType(DormRulesPage), findsNothing);
+    expect(find.text('编辑宿舍公约'), findsOneWidget);
+    expect(find.text('宿舍公约'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('dorm-rules-submit-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('dorm-rules-cancel-button')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('dorm event actions route to dorm status records page', (
     WidgetTester tester,
   ) async {
@@ -2069,6 +3700,18 @@ void main() {
     expect(find.byType(DormCurrentStatusPage), findsOneWidget);
     expect(find.text('当前室友状态'), findsWidgets);
     expect(find.text('按室友查看'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('dorm-current-status-filter-all')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('dorm-current-status-filter-quiet')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('dorm-current-status-filter-pending')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('dorm current status overview has no fake view action', (
@@ -2250,6 +3893,11 @@ void main() {
     tester.widget<TextButton>(find.byKey(DormPage.eventMoreKey)).onPressed!();
     await tester.pumpAndSettle();
 
+    final AppMessageRecordCard activeRecord = tester
+        .widget<AppMessageRecordCard>(
+          find.byKey(DormStatusPage.activeRecordKey),
+        );
+    final String markedTitle = activeRecord.title;
     await tester.tap(find.byKey(DormStatusPage.activeRecordKey));
     await tester.pumpAndSettle();
 
@@ -2266,14 +3914,15 @@ void main() {
     await tester.tap(find.text('更早').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('宿舍环境保持安静'), findsOneWidget);
+    expect(find.text(markedTitle), findsOneWidget);
   });
 
-  testWidgets('dorm status pages use mood palette accents', (
+  testWidgets('dorm status pages use semantic color accents', (
     WidgetTester tester,
   ) async {
     const NightMood mood = NightMood.calm;
     final NightMoodPalette palette = NightMoodPalette.fromMood(mood);
+    final AppSemanticColors appColors = AppSemanticColors.light(palette);
 
     await _pumpApp(
       tester,
@@ -2285,26 +3934,27 @@ void main() {
     final ChoiceChip statusTab = tester.widget<ChoiceChip>(
       find.widgetWithText(ChoiceChip, '待处理').first,
     );
-    expect(statusTab.selectedColor, palette.welcomeAccentColor);
+    expect(statusTab.selectedColor, appColors.accent);
     expect(
       statusTab.color?.resolve(<WidgetState>{
         WidgetState.selected,
         WidgetState.pressed,
       }),
-      palette.welcomeAccentColor,
+      appColors.accent,
     );
     final ChoiceChip todayTab = tester.widget<ChoiceChip>(
       find.widgetWithText(ChoiceChip, '今天').first,
     );
     expect(
       todayTab.color?.resolve(<WidgetState>{WidgetState.pressed}),
-      AppColors.surfaceMuted,
+      appColors.surfaceMuted,
     );
     final AppMessageRecordCard statusOverview = tester
         .widget<AppMessageRecordCard>(
           find.byKey(DormStatusPage.unreadOverviewKey),
         );
-    expect(statusOverview.iconBackgroundColor, palette.primaryHighlight);
+    expect(statusOverview.iconBackgroundColor, appColors.accentSoft);
+    expect(statusOverview.iconColor, appColors.accentDeep);
 
     await _pumpApp(
       tester,
@@ -2313,21 +3963,31 @@ void main() {
       initialSettings: _settingsWithMood(mood),
     );
 
-    final ChoiceChip currentStatusTab = tester.widget<ChoiceChip>(
-      find.widgetWithText(ChoiceChip, '全部').first,
+    final Finder currentStatusTab = find.byKey(
+      const ValueKey<String>('dorm-current-status-filter-all'),
     );
-    expect(currentStatusTab.selectedColor, palette.welcomeAccentColor);
-    expect(
-      currentStatusTab.color?.resolve(<WidgetState>{
-        WidgetState.selected,
-        WidgetState.pressed,
-      }),
-      palette.welcomeAccentColor,
+    final Container currentStatusTabSurface = tester
+        .widgetList<Container>(
+          find.descendant(
+            of: currentStatusTab,
+            matching: find.byType(Container),
+          ),
+        )
+        .firstWhere((Container container) {
+          return container.decoration is BoxDecoration;
+        });
+    final BoxDecoration currentStatusDecoration =
+        currentStatusTabSurface.decoration! as BoxDecoration;
+    expect(currentStatusDecoration.color, appColors.accent);
+    final Text currentStatusLabel = tester.widget<Text>(
+      find.descendant(of: currentStatusTab, matching: find.text('全部')),
     );
+    expect(currentStatusLabel.style?.color, appColors.textOnAccent);
     final AppMessageRecordCard currentStatusOverview = tester
         .widgetList<AppMessageRecordCard>(find.byType(AppMessageRecordCard))
         .first;
-    expect(currentStatusOverview.iconBackgroundColor, palette.primaryHighlight);
+    expect(currentStatusOverview.iconBackgroundColor, appColors.accentSoft);
+    expect(currentStatusOverview.iconColor, appColors.accentDeep);
   });
 
   testWidgets('dorm home event time labels are not rendered as action pills', (
@@ -2365,16 +4025,96 @@ void main() {
   testWidgets('dorm primary color uses the approved CTA token', (
     WidgetTester tester,
   ) async {
-    expect(AppColors.primary, const Color(0xFF8EDDF2));
+    expect(AppColors.primary, const Color(0xFF357E92));
+    expect(AppColors.primarySoft, const Color(0xFF90DDF2));
+    expect(AppColors.primary, isNot(AppColors.primarySoft));
   });
+
+  testWidgets(
+    'message record cards default to semantic typography and accents',
+    (WidgetTester tester) async {
+      final NightMoodPalette palette = NightMoodPalette.fromMood(
+        NightMood.calm,
+      );
+      final AppSemanticColors appColors = AppSemanticColors.light(palette);
+      final TextTheme textTheme = AppTextStyles.buildTextTheme();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(
+            useMaterial3: true,
+            textTheme: textTheme,
+            extensions: <ThemeExtension<dynamic>>[palette, appColors],
+          ),
+          home: const Scaffold(
+            body: AppMessageRecordCard(
+              icon: Icons.nightlight_round,
+              title: '记录标题',
+              detail: '记录说明',
+              timeLabel: '刚刚',
+            ),
+          ),
+        ),
+      );
+
+      final Icon recordIcon = tester.widget<Icon>(
+        find.byIcon(Icons.nightlight_round),
+      );
+      expect(recordIcon.color, appColors.accentDeep);
+      final Container iconContainer = tester.widget<Container>(
+        find
+            .ancestor(
+              of: find.byIcon(Icons.nightlight_round),
+              matching: find.byType(Container),
+            )
+            .first,
+      );
+      final BoxDecoration iconDecoration =
+          iconContainer.decoration! as BoxDecoration;
+      expect(iconDecoration.color, appColors.accentSoft);
+
+      final Text title = tester.widget<Text>(find.text('记录标题'));
+      expect(
+        title.style?.fontSize,
+        AppTypography.cardTitle(textTheme).fontSize,
+      );
+      expect(
+        title.style?.fontWeight,
+        AppTypography.cardTitle(textTheme).fontWeight,
+      );
+      expect(title.style?.color, appColors.textPrimary);
+
+      final Text detail = tester.widget<Text>(find.text('记录说明'));
+      expect(
+        detail.style?.fontSize,
+        AppTypography.bodyMuted(textTheme).fontSize,
+      );
+      expect(
+        detail.style?.fontWeight,
+        AppTypography.bodyMuted(textTheme).fontWeight,
+      );
+      expect(detail.style?.color, appColors.textSecondary);
+
+      final Text time = tester.widget<Text>(find.text('刚刚'));
+      expect(time.style?.fontSize, AppTypography.chip(textTheme).fontSize);
+      expect(time.style?.fontWeight, AppTypography.chip(textTheme).fontWeight);
+      expect(time.style?.color, appColors.textSecondary);
+    },
+  );
 
   testWidgets('dorm member detail uses the shared status record style', (
     WidgetTester tester,
   ) async {
+    const NightMood mood = NightMood.calm;
+    final AppSemanticColors appColors = AppSemanticColors.light(
+      NightMoodPalette.fromMood(mood),
+    );
+
     await _pumpApp(
       tester,
       initialLocation: AppRoutes.dormMemberLocation('roommate-a'),
       clock: _dayClock,
+      initialSettings: _settingsWithMood(mood),
     );
 
     expect(find.byType(DormMemberDetailPage), findsOneWidget);
@@ -2385,19 +4125,70 @@ void main() {
     expect(find.text('林淯已切换到睡眠模式'), findsOneWidget);
     expect(find.text('宿舍环境保持安静'), findsNothing);
     expect(find.byType(AppMessageRecordCard), findsWidgets);
+    final AppMessageRecordCard latestRecord = tester
+        .widgetList<AppMessageRecordCard>(find.byType(AppMessageRecordCard))
+        .first;
+    expect(latestRecord.iconBackgroundColor, appColors.accentSoft);
+    expect(latestRecord.iconColor, appColors.accentDeep);
+
+    final Text memberName = tester.widget<Text>(find.text('林淯').first);
+    expect(
+      memberName.style?.fontSize,
+      AppTypography.sectionTitle(
+        Theme.of(tester.element(find.text('林淯').first)).textTheme,
+      ).fontSize,
+    );
+    expect(memberName.style?.color, appColors.textPrimary);
+
+    final Text recentTitle = tester.widget<Text>(find.text('最近动态'));
+    expect(
+      recentTitle.style?.fontSize,
+      AppTypography.sectionTitle(
+        Theme.of(tester.element(find.text('最近动态'))).textTheme,
+      ).fontSize,
+    );
+    expect(recentTitle.style?.color, appColors.textPrimary);
   });
 
   testWidgets('dorm management route remains available', (
     WidgetTester tester,
   ) async {
+    const NightMood mood = NightMood.calm;
+    final AppSemanticColors appColors = AppSemanticColors.light(
+      NightMoodPalette.fromMood(mood),
+    );
+
     await _pumpApp(
       tester,
       initialLocation: AppRoutes.profileAccountDorm,
       clock: _dayClock,
+      initialSettings: _settingsWithMood(mood),
     );
 
     expect(find.byType(DormManagementPage), findsOneWidget);
     expect(find.text('寝室管理'), findsWidgets);
+
+    final AppSettingsItem inviteItem = tester.widget<AppSettingsItem>(
+      find.widgetWithText(AppSettingsItem, '邀请舍友'),
+    );
+    expect(inviteItem.iconColor, appColors.accentDeep);
+    expect(inviteItem.iconBackgroundColor, appColors.surfaceMuted);
+    expect(
+      inviteItem.titleStyle?.fontSize,
+      AppTypography.body(
+        Theme.of(
+          tester.element(find.widgetWithText(AppSettingsItem, '邀请舍友')),
+        ).textTheme,
+      ).fontSize,
+    );
+
+    final Text currentMembers = tester.widget<Text>(find.text('当前成员'));
+    expect(
+      currentMembers.style?.fontSize,
+      AppTypography.panelTitle(
+        Theme.of(tester.element(find.text('当前成员'))).textTheme,
+      ).fontSize,
+    );
   });
 
   testWidgets('dorm page shows roommate avatar shells and badge chips', (
@@ -2425,10 +4216,236 @@ void main() {
     expect(find.text('安静守护者'), findsNothing);
   });
 
+  testWidgets('dorm member avatar keeps last non-empty avatar during refresh', (
+    WidgetTester tester,
+  ) async {
+    const ValueKey<String> avatarKey = ValueKey<String>('stable-avatar');
+    final Uint8List avatarBytes = Uint8List.fromList(const <int>[
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      0x0D,
+      0x0A,
+      0x1A,
+      0x0A,
+      0x00,
+      0x00,
+      0x00,
+      0x0D,
+      0x49,
+      0x48,
+      0x44,
+      0x52,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x08,
+      0x06,
+      0x00,
+      0x00,
+      0x00,
+      0x1F,
+      0x15,
+      0xC4,
+      0x89,
+      0x00,
+      0x00,
+      0x00,
+      0x0A,
+      0x49,
+      0x44,
+      0x41,
+      0x54,
+      0x78,
+      0x9C,
+      0x63,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x05,
+      0x00,
+      0x01,
+      0x0D,
+      0x0A,
+      0x2D,
+      0xB4,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x49,
+      0x45,
+      0x4E,
+      0x44,
+      0xAE,
+      0x42,
+      0x60,
+      0x82,
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DormMemberAvatar(
+          key: avatarKey,
+          size: 44,
+          accentColor: Colors.green,
+          avatarBytes: avatarBytes,
+          fallbackSeed: 'Alice',
+        ),
+      ),
+    );
+
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.text('A'), findsNothing);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: DormMemberAvatar(
+          key: avatarKey,
+          size: 44,
+          accentColor: Colors.green,
+          fallbackSeed: 'Alice',
+        ),
+      ),
+    );
+
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.text('A'), findsNothing);
+  });
+
+  testWidgets('dorm member avatar prefers a fresh url over cached bytes', (
+    WidgetTester tester,
+  ) async {
+    const ValueKey<String> avatarKey = ValueKey<String>('fresh-url-avatar');
+    final Uint8List avatarBytes = Uint8List.fromList(const <int>[
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      0x0D,
+      0x0A,
+      0x1A,
+      0x0A,
+      0x00,
+      0x00,
+      0x00,
+      0x0D,
+      0x49,
+      0x48,
+      0x44,
+      0x52,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x08,
+      0x06,
+      0x00,
+      0x00,
+      0x00,
+      0x1F,
+      0x15,
+      0xC4,
+      0x89,
+      0x00,
+      0x00,
+      0x00,
+      0x0A,
+      0x49,
+      0x44,
+      0x41,
+      0x54,
+      0x78,
+      0x9C,
+      0x63,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x05,
+      0x00,
+      0x01,
+      0x0D,
+      0x0A,
+      0x2D,
+      0xB4,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x49,
+      0x45,
+      0x4E,
+      0x44,
+      0xAE,
+      0x42,
+      0x60,
+      0x82,
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DormMemberAvatar(
+          key: avatarKey,
+          size: 44,
+          accentColor: Colors.green,
+          avatarBytes: avatarBytes,
+          fallbackSeed: 'Alice',
+        ),
+      ),
+    );
+
+    Image image = tester.widget<Image>(find.byType(Image));
+    expect(image.image, isA<MemoryImage>());
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: DormMemberAvatar(
+          key: avatarKey,
+          size: 44,
+          accentColor: Colors.green,
+          avatarUrl: 'https://example.com/avatar-a.png',
+          fallbackSeed: 'Alice',
+        ),
+      ),
+    );
+
+    image = tester.widget<Image>(find.byType(Image));
+    expect(
+      image.image,
+      isA<NetworkImage>().having(
+        (NetworkImage provider) => provider.url,
+        'url',
+        'https://example.com/avatar-a.png',
+      ),
+    );
+  });
+
   testWidgets('dorm gentle reminder opens the shared rich action sheet', (
     WidgetTester tester,
   ) async {
-    await _pumpApp(tester, initialLocation: AppRoutes.dorm, clock: _dayClock);
+    const NightMood mood = NightMood.calm;
+    final AppSemanticColors appColors = AppSemanticColors.light(
+      NightMoodPalette.fromMood(mood),
+    );
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dorm,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(mood),
+    );
 
     final Finder reminderEntry = find.text('委婉提醒');
     await tester.scrollUntilVisible(
@@ -2449,6 +4466,24 @@ void main() {
       find.byKey(const ValueKey<String>('gentle-reminder-content')),
       findsOneWidget,
     );
+
+    final Text sheetTitle = tester.widget<Text>(find.text('委婉提醒').last);
+    expect(
+      sheetTitle.style?.fontSize,
+      AppTypography.sectionTitle(
+        Theme.of(tester.element(find.text('委婉提醒').last)).textTheme,
+      ).fontSize,
+    );
+    final Text contentTab = tester.widget<Text>(find.text('内容'));
+    expect(contentTab.style?.color, appColors.textOnAccent);
+    final Text contentHeading = tester.widget<Text>(find.text('选择提醒内容'));
+    expect(
+      contentHeading.style?.fontSize,
+      AppTypography.panelTitle(
+        Theme.of(tester.element(find.text('选择提醒内容'))).textTheme,
+      ).fontSize,
+    );
+    expect(contentHeading.style?.color, appColors.textPrimary);
   });
 
   testWidgets('dorm gentle reminder sheet stays above the shell tab bar', (
@@ -2504,6 +4539,41 @@ void main() {
     expect(find.text('设置'), findsOneWidget);
     expect(find.text('常见问题'), findsOneWidget);
   });
+
+  testWidgets(
+    'profile header opens account management without avatar camera affordance',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profile,
+        clock: _dayClock,
+      );
+
+      expect(find.byIcon(Icons.photo_camera_rounded), findsNothing);
+
+      final Rect headerRect = tester.getRect(
+        find.byKey(const ValueKey<String>('profile-header-section')),
+      );
+      await tester.tapAt(Offset(headerRect.left + 34, headerRect.center.dy));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AccountManagementPage), findsOneWidget);
+      expect(find.text('账号管理'), findsOneWidget);
+      expect(find.text('个人资料'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Paul（本地演示）'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AccountManagementPage), findsOneWidget);
+      expect(find.text('账号管理'), findsOneWidget);
+    },
+  );
 
   testWidgets('profile carousel reveals duration and heatmap cards', (
     WidgetTester tester,
@@ -2592,6 +4662,181 @@ void main() {
     },
   );
 
+  testWidgets(
+    'profile layout uses compact header, quote and carousel density',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutes.profile,
+        clock: _dayClock,
+      );
+
+      final Size headerSize = tester.getSize(
+        find.byKey(const ValueKey<String>('profile-header-section')),
+      );
+      final Size quoteSize = tester.getSize(
+        find.ancestor(
+          of: find.text('完成今晚心情选择，解锁一句陪伴语'),
+          matching: find.byType(AppCard),
+        ),
+      );
+      final Size carouselSize = tester.getSize(
+        find.byKey(const ValueKey<String>('profile-data-carousel')),
+      );
+
+      expect(headerSize.height, lessThan(150));
+      expect(quoteSize.height, lessThan(84));
+      expect(carouselSize.height, lessThan(220));
+    },
+  );
+
+  testWidgets('profile data card titles share the same vertical inset', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    double titleTopInset(String title) {
+      final Finder titleFinder = find.text(title);
+      final Finder cardFinder = find.ancestor(
+        of: titleFinder,
+        matching: find.byType(AppCard),
+      );
+      return tester.getTopLeft(titleFinder).dy -
+          tester.getTopLeft(cardFinder).dy;
+    }
+
+    expect(titleTopInset('睡眠质量(分)'), AppSpacing.md);
+
+    await tester.drag(find.text('睡眠质量(分)'), const Offset(-280, 0));
+    await tester.pumpAndSettle();
+    expect(titleTopInset('睡眠时长(小时)'), AppSpacing.md);
+
+    await tester.drag(find.text('睡眠时长(小时)'), const Offset(-280, 0));
+    await tester.pumpAndSettle();
+    expect(titleTopInset('本月打卡热力'), AppSpacing.md);
+  });
+
+  testWidgets('profile heatmap preview fills its grid area', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    await tester.drag(find.text('睡眠质量(分)'), const Offset(-560, 0));
+    await tester.pumpAndSettle();
+
+    final Finder gridFinder = find.byKey(
+      const ValueKey<String>('profile-heatmap-grid'),
+    );
+    final Finder cellFinder = find.byWidgetPredicate((Widget widget) {
+      final Key? key = widget.key;
+      return key is ValueKey<String> &&
+          key.value.startsWith('profile-heatmap-cell-');
+    });
+    final Rect gridRect = tester.getRect(gridFinder);
+    final List<Rect> cellRects = cellFinder
+        .evaluate()
+        .map((Element element) => tester.getRect(find.byWidget(element.widget)))
+        .toList(growable: false);
+
+    expect(cellRects, isNotEmpty);
+    expect(
+      (cellRects.map((Rect rect) => rect.left).reduce(math.min) - gridRect.left)
+          .abs(),
+      lessThan(0.01),
+    );
+    expect(
+      (cellRects.map((Rect rect) => rect.right).reduce(math.max) -
+              gridRect.right)
+          .abs(),
+      lessThan(0.01),
+    );
+    expect(
+      (cellRects.map((Rect rect) => rect.top).reduce(math.min) - gridRect.top)
+          .abs(),
+      lessThan(0.01),
+    );
+    expect(
+      (cellRects.map((Rect rect) => rect.bottom).reduce(math.max) -
+              gridRect.bottom)
+          .abs(),
+      lessThan(0.01),
+    );
+    for (final Rect rect in cellRects) {
+      expect((rect.width - cellRects.first.width).abs(), lessThan(0.01));
+      expect((rect.height - cellRects.first.height).abs(), lessThan(0.01));
+    }
+  });
+
+  testWidgets('profile quote card uses the active primary green', (
+    WidgetTester tester,
+  ) async {
+    const NightMood mood = NightMood.calm;
+    final NightMoodPalette palette = NightMoodPalette.fromMood(mood);
+
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+      initialSettings: _settingsWithMood(mood),
+    );
+
+    final Finder quoteText = find.text('完成今晚心情选择，解锁一句陪伴语');
+    final AppCard quoteCard = tester.widget<AppCard>(
+      find.ancestor(of: quoteText, matching: find.byType(AppCard)),
+    );
+    final Text quote = tester.widget<Text>(quoteText);
+
+    expect(quoteCard.color, palette.primary);
+    expect(quote.style?.color, AppColors.onDark);
+  });
+
+  testWidgets('profile insight subtitles use one typography token', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profile,
+      clock: _dayClock,
+    );
+
+    await tester.ensureVisible(find.text('实验报告'));
+    final Text reportSubtitle = tester.widget<Text>(
+      find.textContaining('本周平均睡眠时长').first,
+    );
+    final Text dreamSubtitle = tester.widget<Text>(find.text('记录片段'));
+    final Text vaultSubtitle = tester.widget<Text>(find.text('灵感待办'));
+
+    expect(dreamSubtitle.style?.fontSize, reportSubtitle.style?.fontSize);
+    expect(vaultSubtitle.style?.fontSize, reportSubtitle.style?.fontSize);
+    expect(dreamSubtitle.style?.fontWeight, reportSubtitle.style?.fontWeight);
+    expect(vaultSubtitle.style?.fontWeight, reportSubtitle.style?.fontWeight);
+    expect(dreamSubtitle.style?.color, reportSubtitle.style?.color);
+    expect(vaultSubtitle.style?.color, reportSubtitle.style?.color);
+  });
+
   testWidgets('home and profile cards use a unified rectangular radius', (
     WidgetTester tester,
   ) async {
@@ -2662,13 +4907,154 @@ void main() {
     final AppCard entryCard = tester.widget<AppCard>(
       find.ancestor(of: find.text('漂浮柑橘岛'), matching: find.byType(AppCard)),
     );
+    final AppCard highlightCard = tester.widget<AppCard>(
+      find.ancestor(
+        of: find.text('这一周的梦开始有规律了'),
+        matching: find.byType(AppCard),
+      ),
+    );
+    final TextTheme textTheme = Theme.of(
+      tester.element(find.byType(DreamJournalPage)),
+    ).textTheme;
+    final Text sectionTitle = tester.widget<Text>(find.text('最近梦境'));
+    final Text highlightTitle = tester.widget<Text>(find.text('这一周的梦开始有规律了'));
+    final Text entryTitle = tester.widget<Text>(find.text('漂浮柑橘岛'));
 
     expect(entryCard.borderRadius, AppRadius.compactCard);
+    expect(highlightCard.padding, const EdgeInsets.all(AppSpacing.md));
+    expect(tester.getSize(find.byWidget(highlightCard)).height, lessThan(220));
+    expect(
+      sectionTitle.style?.fontSize,
+      AppTypography.sectionTitle(textTheme).fontSize,
+    );
+    expect(
+      highlightTitle.style?.fontSize,
+      AppTypography.panelTitle(textTheme).fontSize,
+    );
+    expect(
+      entryTitle.style?.fontSize,
+      AppTypography.cardTitle(textTheme).fontSize,
+    );
+    expect(entryCard.padding, const EdgeInsets.all(AppSpacing.md));
+    expect(find.text('查看详细'), findsOneWidget);
+    expect(find.text('水下图书馆'), findsNothing);
+
+    await tester.tap(find.text('查看详细'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('全部梦境'), findsOneWidget);
+    expect(find.text('漂浮柑橘岛'), findsOneWidget);
+    expect(find.text('水下图书馆'), findsOneWidget);
+    expect(find.text('会说话的风'), findsOneWidget);
+
+    await tester.tap(find.text('水下图书馆'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('梦境详情'), findsOneWidget);
+    expect(find.text('水下图书馆'), findsOneWidget);
+    expect(find.text('漂浮柑橘岛'), findsNothing);
+  });
+
+  testWidgets(
+    'dream detail keeps selected entry across router refresh rebuilds',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final DreamEntryData selectedEntry = DreamContent.entries[1];
+
+      await tester.pumpWidget(_dreamDetailHarness(entry: selectedEntry));
+      await tester.pumpAndSettle();
+
+      expect(find.text('水下图书馆'), findsOneWidget);
+      expect(find.text('漂浮柑橘岛'), findsNothing);
+
+      final Finder overviewCard = find.ancestor(
+        of: find.text('水下图书馆'),
+        matching: find.byType(AppCard),
+      );
+      final Finder mappingCard = find.ancestor(
+        of: find.text('梦境映射'),
+        matching: find.byType(AppCard),
+      );
+      final Finder sleepLinkCard = find.ancestor(
+        of: find.text('睡前关联'),
+        matching: find.byType(AppCard),
+      );
+      expect(tester.getSize(overviewCard).width, greaterThan(320));
+      expect(
+        tester.getSize(mappingCard).width,
+        closeTo(tester.getSize(overviewCard).width, 0.1),
+      );
+      expect(
+        tester.getSize(sleepLinkCard).width,
+        closeTo(tester.getSize(overviewCard).width, 0.1),
+      );
+
+      await tester.pumpWidget(_dreamDetailHarness());
+      await tester.pumpAndSettle();
+
+      expect(find.text('水下图书馆'), findsOneWidget);
+      expect(find.text('漂浮柑橘岛'), findsNothing);
+    },
+  );
+
+  testWidgets('dream mapping tab uses compact visual hierarchy', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dreamJournal,
+      clock: _dayClock,
+    );
+
+    await tester.tap(find.text('映射'));
+    await tester.pumpAndSettle();
+
+    final TextTheme textTheme = Theme.of(
+      tester.element(find.byType(DreamJournalPage)),
+    ).textTheme;
+    final Finder mappingCardFinder = find.ancestor(
+      of: find.text('学会梦的语言，解锁梦的启示'),
+      matching: find.byType(AppCard),
+    );
+    final AppCard mappingCard = tester.widget<AppCard>(mappingCardFinder);
+    final Text mappingTitle = tester.widget<Text>(find.text('学会梦的语言，解锁梦的启示'));
+
+    expect(find.textContaining('从反复出现的场景'), findsNothing);
+    expect(mappingCard.padding, const EdgeInsets.all(AppSpacing.md));
+    expect(
+      mappingTitle.style?.fontSize,
+      AppTypography.panelTitle(textTheme).fontSize,
+    );
+    expect(
+      tester.getSize(
+        find.byKey(const ValueKey<String>('dream-mapping-hero-image')),
+      ),
+      const Size(80, 80),
+    );
+    expect(tester.getSize(mappingCardFinder).height, lessThan(220));
   });
 
   testWidgets(
     'dream journal top tabs suppress default rectangular press overlay',
     (WidgetTester tester) async {
+      final List<MethodCall> platformCalls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (
+            MethodCall call,
+          ) async {
+            platformCalls.add(call);
+            return null;
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, null);
+      });
+
       await _pumpApp(
         tester,
         initialLocation: AppRoutes.dreamJournal,
@@ -2682,6 +5068,14 @@ void main() {
 
       expect(pressedOverlay, Colors.transparent);
       expect(tabBar.splashFactory, NoSplash.splashFactory);
+
+      platformCalls.clear();
+      await tester.tap(find.text('映射'));
+      await tester.pumpAndSettle();
+      expect(
+        _hapticTypesFrom(platformCalls),
+        contains('HapticFeedbackType.selectionClick'),
+      );
     },
   );
 
@@ -2740,6 +5134,72 @@ void main() {
     expect(find.byType(CalendarCheckinPage), findsOneWidget);
   });
 
+  testWidgets('thought vault uses compact profile typography', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileThoughtVault,
+      clock: _dayClock,
+    );
+
+    expect(find.byType(ThoughtVaultPage), findsOneWidget);
+
+    final Finder entryCardFinder = find.ancestor(
+      of: find.text('事记 22:48 · 睡前收口'),
+      matching: find.byType(AppCard),
+    );
+    final AppCard entryCard = tester.widget<AppCard>(entryCardFinder);
+    final TextTheme textTheme = Theme.of(
+      tester.element(find.byType(ThoughtVaultPage)),
+    ).textTheme;
+    final Text entryTitle = tester.widget<Text>(find.text('事记 22:48 · 睡前收口'));
+    final Text timePill = tester.widget<Text>(
+      find
+          .descendant(
+            of: entryCardFinder,
+            matching: find.byWidgetPredicate(
+              (Widget widget) =>
+                  widget is Text &&
+                  widget.data != null &&
+                  RegExp(r'^\d{2}/\d{2} \d{2}:\d{2}$').hasMatch(widget.data!),
+            ),
+          )
+          .first,
+    );
+
+    expect(entryCard.borderRadius, AppRadius.compactCard);
+    expect(entryCard.padding, const EdgeInsets.all(AppSpacing.md));
+    expect(
+      entryTitle.style?.fontSize,
+      AppTypography.cardTitle(textTheme).fontSize,
+    );
+    expect(
+      entryTitle.style?.fontWeight,
+      AppTypography.cardTitle(textTheme).fontWeight,
+    );
+    expect(timePill.style?.fontSize, AppTypography.chip(textTheme).fontSize);
+    expect(tester.getSize(entryCardFinder).height, lessThan(136));
+
+    await tester.tap(find.text('事记 22:48 · 睡前收口'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ThoughtNoteDetailPage), findsOneWidget);
+    final AppCard detailCard = tester.widget<AppCard>(
+      find.ancestor(of: find.text('AI整理提要'), matching: find.byType(AppCard)),
+    );
+    final Text detailTitle = tester.widget<Text>(find.text('AI整理提要'));
+    expect(detailCard.borderRadius, AppRadius.surfacePrimary);
+    expect(detailCard.padding, const EdgeInsets.all(AppSpacing.md));
+    expect(
+      detailTitle.style?.fontSize,
+      AppTypography.cardTitle(textTheme).fontSize,
+    );
+  });
+
   testWidgets('profile badge card opens overview and badge sheet', (
     WidgetTester tester,
   ) async {
@@ -2764,20 +5224,50 @@ void main() {
       find.byKey(const ValueKey<String>('profile-badge-grid-early-sleeper')),
       findsOneWidget,
     );
-    expect(find.text('当前佩戴：安睡大师'), findsOneWidget);
-    expect(find.text('当前展示：安睡大师'), findsNothing);
-    expect(find.text('点击任意勋章可查看说明，并把已获得勋章切换为当前展示。'), findsNothing);
-    expect(find.widgetWithText(FilledButton, '已同步最新'), findsOneWidget);
-    expect(find.text('佩戴最新获得'), findsNothing);
-    expect(find.text('3 / 10'), findsOneWidget);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey<String>('profile-badge-summary-card')),
-        matching: find.text('3 / 10'),
+        matching: find.text('安睡大师'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('profile-badge-summary-card')),
+        matching: find.text('保持稳定睡眠节律并减少夜醒。'),
+      ),
+      findsNothing,
+    );
+    expect(find.text('当前佩戴：安睡大师'), findsNothing);
+    expect(find.text('当前展示：安睡大师'), findsNothing);
+    expect(find.text('点击任意勋章可查看说明，并把已获得勋章切换为当前展示。'), findsNothing);
+    expect(find.widgetWithText(PrimaryButton, '已同步最新'), findsOneWidget);
+    expect(find.text('佩戴最新获得'), findsNothing);
+    final UserProfile defaultProfile = buildDefaultUserProfile();
+    final String countLabel =
+        '${defaultProfile.earnedBadgeIds.length} / ${kHonorBadgeCatalog.length}';
+    expect(find.text(countLabel), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('profile-badge-summary-card')),
+        matching: find.text(countLabel),
       ),
       findsNothing,
     );
     expect(find.text('已获得的勋章会高亮显示，未解锁的勋章也可以先查看说明。'), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('profile-badge-summary-card')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('profile-badge-sheet-sleep-master')),
+      findsOneWidget,
+    );
+
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pumpAndSettle();
 
     final Finder earlySleeperTile = find.byKey(
       const ValueKey<String>('profile-badge-grid-early-sleeper'),
@@ -2804,10 +5294,16 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(430, 932));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
+    const NightMood mood = NightMood.calm;
+    final AppSemanticColors appColors = AppSemanticColors.light(
+      NightMoodPalette.fromMood(mood),
+    );
+
     await _pumpApp(
       tester,
       initialLocation: AppRoutes.profileBadges,
       clock: _dayClock,
+      initialSettings: _settingsWithMood(mood),
     );
 
     expect(
@@ -2848,6 +5344,165 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('寝室脉搏勋章显示'), findsNothing);
+
+    final TextTheme textTheme = Theme.of(
+      tester.element(
+        find.byKey(const ValueKey<String>('badge-catalog-title-dorm')),
+      ),
+    ).textTheme;
+    final Text dormCatalogTitle = tester.widget<Text>(
+      find.byKey(const ValueKey<String>('badge-catalog-title-dorm')),
+    );
+    expect(
+      dormCatalogTitle.style?.fontSize,
+      AppTypography.sectionTitle(textTheme).fontSize,
+    );
+    expect(dormCatalogTitle.style?.color, AppColors.textPrimary);
+
+    final Finder dormSummaryCard = find.byKey(
+      const ValueKey<String>('dorm-badge-summary-card'),
+    );
+    final PrimaryButton dormSummaryAction = tester.widget<PrimaryButton>(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('badge-summary-action-button')),
+        matching: find.byType(PrimaryButton),
+      ),
+    );
+    expect(dormSummaryAction.size, PrimaryButtonSize.mini);
+    expect(dormSummaryAction.variant, PrimaryButtonVariant.soft);
+    expect(dormSummaryAction.backgroundColor, appColors.surfaceMuted);
+    expect(dormSummaryAction.disabledForegroundColor, appColors.textSecondary);
+    expect(
+      find.descendant(of: dormSummaryCard, matching: find.text('不醒人室')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: dormSummaryCard,
+        matching: find.textContaining('当前展示'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: dormSummaryCard,
+        matching: find.text('宿舍成员整体睡眠时间长，睡眠状态良好'),
+      ),
+      findsNothing,
+    );
+    final Text summaryTitle = tester.widget<Text>(
+      find.descendant(of: dormSummaryCard, matching: find.text('不醒人室')),
+    );
+    expect(
+      summaryTitle.style?.fontSize,
+      AppTypography.sectionTitle(textTheme).fontSize,
+    );
+    expect(summaryTitle.style?.color, appColors.textPrimary);
+    expect(summaryTitle.overflow, isNot(TextOverflow.ellipsis));
+
+    final AppSettingsItem visibilityItem = tester.widget<AppSettingsItem>(
+      find.byKey(const ValueKey<String>('dorm-badge-visibility-item')),
+    );
+    expect(visibilityItem.iconColor, appColors.accentDeep);
+    expect(
+      visibilityItem.titleStyle?.fontSize,
+      AppTypography.body(textTheme).fontSize,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('dorm-badge-visibility-item')),
+        matching: find.byType(AppSettingsToggle),
+      ),
+      findsOneWidget,
+    );
+
+    final Finder selectedDormBadge = find.byKey(
+      const ValueKey<String>('dorm-badge-grid-no-wake-room'),
+    );
+    final Text dormBadgeTileTitle = tester.widget<Text>(
+      find.descendant(of: selectedDormBadge, matching: find.text('不醒人室')),
+    );
+    expect(
+      dormBadgeTileTitle.style?.fontSize,
+      AppTypography.meta(textTheme).fontSize,
+    );
+
+    final Size summarySize = tester.getSize(dormSummaryCard);
+    expect(summarySize.height, lessThan(170));
+    final Rect summaryRect = tester.getRect(dormSummaryCard);
+    final Rect summaryTitleRect = tester.getRect(
+      find.descendant(of: dormSummaryCard, matching: find.text('不醒人室')),
+    );
+    expect(summaryTitleRect.center.dy, closeTo(summaryRect.center.dy, 18));
+
+    expect(tester.getSize(selectedDormBadge).height, lessThan(150));
+    final Icon selectedDormBadgeIcon = tester.widget<Icon>(
+      find
+          .descendant(
+            of: selectedDormBadge,
+            matching: find.byIcon(Icons.bedtime_rounded),
+          )
+          .first,
+    );
+    expect(selectedDormBadgeIcon.color, isNot(AppColors.textStrong));
+    expect(selectedDormBadgeIcon.color, appColors.accentDeep);
+
+    await tester.tap(dormSummaryCard);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('dorm-badge-sheet-no-wake-room')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('badge header follows detail page title rhythm', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileBadges,
+      clock: _dayClock,
+    );
+
+    final TextTheme textTheme = Theme.of(
+      tester.element(
+        find.byKey(const ValueKey<String>('badge-catalog-title-profile')),
+      ),
+    ).textTheme;
+    final Text profileTitle = tester.widget<Text>(
+      find.byKey(const ValueKey<String>('badge-catalog-title-profile')),
+    );
+    expect(
+      profileTitle.style?.fontSize,
+      AppTypography.sectionTitle(textTheme).fontSize,
+    );
+    expect(
+      profileTitle.style?.fontWeight,
+      AppTypography.sectionTitle(textTheme).fontWeight,
+    );
+    expect(profileTitle.style?.color, AppColors.textPrimary);
+
+    final double badgeHeaderGap =
+        tester
+            .getTopLeft(
+              find.byKey(const ValueKey<String>('badge-catalog-title-profile')),
+            )
+            .dx -
+        tester.getTopRight(find.byIcon(Icons.chevron_left_rounded).first).dx;
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormStatus,
+      clock: _dayClock,
+    );
+    final double dormHeaderGap =
+        tester.getTopLeft(find.text('寝室状态记录')).dx -
+        tester.getTopRight(find.byIcon(Icons.chevron_left_rounded).first).dx;
+    expect(badgeHeaderGap, closeTo(dormHeaderGap, 0.1));
   });
 
   testWidgets('profile badge preview sheet stays above the shell tab bar', (
@@ -2908,9 +5563,16 @@ void main() {
       find.byKey(const ValueKey<String>('profile-badge-summary-card')),
       findsOneWidget,
     );
-    expect(find.text('当前佩戴：安睡大师'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('profile-badge-summary-card')),
+        matching: find.text('安睡大师'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('当前佩戴：安睡大师'), findsNothing);
     expect(find.text('自动同步最新'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, '已同步最新'), findsOneWidget);
+    expect(find.widgetWithText(PrimaryButton, '已同步最新'), findsOneWidget);
     expect(find.text('当前展示：安睡大师'), findsNothing);
     expect(find.text('佩戴最新获得'), findsNothing);
   });
@@ -2947,17 +5609,38 @@ void main() {
       await tester.ensureVisible(earlySleeperTile);
       await tester.tap(earlySleeperTile);
       await tester.pumpAndSettle();
-      final Finder equipButton = find.widgetWithText(FilledButton, '佩戴此勋章');
+      final Finder equipButton = find.widgetWithText(PrimaryButton, '佩戴此勋章');
       await tester.ensureVisible(equipButton);
       await tester.tap(equipButton);
       await tester.pumpAndSettle();
 
-      expect(find.text('当前佩戴：早睡先锋'), findsOneWidget);
+      final Finder manualSummary = find.byKey(
+        const ValueKey<String>('profile-badge-summary-card'),
+      );
+      expect(
+        find.descendant(of: manualSummary, matching: find.text('早睡先锋')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: manualSummary,
+          matching: find.textContaining('当前佩戴'),
+        ),
+        findsNothing,
+      );
       expect(find.text('手动佩戴中'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, '恢复默认最新'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, '已同步最新'), findsNothing);
+      expect(find.widgetWithText(PrimaryButton, '恢复默认最新'), findsOneWidget);
+      expect(find.widgetWithText(PrimaryButton, '已同步最新'), findsNothing);
+      expect(
+        tester.getSize(
+          find.byKey(const ValueKey<String>('badge-summary-mode-chip')),
+        ),
+        tester.getSize(
+          find.byKey(const ValueKey<String>('badge-summary-action-button')),
+        ),
+      );
 
-      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+      await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
       await tester.pumpAndSettle();
 
       expect(
@@ -2974,19 +5657,19 @@ void main() {
       await tester.tap(find.text('我的勋章'));
       await tester.pumpAndSettle();
       final Finder restoreLatestButton = find.widgetWithText(
-        FilledButton,
+        PrimaryButton,
         '恢复默认最新',
       );
       await tester.ensureVisible(restoreLatestButton);
       await tester.tap(restoreLatestButton);
       await tester.pumpAndSettle();
 
-      expect(find.text('当前佩戴：安睡大师'), findsOneWidget);
+      expect(find.text('安睡大师'), findsWidgets);
       expect(find.text('自动同步最新'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, '已同步最新'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, '恢复默认最新'), findsNothing);
+      expect(find.widgetWithText(PrimaryButton, '已同步最新'), findsOneWidget);
+      expect(find.widgetWithText(PrimaryButton, '恢复默认最新'), findsNothing);
 
-      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+      await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
       await tester.pumpAndSettle();
       expect(
         find.descendant(
@@ -3016,6 +5699,11 @@ void main() {
     expect(find.text('帮助主题'), findsOneWidget);
     expect(find.text('常见问题速览'), findsOneWidget);
     expect(find.text('常见问题内容将继续补充'), findsOneWidget);
+    expect(find.widgetWithText(PrimaryButton, '常见问题内容将继续补充'), findsOneWidget);
+    final PrimaryButton faqButton = tester.widget<PrimaryButton>(
+      find.widgetWithText(PrimaryButton, '常见问题内容将继续补充'),
+    );
+    expect(faqButton.size, PrimaryButtonSize.compact);
 
     await tester.tap(find.text('常见问题速览'));
     await tester.pump();
@@ -3027,6 +5715,34 @@ void main() {
     await tester.pump();
 
     expect(find.text('FAQ 正在整理中'), findsOneWidget);
+  });
+
+  testWidgets('profile edit top card uses dark semantic highlight', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileEdit,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      ),
+    );
+
+    final Finder profileIntroText = find.text('调整昵称、签名和角色，让账号页展示更完整。');
+    expect(profileIntroText, findsOneWidget);
+
+    final BuildContext context = tester.element(profileIntroText);
+    final AppSemanticColors appColors = context.appColors;
+    final AppCard introCard = tester.widget<AppCard>(
+      find.ancestor(of: profileIntroText, matching: find.byType(AppCard)),
+    );
+    expect(introCard.color, appColors.accentSoft);
+    expect(introCard.border, Border.all(color: appColors.accent.withAlpha(92)));
+
+    final Text introTitle = tester.widget<Text>(profileIntroText);
+    expect(introTitle.style?.color, appColors.textPrimary);
   });
 
   testWidgets('profile report entry opens sleep report page', (
@@ -3045,6 +5761,52 @@ void main() {
     expect(find.text('睡眠报告'), findsOneWidget);
     expect(find.text('本轮观察亮点'), findsOneWidget);
     expect(find.text('最近记录'), findsOneWidget);
+  });
+
+  testWidgets('sleep report page uses compact report typography', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileReport,
+      clock: _dayClock,
+    );
+
+    final TextTheme textTheme = Theme.of(
+      tester.element(find.byType(SleepReportPage)),
+    ).textTheme;
+    final Finder summaryCardFinder = find.byType(AppCard).first;
+    final AppCard summaryCard = tester.widget<AppCard>(summaryCardFinder);
+    final Finder highlightsCardFinder = find.ancestor(
+      of: find.text('本轮观察亮点'),
+      matching: find.byType(AppCard),
+    );
+    final AppCard highlightsCard = tester.widget<AppCard>(highlightsCardFinder);
+    final Text reportTitle = tester.widget<Text>(
+      find.descendant(of: summaryCardFinder, matching: find.byType(Text)).first,
+    );
+    final Text highlightsTitle = tester.widget<Text>(find.text('本轮观察亮点'));
+    final Text recentTitle = tester.widget<Text>(find.text('最近记录'));
+
+    expect(summaryCard.padding, const EdgeInsets.all(AppSpacing.md));
+    expect(summaryCard.borderRadius, AppRadius.surfacePrimary);
+    expect(highlightsCard.padding, const EdgeInsets.all(AppSpacing.md));
+    expect(
+      reportTitle.style?.fontSize,
+      AppTypography.panelTitle(textTheme).fontSize,
+    );
+    expect(
+      highlightsTitle.style?.fontSize,
+      AppTypography.cardTitle(textTheme).fontSize,
+    );
+    expect(
+      recentTitle.style?.fontSize,
+      AppTypography.cardTitle(textTheme).fontSize,
+    );
+    expect(tester.getSize(summaryCardFinder).height, lessThan(176));
   });
 
   testWidgets('post sleep page hides shell navigation', (
@@ -3073,6 +5835,219 @@ void main() {
     );
 
     expect(find.byType(NotificationsPage), findsOneWidget);
+  });
+
+  testWidgets('intervention task page uses home typography roles', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.interventionTask,
+      clock: _dayClock,
+    );
+
+    expect(find.byType(AppDetailPageHeader), findsOneWidget);
+    final Text headerTitle = tester.widget<Text>(find.text('全部今晚建议'));
+    final TextTheme textTheme = Theme.of(
+      tester.element(find.text('全部今晚建议')),
+    ).textTheme;
+    expect(
+      headerTitle.style?.fontSize,
+      AppTypography.sectionTitle(textTheme).fontSize,
+    );
+    final double interventionHeaderGap =
+        tester.getTopLeft(find.text('全部今晚建议')).dx -
+        tester.getTopRight(find.byIcon(Icons.chevron_left_rounded).first).dx;
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormStatus,
+      clock: _dayClock,
+    );
+    final double dormHeaderGap =
+        tester.getTopLeft(find.text('寝室状态记录')).dx -
+        tester.getTopRight(find.byIcon(Icons.chevron_left_rounded).first).dx;
+    expect(interventionHeaderGap, closeTo(dormHeaderGap, 0.1));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.interventionTask,
+      clock: _dayClock,
+    );
+
+    final Text introTitle = tester.widget<Text>(
+      find.text('这些建议来自昨晚环境、宿舍状态和你最近的反馈。'),
+    );
+    expect(introTitle.style?.fontSize, 16);
+    expect(introTitle.style?.fontWeight, FontWeight.w700);
+    final Finder interventionIntroCard = find.ancestor(
+      of: find.text('这些建议来自昨晚环境、宿舍状态和你最近的反馈。'),
+      matching: find.byType(AppCard),
+    );
+    final AppCard interventionIntro = tester.widget<AppCard>(
+      interventionIntroCard,
+    );
+    expect(interventionIntro.borderRadius, AppRadius.surfacePrimary);
+    expect(tester.getSize(interventionIntroCard).height, lessThan(116));
+
+    final Text actionTitle = tester.widget<Text>(find.text('睡前放松音频'));
+    expect(actionTitle.style?.fontSize, 15);
+    expect(actionTitle.style?.fontWeight, FontWeight.w700);
+  });
+
+  testWidgets('interference detail page uses home typography roles', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.analysisInterferenceFactors,
+      clock: _dayClock,
+    );
+
+    expect(find.byType(AppDetailPageHeader), findsOneWidget);
+    expect(find.text('今晚影响因素'), findsOneWidget);
+    final double interferenceHeaderGap =
+        tester.getTopLeft(find.text('今晚影响因素')).dx -
+        tester.getTopRight(find.byIcon(Icons.chevron_left_rounded).first).dx;
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.dormStatus,
+      clock: _dayClock,
+    );
+    final double dormHeaderGap =
+        tester.getTopLeft(find.text('寝室状态记录')).dx -
+        tester.getTopRight(find.byIcon(Icons.chevron_left_rounded).first).dx;
+    expect(interferenceHeaderGap, closeTo(dormHeaderGap, 0.1));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.analysisInterferenceFactors,
+      clock: _dayClock,
+    );
+
+    final Text sectionTitle = tester.widget<Text>(find.text('今晚的四个观察点'));
+    expect(sectionTitle.style?.fontSize, 18);
+    expect(sectionTitle.style?.fontWeight, FontWeight.w800);
+    expect(find.text('回到首页'), findsNothing);
+
+    final Text noiseTitle = tester.widget<Text>(find.text('宿舍噪声'));
+    expect(noiseTitle.style?.fontSize, 15);
+    expect(noiseTitle.style?.fontWeight, FontWeight.w700);
+    expect(noiseTitle.maxLines, 2);
+    expect(noiseTitle.overflow, TextOverflow.visible);
+
+    final Text statusChip = tester.widget<Text>(
+      find.textContaining('状态').first,
+    );
+    expect(statusChip.style?.fontSize, 11);
+
+    final Finder introCard = find.ancestor(
+      of: find.text('今晚先一起看看，哪些细小因素正在悄悄影响你的安睡。'),
+      matching: find.byType(AppCard),
+    );
+    final AppCard intro = tester.widget<AppCard>(introCard);
+    expect(intro.borderRadius, AppRadius.surfacePrimary);
+    expect(tester.getSize(introCard).height, lessThan(112));
+
+    final Finder noiseCard = find.ancestor(
+      of: find.text('宿舍噪声'),
+      matching: find.byType(AppCard),
+    );
+    final AppCard noise = tester.widget<AppCard>(noiseCard);
+    expect(noise.borderRadius, AppRadius.surfacePrimary);
+    expect(tester.getSize(noiseCard).width, greaterThanOrEqualTo(280));
+    expect(tester.getSize(noiseCard).height, greaterThan(250));
+    expect(tester.getSize(noiseCard).height, lessThanOrEqualTo(300));
+
+    final Finder retestButton = find.ancestor(
+      of: find.text('再次检测').first,
+      matching: find.byType(PrimaryButton),
+    );
+    expect(
+      tester.getBottomLeft(retestButton).dy,
+      lessThanOrEqualTo(tester.getBottomLeft(noiseCard).dy),
+    );
+    expect(
+      tester.getSize(retestButton).width,
+      greaterThanOrEqualTo(
+        tester.getSize(noiseCard).width - (AppSpacing.md * 2) - 2,
+      ),
+    );
+  });
+
+  testWidgets('interference overview uses responsive equal-height cards', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(840, 1180));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.analysisInterferenceFactors,
+      clock: _dayClock,
+    );
+
+    final List<String> titles = <String>['宿舍噪声', '灯光环境', '手机使用', '情绪压力'];
+    final List<Finder> cards = titles
+        .map(
+          (String title) => find.ancestor(
+            of: find.text(title),
+            matching: find.byType(AppCard),
+          ),
+        )
+        .toList(growable: false);
+
+    for (final Finder card in cards) {
+      expect(card, findsOneWidget);
+    }
+
+    final double firstHeight = tester.getSize(cards.first).height;
+    expect(firstHeight, lessThanOrEqualTo(288));
+    for (final Finder card in cards.skip(1)) {
+      expect(tester.getSize(card).height, closeTo(firstHeight, 0.1));
+    }
+    expect(
+      tester.getTopLeft(cards[1]).dy,
+      closeTo(tester.getTopLeft(cards[0]).dy, 0.1),
+    );
+    expect(
+      tester.getTopLeft(cards[2]).dy,
+      greaterThan(tester.getTopLeft(cards[0]).dy),
+    );
+  });
+
+  testWidgets('notification center uses home typography roles', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.notifications,
+      clock: _dayClock,
+    );
+
+    final Text overviewTitle = tester.widget<Text>(
+      find.textContaining('待处理消息').first,
+    );
+    expect(overviewTitle.style?.fontSize, 16);
+    expect(overviewTitle.style?.fontWeight, FontWeight.w700);
+
+    final Text sectionTitle = tester.widget<Text>(find.text('待处理'));
+    expect(sectionTitle.style?.fontSize, 18);
+    expect(sectionTitle.style?.fontWeight, FontWeight.w800);
+
+    final Text notificationTitle = tester.widget<Text>(
+      find.text('宿舍环境保持安静').first,
+    );
+    expect(notificationTitle.style?.fontSize, 15);
+    expect(notificationTitle.style?.fontWeight, FontWeight.w700);
+
+    final Text overviewBody = tester.widget<Text>(find.text('建议先查看「待处理」分组'));
+    expect(overviewBody.style?.fontSize, 13);
+    expect(overviewBody.style?.fontWeight, FontWeight.w400);
   });
 
   testWidgets(
@@ -3492,6 +6467,9 @@ void main() {
   );
 
   testWidgets('calendar page renders month view', (WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await _pumpApp(
       tester,
       initialLocation: AppRoutes.profileCalendar,
@@ -3500,6 +6478,81 @@ void main() {
 
     expect(find.byType(CalendarCheckinPage), findsOneWidget);
     expect(find.textContaining('202'), findsWidgets);
+
+    final Text monthTitle = tester.widget<Text>(
+      find.textContaining('202').first,
+    );
+    final TextTheme textTheme = Theme.of(
+      tester.element(find.byType(CalendarCheckinPage)),
+    ).textTheme;
+    expect(
+      monthTitle.style?.fontSize,
+      AppTypography.panelTitle(textTheme).fontSize,
+    );
+    expect(
+      monthTitle.style?.fontWeight,
+      AppTypography.panelTitle(textTheme).fontWeight,
+    );
+
+    final Finder calendarCard = find.ancestor(
+      of: find.byType(GridView),
+      matching: find.byType(AppCard),
+    );
+    final AppCard calendarAppCard = tester.widget<AppCard>(calendarCard);
+    expect(calendarAppCard.borderRadius, AppRadius.surfacePrimary);
+    expect(tester.getSize(calendarCard).height, lessThan(390));
+
+    final Rect dayRect = tester.getRect(
+      find.byKey(const ValueKey<String>('calendar-day-cell-1')),
+    );
+    expect((dayRect.width - dayRect.height).abs(), lessThan(6));
+
+    final Text streakTitle = tester.widget<Text>(find.text('连续记录'));
+    expect(
+      streakTitle.style?.fontSize,
+      AppTypography.cardTitle(textTheme).fontSize,
+    );
+    final Text streakValue = tester.widget<Text>(find.textContaining('天连续打卡'));
+    expect(
+      streakValue.style?.fontSize,
+      AppTypography.panelTitle(textTheme).fontSize,
+    );
+  });
+
+  testWidgets('calendar selected day marker uses semantic dark accent', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileCalendar,
+      clock: _dayClock,
+      initialSettings: buildDefaultUserSettings().copyWith(
+        themeMode: AppThemeMode.dark,
+        selectedNightMood: NightMood.calm,
+      ),
+    );
+
+    final int targetDay = DateTime.now().subtract(const Duration(days: 1)).day;
+    final Finder targetCell = find.byKey(
+      ValueKey<String>('calendar-day-cell-$targetDay'),
+    );
+
+    final BuildContext context = tester.element(
+      find.byType(CalendarCheckinPage),
+    );
+    final AppSemanticColors appColors = context.appColors;
+    final Ink selectedInk = tester.widget<Ink>(
+      find.descendant(of: targetCell, matching: find.byType(Ink)).first,
+    );
+    final BoxDecoration decoration = selectedInk.decoration! as BoxDecoration;
+    expect(decoration.color, appColors.accent);
+    expect(
+      decoration.border,
+      Border.all(color: appColors.accentDeep, width: 2),
+    );
   });
 
   testWidgets('home recommendation section opens all recommendations page', (
@@ -3522,7 +6575,7 @@ void main() {
     expect(find.text('佩戴隔音耳塞'), findsOneWidget);
   });
 
-  testWidgets('start sleep card keeps full title and light hint', (
+  testWidgets('start sleep card keeps only title and moon action', (
     WidgetTester tester,
   ) async {
     await _pumpApp(
@@ -3532,9 +6585,84 @@ void main() {
     );
 
     expect(find.text('开启睡眠模式'), findsOneWidget);
-    expect(find.text('轻触进入'), findsOneWidget);
+    expect(find.text('轻触进入'), findsNothing);
     expect(find.text('音频已同步'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(StartSleepModeCard),
+        matching: find.byIcon(Icons.dark_mode_rounded),
+      ),
+      findsOneWidget,
+    );
   });
+
+  testWidgets('sleep risk card separates tap and long press feedback', (
+    WidgetTester tester,
+  ) async {
+    final List<MethodCall> platformCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall call,
+        ) async {
+          platformCalls.add(call);
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+    );
+
+    final Finder feedbackSurface = find.byKey(
+      const ValueKey<String>('home-sleep-risk-feedback-surface'),
+    );
+    AnimatedScale riskScale() {
+      return tester.widget<AnimatedScale>(
+        find.descendant(
+          of: feedbackSurface,
+          matching: find.byType(AnimatedScale),
+        ),
+      );
+    }
+
+    expect(riskScale().scale, 1);
+
+    final TestGesture quickTapGesture = await tester.startGesture(
+      tester.getCenter(feedbackSurface),
+    );
+    await tester.pump();
+    expect(riskScale().scale, closeTo(0.965, 0.001));
+
+    await quickTapGesture.up();
+    await tester.pump();
+    expect(riskScale().scale, 1);
+    expect(
+      _hapticTypesFrom(platformCalls),
+      contains('HapticFeedbackType.lightImpact'),
+    );
+
+    await tester.pump(const Duration(milliseconds: 260));
+    expect(riskScale().scale, 1);
+
+    final TestGesture longPressGesture = await tester.startGesture(
+      tester.getCenter(feedbackSurface),
+    );
+    await tester.pump();
+    expect(riskScale().scale, closeTo(0.965, 0.001));
+
+    await tester.pump(const Duration(milliseconds: 320));
+    expect(riskScale().scale, closeTo(0.935, 0.001));
+
+    await longPressGesture.up();
+    await tester.pump();
+    expect(riskScale().scale, 1);
+  });
+
   testWidgets('entering sleep mode shows the ongoing sleep notification', (
     WidgetTester tester,
   ) async {
@@ -4661,6 +7789,20 @@ Future<void> _pumpAssistantSurface(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 320));
 }
 
+Widget _dreamDetailHarness({DreamEntryData? entry}) {
+  final NightMoodPalette palette = NightMoodPalette.fromMood(null);
+  return MaterialApp(
+    theme: ThemeData(
+      useMaterial3: true,
+      extensions: <ThemeExtension<dynamic>>[
+        palette,
+        AppSemanticColors.light(palette),
+      ],
+    ),
+    home: DreamDetailPage(entry: entry),
+  );
+}
+
 Future<void> _pumpApp(
   WidgetTester tester, {
   required String initialLocation,
@@ -4887,7 +8029,7 @@ DateTime _dayClock() => DateTime(2026, 4, 5, 14);
 
 DateTime _feedbackClock() => DateTime(2026, 4, 18, 7);
 
-DateTime _freshSleepClock() => DateTime(2026, 5, 17, 14);
+DateTime _freshSleepClock() => DateTime(2030, 5, 17, 14);
 
 DateTime _nightClock() => DateTime(2026, 4, 5, 22);
 
@@ -4918,6 +8060,10 @@ Future<void> _seedRegisteredPhoneUser(
   );
   await services.authRepository.signOut();
 }
+
+Iterable<String?> _hapticTypesFrom(List<MethodCall> calls) => calls
+    .where((MethodCall call) => call.method == 'HapticFeedback.vibrate')
+    .map((MethodCall call) => call.arguments as String?);
 
 void _seedExpiredCloudBaseSession() {
   const String deviceId = 'cb-device-test';

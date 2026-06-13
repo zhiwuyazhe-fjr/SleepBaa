@@ -848,6 +848,122 @@ void main() {
     },
   );
 
+  test(
+    'cloudbase dorm repository keeps pending environment update when refreshed snapshot is stale',
+    () async {
+      final List<_PostCall> calls = <_PostCall>[];
+      const Map<String, dynamic> stalePayload = <String, dynamic>{
+        'data': <String, dynamic>{
+          'user': <String, dynamic>{
+            'uid': 'cloud-user',
+            'displayName': 'Cloud User',
+            'dormId': 'dorm-204',
+          },
+          'dorm': <String, dynamic>{
+            'id': 'dorm-204',
+            'name': '梅苑 2 栋 204',
+            'overview': '宿舍整体状态平稳。',
+            'noiseDb': 32,
+            'lightLabel': '偏暗',
+            'quietLabel': '良好',
+            'rules': <Map<String, dynamic>>[],
+            'events': <Map<String, dynamic>>[],
+            'invites': <Map<String, dynamic>>[],
+            'members': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'uid': 'cloud-user',
+                'name': 'Cloud User',
+                'status': 'quiet',
+                'presenceStatus': 'returned',
+                'sleepModeActive': false,
+                'lastActiveAt': '2026-04-13T15:00:00.000Z',
+                'note': '准备休息。',
+              },
+            ],
+          },
+        },
+      };
+      const Map<String, dynamic> confirmedPayload = <String, dynamic>{
+        'data': <String, dynamic>{
+          'user': <String, dynamic>{
+            'uid': 'cloud-user',
+            'displayName': 'Cloud User',
+            'dormId': 'dorm-204',
+          },
+          'dorm': <String, dynamic>{
+            'id': 'dorm-204',
+            'name': '梅苑 2 栋 204',
+            'overview': '宿舍整体状态平稳。',
+            'noiseDb': 47,
+            'lightLabel': '偏暗',
+            'quietLabel': '良好',
+            'rules': <Map<String, dynamic>>[],
+            'events': <Map<String, dynamic>>[],
+            'invites': <Map<String, dynamic>>[],
+            'members': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'uid': 'cloud-user',
+                'name': 'Cloud User',
+                'status': 'quiet',
+                'presenceStatus': 'returned',
+                'sleepModeActive': false,
+                'lastActiveAt': '2026-04-13T15:00:00.000Z',
+                'note': '准备休息。',
+              },
+            ],
+          },
+        },
+      };
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) async {
+              calls.add(_PostCall(path: path, body: body));
+              return <String, dynamic>{'ok': true};
+            },
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(
+          uid: 'cloud-user',
+          dormId: 'dorm-204',
+          displayName: 'Cloud User',
+        ),
+      );
+      final CloudBaseDormRepository repository = CloudBaseDormRepository(
+        authRepository: authRepository,
+        snapshotStore: snapshotStore,
+        appApiClient: appApiClient,
+      );
+      snapshotStore.pushPayload(stalePayload);
+      snapshotStore.onRefresh = () {
+        snapshotStore.pushPayload(stalePayload);
+      };
+
+      await repository.updateDormEnvironment(noiseDb: 47);
+
+      expect(repository.currentDorm.noiseDb, 47);
+      expect(calls.map((call) => call.path), <String>['/api/dorm/environment']);
+      expect(calls.single.body['noiseDb'], 47);
+
+      snapshotStore.pushPayload(stalePayload);
+
+      expect(repository.currentDorm.noiseDb, 47);
+
+      snapshotStore.pushPayload(confirmedPayload);
+
+      expect(repository.currentDorm.noiseDb, 47);
+
+      snapshotStore.pushPayload(stalePayload);
+
+      expect(repository.currentDorm.noiseDb, 32);
+
+      repository.dispose();
+      authRepository.dispose();
+    },
+  );
+
   test('dorm online count uses foreground heartbeat fields only', () {
     final DateTime now = DateTime(2026, 4, 22, 12);
     final List<DormMember> members = <DormMember>[
@@ -2045,7 +2161,7 @@ void main() {
   });
 
   test(
-    'cloudbase user settings keeps pending quick actions when refreshed snapshot omits them',
+    'cloudbase user settings keeps pending quick action state when refreshed snapshot omits it',
     () async {
       final List<_PostCall> calls = <_PostCall>[];
       final Map<String, dynamic> stalePayload = <String, dynamic>{
@@ -2084,19 +2200,131 @@ void main() {
         HomeQuickActionIds.profileReport,
       ];
       await repository.saveSettings(
-        repository.currentSettings.copyWith(homeQuickActionIds: selectedIds),
+        repository.currentSettings.copyWith(
+          homeQuickActionIds: selectedIds,
+          showHomeQuickActions: true,
+        ),
       );
 
       expect(repository.currentSettings.homeQuickActionIds, selectedIds);
+      expect(repository.currentSettings.showHomeQuickActions, isTrue);
       expect(calls.map((call) => call.path), <String>['/api/profile/save']);
       final Map<String, dynamic> settingsBody = Map<String, dynamic>.from(
         calls.single.body['settings'] as Map,
       );
       expect(settingsBody['homeQuickActionIds'], selectedIds);
+      expect(settingsBody['showHomeQuickActions'], isTrue);
 
       snapshotStore.pushPayload(stalePayload);
 
       expect(repository.currentSettings.homeQuickActionIds, selectedIds);
+      expect(repository.currentSettings.showHomeQuickActions, isTrue);
+
+      repository.dispose();
+      authRepository.dispose();
+    },
+  );
+
+  test(
+    'cloudbase user settings keeps optimistic save when refreshed snapshot is stale',
+    () async {
+      final List<_PostCall> calls = <_PostCall>[];
+      final Map<String, dynamic> stalePayload = <String, dynamic>{
+        'data': <String, dynamic>{
+          'user': <String, dynamic>{'uid': 'cloud-user'},
+          'settings': <String, dynamic>{
+            'sleepGoalHours': 7.5,
+            'bedtimeReminderEnabled': true,
+            'morningReminderEnabled': true,
+            'dormAlertsEnabled': true,
+            'bedtimeReminder': <String, dynamic>{'hour': 23, 'minute': 10},
+            'preferredTrackTitle': '深海海浪',
+            'smartSuggestionsEnabled': true,
+            'assistantReplyMotionLevel': 'medium',
+            'selectedNightMood': 'sad',
+            'showHomeQuickActions': false,
+          },
+        },
+      };
+      final Map<String, dynamic> confirmedPayload = <String, dynamic>{
+        'data': <String, dynamic>{
+          'user': <String, dynamic>{'uid': 'cloud-user'},
+          'settings': <String, dynamic>{
+            'sleepGoalHours': 8.25,
+            'bedtimeReminderEnabled': true,
+            'morningReminderEnabled': true,
+            'dormAlertsEnabled': true,
+            'bedtimeReminder': <String, dynamic>{'hour': 23, 'minute': 10},
+            'preferredTrackTitle': '深海海浪',
+            'smartSuggestionsEnabled': true,
+            'assistantReplyMotionLevel': 'high',
+            'selectedNightMood': 'calm',
+            'showHomeQuickActions': true,
+          },
+        },
+      };
+      final _FakeCloudBaseAppApiClient appApiClient =
+          _FakeCloudBaseAppApiClient(
+            onPost: (String path, Map<String, dynamic> body) async {
+              calls.add(_PostCall(path: path, body: body));
+              return <String, dynamic>{'ok': true};
+            },
+          );
+      final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+        initialProfile: buildDefaultUserProfile().copyWith(uid: 'cloud-user'),
+      );
+      final CloudBaseUserSettingsRepository repository =
+          CloudBaseUserSettingsRepository(
+            authRepository: authRepository,
+            snapshotStore: snapshotStore,
+            appApiClient: appApiClient,
+          );
+      snapshotStore.pushPayload(stalePayload);
+      snapshotStore.onRefresh = () {
+        snapshotStore.pushPayload(stalePayload);
+      };
+
+      final UserSettings optimistic = repository.currentSettings.copyWith(
+        sleepGoalHours: 8.25,
+        assistantReplyMotionLevel: AssistantReplyMotionLevel.high,
+        selectedNightMood: NightMood.calm,
+        showHomeQuickActions: true,
+      );
+      repository.replaceLocalSettings(optimistic);
+      await repository.saveSettings(repository.currentSettings);
+
+      expect(repository.currentSettings.sleepGoalHours, 8.25);
+      expect(
+        repository.currentSettings.assistantReplyMotionLevel,
+        AssistantReplyMotionLevel.high,
+      );
+      expect(repository.currentSettings.selectedNightMood, NightMood.calm);
+      expect(repository.currentSettings.showHomeQuickActions, isTrue);
+      expect(calls.map((call) => call.path), <String>[
+        '/api/profile/save',
+        '/api/profile/night-mood',
+      ]);
+
+      snapshotStore.pushPayload(stalePayload);
+
+      expect(repository.currentSettings.sleepGoalHours, 8.25);
+      expect(
+        repository.currentSettings.assistantReplyMotionLevel,
+        AssistantReplyMotionLevel.high,
+      );
+      expect(repository.currentSettings.selectedNightMood, NightMood.calm);
+      expect(repository.currentSettings.showHomeQuickActions, isTrue);
+
+      snapshotStore.pushPayload(confirmedPayload);
+
+      expect(repository.currentSettings.selectedNightMood, NightMood.calm);
+
+      snapshotStore.pushPayload(stalePayload);
+
+      expect(repository.currentSettings.selectedNightMood, NightMood.sad);
 
       repository.dispose();
       authRepository.dispose();
