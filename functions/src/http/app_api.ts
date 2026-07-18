@@ -1,6 +1,19 @@
 import { randomUUID } from "node:crypto";
 import cors from "cors";
 import express, { Request, Response } from "express";
+import {
+  listAgentTools,
+  runAgent,
+  shouldRoutePromptToAgent,
+} from "../agent/agent_runtime";
+import {
+  AgentToolUndoError,
+  undoAgentToolCall,
+} from "../agent/agent_undo";
+import {
+  buildAgentMemoryOverview,
+  compactMemoryItem,
+} from "../agent/agent_memory_overview";
 import { acceptDormInviteCallable } from "../callables/accept_dorm_invite";
 import { assistantCaptureCallable } from "../callables/assistant_capture";
 import { assistantReplyCallable } from "../callables/assistant_reply";
@@ -480,6 +493,225 @@ function launchAssistantReplyPostprocess(params: {
         );
       }
     })();
+  });
+}
+
+function handleAgentRunStream(request: Request, response: Response): void {
+  let replyDispatched = false;
+  let replyAssistantMessageId = "";
+  let replyRunId = "";
+  let streamStartedAt = Date.now();
+  let streamUid = "";
+  let streamThreadId = "";
+
+  void (async () => {
+    const authedRequest = request as AuthedRequest;
+    const repo = createRepositoryFromEnv();
+    const provider = createAIProviderFromEnv();
+    const body = asMap(authedRequest.body);
+    const threadId = asString(
+      body.threadId,
+      `thread-${authedRequest.authContext!.uid}`,
+    );
+    const prompt = asString(body.prompt);
+    if (!prompt.trim()) {
+      throw new Error("prompt is required.");
+    }
+
+    const clientUserMessageId = asString(
+      body.clientUserMessageId,
+      randomUUID(),
+    );
+    const clientAssistantMessageId = asString(
+      body.clientAssistantMessageId,
+      randomUUID(),
+    );
+    replyAssistantMessageId = clientAssistantMessageId;
+    const turnId = clientAssistantMessageId;
+    streamUid = authedRequest.authContext!.uid;
+    streamThreadId = threadId;
+    streamStartedAt = Date.now();
+    let turnLeaseAcquired = false;
+    let turnLeaseTimer: NodeJS.Timeout | null = null;
+    let keepaliveTimer: NodeJS.Timeout | null = null;
+
+    try {
+      await repo.ensureAssistantThread(
+        authedRequest.authContext!.uid,
+        threadId,
+        asString(body.title, "今晚睡前聊天"),
+      );
+      turnLeaseAcquired = await repo.tryAcquireAssistantThreadTurn({
+        uid: authedRequest.authContext!.uid,
+        threadId,
+        turnId,
+        status: "agent_running",
+        leaseMs: ASSISTANT_THREAD_TURN_LEASE_MS,
+      });
+      if (!turnLeaseAcquired) {
+        throw new AssistantThreadTurnBusyError();
+      }
+      turnLeaseTimer = setInterval(() => {
+        void repo
+          .renewAssistantThreadTurn({
+            uid: authedRequest.authContext!.uid,
+            threadId,
+            turnId,
+            status: replyDispatched ? "finalizing" : "agent_running",
+            leaseMs: ASSISTANT_THREAD_TURN_LEASE_MS,
+          })
+          .catch((renewError: unknown) => {
+            logHttp(
+              `agent run stream renew error uid=${authedRequest.authContext!.uid} threadId=${threadId} ${
+                renewError instanceof Error
+                  ? renewError.message
+                  : String(renewError)
+              }`,
+            );
+          });
+      }, ASSISTANT_THREAD_TURN_LEASE_RENEW_INTERVAL_MS);
+      initSse(response);
+      keepaliveTimer = setInterval(() => {
+        if (!response.writableEnded) {
+          writeSseComment(response);
+        }
+      }, SSE_KEEPALIVE_INTERVAL_MS);
+
+      logHttp(
+        `agent run stream start uid=${authedRequest.authContext!.uid} threadId=${threadId}`,
+      );
+      writeSseEvent(response, "ack", {
+        threadId,
+        assistantMessageId: clientAssistantMessageId,
+        agent: true,
+      });
+
+      await repo.appendAssistantMessage({
+        id: clientUserMessageId,
+        threadId,
+        role: "user",
+        content: prompt,
+        createdAt: nowIso(),
+        status: "complete",
+      });
+
+      const result = await runAgent({
+        repo,
+        provider,
+        uid: authedRequest.authContext!.uid,
+        threadId,
+        prompt,
+        onDelta: async (delta) => {
+          writeSseEvent(response, "message_delta", { delta });
+        },
+        emitEvent: async (event) => {
+          writeSseEvent(response, event.event, event.data);
+        },
+      });
+      replyRunId = result.runId;
+      await repo.renewAssistantThreadTurn({
+        uid: authedRequest.authContext!.uid,
+        threadId,
+        turnId,
+        status: "finalizing",
+        leaseMs: ASSISTANT_THREAD_TURN_LEASE_MS,
+      });
+      await repo.appendAssistantMessage({
+        id: clientAssistantMessageId,
+        threadId,
+        role: "assistant",
+        content: result.reply,
+        createdAt: nowIso(),
+        status: result.sourceMode === "error" ? "error" : "complete",
+        sourceMode: result.sourceMode,
+        provider: result.provider,
+        model: result.model,
+        errorMessage: result.errorMessage ?? undefined,
+      });
+      await repo.markAssistantThreadCommittedTurn({
+        uid: authedRequest.authContext!.uid,
+        threadId,
+        turnId,
+      });
+      replyDispatched = true;
+      writeSseEvent(response, "message_completed", {
+        reply: result.reply,
+        runId: result.runId,
+        planId: result.planId,
+        intent: result.goal.intent,
+        provider: result.provider,
+        model: result.model,
+        sourceMode: result.sourceMode,
+        errorMessage: result.errorMessage,
+        assistantMessageId: clientAssistantMessageId,
+        updatedSurfaces: result.updatedSurfaces,
+      });
+      writeSseEvent(response, "done", {
+        runId: result.runId,
+        assistantMessageId: clientAssistantMessageId,
+        backgroundSyncPending: true,
+        reconcileAfterMs: ASSISTANT_REPLY_RECONCILE_AFTER_MS,
+      });
+      response.end();
+      logHttp(
+        `agent run stream completed uid=${authedRequest.authContext!.uid} threadId=${threadId} runId=${result.runId} elapsedMs=${
+          Date.now() - streamStartedAt
+        }`,
+      );
+    } finally {
+      if (keepaliveTimer != null) {
+        clearInterval(keepaliveTimer);
+      }
+      if (turnLeaseTimer != null) {
+        clearInterval(turnLeaseTimer);
+      }
+      if (turnLeaseAcquired) {
+        try {
+          await repo.releaseAssistantThreadTurn({
+            uid: authedRequest.authContext!.uid,
+            threadId,
+            turnId,
+          });
+        } catch (releaseError) {
+          logHttp(
+            `agent run stream release error uid=${authedRequest.authContext!.uid} threadId=${threadId} ${
+              releaseError instanceof Error
+                ? releaseError.message
+                : String(releaseError)
+            }`,
+          );
+        }
+      }
+    }
+  })().catch((error: unknown) => {
+    const timedOut = isAssistantReplyTimeoutError(error);
+    logHttp(
+      `agent run stream error uid=${streamUid} threadId=${streamThreadId} elapsedMs=${
+        Date.now() - streamStartedAt
+      } ${errorMessageOf(error)}`,
+    );
+    if (!response.headersSent) {
+      initSse(response);
+    }
+    if (replyDispatched && !response.writableEnded) {
+      writeSseEvent(response, "done", {
+        assistantMessageId: replyAssistantMessageId,
+        ...(replyRunId ? { runId: replyRunId } : {}),
+      });
+      response.end();
+    } else if (!response.writableEnded) {
+      writeSseEvent(response, "error", {
+        ...(isAssistantThreadTurnBusyError(error)
+          ? { code: error.code }
+          : timedOut
+            ? { code: ASSISTANT_REPLY_TIMEOUT_CODE }
+            : {}),
+        message: timedOut
+          ? ASSISTANT_REPLY_TIMEOUT_MESSAGE
+          : errorMessageOf(error),
+      });
+      response.end();
+    }
   });
 }
 
@@ -1351,6 +1583,88 @@ export function createAppApiServer() {
   );
 
   app.post(
+    "/api/agent/tools",
+    asyncRoute(async (_request, response) => {
+      response.json({ tools: listAgentTools() });
+    }),
+  );
+
+  app.post(
+    "/api/agent/runs/:id",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      const run = await repo.getAgentRun(
+        request.authContext!.uid,
+        asString(request.params.id),
+      );
+      if (!run) {
+        response.status(404).json({
+          code: "AGENT_RUN_NOT_FOUND",
+          message: "Agent run was not found.",
+        });
+        return;
+      }
+      const [plan, toolCalls] = await Promise.all([
+        run.planId
+          ? repo.getAgentPlan(request.authContext!.uid, run.planId)
+          : null,
+        repo.listAgentToolCalls(request.authContext!.uid, run.id),
+      ]);
+      response.json({ run, plan, toolCalls });
+    }),
+  );
+
+  app.post(
+    "/api/agent/tool-calls/:id/undo",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      try {
+        const result = await undoAgentToolCall({
+          repo,
+          uid: request.authContext!.uid,
+          callId: asString(request.params.id),
+        });
+        response.json(result);
+      } catch (error) {
+        if (error instanceof AgentToolUndoError) {
+          response.status(error.httpStatus).json({
+            code: error.code,
+            message: error.message,
+            result: error.result ?? null,
+          });
+          return;
+        }
+        throw error;
+      }
+    }),
+  );
+
+  app.post(
+    "/api/agent/memory",
+    asyncRoute(async (request, response) => {
+      const repo = createRepositoryFromEnv();
+      const body = asMap(request.body);
+      const limit = Math.max(1, Math.min(120, asNumber(body.limit, 80)));
+      const items = await repo.listAssistantMemoryItems(
+        request.authContext!.uid,
+        {
+          limit,
+          query: asString(body.query),
+          kinds: asStringArray(body.kinds),
+          touchLastUsed: false,
+        },
+      );
+      const overview = buildAgentMemoryOverview(items);
+      response.json({
+        ...overview,
+        recent: overview.recent.map(compactMemoryItem),
+      });
+    }),
+  );
+
+  app.post("/api/agent/run/stream", handleAgentRunStream);
+
+  app.post(
     "/api/assistant/reply",
     asyncRoute(async (request, response) => {
       const repo = createRepositoryFromEnv();
@@ -1420,6 +1734,16 @@ export function createAppApiServer() {
   app.post(
     "/api/assistant/reply/stream",
     (request: Request, response: Response) => {
+      const body = asMap((request as AuthedRequest).body);
+      const prompt = asString(body.prompt);
+      if (
+        prompt.trim() &&
+        asString(body.agentRuntime, "auto") !== "off" &&
+        shouldRoutePromptToAgent(prompt)
+      ) {
+        handleAgentRunStream(request, response);
+        return;
+      }
       let replyDispatched = false;
       let replyAssistantMessageId = "";
       let replyRunId = "";

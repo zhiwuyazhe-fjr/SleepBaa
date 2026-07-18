@@ -725,6 +725,61 @@ test(
 );
 
 test(
+  "morning feedback writes intervention effect memory for future planning",
+  { concurrency: false },
+  async () => {
+    await withLocalAppApiServer(async ({ baseUrl, uid }) => {
+      const sessionId = `${uid}-feedback-memory-session`;
+      const response = await fetch(`${baseUrl}/api/feedback/morning`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-debug-uid": uid,
+        },
+        body: JSON.stringify({
+          sessionId,
+          session: {
+            id: sessionId,
+            startedAt: "2026-05-22T15:00:00.000Z",
+            endedAt: "2026-05-22T23:00:00.000Z",
+            status: "completed",
+          },
+          summary: {
+            totalSleepHours: 7.5,
+            sleepQuality: 80,
+            restedLevel: 78,
+          },
+          feedback: [],
+        }),
+      });
+
+      assert.equal(response.status, 200);
+      const repo = createRepositoryFromEnv();
+      const context = await repo.buildAssistantContext(uid, undefined, {
+        memoryLimit: 10,
+        memoryKinds: ["intervention_effect", "strategy_weight"],
+      });
+      const memory = context.longTermMemory ?? [];
+      assert.ok(
+        memory.some(
+          (item) =>
+            item.kind === "intervention_effect" &&
+            item.effectivenessScore === 1,
+        ),
+      );
+      assert.ok(
+        memory.some(
+          (item) =>
+            item.kind === "intervention_effect" &&
+            item.effectivenessScore === -1,
+        ),
+      );
+      assert.ok(memory.some((item) => item.kind === "strategy_weight"));
+    });
+  },
+);
+
+test(
   "sleep exit keeps closed segments and tracked duration in bootstrap payload",
   { concurrency: false },
   async () => {
@@ -949,6 +1004,212 @@ test(
       assert.ok(events.some((item) => item.event === "message_completed"));
       assert.equal(events[events.length - 1]?.event, "done");
       assert.equal(events[events.length - 1]?.data.backgroundSyncPending, true);
+    });
+  },
+);
+
+test(
+  "agent tools and run stream expose tool execution events",
+  { concurrency: false },
+  async () => {
+    await withLocalAppApiServer(async ({ baseUrl, uid }) => {
+      const headers = {
+        "content-type": "application/json",
+        "x-debug-uid": uid,
+      };
+      const toolsResponse = await fetch(`${baseUrl}/api/agent/tools`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({}),
+      });
+      assert.equal(toolsResponse.status, 200);
+      const toolsPayload = await toolsResponse.json();
+      const toolNames = (toolsPayload.tools as Array<Record<string, unknown>>)
+        .map((tool) => tool.name);
+      assert.ok(toolNames.includes("plan.generate_tonight"));
+      assert.ok(toolNames.includes("memory.upsert"));
+      assert.ok(toolNames.includes("sleep.mode.enter"));
+      assert.ok(toolNames.includes("dorm.invite.create"));
+      assert.ok(toolNames.includes("report.profile.read"));
+
+      const createDormResponse = await fetch(`${baseUrl}/api/dorm/create`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ name: "Agent audit dorm" }),
+      });
+      assert.equal(createDormResponse.status, 200);
+
+      const response = await fetch(`${baseUrl}/api/agent/run/stream`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          threadId: `${uid}-agent-thread`,
+          prompt: "My roommate is noisy; help me handle tonight.",
+          clientUserMessageId: `${uid}-agent-user`,
+          clientAssistantMessageId: `${uid}-agent-assistant`,
+        }),
+      });
+
+      assert.equal(response.status, 200);
+      const events = parseSseEvents(await response.text());
+      assert.equal(events[0]?.event, "ack");
+      assert.ok(events.some((item) => item.event === "planning_started"));
+      assert.ok(events.some((item) => item.event === "tool_started"));
+      assert.ok(events.some((item) => item.event === "tool_completed"));
+      assert.ok(events.some((item) => item.event === "agent_done"));
+      const completedTool = events.find(
+        (item) =>
+          item.event === "tool_completed" &&
+          item.data.toolName === "dorm.status.update",
+      );
+      assert.ok(completedTool);
+      assert.equal(typeof completedTool.data.callId, "string");
+      assert.equal(completedTool.data.committed, true);
+      assert.equal(completedTool.data.undoable, true);
+      const completed = events.find(
+        (item) => item.event === "message_completed",
+      );
+      assert.ok(completed);
+      assert.equal(completed.data.assistantMessageId, `${uid}-agent-assistant`);
+      const agentDone = events.find((item) => item.event === "agent_done");
+      assert.ok(agentDone);
+      const runId = String(agentDone.data.runId);
+      const runResponse = await fetch(`${baseUrl}/api/agent/runs/${runId}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({}),
+      });
+      assert.equal(runResponse.status, 200);
+      const runPayload = (await runResponse.json()) as {
+        run: Record<string, unknown>;
+        plan: { steps?: Array<Record<string, unknown>> } | null;
+        toolCalls: Array<Record<string, unknown>>;
+      };
+      assert.equal(runPayload.run.id, runId);
+      assert.ok((runPayload.plan?.steps ?? []).length > 0);
+      assert.ok(runPayload.toolCalls.length > 0);
+      assert.ok(
+        runPayload.toolCalls.some(
+          (call) =>
+            call.toolName === "dorm.status.update" &&
+            call.status === "success" &&
+            Boolean(call.undoPayload),
+        ),
+      );
+      const interferenceCall = runPayload.toolCalls.find(
+        (call) =>
+          call.toolName === "interference.save_tonight" &&
+          call.status === "success",
+      );
+      assert.ok(interferenceCall);
+      const undoResponse = await fetch(
+        `${baseUrl}/api/agent/tool-calls/${encodeURIComponent(
+          String(interferenceCall.id),
+        )}/undo`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({}),
+        },
+      );
+      assert.equal(undoResponse.status, 200);
+      const undoPayload = (await undoResponse.json()) as {
+        status: string;
+        call: Record<string, unknown>;
+        updatedSurfaces: string[];
+      };
+      assert.equal(undoPayload.status, "applied");
+      assert.equal(undoPayload.call.undoStatus, "applied");
+      assert.ok(undoPayload.updatedSurfaces.includes("home_pre_sleep"));
+      const secondUndoResponse = await fetch(
+        `${baseUrl}/api/agent/tool-calls/${encodeURIComponent(
+          String(interferenceCall.id),
+        )}/undo`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({}),
+        },
+      );
+      assert.equal(secondUndoResponse.status, 200);
+      const secondUndoPayload = (await secondUndoResponse.json()) as {
+        alreadyApplied?: boolean;
+      };
+      assert.equal(secondUndoPayload.alreadyApplied, true);
+      assert.equal(events[events.length - 1]?.event, "done");
+    });
+  },
+);
+
+test(
+  "agent memory endpoint returns grouped self-evolution overview",
+  { concurrency: false },
+  async () => {
+    await withLocalAppApiServer(async ({ baseUrl, uid }) => {
+      const repo = createRepositoryFromEnv();
+      await repo.upsertAssistantMemoryItems(uid, [
+        {
+          id: `${uid}:intervention_effect:audio-rain`,
+          kind: "intervention_effect",
+          content: "Rain audio helped the user fall asleep.",
+          canonicalKey: "intervention_effect:audio-rain",
+          keywords: ["audio-rain", "effective"],
+          confidence: 0.9,
+          salience: 0.9,
+          decayScore: 1,
+          contradictionGroup: "intervention_effect:audio-rain",
+          evidenceRefs: ["test"],
+          sourceActionId: "audio-rain",
+          sourceAgentRunId: "run-1",
+          effectivenessScore: 1,
+          lastUsedAt: null,
+          sourceRefs: ["test"],
+          createdAt: "2026-05-23T00:00:00.000Z",
+          updatedAt: "2026-05-23T00:00:00.000Z",
+        },
+        {
+          id: `${uid}:strategy_weight:morning`,
+          kind: "strategy_weight",
+          content: "Keep audio support and down-rank bright screen advice.",
+          canonicalKey: "strategy_weight:morning",
+          keywords: ["strategy", "feedback"],
+          confidence: 0.82,
+          salience: 0.8,
+          decayScore: 1,
+          contradictionGroup: "strategy_weight:morning",
+          evidenceRefs: ["test"],
+          sourceActionId: "session-1",
+          sourceAgentRunId: null,
+          effectivenessScore: 0,
+          lastUsedAt: null,
+          sourceRefs: ["test"],
+          createdAt: "2026-05-23T00:00:01.000Z",
+          updatedAt: "2026-05-23T00:00:01.000Z",
+        },
+      ]);
+
+      const response = await fetch(`${baseUrl}/api/agent/memory`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-debug-uid": uid },
+        body: JSON.stringify({ limit: 20 }),
+      });
+
+      assert.equal(response.status, 200);
+      const payload = (await response.json()) as {
+        totalCount: number;
+        byKind: Array<Record<string, unknown>>;
+        interventionEffects: Array<Record<string, unknown>>;
+        strategyWeights: Array<Record<string, unknown>>;
+      };
+      assert.equal(payload.totalCount, 2);
+      assert.ok(
+        payload.byKind.some(
+          (item) =>
+            item.kind === "intervention_effect" && item.count === 1,
+        ),
+      );
+      assert.equal(payload.interventionEffects[0]?.actionId, "audio-rain");
+      assert.equal(payload.strategyWeights.length, 1);
     });
   },
 );

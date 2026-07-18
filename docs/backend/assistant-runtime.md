@@ -130,3 +130,35 @@ capture 必须传 `sessionId` 和 `captureType`。`captureType` 目前规范为 
 3. 检查 provider 环境变量和 `provider_factory.test.ts` 覆盖的模式。
 4. 检查 `assistant_runs` 中的 `sourceMode`、`provider`、`model`、`errorMessage`。
 5. 检查前端是否在 `done.backgroundSyncPending` 后完成 reconcile。
+## Agent Runtime
+
+2026-05-23 起，普通助手流旁路新增内嵌 `AgentRuntime`。它仍运行在 CloudBase HTTP Function `app-api` 内，不另起独立 Agent 服务，也不暴露真实 MCP Server。
+
+新增调用链：
+
+```text
+AssistantPage / AssistantConversationController
+  -> CloudBaseAssistantReplyGateway
+  -> /api/agent/run/stream
+  -> AgentRuntime planner / executor / summarizer
+  -> internal JSON tool registry
+  -> agent_runs / agent_plans / agent_tool_calls
+  -> assistant_runs / assistant_messages / card_snapshots / memory
+```
+
+旧 `/api/assistant/reply/stream` 保留；当 prompt 命中跨模块动作意图时，会委托 `AgentRuntime`。如需强制旧链路，可在请求体中传 `agentRuntime: "off"`。
+
+Agent SSE 成功事件可能包含：
+
+1. `ack`
+2. `planning_started`
+3. `tool_started`
+4. `tool_completed` 或 `tool_failed`
+5. `action_committed`
+6. `memory_updated`
+7. `message_delta`
+8. `agent_done`
+9. `message_completed`
+10. `done`
+
+工具层先采用内部 JSON registry，schema 按 MCP 风格保存。首轮已接入 `context.read`、`plan.generate_tonight`、`interference.save_tonight`、`dorm.reminder.send`、`dorm.status.update`、`dorm.rules.save`、`cards.refresh`、`memory.upsert` 等工具。高风险账号、退出宿舍、删除类动作不会自动执行。

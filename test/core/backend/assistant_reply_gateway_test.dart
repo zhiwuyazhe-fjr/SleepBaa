@@ -79,6 +79,179 @@ void main() {
     },
   );
 
+  test('cloudbase assistant reply gateway parses agent tool events', () async {
+    final _FakeStreamCloudBaseAppApiClient
+    appApiClient = _FakeStreamCloudBaseAppApiClient(
+      postSseBehaviors: <Future<Stream<CloudBaseSseFrame>> Function()>[
+        () async => Stream<CloudBaseSseFrame>.fromIterable(const <
+          CloudBaseSseFrame
+        >[
+          CloudBaseSseFrame(event: 'ack', data: '{}'),
+          CloudBaseSseFrame(
+            event: 'planning_started',
+            data: '{"runId":"run-1","planId":"plan-1"}',
+          ),
+          CloudBaseSseFrame(
+            event: 'tool_completed',
+            data:
+                '{"runId":"run-1","planId":"plan-1","callId":"call-1","toolName":"plan.generate_tonight","toolTitle":"生成今晚计划","output":{"actionCount":3},"updatedSurfaces":["home_pre_sleep"],"committed":true,"undoable":true,"undoPayload":{"previousUnknown":true}}',
+          ),
+          CloudBaseSseFrame(
+            event: 'memory_updated',
+            data: '{"runId":"run-1","count":1}',
+          ),
+          CloudBaseSseFrame(
+            event: 'agent_done',
+            data:
+                '{"runId":"run-1","planId":"plan-1","updatedSurfaces":["assistant_context"]}',
+          ),
+          CloudBaseSseFrame(
+            event: 'message_completed',
+            data:
+                '{"reply":"done","sourceMode":"fallbackSuccess","assistantMessageId":"assistant-1","runId":"run-1"}',
+          ),
+          CloudBaseSseFrame(event: 'done', data: '{"runId":"run-1"}'),
+        ]),
+      ],
+    );
+    final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
+      appApiClient: appApiClient,
+    );
+    final CloudBaseAssistantReplyGateway gateway =
+        CloudBaseAssistantReplyGateway(
+          appApiClient: appApiClient,
+          snapshotStore: snapshotStore,
+        );
+
+    final List<AssistantStreamEvent> events = await gateway
+        .streamReply(
+          prompt: '帮我规划今晚',
+          threadId: 'thread-1',
+          clientUserMessageId: 'user-1',
+          clientAssistantMessageId: 'assistant-1',
+          dorm: _testDorm(),
+        )
+        .toList();
+
+    expect(
+      events.map((AssistantStreamEvent event) => event.type),
+      containsAll(<AssistantStreamEventType>[
+        AssistantStreamEventType.planningStarted,
+        AssistantStreamEventType.toolCompleted,
+        AssistantStreamEventType.memoryUpdated,
+        AssistantStreamEventType.agentDone,
+      ]),
+    );
+    final AssistantStreamEvent completed = events
+        .where(
+          (AssistantStreamEvent event) =>
+              event.type == AssistantStreamEventType.toolCompleted,
+        )
+        .single;
+    expect(
+      completed.updatedSurfaces,
+      containsAll(<String>[
+        'home_pre_sleep',
+        'agent_tool_plan_generate_tonight',
+      ]),
+    );
+    expect(completed.toolCallId, 'call-1');
+    expect(completed.toolOutput, containsPair('actionCount', 3));
+    expect(completed.committed, true);
+    expect(completed.undoable, true);
+    expect(completed.undoPayload, containsPair('previousUnknown', true));
+  });
+
+  test('cloudbase assistant reply gateway calls agent undo endpoint', () async {
+    final _FakeStreamCloudBaseAppApiClient appApiClient =
+        _FakeStreamCloudBaseAppApiClient(
+          postSseBehaviors: <Future<Stream<CloudBaseSseFrame>> Function()>[],
+          postResponse: const <String, dynamic>{
+            'status': 'applied',
+            'call': <String, dynamic>{'id': 'call-1', 'undoStatus': 'applied'},
+            'updatedSurfaces': <String>['home_pre_sleep'],
+          },
+        );
+    final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
+      appApiClient: appApiClient,
+    );
+    final CloudBaseAssistantReplyGateway gateway =
+        CloudBaseAssistantReplyGateway(
+          appApiClient: appApiClient,
+          snapshotStore: snapshotStore,
+        );
+
+    final AssistantToolUndoResult result = await gateway.undoToolCall(
+      toolCallId: 'call-1',
+    );
+
+    expect(result.applied, true);
+    expect(result.callId, 'call-1');
+    expect(result.updatedSurfaces, contains('home_pre_sleep'));
+    expect(appApiClient.lastPostPath, '/api/agent/tool-calls/call-1/undo');
+    expect(appApiClient.bootstrapCallCount, 1);
+  });
+
+  test('cloudbase assistant reply gateway fetches memory overview', () async {
+    final _FakeStreamCloudBaseAppApiClient appApiClient =
+        _FakeStreamCloudBaseAppApiClient(
+          postSseBehaviors: <Future<Stream<CloudBaseSseFrame>> Function()>[],
+          postResponse: const <String, dynamic>{
+            'generatedAt': '2026-05-23T00:00:00.000Z',
+            'totalCount': 2,
+            'byKind': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'kind': 'intervention_effect',
+                'count': 1,
+                'averageConfidence': 0.9,
+              },
+              <String, dynamic>{'kind': 'strategy_weight', 'count': 1},
+            ],
+            'recent': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'id': 'memory-1',
+                'kind': 'intervention_effect',
+                'content': 'Rain audio helped.',
+                'confidence': 0.9,
+              },
+            ],
+            'interventionEffects': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'actionId': 'audio-rain',
+                'content': 'Rain audio helped.',
+                'effectivenessScore': 1,
+              },
+            ],
+            'strategyWeights': <Map<String, dynamic>>[],
+            'contradictionGroups': <Map<String, dynamic>>[],
+          },
+        );
+    final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
+      appApiClient: appApiClient,
+    );
+    final CloudBaseAssistantReplyGateway gateway =
+        CloudBaseAssistantReplyGateway(
+          appApiClient: appApiClient,
+          snapshotStore: snapshotStore,
+        );
+
+    final AssistantMemoryOverview overview = await gateway.fetchMemoryOverview(
+      limit: 20,
+      kinds: const <String>['intervention_effect'],
+    );
+
+    expect(appApiClient.lastPostPath, '/api/agent/memory');
+    expect(appApiClient.lastPostBody, containsPair('limit', 20));
+    expect(
+      appApiClient.lastPostBody,
+      containsPair('kinds', const <String>['intervention_effect']),
+    );
+    expect(overview.totalCount, 2);
+    expect(overview.byKind.first.kind, 'intervention_effect');
+    expect(overview.recent.single.content, 'Rain audio helped.');
+    expect(overview.interventionEffects.single.actionId, 'audio-rain');
+  });
+
   test(
     'cloudbase assistant reply gateway does not retry after reply delta has started',
     () async {
@@ -355,34 +528,39 @@ void main() {
 }
 
 class _FakeStreamCloudBaseAppApiClient extends CloudBaseAppApiClient {
-  _FakeStreamCloudBaseAppApiClient({required this.postSseBehaviors})
-    : super(
-        environment: const AppEnvironment(
-          target: AppBackendTarget.production,
-          appIdPrefix: 'com.dormsleep.app',
-          cloudbaseEnvId: 'demo-env',
-          cloudbaseAuthBaseUrl: 'https://example.com',
-          cloudbaseAppApiBaseUrl: 'https://example.com',
-          cloudbasePublishableKey: 'publishable-key',
-          cloudbaseClientId: 'demo-env',
-        ),
-        sessionStore: _FakeSessionStore(),
-        authClient: CloudBaseAuthClient(
-          environment: const AppEnvironment(
-            target: AppBackendTarget.production,
-            appIdPrefix: 'com.dormsleep.app',
-            cloudbaseEnvId: 'demo-env',
-            cloudbaseAuthBaseUrl: 'https://example.com',
-            cloudbaseAppApiBaseUrl: 'https://example.com',
-            cloudbasePublishableKey: 'publishable-key',
-            cloudbaseClientId: 'demo-env',
-          ),
-        ),
-      );
+  _FakeStreamCloudBaseAppApiClient({
+    required this.postSseBehaviors,
+    this.postResponse = const <String, dynamic>{},
+  }) : super(
+         environment: const AppEnvironment(
+           target: AppBackendTarget.production,
+           appIdPrefix: 'com.dormsleep.app',
+           cloudbaseEnvId: 'demo-env',
+           cloudbaseAuthBaseUrl: 'https://example.com',
+           cloudbaseAppApiBaseUrl: 'https://example.com',
+           cloudbasePublishableKey: 'publishable-key',
+           cloudbaseClientId: 'demo-env',
+         ),
+         sessionStore: _FakeSessionStore(),
+         authClient: CloudBaseAuthClient(
+           environment: const AppEnvironment(
+             target: AppBackendTarget.production,
+             appIdPrefix: 'com.dormsleep.app',
+             cloudbaseEnvId: 'demo-env',
+             cloudbaseAuthBaseUrl: 'https://example.com',
+             cloudbaseAppApiBaseUrl: 'https://example.com',
+             cloudbasePublishableKey: 'publishable-key',
+             cloudbaseClientId: 'demo-env',
+           ),
+         ),
+       );
 
   final List<Future<Stream<CloudBaseSseFrame>> Function()> postSseBehaviors;
+  final Map<String, dynamic> postResponse;
   int postSseCallCount = 0;
   int bootstrapCallCount = 0;
+  String? lastPostPath;
+  Map<String, dynamic> lastPostBody = const <String, dynamic>{};
 
   @override
   bool get isConfigured => true;
@@ -398,9 +576,19 @@ class _FakeStreamCloudBaseAppApiClient extends CloudBaseAppApiClient {
     String path, {
     Map<String, dynamic> body = const <String, dynamic>{},
   }) async {
-    expect(path, '/api/assistant/reply/stream');
+    expect(path, '/api/agent/run/stream');
     postSseCallCount += 1;
     return postSseBehaviors[postSseCallCount - 1]();
+  }
+
+  @override
+  Future<Map<String, dynamic>> post(
+    String path, {
+    Map<String, dynamic> body = const <String, dynamic>{},
+  }) async {
+    lastPostPath = path;
+    lastPostBody = body;
+    return postResponse;
   }
 }
 

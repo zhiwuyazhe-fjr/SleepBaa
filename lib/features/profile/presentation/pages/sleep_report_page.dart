@@ -10,6 +10,23 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
+import 'package:sleep_dorm_app/core/widgets/assistant_agent_entry.dart';
+
+String _reportAgentPrompt({
+  required SleepReport report,
+  required List<SleepSession> recent,
+}) {
+  final int pendingCount = recent
+      .where((SleepSession session) => !session.hasSubmittedFeedback)
+      .length;
+  return '请作为小眠中枢解读我的睡眠报告并生成后续行动：'
+      '平均睡眠 ${report.averageSleepHours.toStringAsFixed(1)} 小时，'
+      '平均质量 ${report.averageSleepQuality.toStringAsFixed(1)}，'
+      '平均恢复感 ${report.averageRestedLevel.toStringAsFixed(1)}，'
+      '安静夜晚 ${report.calmNights} 晚，梦境记录 ${report.dreamEntriesCount} 条，'
+      '最近记录 ${recent.length} 条，待补反馈 $pendingCount 条。'
+      '请结合长期记忆和晨间反馈，刷新建议权重并给出下一步。';
+}
 
 class SleepReportPage extends StatelessWidget {
   const SleepReportPage({super.key});
@@ -97,6 +114,15 @@ class SleepReportPage extends StatelessWidget {
                             color: const Color(0xFF8F63D6),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      AssistantAgentEntryButton(
+                        label: '让小眠解读报告',
+                        source: 'profile_report',
+                        prompt: _reportAgentPrompt(
+                          report: report,
+                          recent: recent,
+                        ),
                       ),
                     ],
                   ),

@@ -3,6 +3,9 @@ import {
   AssistantContext,
   AssistantMemoryCandidate,
   AssistantProfileDoc,
+  AgentPlanDoc,
+  AgentRunDoc,
+  AgentToolCallDoc,
   AssistantMemoryItem,
   AssistantRunDoc,
   AssistantThreadSummaryDoc,
@@ -133,6 +136,9 @@ const Collections = {
   userState: "user_state",
   cardSnapshots: "card_snapshots",
   assistantRuns: "assistant_runs",
+  agentRuns: "agent_runs",
+  agentPlans: "agent_plans",
+  agentToolCalls: "agent_tool_calls",
   assistantProfiles: "assistant_profiles",
   accountMigrations: "account_migrations",
   assistantThreadSummaries: "assistant_thread_summaries",
@@ -1156,6 +1162,24 @@ export interface AssistantDataRepository {
     runId: string,
     run: AssistantRunDoc,
   ): Promise<void>;
+  writeAgentRun(uid: string, runId: string, run: AgentRunDoc): Promise<void>;
+  getAgentRun(uid: string, runId: string): Promise<AgentRunDoc | null>;
+  getAgentPlan(uid: string, planId: string): Promise<AgentPlanDoc | null>;
+  getAgentToolCall(
+    uid: string,
+    callId: string,
+  ): Promise<AgentToolCallDoc | null>;
+  listAgentToolCalls(uid: string, runId: string): Promise<AgentToolCallDoc[]>;
+  writeAgentPlan(
+    uid: string,
+    planId: string,
+    plan: AgentPlanDoc,
+  ): Promise<void>;
+  writeAgentToolCall(
+    uid: string,
+    callId: string,
+    call: AgentToolCallDoc,
+  ): Promise<void>;
   setDreamAnalysis(
     entryId: string,
     analysis: DreamAnalysis,
@@ -1223,6 +1247,15 @@ export interface AssistantDataRepository {
     uid: string,
     items: AssistantMemoryItem[],
   ): Promise<void>;
+  listAssistantMemoryItems(
+    uid: string,
+    options?: {
+      limit?: number;
+      query?: string;
+      kinds?: string[];
+      touchLastUsed?: boolean;
+    },
+  ): Promise<AssistantMemoryItem[]>;
 }
 
 export class FirestoreRepository implements AssistantDataRepository {
@@ -2767,6 +2800,90 @@ export class FirestoreRepository implements AssistantDataRepository {
     });
   }
 
+  async writeAgentRun(
+    uid: string,
+    runId: string,
+    run: AgentRunDoc,
+  ): Promise<void> {
+    await this.ensureUserBootstrap(uid);
+    await this.store.set(Collections.agentRuns, `${uid}:${runId}`, {
+      ...(run as unknown as JsonMap),
+      uid,
+      runId,
+    });
+  }
+
+  async getAgentRun(uid: string, runId: string): Promise<AgentRunDoc | null> {
+    await this.ensureUserBootstrap(uid);
+    const doc = await this.store.get(Collections.agentRuns, `${uid}:${runId}`);
+    return doc ? (withoutMeta(doc) as unknown as AgentRunDoc) : null;
+  }
+
+  async getAgentPlan(uid: string, planId: string): Promise<AgentPlanDoc | null> {
+    await this.ensureUserBootstrap(uid);
+    const doc = await this.store.get(Collections.agentPlans, `${uid}:${planId}`);
+    return doc ? (withoutMeta(doc) as unknown as AgentPlanDoc) : null;
+  }
+
+  async getAgentToolCall(
+    uid: string,
+    callId: string,
+  ): Promise<AgentToolCallDoc | null> {
+    await this.ensureUserBootstrap(uid);
+    const doc = await this.store.get(
+      Collections.agentToolCalls,
+      `${uid}:${callId}`,
+    );
+    return doc ? (withoutMeta(doc) as unknown as AgentToolCallDoc) : null;
+  }
+
+  async listAgentToolCalls(
+    uid: string,
+    runId: string,
+  ): Promise<AgentToolCallDoc[]> {
+    await this.ensureUserBootstrap(uid);
+    const docs = await this.store.query(Collections.agentToolCalls, {
+      filters: { userId: uid, runId },
+      limit: 100,
+    });
+    return docs
+      .map((doc) => withoutMeta(doc) as unknown as AgentToolCallDoc)
+      .sort((left, right) => {
+        const leftStarted = Date.parse(left.startedAt);
+        const rightStarted = Date.parse(right.startedAt);
+        return (
+          (Number.isNaN(leftStarted) ? 0 : leftStarted) -
+          (Number.isNaN(rightStarted) ? 0 : rightStarted)
+        );
+      });
+  }
+
+  async writeAgentPlan(
+    uid: string,
+    planId: string,
+    plan: AgentPlanDoc,
+  ): Promise<void> {
+    await this.ensureUserBootstrap(uid);
+    await this.store.set(Collections.agentPlans, `${uid}:${planId}`, {
+      ...(plan as unknown as JsonMap),
+      uid,
+      planId,
+    });
+  }
+
+  async writeAgentToolCall(
+    uid: string,
+    callId: string,
+    call: AgentToolCallDoc,
+  ): Promise<void> {
+    await this.ensureUserBootstrap(uid);
+    await this.store.set(Collections.agentToolCalls, `${uid}:${callId}`, {
+      ...(call as unknown as JsonMap),
+      uid,
+      callId,
+    });
+  }
+
   async setDreamAnalysis(
     entryId: string,
     analysis: DreamAnalysis,
@@ -3312,6 +3429,19 @@ export class FirestoreRepository implements AssistantDataRepository {
     }
   }
 
+  async listAssistantMemoryItems(
+    uid: string,
+    options: {
+      limit?: number;
+      query?: string;
+      kinds?: string[];
+      touchLastUsed?: boolean;
+    } = {},
+  ): Promise<AssistantMemoryItem[]> {
+    await this.ensureUserBootstrap(uid);
+    return this.listAssistantMemory(uid, options);
+  }
+
   private async transferAccountData(
     sourceUid: string,
     canonicalUid: string,
@@ -3848,6 +3978,7 @@ export class FirestoreRepository implements AssistantDataRepository {
       limit?: number;
       query?: string;
       kinds?: string[];
+      touchLastUsed?: boolean;
     } = {},
   ): Promise<AssistantMemoryItem[]> {
     const limit = options.limit ?? 20;
@@ -3881,13 +4012,31 @@ export class FirestoreRepository implements AssistantDataRepository {
       const ageDays = Number.isNaN(updatedAt)
         ? 365
         : Math.max(0, (Date.now() - updatedAt) / (24 * 60 * 60 * 1000));
-      const recencyScore = Math.max(0, 15 - ageDays);
+      const storedDecay =
+        value.decayScore == null ? null : asNumber(value.decayScore, 1);
+      const decayScore =
+        storedDecay == null
+          ? Math.max(0.1, 1 - ageDays / 90)
+          : Math.max(0.05, Math.min(1, storedDecay));
+      const recencyScore = Math.max(0, 15 - ageDays) * decayScore;
       const kindScore =
         allowedKinds.size === 0 || allowedKinds.has(kind) ? 8 : 0;
       const overlapScore = queryTokens.length === 0 ? 0 : overlapCount * 12;
-      const salienceScore = asNumber(value.salience, 0.5) * 20;
+      const salienceScore = asNumber(value.salience, 0.5) * 20 * decayScore;
+      const confidenceScore = asNumber(value.confidence, 0.5) * 8;
+      const effectivenessScore =
+        value.effectivenessScore == null
+          ? 0
+          : Math.min(12, Math.abs(asNumber(value.effectivenessScore, 0)) * 12);
       return {
-        score: salienceScore + overlapScore + recencyScore + kindScore,
+        docId: asString(doc._id, asString(value.id)),
+        score:
+          salienceScore +
+          overlapScore +
+          recencyScore +
+          kindScore +
+          confidenceScore +
+          effectivenessScore,
         item: {
           id: asString(value.id, asString(value._id)),
           kind: asString(value.kind, "profile"),
@@ -3899,6 +4048,15 @@ export class FirestoreRepository implements AssistantDataRepository {
           sourceThreadId: asString(value.sourceThreadId) || null,
           sourceMessageId: asString(value.sourceMessageId) || null,
           salience: asNumber(value.salience, 0.5),
+          decayScore,
+          contradictionGroup: asString(value.contradictionGroup) || null,
+          evidenceRefs: asStringArray(value.evidenceRefs),
+          sourceActionId: asString(value.sourceActionId) || null,
+          sourceAgentRunId: asString(value.sourceAgentRunId) || null,
+          effectivenessScore:
+            value.effectivenessScore == null
+              ? null
+              : asNumber(value.effectivenessScore, 0),
           lastUsedAt: asString(value.lastUsedAt) || null,
           sourceRefs: asStringArray(value.sourceRefs),
           createdAt: asString(value.createdAt, nowIso()),
@@ -3907,10 +4065,26 @@ export class FirestoreRepository implements AssistantDataRepository {
       };
     });
 
-    return scored
+    const selected = scored
       .sort((left, right) => right.score - left.score)
-      .slice(0, limit)
-      .map((entry) => entry.item);
+      .slice(0, limit);
+    const usedAt = options.touchLastUsed === false ? null : nowIso();
+    if (usedAt) {
+      await Promise.all(
+        selected
+          .map((entry) => entry.docId)
+          .filter(Boolean)
+          .map((docId) =>
+            this.store.merge(Collections.assistantMemoryItems, docId, {
+              lastUsedAt: usedAt,
+            }),
+          ),
+      );
+    }
+    return selected.map((entry) => ({
+      ...entry.item,
+      lastUsedAt: usedAt ?? entry.item.lastUsedAt,
+    }));
   }
 
   private async ensureUserBootstrap(uid: string): Promise<void> {

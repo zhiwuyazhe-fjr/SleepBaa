@@ -2007,6 +2007,38 @@ void main() {
     expect(submitButton.onPressed, isNotNull);
   });
 
+  testWidgets('assistant memory header opens memory overview sheet', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.assistant,
+      clock: _dayClock,
+      settle: false,
+    );
+    await _pumpAssistantSurface(tester);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('assistant-header-memory')),
+        matching: find.byType(IconButton),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 320));
+    await tester.pump(const Duration(milliseconds: 320));
+
+    expect(
+      find.byKey(const ValueKey<String>('assistant-memory-sheet')),
+      findsOneWidget,
+    );
+    expect(find.text('记忆与进化'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('assistant-memory-total-count')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('sleep capture assistant switches dream and memo guidance', (
     WidgetTester tester,
   ) async {

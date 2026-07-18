@@ -22,6 +22,19 @@ enum _SleepExitAction { back, pause, finish }
 
 const String _feedbackAlreadySubmittedMessage = '您已经填写过晨间反馈，小眠已经收到🫡';
 
+String _sleepModeAgentPrompt({
+  required SleepSession? session,
+  required Dorm dorm,
+}) {
+  final String sessionText = session == null
+      ? '当前没有可用睡眠会话'
+      : '当前睡眠会话 ${session.id} 已运行 '
+            '${session.liveTrackedDurationMinutes().clamp(1, 24 * 60)} 分钟';
+  return '请作为小眠中枢处理睡眠模式中的即时支持：'
+      '$sessionText，宿舍噪音 ${dorm.noiseDb} dB，状态 ${dorm.quietLabel}。'
+      '请检查上下文，必要时记录干扰、刷新建议，并给出低负担的下一步。';
+}
+
 class HomePostSleepPage extends StatelessWidget {
   const HomePostSleepPage({super.key});
 
@@ -52,6 +65,17 @@ class HomePostSleepPage extends StatelessWidget {
                 orElse: () => null,
               );
           final List<_SleepSupportTool> tools = <_SleepSupportTool>[
+            _SleepSupportTool(
+              title: '让小眠处理',
+              subtitle: '把当前睡眠状态交给中枢',
+              icon: Icons.auto_awesome_rounded,
+              onTap: () => context.push(
+                AppRoutes.assistantAgentLocation(
+                  source: 'sleep_mode',
+                  prompt: _sleepModeAgentPrompt(session: session, dorm: dorm),
+                ),
+              ),
+            ),
             _SleepSupportTool(
               title: '难以入睡',
               subtitle: '快速切到呼吸放松与音频支持',

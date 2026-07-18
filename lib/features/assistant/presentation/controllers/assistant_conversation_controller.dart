@@ -35,6 +35,9 @@ class AssistantConversationController extends ChangeNotifier {
   final AssistantReplyGateway _assistantReplyGateway;
   final Map<String, List<String>> _updatedSurfacesByMessageId =
       <String, List<String>>{};
+  AssistantMemoryOverview? _memoryOverview;
+  bool _memoryOverviewLoading = false;
+  String? _memoryOverviewError;
 
   AssistantThread? get currentThread => _assistantRepository.currentThread;
 
@@ -57,6 +60,12 @@ class AssistantConversationController extends ChangeNotifier {
   bool get isBusy =>
       turnState != null && turnState!.status != AssistantThreadTurnStatus.idle;
 
+  AssistantMemoryOverview? get memoryOverview => _memoryOverview;
+
+  bool get memoryOverviewLoading => _memoryOverviewLoading;
+
+  String? get memoryOverviewError => _memoryOverviewError;
+
   List<String> updatedSurfacesForMessage(String? messageId) {
     if (messageId == null || messageId.trim().isEmpty) {
       return const <String>[];
@@ -64,6 +73,56 @@ class AssistantConversationController extends ChangeNotifier {
     return List<String>.unmodifiable(
       _updatedSurfacesByMessageId[messageId] ?? const <String>[],
     );
+  }
+
+  Future<bool> undoToolCall(String toolCallId) async {
+    final String normalizedCallId = toolCallId.trim();
+    if (normalizedCallId.isEmpty) {
+      return false;
+    }
+    _setUndoSurfaceToken(normalizedCallId, 'agent_undo_running');
+    try {
+      final AssistantToolUndoResult result = await _assistantReplyGateway
+          .undoToolCall(toolCallId: normalizedCallId);
+      if (!result.applied) {
+        _setUndoSurfaceToken(normalizedCallId, 'agent_undo_failed');
+        return false;
+      }
+      _setUndoSurfaceToken(
+        normalizedCallId,
+        'agent_undo_applied',
+        extraSurfaceIds: result.updatedSurfaces,
+      );
+      return true;
+    } catch (_) {
+      _setUndoSurfaceToken(normalizedCallId, 'agent_undo_failed');
+      return false;
+    }
+  }
+
+  Future<bool> refreshMemoryOverview({
+    String? query,
+    List<String> kinds = const <String>[],
+  }) async {
+    if (_memoryOverviewLoading) {
+      return false;
+    }
+    _memoryOverviewLoading = true;
+    _memoryOverviewError = null;
+    notifyListeners();
+    try {
+      _memoryOverview = await _assistantReplyGateway.fetchMemoryOverview(
+        query: query,
+        kinds: kinds,
+      );
+      return true;
+    } catch (_) {
+      _memoryOverviewError = '暂时无法读取记忆概览';
+      return false;
+    } finally {
+      _memoryOverviewLoading = false;
+      notifyListeners();
+    }
   }
 
   String? get latestUserPrompt {
@@ -262,10 +321,7 @@ class AssistantConversationController extends ChangeNotifier {
     return _assistantRepository.messagesForThread(thread.id).isEmpty;
   }
 
-  bool _isReusableBlankThread(
-    AssistantThread? thread,
-    String normalizedTitle,
-  ) {
+  bool _isReusableBlankThread(AssistantThread? thread, String normalizedTitle) {
     if (!_isBlankThread(thread)) {
       return false;
     }
@@ -364,6 +420,22 @@ class AssistantConversationController extends ChangeNotifier {
               errorCode: event.errorCode,
             );
             await finishTurn();
+            break;
+          case AssistantStreamEventType.planningStarted:
+          case AssistantStreamEventType.toolStarted:
+          case AssistantStreamEventType.toolCompleted:
+          case AssistantStreamEventType.toolFailed:
+          case AssistantStreamEventType.actionCommitted:
+          case AssistantStreamEventType.memoryUpdated:
+          case AssistantStreamEventType.agentDone:
+            _recordUpdatedSurfaces(
+              messageIds: <String?>[
+                resolvedAssistantMessageId,
+                clientAssistantMessageId,
+                event.assistantMessageId,
+              ],
+              surfaceIds: _surfaceIdsForAgentEvent(event),
+            );
             break;
           case AssistantStreamEventType.ack:
           case AssistantStreamEventType.captureRecord:
@@ -508,6 +580,22 @@ class AssistantConversationController extends ChangeNotifier {
               errorCode: event.errorCode,
             );
             await finishTurn();
+            break;
+          case AssistantStreamEventType.planningStarted:
+          case AssistantStreamEventType.toolStarted:
+          case AssistantStreamEventType.toolCompleted:
+          case AssistantStreamEventType.toolFailed:
+          case AssistantStreamEventType.actionCommitted:
+          case AssistantStreamEventType.memoryUpdated:
+          case AssistantStreamEventType.agentDone:
+            _recordUpdatedSurfaces(
+              messageIds: <String?>[
+                resolvedAssistantMessageId,
+                clientAssistantMessageId,
+                event.assistantMessageId,
+              ],
+              surfaceIds: _surfaceIdsForAgentEvent(event),
+            );
             break;
           case AssistantStreamEventType.ack:
           case AssistantStreamEventType.memorySynced:
@@ -688,6 +776,102 @@ class AssistantConversationController extends ChangeNotifier {
     if (changed) {
       notifyListeners();
     }
+  }
+
+  List<String> _surfaceIdsForAgentEvent(AssistantStreamEvent event) {
+    final List<String> surfaces = List<String>.from(event.updatedSurfaces);
+    final String? navigationToken = _navigationSurfaceTokenForAgentEvent(event);
+    if (navigationToken != null) {
+      surfaces.add(navigationToken);
+    }
+    if (_shouldExposeUndo(event)) {
+      surfaces.add('agent_undo_available:${event.toolCallId!.trim()}');
+    }
+    return surfaces;
+  }
+
+  String? _navigationSurfaceTokenForAgentEvent(AssistantStreamEvent event) {
+    if (event.type != AssistantStreamEventType.toolCompleted ||
+        event.toolName != 'navigation.suggest') {
+      return null;
+    }
+    final Map<String, dynamic> output =
+        event.toolOutput ?? const <String, dynamic>{};
+    final String route = (output['route'] as String? ?? '').trim();
+    if (route.isEmpty || !route.startsWith('/')) {
+      return null;
+    }
+    final String label = (output['label'] as String? ?? '继续处理').trim();
+    return 'agent_navigation:${Uri.encodeComponent(route)}:'
+        '${Uri.encodeComponent(label.isEmpty ? '继续处理' : label)}';
+  }
+
+  bool _shouldExposeUndo(AssistantStreamEvent event) {
+    final String toolCallId = event.toolCallId?.trim() ?? '';
+    return event.type == AssistantStreamEventType.actionCommitted &&
+        event.committed == true &&
+        event.undoable == true &&
+        toolCallId.isNotEmpty &&
+        (event.toolName == 'interference.save_tonight' ||
+            event.toolName == 'sleep.mode.exit');
+  }
+
+  void _setUndoSurfaceToken(
+    String toolCallId,
+    String status, {
+    Iterable<String> extraSurfaceIds = const <String>[],
+  }) {
+    final String token = '$status:$toolCallId';
+    bool changed = false;
+    for (final MapEntry<String, List<String>> entry
+        in _updatedSurfacesByMessageId.entries.toList()) {
+      final List<String> current = entry.value;
+      final List<String> next = current
+          .where(
+            (String surfaceId) => !_isUndoSurfaceForCall(surfaceId, toolCallId),
+          )
+          .toList(growable: true);
+      for (final String surfaceId in <String>[...extraSurfaceIds, token]) {
+        final String normalized = surfaceId.trim();
+        if (normalized.isNotEmpty && !next.contains(normalized)) {
+          next.add(normalized);
+        }
+      }
+      if (!listEquals(current, next)) {
+        _updatedSurfacesByMessageId[entry.key] = next;
+        changed = true;
+      }
+    }
+    if (!changed) {
+      final String? latestMessageId = _latestAssistantMessageId();
+      if (latestMessageId != null) {
+        _recordUpdatedSurfaces(
+          messageIds: <String?>[latestMessageId],
+          surfaceIds: <String>[...extraSurfaceIds, token],
+        );
+      }
+      return;
+    }
+    notifyListeners();
+  }
+
+  bool _isUndoSurfaceForCall(String surfaceId, String toolCallId) {
+    final List<String> parts = surfaceId.split(':');
+    return parts.length == 2 &&
+        parts[1] == toolCallId &&
+        (parts[0] == 'agent_undo_available' ||
+            parts[0] == 'agent_undo_running' ||
+            parts[0] == 'agent_undo_applied' ||
+            parts[0] == 'agent_undo_failed');
+  }
+
+  String? _latestAssistantMessageId() {
+    for (final AssistantMessage message in currentMessages.reversed) {
+      if (message.role == AssistantMessageRole.assistant) {
+        return message.id;
+      }
+    }
+    return null;
   }
 
   void _relayState() {

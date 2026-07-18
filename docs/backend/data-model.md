@@ -130,3 +130,23 @@ Flutter 页面应通过对应 repository/facade 读取快照，不应自行拼�
 - Flutter 领域对象以 `lib/core/models/app_models.dart` 为准。
 - JSON 到 Dart 的转换集中在 `lib/core/data/model_serializers.dart`。
 - 新增字段时，先保证后端 bootstrap 可返回，再补 Dart serializer 的默认值和兼容逻辑。
+## Agent Collections
+
+2026-05-23 新增中枢 Agent 审计集合：
+
+| Collection | 主要内容 |
+| --- | --- |
+| `agent_runs` | 每次 Agent 目标执行的总记录，包含 goal、status、planId、工具数量、记忆数量、updatedSurfaces、错误和耗时 |
+| `agent_plans` | 每次运行生成的步骤计划，包含 `AgentStep`、工具名、输入、风险和步骤状态 |
+| `agent_tool_calls` | 每个工具调用的输入、输出、状态、错误、undoPayload、开始/结束时间和耗时 |
+
+`assistant_memory_items` 扩展字段：
+
+- `decayScore`
+- `contradictionGroup`
+- `evidenceRefs`
+- `sourceActionId`
+- `sourceAgentRunId`
+- `effectivenessScore`
+
+这些字段用于长期记忆治理、自我进化和行动有效性追踪；不代表代码自修改。

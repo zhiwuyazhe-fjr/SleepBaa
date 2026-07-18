@@ -174,6 +174,25 @@ class _FakeAssistantGateway implements AssistantReplyGateway {
       updatedSurfaces: const <String>['assistant_context'],
     );
   }
+
+  @override
+  Future<AssistantToolUndoResult> undoToolCall({
+    required String toolCallId,
+  }) async {
+    return AssistantToolUndoResult(status: 'applied', callId: toolCallId);
+  }
+
+  @override
+  Future<AssistantMemoryOverview> fetchMemoryOverview({
+    int limit = 80,
+    String? query,
+    List<String> kinds = const <String>[],
+  }) async {
+    return const AssistantMemoryOverview(
+      generatedAt: '2026-05-23T00:00:00.000Z',
+      totalCount: 0,
+    );
+  }
 }
 
 class _ErrorAssistantGateway implements AssistantReplyGateway {
@@ -248,6 +267,25 @@ class _ErrorAssistantGateway implements AssistantReplyGateway {
         content: prompt,
       ),
       recordPersistedRemotely: false,
+    );
+  }
+
+  @override
+  Future<AssistantToolUndoResult> undoToolCall({
+    required String toolCallId,
+  }) async {
+    return AssistantToolUndoResult(status: 'unavailable', callId: toolCallId);
+  }
+
+  @override
+  Future<AssistantMemoryOverview> fetchMemoryOverview({
+    int limit = 80,
+    String? query,
+    List<String> kinds = const <String>[],
+  }) async {
+    return const AssistantMemoryOverview(
+      generatedAt: '2026-05-23T00:00:00.000Z',
+      totalCount: 0,
     );
   }
 }
@@ -331,6 +369,25 @@ class _TimeoutAssistantGateway implements AssistantReplyGateway {
         content: prompt,
       ),
       recordPersistedRemotely: false,
+    );
+  }
+
+  @override
+  Future<AssistantToolUndoResult> undoToolCall({
+    required String toolCallId,
+  }) async {
+    return AssistantToolUndoResult(status: 'unavailable', callId: toolCallId);
+  }
+
+  @override
+  Future<AssistantMemoryOverview> fetchMemoryOverview({
+    int limit = 80,
+    String? query,
+    List<String> kinds = const <String>[],
+  }) async {
+    return const AssistantMemoryOverview(
+      generatedAt: '2026-05-23T00:00:00.000Z',
+      totalCount: 0,
     );
   }
 }

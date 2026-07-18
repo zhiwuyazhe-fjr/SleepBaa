@@ -25,10 +25,27 @@ class AssistantSurfaceMetrics {
 }
 
 class AssistantToolStatus {
-  const AssistantToolStatus({required this.icon, required this.label});
+  const AssistantToolStatus({
+    required this.icon,
+    required this.label,
+    this.undoCallId,
+    this.undoStatus,
+    this.navigationRoute,
+    this.navigationLabel,
+  });
 
   final IconData icon;
   final String label;
+  final String? undoCallId;
+  final String? undoStatus;
+  final String? navigationRoute;
+  final String? navigationLabel;
+
+  bool get canUndo =>
+      undoCallId != null && undoCallId!.isNotEmpty && undoStatus == 'available';
+
+  bool get canNavigate =>
+      navigationRoute != null && navigationRoute!.trim().isNotEmpty;
 }
 
 class AssistantConversationSlice {
@@ -245,6 +262,7 @@ class AssistantShellScaffold extends StatelessWidget {
     required this.bodyBuilder,
     required this.composerBuilder,
     required this.onTapAdd,
+    required this.onTapMemory,
     required this.onTapHistory,
   });
 
@@ -262,6 +280,7 @@ class AssistantShellScaffold extends StatelessWidget {
   )
   composerBuilder;
   final VoidCallback? onTapAdd;
+  final VoidCallback? onTapMemory;
   final VoidCallback? onTapHistory;
 
   @override
@@ -315,6 +334,7 @@ class AssistantShellScaffold extends StatelessWidget {
                             metrics: metrics,
                             palette: palette,
                             onTapAdd: onTapAdd,
+                            onTapMemory: onTapMemory,
                             onTapHistory: onTapHistory,
                           ),
                         ),
@@ -355,12 +375,14 @@ class AssistantHeader extends StatelessWidget {
     required this.metrics,
     required this.palette,
     required this.onTapAdd,
+    required this.onTapMemory,
     required this.onTapHistory,
   });
 
   final AssistantSurfaceMetrics metrics;
   final AssistantSurfacePalette palette;
   final VoidCallback? onTapAdd;
+  final VoidCallback? onTapMemory;
   final VoidCallback? onTapHistory;
 
   @override
@@ -372,6 +394,7 @@ class AssistantHeader extends StatelessWidget {
           icon: Icons.add,
           size: metrics.unit(22),
           color: palette.headerIcon,
+          tooltip: '新对话',
           onTap: onTapAdd,
         ),
         Expanded(
@@ -387,10 +410,19 @@ class AssistantHeader extends StatelessWidget {
           ),
         ),
         _AssistantActionIconButton(
+          key: const ValueKey<String>('assistant-header-memory'),
+          icon: Icons.psychology_alt_outlined,
+          size: metrics.unit(21),
+          color: palette.headerIcon,
+          tooltip: '记忆与进化',
+          onTap: onTapMemory,
+        ),
+        _AssistantActionIconButton(
           key: const ValueKey<String>('assistant-header-history'),
           icon: Icons.history,
           size: metrics.unit(22),
           color: palette.headerIcon,
+          tooltip: '历史对话',
           onTap: onTapHistory,
         ),
       ],
@@ -755,11 +787,15 @@ class AssistantInlineStatusList extends StatelessWidget {
     required this.statuses,
     required this.metrics,
     required this.palette,
+    this.onUndoPressed,
+    this.onNavigatePressed,
   });
 
   final List<AssistantToolStatus> statuses;
   final AssistantSurfaceMetrics metrics;
   final AssistantSurfacePalette palette;
+  final ValueChanged<AssistantToolStatus>? onUndoPressed;
+  final ValueChanged<AssistantToolStatus>? onNavigatePressed;
 
   @override
   Widget build(BuildContext context) {
@@ -797,6 +833,53 @@ class AssistantInlineStatusList extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (status.canUndo && onUndoPressed != null) ...<Widget>[
+                  SizedBox(width: metrics.unit(8)),
+                  TextButton.icon(
+                    key: ValueKey<String>(
+                      'assistant-undo-${status.undoCallId}',
+                    ),
+                    onPressed: () => onUndoPressed!(status),
+                    icon: Icon(Icons.undo, size: metrics.unit(13)),
+                    label: const Text('撤销'),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      minimumSize: Size(metrics.unit(50), metrics.unit(28)),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: metrics.unit(8),
+                        vertical: 0,
+                      ),
+                    ),
+                  ),
+                ],
+                if (status.canNavigate &&
+                    onNavigatePressed != null) ...<Widget>[
+                  SizedBox(width: metrics.unit(8)),
+                  TextButton.icon(
+                    key: ValueKey<String>(
+                      'assistant-navigate-${Uri.encodeComponent(status.navigationRoute!)}',
+                    ),
+                    onPressed: () => onNavigatePressed!(status),
+                    icon: Icon(Icons.open_in_new, size: metrics.unit(13)),
+                    label: Text(
+                      status.navigationLabel?.trim().isNotEmpty == true
+                          ? status.navigationLabel!.trim()
+                          : '打开',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      minimumSize: Size(metrics.unit(54), metrics.unit(28)),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: metrics.unit(8),
+                        vertical: 0,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -890,7 +973,9 @@ List<AssistantToolStatus> assistantToolStatusesFromSurfaceIds(
   final Set<String> seenLabels = <String>{};
   for (final String surfaceId in surfaceIds) {
     final AssistantToolStatus? status = _toolStatusForSurfaceId(surfaceId);
-    if (status == null || !seenLabels.add(status.label)) {
+    final String seenKey =
+        '${status?.label}:${status?.undoCallId ?? ''}:${status?.undoStatus ?? ''}';
+    if (status == null || !seenLabels.add(seenKey)) {
       continue;
     }
     statuses.add(status);
@@ -899,8 +984,84 @@ List<AssistantToolStatus> assistantToolStatusesFromSurfaceIds(
 }
 
 AssistantToolStatus? _toolStatusForSurfaceId(String surfaceId) {
-  final String normalized = surfaceId.trim().toLowerCase();
+  final String raw = surfaceId.trim();
+  final AssistantToolStatus? undoStatus = _undoToolStatusForSurfaceId(raw);
+  if (undoStatus != null) {
+    return undoStatus;
+  }
+  final AssistantToolStatus? navigationStatus =
+      _navigationToolStatusForSurfaceId(raw);
+  if (navigationStatus != null) {
+    return navigationStatus;
+  }
+  final String normalized = raw.toLowerCase();
   switch (normalized) {
+    case 'agent_planning':
+      return const AssistantToolStatus(
+        icon: Icons.account_tree_outlined,
+        label: '小眠已拆解任务',
+      );
+    case 'agent_tool_context_read':
+      return const AssistantToolStatus(
+        icon: Icons.manage_search,
+        label: '已读取睡眠上下文',
+      );
+    case 'agent_tool_sleep_records_read':
+      return const AssistantToolStatus(
+        icon: Icons.bedtime_outlined,
+        label: '已检查睡眠记录',
+      );
+    case 'agent_tool_dream_records_read':
+      return const AssistantToolStatus(
+        icon: Icons.nights_stay_outlined,
+        label: '已检查梦记',
+      );
+    case 'agent_tool_interference_save_tonight':
+      return const AssistantToolStatus(icon: Icons.tune, label: '今晚干扰已更新');
+    case 'agent_tool_plan_generate_tonight':
+      return const AssistantToolStatus(icon: Icons.route, label: '今晚计划已生成');
+    case 'agent_tool_cards_refresh':
+      return const AssistantToolStatus(
+        icon: Icons.dashboard_customize_outlined,
+        label: '页面卡片已刷新',
+      );
+    case 'agent_tool_dorm_reminder_send':
+      return const AssistantToolStatus(
+        icon: Icons.record_voice_over_outlined,
+        label: '已发送宿舍温和提醒',
+      );
+    case 'agent_tool_dorm_status_update':
+      return const AssistantToolStatus(
+        icon: Icons.volume_off,
+        label: '宿舍状态已同步',
+      );
+    case 'agent_tool_dorm_rules_save':
+      return const AssistantToolStatus(icon: Icons.rule, label: '宿舍公约已提交');
+    case 'agent_tool_notification_write':
+      return const AssistantToolStatus(
+        icon: Icons.notifications_active,
+        label: '通知已写入',
+      );
+    case 'agent_tool_capture_save':
+      return const AssistantToolStatus(icon: Icons.edit_note, label: '记录已收纳');
+    case 'agent_tool_navigation_suggest':
+      return const AssistantToolStatus(
+        icon: Icons.open_in_new,
+        label: '已准备跳转入口',
+      );
+    case 'agent_tool_memory_upsert':
+    case 'agent_memory':
+      return const AssistantToolStatus(
+        icon: Icons.auto_awesome,
+        label: '长期记忆已更新',
+      );
+    case 'agent_tool_failed':
+      return const AssistantToolStatus(
+        icon: Icons.error_outline,
+        label: '有动作未完成',
+      );
+    case 'agent_done':
+      return const AssistantToolStatus(icon: Icons.task_alt, label: '中枢任务已完成');
     case 'alarm':
     case 'sleep_alarm':
     case 'bedtime_alarm':
@@ -932,6 +1093,78 @@ AssistantToolStatus? _toolStatusForSurfaceId(String surfaceId) {
     case 'profile_report':
       return const AssistantToolStatus(icon: Icons.insights, label: '画像摘要已更新');
     default:
+      if (normalized.startsWith('agent_tool_')) {
+        return const AssistantToolStatus(
+          icon: Icons.extension,
+          label: '小眠已调用工具',
+        );
+      }
+      return null;
+  }
+}
+
+AssistantToolStatus? _navigationToolStatusForSurfaceId(String surfaceId) {
+  const String prefix = 'agent_navigation:';
+  if (!surfaceId.startsWith(prefix)) {
+    return null;
+  }
+  final String payload = surfaceId.substring(prefix.length);
+  final int separator = payload.indexOf(':');
+  if (separator <= 0) {
+    return null;
+  }
+  final String route = Uri.decodeComponent(payload.substring(0, separator));
+  if (route.trim().isEmpty) {
+    return null;
+  }
+  final String actionLabel = Uri.decodeComponent(
+    payload.substring(separator + 1),
+  ).trim();
+  final String label = actionLabel.isEmpty ? '继续处理' : actionLabel;
+  return AssistantToolStatus(
+    icon: Icons.open_in_new,
+    label: '可跳转：$label',
+    navigationRoute: route,
+    navigationLabel: label,
+  );
+}
+
+AssistantToolStatus? _undoToolStatusForSurfaceId(String surfaceId) {
+  final List<String> parts = surfaceId.split(':');
+  if (parts.length != 2 || parts[1].trim().isEmpty) {
+    return null;
+  }
+  final String callId = parts[1].trim();
+  switch (parts[0].trim().toLowerCase()) {
+    case 'agent_undo_available':
+      return AssistantToolStatus(
+        icon: Icons.undo,
+        label: '可撤销一项动作',
+        undoCallId: callId,
+        undoStatus: 'available',
+      );
+    case 'agent_undo_running':
+      return AssistantToolStatus(
+        icon: Icons.pending_actions_outlined,
+        label: '正在撤销动作',
+        undoCallId: callId,
+        undoStatus: 'running',
+      );
+    case 'agent_undo_applied':
+      return AssistantToolStatus(
+        icon: Icons.task_alt,
+        label: '已撤销一项动作',
+        undoCallId: callId,
+        undoStatus: 'applied',
+      );
+    case 'agent_undo_failed':
+      return AssistantToolStatus(
+        icon: Icons.error_outline,
+        label: '撤销未完成',
+        undoCallId: callId,
+        undoStatus: 'failed',
+      );
+    default:
       return null;
   }
 }
@@ -945,6 +1178,7 @@ class _AssistantActionIconButton extends StatelessWidget {
     this.hapticRole = AppHapticRole.selection,
     this.icon,
     this.child,
+    this.tooltip,
   });
 
   final IconData? icon;
@@ -952,12 +1186,13 @@ class _AssistantActionIconButton extends StatelessWidget {
   final double size;
   final Color color;
   final VoidCallback? onTap;
+  final String? tooltip;
   final AppHapticRole? hapticRole;
 
   @override
   Widget build(BuildContext context) {
     final double hitSize = math.max(size * 1.56, 36);
-    return SizedBox(
+    final Widget button = SizedBox(
       width: hitSize,
       height: hitSize,
       child: IconButton(
@@ -976,6 +1211,10 @@ class _AssistantActionIconButton extends StatelessWidget {
         icon: child ?? Icon(icon, size: size, color: color),
       ),
     );
+    if (tooltip == null || tooltip!.trim().isEmpty) {
+      return button;
+    }
+    return Tooltip(message: tooltip!, child: button);
   }
 }
 
