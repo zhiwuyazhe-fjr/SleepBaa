@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -118,4 +120,54 @@ void main() {
       expect(restoredDeviceId, firstDeviceId);
     },
   );
+
+  test('readPersistedSession bypasses an older in-memory session', () async {
+    final SharedPreferences sharedPreferences =
+        await SharedPreferences.getInstance();
+    final CloudBaseSessionStore store = CloudBaseSessionStore(
+      sharedPreferences: sharedPreferences,
+    );
+    final CloudBaseSession oldSession = CloudBaseSession(
+      accessToken: 'old-access',
+      refreshToken: 'old-refresh',
+      subject: 'user-1',
+      expiresAt: DateTime.now().add(const Duration(hours: 1)),
+      deviceId: 'device-1',
+    );
+    final CloudBaseSession newSession = oldSession.copyWith(
+      accessToken: 'new-access',
+      refreshToken: 'new-refresh',
+    );
+
+    await store.writeSession(oldSession);
+    secureStorage['cloudbase.session'] = jsonEncode(newSession.toJson());
+
+    expect((await store.readSession())?.accessToken, 'old-access');
+    expect((await store.readPersistedSession())?.accessToken, 'new-access');
+    expect((await store.readSession())?.accessToken, 'new-access');
+  });
+
+  test('writeSession does not hide secure storage write failures', () async {
+    final SharedPreferences sharedPreferences =
+        await SharedPreferences.getInstance();
+    final CloudBaseSessionStore store = CloudBaseSessionStore(
+      sharedPreferences: sharedPreferences,
+    );
+    final CloudBaseSession session = CloudBaseSession(
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      subject: 'user-1',
+      expiresAt: DateTime.now().add(const Duration(hours: 1)),
+      deviceId: 'device-1',
+    );
+    throwOnWrite = true;
+
+    await expectLater(
+      store.writeSession(session),
+      throwsA(isA<PlatformException>()),
+    );
+
+    throwOnWrite = false;
+    expect(await store.readSession(), isNull);
+  });
 }

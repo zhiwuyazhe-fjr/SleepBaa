@@ -201,9 +201,10 @@ class CloudBaseAppApiClient {
   Future<CloudBaseSession> _recoverUnauthorizedSession(
     CloudBaseSession requestSession,
   ) async {
-    final CloudBaseSession? latest = await _sessionStore.readSession();
+    final CloudBaseSession? latest = await _latestPersistedSession();
     if (latest != null &&
-        latest.accessToken != requestSession.accessToken &&
+        (latest.accessToken != requestSession.accessToken ||
+            latest.refreshToken != requestSession.refreshToken) &&
         !latest.isExpired) {
       return latest;
     }
@@ -220,8 +221,15 @@ class CloudBaseAppApiClient {
     }
     final Future<CloudBaseSession> refreshFuture = Future<CloudBaseSession>(
       () async {
-        final CloudBaseSession? latest = await _sessionStore.readSession();
+        final CloudBaseSession? latest = await _latestPersistedSession();
         final CloudBaseSession candidate = latest ?? existing;
+        final bool sessionChanged =
+            candidate.accessToken != existing.accessToken ||
+            candidate.refreshToken != existing.refreshToken ||
+            candidate.subject != existing.subject;
+        if (sessionChanged && !candidate.isExpired) {
+          return candidate;
+        }
         if (!force && !candidate.isExpired) {
           return candidate;
         }
@@ -238,14 +246,32 @@ class CloudBaseAppApiClient {
     }
   }
 
+  Future<CloudBaseSession?> _latestPersistedSession() async {
+    final CloudBaseSession? persisted = await _sessionStore
+        .readPersistedSession();
+    return persisted ?? await _sessionStore.readSession();
+  }
+
   Future<CloudBaseSession> _performSessionRefresh(
     CloudBaseSession existing,
   ) async {
-    final CloudBaseAuthTokenResponse refreshed = await _authClient
-        .refreshAccessToken(
-          refreshToken: existing.refreshToken,
-          deviceId: existing.deviceId,
+    late final CloudBaseAuthTokenResponse refreshed;
+    try {
+      refreshed = await _authClient.refreshAccessToken(
+        refreshToken: existing.refreshToken,
+        deviceId: existing.deviceId,
+      );
+    } on CloudBaseAuthException catch (error) {
+      if (_isRefreshTokenRejected(error)) {
+        final CloudBaseSession? recovered = await _waitForConcurrentRefresh(
+          existing,
         );
+        if (recovered != null) {
+          return recovered;
+        }
+      }
+      rethrow;
+    }
     final String refreshedAccessToken = refreshed.accessToken.trim();
     if (refreshedAccessToken.isEmpty) {
       throw const CloudBaseAuthException(
@@ -271,6 +297,27 @@ class CloudBaseAppApiClient {
     );
     await _sessionStore.writeSession(next);
     return next;
+  }
+
+  Future<CloudBaseSession?> _waitForConcurrentRefresh(
+    CloudBaseSession failedSession,
+  ) async {
+    for (final Duration delay in const <Duration>[
+      Duration(milliseconds: 50),
+      Duration(milliseconds: 150),
+      Duration(milliseconds: 350),
+    ]) {
+      await Future<void>.delayed(delay);
+      final CloudBaseSession? latest = await _sessionStore
+          .readPersistedSession();
+      if (latest != null &&
+          (latest.accessToken != failedSession.accessToken ||
+              latest.refreshToken != failedSession.refreshToken) &&
+          !latest.isExpired) {
+        return latest;
+      }
+    }
+    return null;
   }
 
   Uri _uri(String path) {
@@ -360,6 +407,22 @@ bool _isRefreshableAuthFailure(int statusCode, Map<String, dynamic> payload) {
       details.contains('unauthenticated') ||
       details.contains('invalid token') ||
       details.contains('token expired');
+}
+
+bool _isRefreshTokenRejected(CloudBaseAuthException error) {
+  if (error.statusCode == 401 || error.statusCode == 403) {
+    return true;
+  }
+  final String details = <String>[
+    error.code ?? '',
+    error.message,
+    error.body?['error']?.toString() ?? '',
+    error.body?['error_description']?.toString() ?? '',
+  ].join(' ').toLowerCase();
+  return details.contains('invalid_grant') ||
+      details.contains('token hash not match') ||
+      details.contains('invalid refresh token') ||
+      details.contains('refresh token expired');
 }
 
 String _stripLeadingSlash(String value) {

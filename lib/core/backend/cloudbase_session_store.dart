@@ -94,7 +94,10 @@ class CloudBaseSessionStore {
        _secureStorage =
            secureStorage ??
            const FlutterSecureStorage(
-             aOptions: AndroidOptions(encryptedSharedPreferences: true),
+             aOptions: AndroidOptions(
+               encryptedSharedPreferences: true,
+               resetOnError: true,
+             ),
            );
 
   static const String _sessionKey = 'cloudbase.session';
@@ -121,7 +124,24 @@ class CloudBaseSessionStore {
     if (_memorySession != null) {
       return _memorySession;
     }
+    return readPersistedSession();
+  }
+
+  /// Reads the durable session even when this store has an in-memory cache.
+  ///
+  /// More than one Flutter engine/process can briefly use the same Android
+  /// secure-storage namespace. A cached session in an older engine must not
+  /// win over a newer refresh-token rotation written by another engine.
+  Future<CloudBaseSession?> readPersistedSession() async {
     final String? raw = await _readValue(_sessionKey);
+    final CloudBaseSession? persisted = _decodeSession(raw);
+    if (persisted != null) {
+      _memorySession = persisted;
+    }
+    return persisted;
+  }
+
+  CloudBaseSession? _decodeSession(String? raw) {
     if (raw == null || raw.isEmpty) {
       return null;
     }
@@ -130,19 +150,17 @@ class CloudBaseSessionStore {
       if (decoded is! Map) {
         return null;
       }
-      _memorySession = CloudBaseSession.fromJson(
-        Map<String, dynamic>.from(decoded),
-      );
-      return _memorySession;
+      return CloudBaseSession.fromJson(Map<String, dynamic>.from(decoded));
     } catch (_) {
       return null;
     }
   }
 
   Future<void> writeSession(CloudBaseSession session) async {
+    final String encoded = jsonEncode(session.toJson());
+    await _writeValue(_sessionKey, encoded);
     _memorySession = session;
     _memoryDeviceId = session.deviceId;
-    await _writeValue(_sessionKey, jsonEncode(session.toJson()));
     await _writeValue(_deviceIdKey, session.deviceId);
   }
 
@@ -189,10 +207,10 @@ class CloudBaseSessionStore {
       await _writeFallbackDeviceId(value);
       return;
     }
-    try {
-      await _secureStorage.write(key: key, value: value);
-    } catch (_) {
-      // Ignore non-device writes when secure storage is unavailable.
+    await _secureStorage.write(key: key, value: value);
+    final String? persisted = await _secureStorage.read(key: key);
+    if (persisted != value) {
+      throw StateError('Secure session storage did not persist the value.');
     }
   }
 

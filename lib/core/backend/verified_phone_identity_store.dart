@@ -42,7 +42,10 @@ class VerifiedPhoneIdentityStore {
     : _secureStorage =
           secureStorage ??
           const FlutterSecureStorage(
-            aOptions: AndroidOptions(encryptedSharedPreferences: true),
+            aOptions: AndroidOptions(
+              encryptedSharedPreferences: true,
+              resetOnError: true,
+            ),
           );
 
   static const String _key = 'cloudbase.verified_phone_identity';
@@ -59,9 +62,7 @@ class VerifiedPhoneIdentityStore {
       if (decoded is! Map) {
         return null;
       }
-      return VerifiedPhoneIdentity.fromJson(
-        Map<String, dynamic>.from(decoded),
-      );
+      return VerifiedPhoneIdentity.fromJson(Map<String, dynamic>.from(decoded));
     } catch (_) {
       return null;
     }

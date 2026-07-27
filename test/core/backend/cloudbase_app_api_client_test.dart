@@ -127,6 +127,124 @@ void main() {
   });
 
   test(
+    'refresh rechecks durable storage before using a stale in-memory session',
+    () async {
+      int refreshCalls = 0;
+      final _SeededSessionStore sessionStore = _SeededSessionStore(
+        session: CloudBaseSession(
+          accessToken: 'stale-memory-access',
+          refreshToken: 'stale-memory-refresh',
+          subject: 'cloud-user',
+          expiresAt: DateTime.now().subtract(const Duration(minutes: 5)),
+          deviceId: 'device-1',
+        ),
+        persistedSession: CloudBaseSession(
+          accessToken: 'fresh-persisted-access',
+          refreshToken: 'fresh-persisted-refresh',
+          subject: 'cloud-user',
+          expiresAt: DateTime.now().add(const Duration(hours: 1)),
+          deviceId: 'device-1',
+        ),
+      );
+      final http.Client httpClient = MockClient((http.Request request) async {
+        if (request.url.path == '/auth/v1/token') {
+          refreshCalls += 1;
+          throw StateError('stale in-memory refresh must not be sent');
+        }
+        if (request.url.path == '/api/test') {
+          expect(
+            _authorizationHeader(request),
+            'Bearer fresh-persisted-access',
+          );
+          return http.Response(jsonEncode(<String, dynamic>{'ok': true}), 200);
+        }
+        throw StateError('Unexpected path: ${request.url.path}');
+      });
+      final CloudBaseAppApiClient client = CloudBaseAppApiClient(
+        environment: _environment,
+        sessionStore: sessionStore,
+        authClient: CloudBaseAuthClient(
+          environment: _environment,
+          httpClient: httpClient,
+        ),
+        httpClient: httpClient,
+      );
+
+      final Map<String, dynamic> payload = await client.post('/api/test');
+
+      expect(payload['ok'], isTrue);
+      expect(refreshCalls, 0);
+      expect(
+        sessionStore.currentSession?.accessToken,
+        'fresh-persisted-access',
+      );
+    },
+  );
+
+  test(
+    'refresh rejection adopts a token rotated by another client instance',
+    () async {
+      int refreshCalls = 0;
+      final _SeededSessionStore sessionStore = _SeededSessionStore(
+        session: CloudBaseSession(
+          accessToken: 'stale-access',
+          refreshToken: 'stale-refresh',
+          subject: 'cloud-user',
+          expiresAt: DateTime.now().subtract(const Duration(minutes: 5)),
+          deviceId: 'device-1',
+        ),
+      );
+      final http.Client httpClient = MockClient((http.Request request) async {
+        if (request.url.path == '/auth/v1/token') {
+          refreshCalls += 1;
+          sessionStore.replacePersistedSession(
+            CloudBaseSession(
+              accessToken: 'concurrent-fresh-access',
+              refreshToken: 'concurrent-fresh-refresh',
+              subject: 'cloud-user',
+              expiresAt: DateTime.now().add(const Duration(hours: 1)),
+              deviceId: 'device-1',
+            ),
+          );
+          return http.Response(
+            jsonEncode(<String, dynamic>{
+              'error': 'unauthenticated',
+              'error_description': 'token hash not match',
+            }),
+            401,
+          );
+        }
+        if (request.url.path == '/api/test') {
+          expect(
+            _authorizationHeader(request),
+            'Bearer concurrent-fresh-access',
+          );
+          return http.Response(jsonEncode(<String, dynamic>{'ok': true}), 200);
+        }
+        throw StateError('Unexpected path: ${request.url.path}');
+      });
+      final CloudBaseAppApiClient client = CloudBaseAppApiClient(
+        environment: _environment,
+        sessionStore: sessionStore,
+        authClient: CloudBaseAuthClient(
+          environment: _environment,
+          httpClient: httpClient,
+        ),
+        httpClient: httpClient,
+      );
+
+      final Map<String, dynamic> payload = await client.post('/api/test');
+
+      expect(payload['ok'], isTrue);
+      expect(refreshCalls, 1);
+      expect(
+        sessionStore.currentSession?.accessToken,
+        'concurrent-fresh-access',
+      );
+    },
+  );
+
+  test(
     'post retries with the latest stored session after a stale-token 401',
     () async {
       int refreshCalls = 0;
@@ -352,27 +470,43 @@ const AppEnvironment _environment = AppEnvironment(
 );
 
 class _SeededSessionStore extends CloudBaseSessionStore {
-  _SeededSessionStore({CloudBaseSession? session})
-    : _session =
-          session ??
-          CloudBaseSession(
-            accessToken: 'access-token',
-            refreshToken: 'refresh-token',
-            subject: 'cloud-user',
-            expiresAt: DateTime.now().add(const Duration(hours: 1)),
-            deviceId: 'device-1',
-          );
+  _SeededSessionStore({
+    CloudBaseSession? session,
+    CloudBaseSession? persistedSession,
+  }) : _session =
+           session ??
+           CloudBaseSession(
+             accessToken: 'access-token',
+             refreshToken: 'refresh-token',
+             subject: 'cloud-user',
+             expiresAt: DateTime.now().add(const Duration(hours: 1)),
+             deviceId: 'device-1',
+           ),
+       _persistedSession = persistedSession;
 
   CloudBaseSession _session;
+  CloudBaseSession? _persistedSession;
 
   CloudBaseSession? get currentSession => _session;
+
+  void replacePersistedSession(CloudBaseSession session) {
+    _persistedSession = session;
+  }
 
   @override
   Future<CloudBaseSession?> readSession() async => _session;
 
   @override
+  Future<CloudBaseSession?> readPersistedSession() async {
+    final CloudBaseSession persisted = _persistedSession ?? _session;
+    _session = persisted;
+    return persisted;
+  }
+
+  @override
   Future<void> writeSession(CloudBaseSession session) async {
     _session = session;
+    _persistedSession = session;
   }
 }
 

@@ -1316,6 +1316,9 @@ class _FakeSessionStore extends CloudBaseSessionStore {
   Future<CloudBaseSession?> readSession() async => _session;
 
   @override
+  Future<CloudBaseSession?> readPersistedSession() async => _session;
+
+  @override
   Future<void> writeSession(CloudBaseSession session) async {
     _session = session;
   }

@@ -1079,7 +1079,9 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     CloudBaseSession failedSession, {
     required String fallbackDeviceId,
   }) async {
-    final CloudBaseSession? latest = await _sessionStore.readSession();
+    final CloudBaseSession? latest =
+        await _sessionStore.readPersistedSession() ??
+        await _sessionStore.readSession();
     if (latest == null) {
       return null;
     }
