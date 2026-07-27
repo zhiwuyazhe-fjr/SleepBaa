@@ -1129,10 +1129,11 @@ test(
           );
         },
         {
-          AI_PROVIDER_MODE: "xai_responses",
+          AI_PROVIDER_MODE: "cloudbase_ai",
           AI_PROVIDER_API_KEY: "test-key",
+          AI_PROVIDER_GROUP: "openai-compatible-custom",
           AI_PROVIDER_BASE_URL: "https://example.com/replies",
-          AI_PROVIDER_MODEL: "grok-test",
+          AI_PROVIDER_MODEL: "test-model",
           AI_PROVIDER_TIMEOUT_MS: "240000",
         },
       );

@@ -85,7 +85,6 @@ capture 必须传 `sessionId` 和 `captureType`。`captureType` 目前规范为 
 | --- | --- |
 | `deterministic` | 规则/测试 provider，默认模型名 `rules-v1`。 |
 | `cloudbase_ai` | CloudBase OpenAI-compatible gateway。默认模型 `hunyuan-2.0-instruct-20251111`。 |
-| `xai_responses` | xAI Responses API。默认 base URL `https://api.x.ai/v1/responses`，默认模型 `grok-4-1-fast-reasoning`。 |
 
 常用环境变量：
 

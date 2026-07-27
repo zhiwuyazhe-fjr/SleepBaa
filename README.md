@@ -181,7 +181,7 @@ build/app/outputs/flutter-apk/app-release.apk
 - `functions/src/providers/provider_factory.ts`：大模型 Provider 工厂与远程调用实现。
 - `functions/src/providers/ai_provider.ts`：本地规则兜底 Provider 和统一接口定义。
 - 关键环境变量：
-  - `AI_PROVIDER_MODE`：选择 Provider，支持 `cloudbase_ai`、`xai_responses`、`deterministic`。
+  - `AI_PROVIDER_MODE`：选择 Provider，支持 `cloudbase_ai`?`deterministic`????????? deterministic。
   - `AI_PROVIDER_MODEL`：主模型名称。
   - `AI_PROVIDER_MODEL_REPLY`：助手普通对话回复模型覆盖项。
   - `AI_PROVIDER_MODEL_STRUCTURED`：结构化 JSON 任务模型覆盖项。

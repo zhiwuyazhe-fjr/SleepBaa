@@ -45,7 +45,7 @@ CloudBase 模式需要配置 `CLOUDBASE_ENV_ID`、`CLOUDBASE_AUTH_BASE_URL`、`C
 | Repository | `functions/src/repositories/firestore_repositories.ts` | CloudBase 集合读写、bootstrap payload、卡片快照、宿舍与助手持久化。 |
 | 共享类型 | `functions/src/shared/types.ts` | 运行时 payload、SSE event、卡片 surface、助手类型。 |
 | 助手编排 | `functions/src/services/assistant_orchestrator.ts` | 睡前计划、助手回复、梦记/事记整理、卡片刷新。 |
-| Provider | `functions/src/providers/provider_factory.ts` | `deterministic`、`cloudbase_ai`、`xai_responses` provider 选择。 |
+| Provider | `functions/src/providers/provider_factory.ts` | `deterministic`?`cloudbase_ai` provider 选择。 |
 | 触发器 | `functions/src/triggers/**` | 睡眠记录、梦记记录变更后的自动派生。 |
 
 ## 关键业务链路

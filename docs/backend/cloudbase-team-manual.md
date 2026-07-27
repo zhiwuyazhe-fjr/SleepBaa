@@ -180,13 +180,12 @@ npm --prefix functions run serve
 
 ## 7. AI Provider 配置
 
-当前代码支持 3 种 provider mode：
+当前代码支持 2 种 provider mode：
 
 | Mode | 用途 |
 | --- | --- |
 | `deterministic` | 规则兜底和测试，不依赖真实模型。 |
 | `cloudbase_ai` | CloudBase AI / OpenAI-compatible gateway。 |
-| `xai_responses` | xAI Responses API。 |
 
 部署脚本默认值：
 
@@ -208,14 +207,6 @@ npm --prefix functions run serve
 .\deploy_cloudbase_functions.cmd -AIProviderMode deterministic -AIProviderModel rules-v1
 ```
 
-切换到 xAI Responses：
-
-```powershell
-.\deploy_cloudbase_functions.cmd `
-  -AIProviderMode xai_responses `
-  -AIProviderBaseUrl https://api.x.ai/v1/responses `
-  -AIProviderModel grok-4-1-fast-reasoning
-```
 
 关于 AI provider secret：
 

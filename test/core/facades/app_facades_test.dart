@@ -74,8 +74,8 @@ class _FakeAssistantGateway implements AssistantReplyGateway {
       sourceMode: AssistantReplySourceMode.remoteSuccess,
       runId: 'run-1',
       intent: 'general_support',
-      provider: 'xai_responses',
-      model: 'grok-4-1-fast-reasoning',
+      provider: 'cloudbase_ai',
+      model: 'hunyuan-2.0-instruct-20251111',
       assistantMessageId: clientAssistantMessageId,
       updatedSurfaces: const <String>['assistant_context'],
     );
@@ -113,8 +113,8 @@ class _FakeAssistantGateway implements AssistantReplyGateway {
       type: AssistantStreamEventType.messageCompleted,
       reply: 'Capture reply',
       sourceMode: AssistantReplySourceMode.remoteSuccess,
-      provider: 'xai_responses',
-      model: 'grok-4-1-fast-reasoning',
+      provider: 'cloudbase_ai',
+      model: 'hunyuan-2.0-instruct-20251111',
       assistantMessageId: clientAssistantMessageId,
       updatedSurfaces: const <String>['assistant_context'],
     );
@@ -138,8 +138,8 @@ class _FakeAssistantGateway implements AssistantReplyGateway {
       sourceMode: AssistantReplySourceMode.remoteSuccess,
       runId: 'run-1',
       intent: 'general_support',
-      provider: 'xai_responses',
-      model: 'grok-4-1-fast-reasoning',
+      provider: 'cloudbase_ai',
+      model: 'hunyuan-2.0-instruct-20251111',
       assistantMessageId: clientAssistantMessageId,
       updatedSurfaces: const <String>['assistant_context'],
     );
@@ -168,8 +168,8 @@ class _FakeAssistantGateway implements AssistantReplyGateway {
         content: prompt,
       ),
       recordPersistedRemotely: true,
-      provider: 'xai_responses',
-      model: 'grok-4-1-fast-reasoning',
+      provider: 'cloudbase_ai',
+      model: 'hunyuan-2.0-instruct-20251111',
       assistantMessageId: clientAssistantMessageId,
       updatedSurfaces: const <String>['assistant_context'],
     );
@@ -518,8 +518,8 @@ void main() {
       expect(messages.last.content, 'Backend reply');
       expect(messages.last.role, AssistantMessageRole.assistant);
       expect(messages.last.sourceMode, AssistantReplySourceMode.remoteSuccess);
-      expect(messages.last.provider, 'xai_responses');
-      expect(messages.last.model, 'grok-4-1-fast-reasoning');
+      expect(messages.last.provider, 'cloudbase_ai');
+      expect(messages.last.model, 'hunyuan-2.0-instruct-20251111');
       facade.dispose();
       authRepository.dispose();
       assistantRepository.dispose();

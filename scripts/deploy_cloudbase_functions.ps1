@@ -187,7 +187,6 @@ function Resolve-ProviderName([string]$Mode, [string]$ExplicitName) {
 
   switch ($Mode) {
     "cloudbase_ai" { return "cloudbase_ai" }
-    "xai_responses" { return "xai_responses" }
     "deterministic" { return "deterministic" }
     default { return "" }
   }
@@ -261,11 +260,21 @@ try {
       -DefaultValue "cloudbase_ai" `
       -WasSpecified $PSBoundParameters.ContainsKey("AIProviderMode") `
       -SpecifiedValue $AIProviderMode
+    $providerModeWasSpecified = $PSBoundParameters.ContainsKey("AIProviderMode")
+    $providerModeWasUnsupported = $desiredProviderMode -notin @("cloudbase_ai", "deterministic")
+    if ($providerModeWasSpecified -and $providerModeWasUnsupported) {
+      throw "Unsupported AI provider mode '$desiredProviderMode'. Only cloudbase_ai and deterministic are supported."
+    }
+    if ($providerModeWasUnsupported) {
+      Write-Warning "Replacing stale unsupported AI_PROVIDER_MODE='$desiredProviderMode' with cloudbase_ai."
+      $desiredProviderMode = "cloudbase_ai"
+    }
     $desiredProviderName = if ($PSBoundParameters.ContainsKey("AIProviderName")) {
       [string]$AIProviderName
     }
     elseif (
-      -not $PSBoundParameters.ContainsKey("AIProviderMode") -and
+      -not $providerModeWasSpecified -and
+      -not $providerModeWasUnsupported -and
       $currentEnv.ContainsKey("AI_PROVIDER_NAME")
     ) {
       [string]$currentEnv["AI_PROVIDER_NAME"]
@@ -308,6 +317,13 @@ try {
       -DefaultValue "hunyuan-2.0-instruct-20251111" `
       -WasSpecified $PSBoundParameters.ContainsKey("AIProviderModel") `
       -SpecifiedValue $AIProviderModel
+
+    if ($providerModeWasUnsupported) {
+      if (-not $PSBoundParameters.ContainsKey("AIProviderGroup")) { $desiredProviderGroup = "" }
+      if (-not $PSBoundParameters.ContainsKey("AIProviderBaseUrl")) { $desiredProviderBaseUrl = "" }
+      if (-not $PSBoundParameters.ContainsKey("AIProviderApiKey") -and -not $ClearAIProviderApiKey) { $desiredProviderApiKey = "" }
+      if (-not $PSBoundParameters.ContainsKey("AIProviderModel")) { $desiredProviderModel = "hunyuan-2.0-instruct-20251111" }
+    }
 
     $nextEnv["CLOUDBASE_ENV_ID"] = $envId
     $nextEnv["AI_PROVIDER_MODE"] = $desiredProviderMode
