@@ -198,6 +198,147 @@ void main() {
       expect(sessionStore.currentSession?.accessToken, 'fresh-access');
     },
   );
+
+  test(
+    'post refreshes after the legacy 400 auth error and preserves omitted refresh fields',
+    () async {
+      int refreshCalls = 0;
+      int apiCalls = 0;
+      final DateTime previousExpiry = DateTime.now().add(
+        const Duration(hours: 1),
+      );
+      final _SeededSessionStore sessionStore = _SeededSessionStore(
+        session: CloudBaseSession(
+          accessToken: 'expired-access',
+          refreshToken: 'existing-refresh',
+          subject: 'cloud-user',
+          expiresAt: previousExpiry,
+          deviceId: 'device-1',
+          scope: 'profile offline_access',
+          tokenType: 'CustomBearer',
+        ),
+      );
+      final http.Client httpClient = MockClient((http.Request request) async {
+        if (request.url.path == '/auth/v1/token') {
+          refreshCalls += 1;
+          final Map<String, dynamic> body =
+              jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body['grant_type'], 'refresh_token');
+          expect(body['refresh_token'], 'existing-refresh');
+          return http.Response(
+            jsonEncode(<String, dynamic>{
+              'access_token': 'fresh-access',
+              'expires_in': 3600,
+            }),
+            200,
+          );
+        }
+        if (request.url.path == '/api/test') {
+          apiCalls += 1;
+          if (_authorizationHeader(request) == 'Bearer expired-access') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'code': 'APP_API_ERROR',
+                'message': 'CloudBase auth verification failed with 401.',
+              }),
+              400,
+            );
+          }
+          expect(_authorizationHeader(request), 'Bearer fresh-access');
+          return http.Response(jsonEncode(<String, dynamic>{'ok': true}), 200);
+        }
+        throw StateError('Unexpected path: ${request.url.path}');
+      });
+      final CloudBaseAppApiClient client = CloudBaseAppApiClient(
+        environment: _environment,
+        sessionStore: sessionStore,
+        authClient: CloudBaseAuthClient(
+          environment: _environment,
+          httpClient: httpClient,
+        ),
+        httpClient: httpClient,
+      );
+
+      final Map<String, dynamic> payload = await client.post('/api/test');
+
+      expect(payload['ok'], isTrue);
+      expect(apiCalls, 2);
+      expect(refreshCalls, 1);
+      final CloudBaseSession? refreshed = sessionStore.currentSession;
+      expect(refreshed?.accessToken, 'fresh-access');
+      expect(refreshed?.refreshToken, 'existing-refresh');
+      expect(refreshed?.subject, 'cloud-user');
+      expect(refreshed?.scope, 'profile offline_access');
+      expect(refreshed?.tokenType, 'CustomBearer');
+      expect(refreshed?.expiresAt.isAfter(previousExpiry), isTrue);
+    },
+  );
+
+  test(
+    'postSse refreshes and retries when the stream request is unauthorized',
+    () async {
+      int refreshCalls = 0;
+      int sseCalls = 0;
+      final _SeededSessionStore sessionStore = _SeededSessionStore(
+        session: CloudBaseSession(
+          accessToken: 'stale-access',
+          refreshToken: 'refresh-token',
+          subject: 'cloud-user',
+          expiresAt: DateTime.now().add(const Duration(hours: 1)),
+          deviceId: 'device-1',
+        ),
+      );
+      final http.Client httpClient = MockClient((http.Request request) async {
+        if (request.url.path == '/auth/v1/token') {
+          refreshCalls += 1;
+          return http.Response(
+            jsonEncode(<String, dynamic>{
+              'access_token': 'fresh-access',
+              'refresh_token': 'fresh-refresh',
+              'sub': 'cloud-user',
+              'expires_in': 7200,
+            }),
+            200,
+          );
+        }
+        if (request.url.path == '/api/assistant/stream') {
+          sseCalls += 1;
+          if (_authorizationHeader(request) == 'Bearer stale-access') {
+            return http.Response(
+              jsonEncode(<String, dynamic>{
+                'code': 'UNAUTHENTICATED',
+                'message': 'token expired',
+              }),
+              401,
+            );
+          }
+          expect(_authorizationHeader(request), 'Bearer fresh-access');
+          return http.Response('event: complete\ndata: {"ok":true}\n\n', 200);
+        }
+        throw StateError('Unexpected path: ${request.url.path}');
+      });
+      final CloudBaseAppApiClient client = CloudBaseAppApiClient(
+        environment: _environment,
+        sessionStore: sessionStore,
+        authClient: CloudBaseAuthClient(
+          environment: _environment,
+          httpClient: httpClient,
+        ),
+        httpClient: httpClient,
+      );
+
+      final Stream<CloudBaseSseFrame> stream = await client.postSse(
+        '/api/assistant/stream',
+      );
+      final List<CloudBaseSseFrame> frames = await stream.toList();
+
+      expect(refreshCalls, 1);
+      expect(sseCalls, 2);
+      expect(frames, hasLength(1));
+      expect(frames.single.event, 'complete');
+      expect(frames.single.data, '{"ok":true}');
+    },
+  );
 }
 
 const AppEnvironment _environment = AppEnvironment(

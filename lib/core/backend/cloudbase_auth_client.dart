@@ -81,7 +81,7 @@ class CloudBaseAuthTokenResponse {
     required this.expiresIn,
     required this.subject,
     this.scope,
-    this.tokenType = 'Bearer',
+    this.tokenType = '',
   });
 
   final String accessToken;
@@ -535,7 +535,7 @@ class CloudBaseAuthClient {
           map['id'] as String? ??
           '',
       scope: map['scope'] as String?,
-      tokenType: map['token_type'] as String? ?? 'Bearer',
+      tokenType: map['token_type'] as String? ?? '',
     );
   }
 }

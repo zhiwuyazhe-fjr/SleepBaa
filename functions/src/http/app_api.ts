@@ -44,6 +44,17 @@ class AssistantThreadTurnBusyError extends Error {
   readonly code = "THREAD_TURN_BUSY";
 }
 
+class AppApiHttpError extends Error {
+  constructor(
+    readonly statusCode: number,
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "AppApiHttpError";
+  }
+}
+
 const ASSISTANT_REPLY_TIMEOUT_CODE = "ASSISTANT_REPLY_TIMEOUT";
 const ASSISTANT_REPLY_TIMEOUT_MESSAGE =
   "Assistant reply timed out before completion. Please try again.";
@@ -251,7 +262,11 @@ async function resolveAuthenticatedUser(
       logHttp(`auth fallback without access token -> uid=${fallbackUid}`);
       return { uid: fallbackUid };
     }
-    throw new Error("Missing Authorization bearer token.");
+    throw new AppApiHttpError(
+      401,
+      "UNAUTHENTICATED",
+      "Missing Authorization bearer token.",
+    );
   }
 
   if (!baseUrl) {
@@ -273,7 +288,11 @@ async function resolveAuthenticatedUser(
     },
   });
   if (!response.ok) {
-    throw new Error(
+    throw new AppApiHttpError(
+      response.status === 401 || response.status === 403 ? 401 : 502,
+      response.status === 401 || response.status === 403
+        ? "UNAUTHENTICATED"
+        : "AUTH_VERIFICATION_FAILED",
       `CloudBase auth verification failed with ${response.status}.`,
     );
   }
@@ -1994,6 +2013,13 @@ export function createAppApiServer() {
 
   app.use(
     (error: unknown, _request: Request, response: Response, _next: unknown) => {
+      if (error instanceof AppApiHttpError) {
+        response.status(error.statusCode).json({
+          code: error.code,
+          message: error.message,
+        });
+        return;
+      }
       const message =
         error instanceof Error ? error.message : "Unknown app-api error.";
       response.status(400).json({
