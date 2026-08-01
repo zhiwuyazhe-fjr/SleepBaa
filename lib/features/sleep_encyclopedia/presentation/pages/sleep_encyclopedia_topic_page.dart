@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -28,7 +28,7 @@ class SleepEncyclopediaTopicPage extends StatelessWidget {
         SleepEncyclopediaContent.relatedTopics(topic);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appColors.pageBackground,
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -36,7 +36,7 @@ class SleepEncyclopediaTopicPage extends StatelessWidget {
             end: Alignment.bottomCenter,
             colors: <Color>[
               category.accentColor.withAlpha(30),
-              AppColors.background,
+              context.appColors.pageBackground,
             ],
           ),
         ),
@@ -63,7 +63,7 @@ class SleepEncyclopediaTopicPage extends StatelessWidget {
                       end: Alignment.bottomRight,
                       colors: <Color>[
                         category.accentColor.withAlpha(36),
-                        Colors.white,
+                        context.appColors.surface,
                       ],
                     ),
                   ),
@@ -84,7 +84,7 @@ class SleepEncyclopediaTopicPage extends StatelessWidget {
                           ),
                           _Pill(
                             text: topic.readTime,
-                            color: AppColors.textSecondary,
+                            color: context.appColors.textSecondary,
                           ),
                         ],
                       ),
@@ -102,7 +102,7 @@ class SleepEncyclopediaTopicPage extends StatelessWidget {
                         sleepEncyclopediaCardSubtitle(topic.subtitle),
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
-                              color: AppColors.textSecondary,
+                              color: context.appColors.textSecondary,
                               fontWeight: FontWeight.w500,
                             ),
                       ),
@@ -110,7 +110,7 @@ class SleepEncyclopediaTopicPage extends StatelessWidget {
                       Text(
                         topic.summary,
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: AppColors.textSecondary,
+                          color: context.appColors.textSecondary,
                           height: 1.62,
                         ),
                       ),
@@ -154,7 +154,7 @@ class SleepEncyclopediaTopicPage extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.md),
               AppCard(
-                color: Colors.white,
+                color: context.appColors.surface,
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -179,7 +179,7 @@ class SleepEncyclopediaTopicPage extends StatelessWidget {
                           child: Ink(
                             padding: const EdgeInsets.all(AppSpacing.md),
                             decoration: BoxDecoration(
-                              color: AppColors.surfaceMuted,
+                              color: context.appColors.surfaceMuted,
                               borderRadius: AppRadius.card,
                             ),
                             child: Row(
@@ -207,7 +207,9 @@ class SleepEncyclopediaTopicPage extends StatelessWidget {
                                             .textTheme
                                             .bodyMedium
                                             ?.copyWith(
-                                              color: AppColors.textSecondary,
+                                              color: context
+                                                  .appColors
+                                                  .textSecondary,
                                               height: 1.45,
                                             ),
                                       ),
@@ -259,7 +261,7 @@ class _DetailSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      color: Colors.white,
+      color: context.appColors.surface,
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -295,7 +297,7 @@ class _DetailSection extends StatelessWidget {
                     child: Text(
                       item,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: context.appColors.textSecondary,
                         height: 1.55,
                       ),
                     ),
@@ -329,7 +331,7 @@ class _TopicImageSlot extends StatelessWidget {
       width: double.infinity,
       height: 196,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appColors.surface,
         borderRadius: AppRadius.card,
         border: Border.all(color: accentColor.withAlpha(50)),
       ),
@@ -352,7 +354,7 @@ class _TopicImageSlot extends StatelessWidget {
                   Text(
                     description,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
+                      color: context.appColors.textSecondary,
                       height: 1.5,
                     ),
                   ),
@@ -375,7 +377,9 @@ class _TopicImageSlot extends StatelessWidget {
                         child: Text(
                           '图片加载中',
                           style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: AppColors.textSecondary),
+                              ?.copyWith(
+                                color: context.appColors.textSecondary,
+                              ),
                         ),
                       ),
                 ),
@@ -399,7 +403,9 @@ class _Pill extends StatelessWidget {
         vertical: 6,
       ),
       decoration: BoxDecoration(
-        color: color.withAlpha(color == AppColors.textSecondary ? 20 : 26),
+        color: color.withAlpha(
+          color == context.appColors.textSecondary ? 20 : 26,
+        ),
         borderRadius: AppRadius.pill,
       ),
       child: Text(
@@ -428,9 +434,9 @@ class _TopicNotFoundPage extends StatelessWidget {
           padding: const EdgeInsets.all(AppSpacing.xl),
           child: Text(
             '这个百科话题暂时还没准备好，可以先回到睡眠百科首页浏览其他内容。',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyLarge?.copyWith(color: AppColors.textSecondary),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: context.appColors.textSecondary,
+            ),
             textAlign: TextAlign.center,
           ),
         ),

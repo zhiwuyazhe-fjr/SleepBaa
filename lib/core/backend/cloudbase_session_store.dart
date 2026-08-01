@@ -101,6 +101,11 @@ class CloudBaseSessionStore {
            );
 
   static const String _sessionKey = 'cloudbase.session';
+  // SharedPreferences is a recovery mirror for devices whose Android Keystore
+  // becomes temporarily unreadable after an OS update or restore. The secure
+  // copy remains the primary source; this mirror prevents a transient storage
+  // error from looking like a real logout.
+  static const String _sessionMirrorKey = 'cloudbase.session.mirror';
   static const String _deviceIdKey = 'cloudbase.device_id';
 
   final FlutterSecureStorage _secureStorage;
@@ -133,10 +138,16 @@ class CloudBaseSessionStore {
   /// secure-storage namespace. A cached session in an older engine must not
   /// win over a newer refresh-token rotation written by another engine.
   Future<CloudBaseSession?> readPersistedSession() async {
-    final String? raw = await _readValue(_sessionKey);
-    final CloudBaseSession? persisted = _decodeSession(raw);
+    final CloudBaseSession? secureSession = _decodeSession(
+      await _readSecureValue(_sessionKey),
+    );
+    final CloudBaseSession? persisted =
+        secureSession ?? _decodeSession(await _readSessionMirror());
     if (persisted != null) {
       _memorySession = persisted;
+      if (secureSession != null) {
+        await _writeSessionMirror(jsonEncode(secureSession.toJson()));
+      }
     }
     return persisted;
   }
@@ -167,33 +178,35 @@ class CloudBaseSessionStore {
   Future<void> clearSession() async {
     _memorySession = null;
     await _deleteValue(_sessionKey);
+    await _deleteSessionMirror();
   }
 
   Future<void> clearAll() async {
     _memorySession = null;
     _memoryDeviceId = null;
     await _deleteValue(_sessionKey);
+    await _deleteSessionMirror();
     await _deleteValue(_deviceIdKey);
   }
 
-  Future<String?> _readValue(String key) async {
-    if (key == _deviceIdKey) {
-      try {
-        final String? persisted = await _secureStorage.read(key: key);
-        if (persisted != null && persisted.isNotEmpty) {
-          return persisted;
-        }
-      } catch (_) {
-        // Fall back to the non-sensitive mirror below.
-      }
-      final String? fallback = await _readFallbackDeviceId();
-      return fallback?.isNotEmpty == true ? fallback : _memoryDeviceId;
-    }
+  Future<String?> _readSecureValue(String key) async {
     try {
       return await _secureStorage.read(key: key);
     } catch (_) {
       return null;
     }
+  }
+
+  Future<String?> _readValue(String key) async {
+    if (key == _deviceIdKey) {
+      final String? persisted = await _readSecureValue(key);
+      if (persisted != null && persisted.isNotEmpty) {
+        return persisted;
+      }
+      final String? fallback = await _readFallbackDeviceId();
+      return fallback?.isNotEmpty == true ? fallback : _memoryDeviceId;
+    }
+    return _readSecureValue(key);
   }
 
   Future<void> _writeValue(String key, String value) async {
@@ -207,10 +220,19 @@ class CloudBaseSessionStore {
       await _writeFallbackDeviceId(value);
       return;
     }
-    await _secureStorage.write(key: key, value: value);
-    final String? persisted = await _secureStorage.read(key: key);
-    if (persisted != value) {
-      throw StateError('Secure session storage did not persist the value.');
+
+    bool persistedSecurely = false;
+    try {
+      await _secureStorage.write(key: key, value: value);
+      persistedSecurely = await _secureStorage.read(key: key) == value;
+    } catch (_) {
+      // Keystore failures must not turn a successful login into a logout.
+    }
+    if (key == _sessionKey) {
+      await _writeSessionMirror(value);
+    }
+    if (!persistedSecurely && key != _sessionKey) {
+      throw StateError('Secure storage did not persist the value.');
     }
   }
 
@@ -230,6 +252,28 @@ class CloudBaseSessionStore {
     } catch (_) {
       // Ignore non-device deletes when secure storage is unavailable.
     }
+  }
+
+  Future<String?> _readSessionMirror() async {
+    try {
+      return (await _prefs()).getString(_sessionMirrorKey);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _writeSessionMirror(String value) async {
+    try {
+      await (await _prefs()).setString(_sessionMirrorKey, value);
+    } catch (_) {
+      // The secure copy is still available when the mirror cannot be written.
+    }
+  }
+
+  Future<void> _deleteSessionMirror() async {
+    try {
+      await (await _prefs()).remove(_sessionMirrorKey);
+    } catch (_) {}
   }
 
   Future<String?> _readFallbackDeviceId() async {

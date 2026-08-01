@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -14,6 +16,10 @@ enum AppHapticRole {
 class AppHaptics {
   const AppHaptics._();
 
+  static const MethodChannel _nativeChannel = MethodChannel(
+    'com.dormsleep.app/haptics',
+  );
+
   static Future<void> trigger(AppHapticRole role) async {
     if (kIsWeb) {
       return;
@@ -29,7 +35,7 @@ class AppHaptics {
 
   static Future<void> _perform(AppHapticRole role) {
     return switch (role) {
-      AppHapticRole.tap => HapticFeedback.lightImpact(),
+      AppHapticRole.tap => _impact('light', HapticFeedback.lightImpact),
       AppHapticRole.navigation => _runPattern(<_HapticPulse>[
         const _HapticPulse.selection(),
         const _HapticPulse.light(after: Duration(milliseconds: 28)),
@@ -42,7 +48,10 @@ class AppHaptics {
         const _HapticPulse.light(),
         const _HapticPulse.medium(after: Duration(milliseconds: 44)),
       ]),
-      AppHapticRole.selection => HapticFeedback.selectionClick(),
+      AppHapticRole.selection => _impact(
+        'selection',
+        HapticFeedback.selectionClick,
+      ),
       AppHapticRole.messageSend => _runPattern(<_HapticPulse>[
         const _HapticPulse.light(),
         const _HapticPulse.selection(after: Duration(milliseconds: 30)),
@@ -54,6 +63,34 @@ class AppHaptics {
         const _HapticPulse.heavy(after: Duration(milliseconds: 72)),
       ]),
     };
+  }
+
+  static Future<void> _impact(
+    String style,
+    Future<void> Function() fallback,
+  ) async {
+    // Keep the Flutter path for tests and non-Android targets. Android uses
+    // the native channel so devices that ignore lightImpact still receive a
+    // real view haptic/vibrator pulse.
+    if (!Platform.isAndroid) {
+      await fallback();
+      return;
+    }
+    try {
+      final bool? performed = await _nativeChannel.invokeMethod<bool>(
+        'impact',
+        <String, dynamic>{'style': style},
+      );
+      if (performed == true) {
+        return;
+      }
+    } on MissingPluginException {
+      // Use Flutter's platform haptic implementation when the channel is not
+      // available (for example, an older Android engine).
+    } catch (_) {
+      // Fall through to the Flutter implementation.
+    }
+    await fallback();
   }
 
   static Future<void> _runPattern(List<_HapticPulse> pulses) async {
@@ -141,10 +178,22 @@ class _HapticPulse {
 
   Future<void> trigger() {
     return switch (type) {
-      _HapticPulseType.light => HapticFeedback.lightImpact(),
-      _HapticPulseType.medium => HapticFeedback.mediumImpact(),
-      _HapticPulseType.heavy => HapticFeedback.heavyImpact(),
-      _HapticPulseType.selection => HapticFeedback.selectionClick(),
+      _HapticPulseType.light => AppHaptics._impact(
+        'light',
+        HapticFeedback.lightImpact,
+      ),
+      _HapticPulseType.medium => AppHaptics._impact(
+        'medium',
+        HapticFeedback.mediumImpact,
+      ),
+      _HapticPulseType.heavy => AppHaptics._impact(
+        'heavy',
+        HapticFeedback.heavyImpact,
+      ),
+      _HapticPulseType.selection => AppHaptics._impact(
+        'selection',
+        HapticFeedback.selectionClick,
+      ),
     };
   }
 }

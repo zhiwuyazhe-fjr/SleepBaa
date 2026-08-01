@@ -6,6 +6,9 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Process
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.view.HapticFeedbackConstants
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -14,10 +17,21 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     companion object {
         private const val USAGE_STATS_CHANNEL_NAME = "com.dormsleep.app/usage_stats"
+        private const val HAPTICS_CHANNEL_NAME = "com.dormsleep.app/haptics"
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            HAPTICS_CHANNEL_NAME,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "impact" -> result.success(performHapticImpact(call.argument<String>("style")))
+                else -> result.notImplemented()
+            }
+        }
+
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             USAGE_STATS_CHANNEL_NAME,
@@ -42,6 +56,32 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+    }
+
+    private fun performHapticImpact(style: String?): Boolean {
+        val feedback = when (style) {
+            "medium", "heavy" -> HapticFeedbackConstants.LONG_PRESS
+            else -> HapticFeedbackConstants.VIRTUAL_KEY
+        }
+        if (window.decorView.performHapticFeedback(feedback)) {
+            return true
+        }
+
+        val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            ?: return false
+        if (!vibrator.hasVibrator()) {
+            return false
+        }
+        val duration = if (style == "heavy") 42L else 18L
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(
+                VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE),
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(duration)
+        }
+        return true
     }
 
     private fun hasUsageStatsPermission(): Boolean {

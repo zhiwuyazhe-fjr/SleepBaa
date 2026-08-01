@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
@@ -18,7 +18,7 @@ class SleepEncyclopediaPage extends StatelessWidget {
         SleepEncyclopediaContent.featuredTopics();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appColors.pageBackground,
       appBar: AppDetailPageAppBar(
         title: '睡眠百科',
         onBack: () => Navigator.of(context).maybePop(),
@@ -146,13 +146,13 @@ class _HeroCard extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE9F6F1),
+                    color: context.appColors.accentSoft,
                     borderRadius: AppRadius.pill,
                   ),
                   child: Text(
                     '睡眠百科',
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: AppColors.primaryDeep,
+                      color: context.appColors.accentDeep,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -163,14 +163,14 @@ class _HeroCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                     height: 1.2,
-                    color: AppColors.textStrong,
+                    color: context.appColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   '从入睡、作息、宿舍环境和压力梦境里挑一个开始就好。',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: context.appColors.textSecondary,
                     height: 1.5,
                   ),
                 ),
@@ -204,7 +204,7 @@ class _SectionHeader extends StatelessWidget {
         Text(
           subtitle,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppColors.textSecondary,
+            color: context.appColors.textSecondary,
             height: 1.45,
           ),
         ),
@@ -225,7 +225,7 @@ class _TopicPreviewCard extends StatelessWidget {
         SleepEncyclopediaContent.categoryBySlug(topic.categorySlug)!;
     return AppCard(
       onTap: onTap,
-      color: Colors.white,
+      color: context.appColors.surface,
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -237,7 +237,7 @@ class _TopicPreviewCard extends StatelessWidget {
               Text(
                 topic.readTime,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: AppColors.textHint,
+                  color: context.appColors.textSecondary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -254,7 +254,7 @@ class _TopicPreviewCard extends StatelessWidget {
           Text(
             sleepEncyclopediaCardSubtitle(topic.subtitle),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSecondary,
+              color: context.appColors.textSecondary,
               height: 1.45,
             ),
           ),
@@ -288,7 +288,10 @@ class _CategoryCard extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: <Color>[category.accentColor.withAlpha(36), Colors.white],
+            colors: <Color>[
+              category.accentColor.withAlpha(36),
+              context.appColors.surface,
+            ],
           ),
         ),
         child: Row(
@@ -319,7 +322,7 @@ class _CategoryCard extends StatelessWidget {
                   Text(
                     sleepEncyclopediaCardSubtitle(category.description),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
+                      color: context.appColors.textSecondary,
                       height: 1.45,
                     ),
                   ),
@@ -360,7 +363,7 @@ class _ReadingPathCard extends StatelessWidget {
         .toList(growable: false);
 
     return AppCard(
-      color: Colors.white,
+      color: context.appColors.surface,
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -375,7 +378,7 @@ class _ReadingPathCard extends StatelessWidget {
           Text(
             sleepEncyclopediaCardSubtitle(description),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.textSecondary,
+              color: context.appColors.textSecondary,
               height: 1.45,
             ),
           ),
@@ -387,7 +390,7 @@ class _ReadingPathCard extends StatelessWidget {
                 .map(
                   (SleepEncyclopediaTopic topic) => ActionChip(
                     label: Text(topic.title),
-                    backgroundColor: AppColors.surfaceMuted,
+                    backgroundColor: context.appColors.surfaceMuted,
                     side: BorderSide.none,
                     onPressed: () => context.push(
                       AppRoutes.sleepEncyclopediaTopicLocation(topic.slug),
@@ -410,7 +413,7 @@ class _Tag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color effectiveColor = color ?? AppColors.primary;
+    final Color effectiveColor = color ?? context.appColors.accent;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,

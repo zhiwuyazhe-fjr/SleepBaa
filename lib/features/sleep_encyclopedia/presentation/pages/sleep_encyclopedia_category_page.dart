@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
-import 'package:sleep_dorm_app/app/theme/app_colors.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
@@ -26,7 +26,7 @@ class SleepEncyclopediaCategoryPage extends StatelessWidget {
         SleepEncyclopediaContent.topicsForCategory(categorySlug);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appColors.pageBackground,
       appBar: AppDetailPageAppBar(
         title: category.title,
         onBack: () => Navigator.of(context).maybePop(),
@@ -50,7 +50,7 @@ class SleepEncyclopediaCategoryPage extends StatelessWidget {
                   end: Alignment.bottomRight,
                   colors: <Color>[
                     category.accentColor.withAlpha(40),
-                    Colors.white,
+                    context.appColors.surface,
                   ],
                 ),
                 borderRadius: AppRadius.cardLarge,
@@ -83,7 +83,7 @@ class SleepEncyclopediaCategoryPage extends StatelessWidget {
                   Text(
                     sleepEncyclopediaCardSubtitle(category.description),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
+                      color: context.appColors.textSecondary,
                       height: 1.5,
                     ),
                   ),
@@ -107,7 +107,7 @@ class SleepEncyclopediaCategoryPage extends StatelessWidget {
                 onTap: () => context.push(
                   AppRoutes.sleepEncyclopediaTopicLocation(topic.slug),
                 ),
-                color: Colors.white,
+                color: context.appColors.surface,
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -123,7 +123,7 @@ class SleepEncyclopediaCategoryPage extends StatelessWidget {
                           topic.readTime,
                           style: Theme.of(context).textTheme.labelMedium
                               ?.copyWith(
-                                color: AppColors.textHint,
+                                color: context.appColors.textSecondary,
                                 fontWeight: FontWeight.w600,
                               ),
                         ),
@@ -140,7 +140,7 @@ class SleepEncyclopediaCategoryPage extends StatelessWidget {
                     Text(
                       sleepEncyclopediaCardSubtitle(topic.summary),
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textSecondary,
+                        color: context.appColors.textSecondary,
                         height: 1.5,
                       ),
                     ),
@@ -200,9 +200,9 @@ class _SleepEncyclopediaNotFoundPage extends StatelessWidget {
           padding: const EdgeInsets.all(AppSpacing.xl),
           child: Text(
             '内容正在整理中，稍后可以从百科首页重新进入。',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyLarge?.copyWith(color: AppColors.textSecondary),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: context.appColors.textSecondary,
+            ),
             textAlign: TextAlign.center,
           ),
         ),

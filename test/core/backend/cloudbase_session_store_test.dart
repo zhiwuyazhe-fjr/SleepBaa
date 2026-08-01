@@ -147,27 +147,33 @@ void main() {
     expect((await store.readSession())?.accessToken, 'new-access');
   });
 
-  test('writeSession does not hide secure storage write failures', () async {
-    final SharedPreferences sharedPreferences =
-        await SharedPreferences.getInstance();
-    final CloudBaseSessionStore store = CloudBaseSessionStore(
-      sharedPreferences: sharedPreferences,
-    );
-    final CloudBaseSession session = CloudBaseSession(
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-      subject: 'user-1',
-      expiresAt: DateTime.now().add(const Duration(hours: 1)),
-      deviceId: 'device-1',
-    );
-    throwOnWrite = true;
+  test(
+    'writeSession keeps a recovery copy when secure storage write fails',
+    () async {
+      final SharedPreferences sharedPreferences =
+          await SharedPreferences.getInstance();
+      final CloudBaseSessionStore store = CloudBaseSessionStore(
+        sharedPreferences: sharedPreferences,
+      );
+      final CloudBaseSession session = CloudBaseSession(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        subject: 'user-1',
+        expiresAt: DateTime.now().add(const Duration(hours: 1)),
+        deviceId: 'device-1',
+      );
+      throwOnWrite = true;
 
-    await expectLater(
-      store.writeSession(session),
-      throwsA(isA<PlatformException>()),
-    );
+      await store.writeSession(session);
 
-    throwOnWrite = false;
-    expect(await store.readSession(), isNull);
-  });
+      throwOnWrite = false;
+      final CloudBaseSessionStore restoredStore = CloudBaseSessionStore(
+        sharedPreferences: sharedPreferences,
+      );
+      expect(
+        (await restoredStore.readPersistedSession())?.accessToken,
+        'access-token',
+      );
+    },
+  );
 }
