@@ -31,7 +31,7 @@ function Resolve-AndroidDevice([string]$RequestedDevice) {
   # Use cmd so stderr (mirror / asset notices) is dropped reliably; stdout stays JSON only.
   $devicesText = cmd.exe /c "flutter devices --machine 2>nul"
   if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace([string]$devicesText)) {
-    throw "Unable to read flutter devices. Run `flutter devices` manually first."
+    throw "Unable to read Flutter device list. Run 'flutter devices' manually first."
   }
 
   $devices = $devicesText | ConvertFrom-Json
@@ -40,7 +40,20 @@ function Resolve-AndroidDevice([string]$RequestedDevice) {
   } | Select-Object -First 1
 
   if ($null -eq $androidDevice) {
-    throw "No Android device detected. Connect a phone or start an emulator, then run `flutter devices`."
+    $diagnostics = @(cmd.exe /c "flutter devices 2>&1") -join [Environment]::NewLine
+    $unauthorizedMatch = [regex]::Match(
+      $diagnostics,
+      "Device\s+(\S+)\s+is not authorized",
+      [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+    )
+    if ($unauthorizedMatch.Success) {
+      $deviceId = $unauthorizedMatch.Groups[1].Value
+      throw "Android device $deviceId is connected but ADB is not authorized. Unlock the phone, accept the USB debugging authorization dialog, then run this command again."
+    }
+    if ($diagnostics -match "offline") {
+      throw "An Android device is connected but offline. Reconnect USB or restart ADB, then run this command again."
+    }
+    throw "No usable Android device detected. Connect and authorize a phone or start an emulator, then run 'flutter devices'."
   }
 
   return [string]$androidDevice.id
