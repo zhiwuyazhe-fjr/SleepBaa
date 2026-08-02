@@ -10,6 +10,7 @@ class AppEnvironment {
     this.cloudbaseAppApiBaseUrl,
     this.cloudbasePublishableKey,
     this.cloudbaseClientId,
+    this.noiseCalibrationOffsetDb = 0,
   });
 
   factory AppEnvironment.inMemory() {
@@ -54,6 +55,14 @@ class AppEnvironment {
       'CLOUDBASE_CLIENT_ID',
       defaultValue: '',
     );
+    final double noiseCalibrationOffsetDb =
+        double.tryParse(
+          const String.fromEnvironment(
+            'NOISE_CALIBRATION_OFFSET_DB',
+            defaultValue: '0',
+          ),
+        )?.clamp(-30, 30).toDouble() ??
+        0;
 
     return AppEnvironment(
       target: target,
@@ -78,6 +87,7 @@ class AppEnvironment {
         ),
       ),
       cloudbaseClientId: _emptyToNull(clientId.isEmpty ? envId : clientId),
+      noiseCalibrationOffsetDb: noiseCalibrationOffsetDb,
     );
   }
 
@@ -89,6 +99,7 @@ class AppEnvironment {
   final String? cloudbaseAppApiBaseUrl;
   final String? cloudbasePublishableKey;
   final String? cloudbaseClientId;
+  final double noiseCalibrationOffsetDb;
 
   bool get usesCloudBase => target != AppBackendTarget.inMemory;
 
@@ -110,6 +121,7 @@ class AppEnvironment {
     String? cloudbaseAppApiBaseUrl,
     String? cloudbasePublishableKey,
     String? cloudbaseClientId,
+    double? noiseCalibrationOffsetDb,
   }) {
     return AppEnvironment(
       target: target ?? this.target,
@@ -123,6 +135,8 @@ class AppEnvironment {
       cloudbasePublishableKey:
           cloudbasePublishableKey ?? this.cloudbasePublishableKey,
       cloudbaseClientId: cloudbaseClientId ?? this.cloudbaseClientId,
+      noiseCalibrationOffsetDb:
+          noiseCalibrationOffsetDb ?? this.noiseCalibrationOffsetDb,
     );
   }
 }

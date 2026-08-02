@@ -1,15 +1,22 @@
 package com.dormsleep.app
 
 import android.app.AppOpsManager
+import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.Process
 import android.os.VibrationEffect
 import android.os.Vibrator
-import android.view.HapticFeedbackConstants
 import android.provider.Settings
+import android.view.HapticFeedbackConstants
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -17,8 +24,14 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     companion object {
         private const val USAGE_STATS_CHANNEL_NAME = "com.dormsleep.app/usage_stats"
+        private const val ENVIRONMENT_SENSORS_CHANNEL_NAME =
+            "com.dormsleep.app/environment_sensors"
         private const val HAPTICS_CHANNEL_NAME = "com.dormsleep.app/haptics"
+        private const val ONE_HOUR_MS = 60L * 60L * 1000L
+        private const val USAGE_LOOKBACK_MS = 24L * 60L * 60L * 1000L
     }
+
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -34,6 +47,16 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
+            ENVIRONMENT_SENSORS_CHANNEL_NAME,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "readAmbientLightLux" -> readAmbientLightLux(result)
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
             USAGE_STATS_CHANNEL_NAME,
         ).setMethodCallHandler { call, result ->
             when (call.method) {
@@ -42,7 +65,7 @@ class MainActivity : FlutterActivity() {
                     openUsageStatsSettings()
                     result.success(null)
                 }
-                "getLastTwoHoursUsageMinutes" -> {
+                "getLastHourUsageMinutes" -> {
                     if (!hasUsageStatsPermission()) {
                         result.error(
                             "permission_denied",
@@ -51,7 +74,7 @@ class MainActivity : FlutterActivity() {
                         )
                         return@setMethodCallHandler
                     }
-                    result.success(readLastTwoHoursUsageMinutes())
+                    result.success(readLastHourUsageMinutes())
                 }
                 else -> result.notImplemented()
             }
@@ -82,6 +105,68 @@ class MainActivity : FlutterActivity() {
             vibrator.vibrate(duration)
         }
         return true
+    }
+
+    private fun readAmbientLightLux(result: MethodChannel.Result) {
+        val sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val lightSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT)
+        if (lightSensor == null) {
+            result.success(null)
+            return
+        }
+
+        val samples = mutableListOf<Float>()
+        var completed = false
+        lateinit var listener: SensorEventListener
+        lateinit var timeout: Runnable
+
+        fun finish() {
+            if (completed) {
+                return
+            }
+            completed = true
+            sensorManager.unregisterListener(listener)
+            mainHandler.removeCallbacks(timeout)
+            if (samples.isEmpty()) {
+                result.error("sensor_unavailable", "No ambient light reading was returned.", null)
+                return
+            }
+            val sorted = samples.sorted()
+            val middle = sorted.size / 2
+            val median = if (sorted.size % 2 == 1) {
+                sorted[middle].toDouble()
+            } else {
+                (sorted[middle - 1] + sorted[middle]).toDouble() / 2.0
+            }
+            result.success(median)
+        }
+
+        listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                val lux = event.values.firstOrNull() ?: return
+                if (lux.isFinite() && lux >= 0f) {
+                    samples.add(lux)
+                }
+                if (samples.size >= 5) {
+                    finish()
+                }
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+        }
+        timeout = Runnable { finish() }
+
+        val registered = sensorManager.registerListener(
+            listener,
+            lightSensor,
+            SensorManager.SENSOR_DELAY_NORMAL,
+        )
+        if (!registered) {
+            completed = true
+            result.success(null)
+            return
+        }
+        mainHandler.postDelayed(timeout, 1800L)
     }
 
     private fun hasUsageStatsPermission(): Boolean {
@@ -124,19 +209,72 @@ class MainActivity : FlutterActivity() {
         )
     }
 
-    private fun readLastTwoHoursUsageMinutes(): Int {
+    private fun readLastHourUsageMinutes(): Int {
         val usageStatsManager =
             getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val endTime = System.currentTimeMillis()
-        val startTime = endTime - 2L * 60L * 60L * 1000L
-        val aggregate = usageStatsManager.queryAndAggregateUsageStats(
-            startTime,
+        val startTime = endTime - ONE_HOUR_MS
+        val events = usageStatsManager.queryEvents(
+            startTime - USAGE_LOOKBACK_MS,
             endTime,
         )
-        val foregroundMs =
-            aggregate.values
-                .filter { it.packageName != packageName }
-                .sumOf { stats -> stats.totalTimeInForeground.coerceAtLeast(0L) }
-        return (foregroundMs / 60_000L).toInt()
+
+        var activePackage: String? = null
+        var activeSince = startTime
+        var foregroundMs = 0L
+        val event = UsageEvents.Event()
+
+        fun closeActive(atTime: Long) {
+            val currentPackage = activePackage ?: return
+            val intervalStart = maxOf(activeSince, startTime)
+            val intervalEnd = minOf(atTime, endTime)
+            if (currentPackage != packageName && intervalEnd > intervalStart) {
+                foregroundMs += intervalEnd - intervalStart
+            }
+        }
+
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            val eventPackage = event.packageName
+            val eventTime = event.timeStamp
+            val isForeground =
+                event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND ||
+                    event.eventType == UsageEvents.Event.ACTIVITY_RESUMED
+            val isBackground =
+                event.eventType == UsageEvents.Event.MOVE_TO_BACKGROUND ||
+                    event.eventType == UsageEvents.Event.ACTIVITY_PAUSED
+            val isScreenOff = event.eventType == UsageEvents.Event.SCREEN_NON_INTERACTIVE
+
+            if (eventTime < startTime) {
+                when {
+                    isScreenOff -> activePackage = null
+                    isForeground && eventPackage != null -> {
+                        activePackage = eventPackage
+                        activeSince = startTime
+                    }
+                    isBackground && activePackage == eventPackage -> activePackage = null
+                }
+                continue
+            }
+
+            when {
+                isScreenOff -> {
+                    closeActive(eventTime)
+                    activePackage = null
+                }
+                isForeground && eventPackage != null -> {
+                    closeActive(eventTime)
+                    activePackage = eventPackage
+                    activeSince = eventTime
+                }
+                isBackground && activePackage == eventPackage -> {
+                    closeActive(eventTime)
+                    activePackage = null
+                }
+            }
+        }
+
+        closeActive(endTime)
+        return (foregroundMs.coerceIn(0L, ONE_HOUR_MS) / 60_000L).toInt()
     }
 }

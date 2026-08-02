@@ -15,6 +15,7 @@ import 'package:sleep_dorm_app/core/data/model_serializers.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/state/dorm_noise_sample_ledger.dart';
+import 'package:sleep_dorm_app/core/utils/noise_statistics.dart';
 
 class InterferenceProbeController extends ChangeNotifier {
   InterferenceProbeController({
@@ -24,13 +25,17 @@ class InterferenceProbeController extends ChangeNotifier {
     CloudBaseAppApiClient? appApiClient,
     CloudBaseSnapshotStore? snapshotStore,
     AndroidUsageStatsGateway? usageStatsGateway,
+    AndroidLightSensorGateway? lightSensorGateway,
     DormNoiseSampleLedger? noiseSampleLedger,
   }) : _authRepository = authRepository,
        _dormRepository = dormRepository,
        _environment = environment,
        _appApiClient = appApiClient,
        _snapshotStore = snapshotStore,
-       _usageStatsGateway = usageStatsGateway ?? const AndroidUsageStatsGateway(),
+       _usageStatsGateway =
+           usageStatsGateway ?? const AndroidUsageStatsGateway(),
+       _lightSensorGateway =
+           lightSensorGateway ?? const AndroidLightSensorGateway(),
        _noiseSampleLedger = noiseSampleLedger,
        _state = _buildFallbackState(dormRepository.currentDorm) {
     _dormRepository.addListener(_syncDormFallbacks);
@@ -44,6 +49,7 @@ class InterferenceProbeController extends ChangeNotifier {
   final CloudBaseAppApiClient? _appApiClient;
   final CloudBaseSnapshotStore? _snapshotStore;
   final AndroidUsageStatsGateway _usageStatsGateway;
+  final AndroidLightSensorGateway _lightSensorGateway;
   final DormNoiseSampleLedger? _noiseSampleLedger;
 
   TonightInterferenceState _state;
@@ -144,9 +150,7 @@ class InterferenceProbeController extends ChangeNotifier {
         const Duration(minutes: 15);
   }
 
-  Future<void> _detectNoise({
-    required bool allowPermissionPrompt,
-  }) async {
+  Future<void> _detectNoise({required bool allowPermissionPrompt}) async {
     if (!Platform.isAndroid) {
       _commitLocalFactor(
         InterferenceFactorSnapshot(
@@ -191,46 +195,67 @@ class InterferenceProbeController extends ChangeNotifier {
         status: InterferenceFactorStatus.measuring,
         value: '检测中...',
         gradeLabel: '检测中',
-        detail: '小眠正在听一听此刻宿舍里的声音。',
+        detail: '正在进行 12 秒噪声检测，开始 1 秒的数据不会计入结果。',
         measuredAt: DateTime.now(),
       ),
     );
 
     final NoiseMeter noiseMeter = NoiseMeter();
-    final List<double> samples = <double>[];
+    final List<double> meanSamples = <double>[];
+    final List<double> peakSamples = <double>[];
     StreamSubscription<NoiseReading>? subscription;
+    bool collecting = false;
     try {
       subscription = noiseMeter.noise.listen((NoiseReading reading) {
+        if (!collecting) {
+          return;
+        }
         if (reading.meanDecibel.isFinite && reading.meanDecibel > 0) {
-          samples.add(reading.meanDecibel);
+          meanSamples.add(reading.meanDecibel);
+        }
+        if (reading.maxDecibel.isFinite && reading.maxDecibel > 0) {
+          peakSamples.add(reading.maxDecibel);
         }
       });
-      await Future<void>.delayed(const Duration(seconds: 3));
+
+      await Future<void>.delayed(const Duration(seconds: 1));
+      collecting = true;
+      await Future<void>.delayed(const Duration(seconds: 11));
+      collecting = false;
       await subscription.cancel();
 
-      if (samples.isEmpty) {
-        throw StateError('No microphone readings captured.');
-      }
-
-      final double average =
-          samples.reduce((double a, double b) => a + b) / samples.length;
-      final _ProbeGrade grade = _noiseGrade(average);
+      final NoiseStatistics statistics = calculateNoiseStatistics(
+        meanSamplesDb: meanSamples,
+        peakSamplesDb: peakSamples,
+        calibrationOffsetDb: _environment.noiseCalibrationOffsetDb,
+      );
+      final _ProbeGrade grade = _noiseGrade(statistics.leqDb);
+      final String calibrationLabel =
+          statistics.calibrationOffsetDb.abs() < 0.05
+          ? '未配置额外校准偏移'
+          : '已应用 ${statistics.calibrationOffsetDb >= 0 ? '+' : ''}'
+                '${statistics.calibrationOffsetDb.toStringAsFixed(1)} dB 校准';
       final InterferenceFactorSnapshot factor = InterferenceFactorSnapshot(
         type: InterferenceFactorType.noise,
         title: '宿舍噪声',
-        value: '${average.round()} dB',
+        value: '${statistics.leqDb.round()} dB（估算）',
         gradeLabel: grade.label,
         status: InterferenceFactorStatus.ready,
-        detail: grade.detail,
-        source: 'microphone',
+        detail:
+            '${grade.detail} 12 秒结果：中位数 '
+            '${statistics.medianDb.toStringAsFixed(1)} dB，峰值 '
+            '${statistics.peakDb.toStringAsFixed(1)} dB；$calibrationLabel。',
+        source: 'microphone_estimate',
         measuredAt: DateTime.now(),
-        numericValue: average,
+        numericValue: statistics.leqDb,
         score: grade.score,
       );
       _commitLocalFactor(factor);
       await _persistFactor(factor);
-      await _dormRepository.updateDormEnvironment(noiseDb: average.round());
-      _noiseSampleLedger?.recordSample(average, DateTime.now());
+      await _dormRepository.updateDormEnvironment(
+        noiseDb: statistics.leqDb.round(),
+      );
+      _noiseSampleLedger?.recordSample(statistics.leqDb, DateTime.now());
     } catch (_) {
       await subscription?.cancel();
       _commitLocalFactor(
@@ -240,8 +265,8 @@ class InterferenceProbeController extends ChangeNotifier {
           value: '检测失败',
           gradeLabel: '检测失败',
           status: InterferenceFactorStatus.error,
-          detail: '这次没有顺利读到噪声，稍后换个时机再试一次。',
-          source: 'microphone',
+          detail: '这次没有顺利读到足够的噪声数据，稍后保持手机静止再试一次。',
+          source: 'microphone_estimate',
           measuredAt: DateTime.now(),
         ),
       );
@@ -250,9 +275,7 @@ class InterferenceProbeController extends ChangeNotifier {
     }
   }
 
-  Future<void> _detectLight({
-    required bool allowPermissionPrompt,
-  }) async {
+  Future<void> _detectLight({required bool allowPermissionPrompt}) async {
     if (!Platform.isAndroid) {
       _commitLocalFactor(
         InterferenceFactorSnapshot(
@@ -269,25 +292,6 @@ class InterferenceProbeController extends ChangeNotifier {
       return;
     }
 
-    final PermissionStatus permission = allowPermissionPrompt
-        ? await Permission.camera.request()
-        : await Permission.camera.status;
-    if (!permission.isGranted) {
-      _commitLocalFactor(
-        InterferenceFactorSnapshot(
-          type: InterferenceFactorType.light,
-          title: '灯光环境',
-          value: '未授权',
-          gradeLabel: '未授权',
-          status: InterferenceFactorStatus.denied,
-          detail: '先打开相机权限，我才能帮你判断房间现在是偏暗还是偏亮。',
-          source: 'camera_permission',
-          measuredAt: DateTime.now(),
-        ),
-      );
-      return;
-    }
-
     if (_activeProbes.contains(InterferenceFactorType.light)) {
       return;
     }
@@ -297,15 +301,63 @@ class InterferenceProbeController extends ChangeNotifier {
         status: InterferenceFactorStatus.measuring,
         value: '检测中...',
         gradeLabel: '检测中',
-        detail: '小眠正在用前置摄像头看看房间亮度。',
+        detail: '正在优先读取环境光传感器；不支持时才会使用相机估算。',
         measuredAt: DateTime.now(),
       ),
     );
 
     CameraController? controller;
     try {
+      double? lux;
+      try {
+        lux = await _lightSensorGateway.readAmbientLightLux();
+      } on PlatformException {
+        lux = null;
+      }
+      if (lux != null && lux.isFinite && lux >= 0) {
+        final _ProbeGrade grade = _lightGradeFromLux(lux);
+        final InterferenceFactorSnapshot factor = InterferenceFactorSnapshot(
+          type: InterferenceFactorType.light,
+          title: '灯光环境',
+          value: '${_formatLux(lux)} lx',
+          gradeLabel: grade.label,
+          status: InterferenceFactorStatus.ready,
+          detail: '环境光传感器实测：${grade.detail}',
+          source: 'ambient_light_sensor',
+          measuredAt: DateTime.now(),
+          numericValue: lux,
+          score: grade.score,
+        );
+        _commitLocalFactor(factor);
+        await _persistFactor(factor);
+        await _dormRepository.updateDormEnvironment(
+          lightLabel: grade.valueLabel,
+        );
+        return;
+      }
+
+      final PermissionStatus permission = allowPermissionPrompt
+          ? await Permission.camera.request()
+          : await Permission.camera.status;
+      if (!permission.isGranted) {
+        _commitLocalFactor(
+          InterferenceFactorSnapshot(
+            type: InterferenceFactorType.light,
+            title: '灯光环境',
+            value: '未授权',
+            gradeLabel: '未授权',
+            status: InterferenceFactorStatus.denied,
+            detail: '设备没有可用的光线传感器，需要相机权限才能进行相机估算。',
+            source: 'camera_permission',
+            measuredAt: DateTime.now(),
+          ),
+        );
+        return;
+      }
+
       final List<CameraDescription> cameras = await availableCameras();
-      final CameraDescription? frontCamera = cameras.cast<CameraDescription?>()
+      final CameraDescription? frontCamera = cameras
+          .cast<CameraDescription?>()
           .firstWhere(
             (CameraDescription? item) =>
                 item?.lensDirection == CameraLensDirection.front,
@@ -316,11 +368,11 @@ class InterferenceProbeController extends ChangeNotifier {
           InterferenceFactorSnapshot(
             type: InterferenceFactorType.light,
             title: '灯光环境',
-            value: '没有前摄',
+            value: '不可检测',
             gradeLabel: '不可检测',
             status: InterferenceFactorStatus.unavailable,
-            detail: '没有找到可用的前置摄像头，这次先没法判断环境亮度。',
-            source: 'camera',
+            detail: '没有环境光传感器，也没有找到可用的前置摄像头。',
+            source: 'camera_estimate',
             measuredAt: DateTime.now(),
           ),
         );
@@ -333,6 +385,7 @@ class InterferenceProbeController extends ChangeNotifier {
         enableAudio: false,
       );
       await controller.initialize();
+      await Future<void>.delayed(const Duration(milliseconds: 1500));
       final XFile file = await controller.takePicture();
       final Uint8List bytes = await file.readAsBytes();
       final img.Image? image = img.decodeImage(bytes);
@@ -341,15 +394,15 @@ class InterferenceProbeController extends ChangeNotifier {
       }
 
       final double luminance = _averageLuminance(image);
-      final _ProbeGrade grade = _lightGrade(luminance);
+      final _ProbeGrade grade = _cameraLightGrade(luminance);
       final InterferenceFactorSnapshot factor = InterferenceFactorSnapshot(
         type: InterferenceFactorType.light,
         title: '灯光环境',
-        value: grade.valueLabel,
+        value: '相机估算 · ${grade.valueLabel}',
         gradeLabel: grade.label,
         status: InterferenceFactorStatus.ready,
-        detail: grade.detail,
-        source: 'front_camera',
+        detail: '相机估算：${grade.detail} 结果会受到自动曝光和拍摄方向影响。',
+        source: 'front_camera_estimate',
         measuredAt: DateTime.now(),
         numericValue: luminance,
         score: grade.score,
@@ -365,8 +418,8 @@ class InterferenceProbeController extends ChangeNotifier {
           value: '检测失败',
           gradeLabel: '检测失败',
           status: InterferenceFactorStatus.error,
-          detail: '这次没有顺利读到亮度，稍后换个角度再试试。',
-          source: 'front_camera',
+          detail: '光线传感器和相机估算都没有返回可用结果，请稍后再试。',
+          source: 'light_probe',
           measuredAt: DateTime.now(),
         ),
       );
@@ -376,9 +429,7 @@ class InterferenceProbeController extends ChangeNotifier {
     }
   }
 
-  Future<void> _detectPhoneUsage({
-    required bool allowPermissionPrompt,
-  }) async {
+  Future<void> _detectPhoneUsage({required bool allowPermissionPrompt}) async {
     if (!Platform.isAndroid) {
       _commitLocalFactor(
         InterferenceFactorSnapshot(
@@ -407,7 +458,7 @@ class InterferenceProbeController extends ChangeNotifier {
           value: '未授权',
           gradeLabel: '未授权',
           status: InterferenceFactorStatus.denied,
-          detail: '先打开“使用情况访问权限”，我才能读取最近 2 小时手机使用时长。',
+          detail: '先打开“使用情况访问权限”，我才能读取最近 1 小时手机使用时长。',
           source: 'usage_stats_permission',
           measuredAt: DateTime.now(),
         ),
@@ -424,13 +475,13 @@ class InterferenceProbeController extends ChangeNotifier {
         status: InterferenceFactorStatus.measuring,
         value: '检测中...',
         gradeLabel: '检测中',
-        detail: '小眠正在读取最近 2 小时的手机使用情况。',
+        detail: '小眠正在读取最近 1 小时的手机使用情况。',
         measuredAt: DateTime.now(),
       ),
     );
 
     try {
-      final int minutes = await _usageStatsGateway.readLastTwoHoursUsageMinutes();
+      final int minutes = await _usageStatsGateway.readLastHourUsageMinutes();
       final _ProbeGrade grade = _phoneUsageGrade(minutes);
       final InterferenceFactorSnapshot factor = InterferenceFactorSnapshot(
         type: InterferenceFactorType.phoneUsage,
@@ -467,7 +518,7 @@ class InterferenceProbeController extends ChangeNotifier {
           value: '检测失败',
           gradeLabel: '检测失败',
           status: InterferenceFactorStatus.error,
-          detail: '这次没能读到最近 2 小时使用时长，稍后再试一次。',
+          detail: '这次没能读到最近 1 小时使用时长，稍后再试一次。',
           source: 'android_usage_stats',
           measuredAt: DateTime.now(),
         ),
@@ -505,9 +556,8 @@ class InterferenceProbeController extends ChangeNotifier {
       await client.post(
         '/api/interference/tonight',
         body: <String, dynamic>{
-          _factorKey(factor.type): ModelSerializers.interferenceFactorSnapshotToMap(
-            factor,
-          ),
+          _factorKey(factor.type):
+              ModelSerializers.interferenceFactorSnapshotToMap(factor),
         },
       );
       await client.post(
@@ -539,8 +589,7 @@ class InterferenceProbeController extends ChangeNotifier {
     for (int y = 0; y < image.height; y += stepY) {
       for (int x = 0; x < image.width; x += stepX) {
         final img.Pixel pixel = image.getPixel(x, y);
-        total +=
-            (0.2126 * pixel.r) + (0.7152 * pixel.g) + (0.0722 * pixel.b);
+        total += (0.2126 * pixel.r) + (0.7152 * pixel.g) + (0.0722 * pixel.b);
         count += 1;
       }
     }
@@ -557,7 +606,7 @@ class InterferenceProbeController extends ChangeNotifier {
         value: '待检测',
         gradeLabel: '待检测',
         status: InterferenceFactorStatus.idle,
-        detail: '授权后可读取最近 2 小时手机使用时长。',
+        detail: '授权后可读取最近 1 小时手机使用时长。',
         source: 'android_usage_stats',
       ),
       emotion: _defaultEmotionSnapshot(),
@@ -641,7 +690,44 @@ class InterferenceProbeController extends ChangeNotifier {
     );
   }
 
-  static _ProbeGrade _lightGrade(double brightness) {
+  static String _formatLux(double lux) {
+    return lux < 10 ? lux.toStringAsFixed(1) : lux.round().toString();
+  }
+
+  static _ProbeGrade _lightGradeFromLux(double lux) {
+    if (lux <= 10) {
+      return const _ProbeGrade(
+        label: '偏暗',
+        valueLabel: '偏暗',
+        detail: '当前照度较低，适合逐渐进入休息状态。',
+        score: 16,
+      );
+    }
+    if (lux <= 50) {
+      return const _ProbeGrade(
+        label: '适中',
+        valueLabel: '适中',
+        detail: '当前照度较柔和，睡前可以继续保持。',
+        score: 28,
+      );
+    }
+    if (lux <= 150) {
+      return const _ProbeGrade(
+        label: '偏亮',
+        valueLabel: '偏亮',
+        detail: '当前照度偏亮，建议减少顶灯或正对眼睛的光线。',
+        score: 62,
+      );
+    }
+    return const _ProbeGrade(
+      label: '过亮',
+      valueLabel: '过亮',
+      detail: '当前照度较高，建议调暗灯光后再准备入睡。',
+      score: 84,
+    );
+  }
+
+  static _ProbeGrade _cameraLightGrade(double brightness) {
     if (brightness <= 45) {
       return const _ProbeGrade(
         label: '偏暗',
@@ -703,41 +789,41 @@ class InterferenceProbeController extends ChangeNotifier {
       _ => const _ProbeGrade(
         label: '待检测',
         valueLabel: '待检测',
-        detail: '点一下就能用前摄检测当前环境亮度。',
+        detail: '点一下会优先使用环境光传感器，不支持时再用前摄估算。',
         score: 28,
       ),
     };
   }
 
   static _ProbeGrade _phoneUsageGrade(int minutes) {
-    if (minutes <= 20) {
+    if (minutes <= 10) {
       return const _ProbeGrade(
         label: '很少',
         valueLabel: '很少',
-        detail: '最近 2 小时手机使用很少，屏幕刺激对今晚影响较低。',
+        detail: '最近 1 小时手机使用很少，屏幕刺激对今晚影响较低。',
         score: 14,
       );
     }
-    if (minutes <= 50) {
+    if (minutes <= 25) {
       return const _ProbeGrade(
         label: '适中',
         valueLabel: '适中',
-        detail: '最近 2 小时手机使用还算克制，再往下收一收会更稳一点。',
+        detail: '最近 1 小时手机使用还算克制，再往下收一收会更稳一点。',
         score: 34,
       );
     }
-    if (minutes <= 90) {
+    if (minutes <= 45) {
       return const _ProbeGrade(
         label: '偏多',
         valueLabel: '偏多',
-        detail: '最近 2 小时手机使用有点久，可能会拖慢睡意。',
+        detail: '最近 1 小时手机使用有点久，可能会拖慢睡意。',
         score: 62,
       );
     }
     return const _ProbeGrade(
       label: '过长',
       valueLabel: '过长',
-      detail: '屏幕使用时间偏长，先离开手机一会儿，会更容易慢下来。',
+      detail: '最近 1 小时大部分时间都在使用手机，建议先离开屏幕一会儿。',
       score: 86,
     );
   }
@@ -747,6 +833,19 @@ class InterferenceProbeController extends ChangeNotifier {
     _dormRepository.removeListener(_syncDormFallbacks);
     _snapshotStore?.removeListener(_hydrateFromSnapshot);
     super.dispose();
+  }
+}
+
+class AndroidLightSensorGateway {
+  const AndroidLightSensorGateway();
+
+  static const MethodChannel _channel = MethodChannel(
+    'com.dormsleep.app/environment_sensors',
+  );
+
+  Future<double?> readAmbientLightLux() async {
+    final num? lux = await _channel.invokeMethod<num>('readAmbientLightLux');
+    return lux?.toDouble();
   }
 }
 
@@ -766,9 +865,9 @@ class AndroidUsageStatsGateway {
     await _channel.invokeMethod<void>('openPermissionSettings');
   }
 
-  Future<int> readLastTwoHoursUsageMinutes() async {
+  Future<int> readLastHourUsageMinutes() async {
     final int? minutes = await _channel.invokeMethod<int>(
-      'getLastTwoHoursUsageMinutes',
+      'getLastHourUsageMinutes',
     );
     return minutes ?? 0;
   }
