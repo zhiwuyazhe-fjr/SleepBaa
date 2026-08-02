@@ -2160,6 +2160,59 @@ void main() {
     authRepository.dispose();
   });
 
+  test('cloudbase notification repository syncs all unread items', () async {
+    final List<_PostCall> calls = <_PostCall>[];
+    final _FakeCloudBaseAppApiClient appApiClient = _FakeCloudBaseAppApiClient(
+      onPost: (String path, Map<String, dynamic> body) async {
+        calls.add(_PostCall(path: path, body: body));
+        return <String, dynamic>{'ok': true};
+      },
+    );
+    final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+      appApiClient: appApiClient,
+    );
+    final InMemoryAuthRepository authRepository = InMemoryAuthRepository(
+      initialProfile: buildDefaultUserProfile().copyWith(uid: 'cloud-user'),
+    );
+    final CloudBaseNotificationRepository repository =
+        CloudBaseNotificationRepository(
+          authRepository: authRepository,
+          snapshotStore: snapshotStore,
+          appApiClient: appApiClient,
+        );
+
+    for (final String id in <String>['notif-1', 'notif-2']) {
+      await repository.upsertNotification(
+        NotificationItem(
+          id: id,
+          category: NotificationCategory.system,
+          title: 'Remote sync',
+          body: 'Batch read state',
+          createdAt: DateTime(2026, 4, 13, 12, 0),
+          route: '/notifications',
+          readAt: null,
+          ownerUid: 'cloud-user',
+        ),
+      );
+    }
+
+    await repository.markAllRead();
+
+    expect(repository.unreadNotifications(), isEmpty);
+    expect(calls, hasLength(2));
+    expect(
+      calls.map((_PostCall call) => call.body['notificationId']).toSet(),
+      <String>{'notif-1', 'notif-2'},
+    );
+    expect(
+      calls.every((_PostCall call) => call.path == '/api/notifications/read'),
+      isTrue,
+    );
+
+    repository.dispose();
+    authRepository.dispose();
+  });
+
   test(
     'cloudbase user settings keeps pending quick action state when refreshed snapshot omits it',
     () async {

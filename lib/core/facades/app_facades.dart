@@ -502,6 +502,10 @@ class NotificationFacade extends ChangeNotifier {
     return _notificationRepository.markRead(notificationId);
   }
 
+  Future<void> markAllRead() {
+    return _notificationRepository.markAllRead();
+  }
+
   @override
   void dispose() {
     _notificationRepository.removeListener(notifyListeners);

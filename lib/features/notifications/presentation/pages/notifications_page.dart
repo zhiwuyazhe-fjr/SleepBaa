@@ -11,10 +11,15 @@ import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
+import 'package:sleep_dorm_app/core/widgets/app_text_action.dart';
 import 'package:sleep_dorm_app/core/widgets/section_title.dart';
 
 class NotificationsPage extends StatelessWidget {
   const NotificationsPage({super.key});
+
+  static const ValueKey<String> markAllReadKey = ValueKey<String>(
+    'notifications-mark-all-read',
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +31,30 @@ class NotificationsPage extends StatelessWidget {
       appBar: AppDetailPageAppBar(
         title: '消息中心',
         onBack: () => Navigator.of(context).maybePop(),
+        trailing: ListenableBuilder(
+          listenable: services.notificationRepository,
+          builder: (BuildContext context, Widget? child) {
+            final int unreadCount = services.notificationRepository
+                .unreadNotifications()
+                .length;
+            return AppTextAction(
+              key: markAllReadKey,
+              label: '全部已读',
+              icon: Icons.done_all_rounded,
+              onPressed: unreadCount == 0
+                  ? null
+                  : () async {
+                      await services.notificationRepository.markAllRead();
+                      if (!context.mounted) {
+                        return;
+                      }
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('已清除 $unreadCount 条未读消息')),
+                      );
+                    },
+            );
+          },
+        ),
       ),
       body: ListenableBuilder(
         listenable: services.notificationRepository,
@@ -133,7 +162,9 @@ class _NotificationSection extends StatelessWidget {
                   vertical: AppSpacing.sm,
                 ),
                 borderRadius: AppRadius.compactCard,
-                color: item.isRead ? appColors.surface : appColors.surfaceRaised,
+                color: item.isRead
+                    ? appColors.surface
+                    : appColors.surfaceRaised,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[

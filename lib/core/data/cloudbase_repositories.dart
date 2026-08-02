@@ -3998,6 +3998,41 @@ class CloudBaseNotificationRepository extends ChangeNotifier
   }
 
   @override
+  Future<void> markAllRead() async {
+    final List<NotificationItem> unread = unreadNotifications();
+    if (unread.isEmpty) {
+      return;
+    }
+    final DateTime readAt = DateTime.now();
+    _notifications = _notifications
+        .map((NotificationItem item) {
+          return item.isRead ? item : item.copyWith(readAt: readAt);
+        })
+        .toList(growable: false);
+    notifyListeners();
+
+    if (!_appApiClient.isConfigured) {
+      return;
+    }
+    try {
+      await _authRepository.ensureAuthenticated();
+      await Future.wait(
+        unread.map((NotificationItem item) {
+          return _appApiClient.post(
+            '/api/notifications/read',
+            body: <String, dynamic>{
+              'notificationId': item.id,
+              'readAt': readAt.toIso8601String(),
+            },
+          );
+        }),
+      );
+    } catch (_) {
+      // Keep the local batch action responsive even if remote sync fails.
+    }
+  }
+
+  @override
   Future<void> upsertNotification(NotificationItem notification) async {
     final int index = _notifications.indexWhere((NotificationItem item) {
       return item.id == notification.id;

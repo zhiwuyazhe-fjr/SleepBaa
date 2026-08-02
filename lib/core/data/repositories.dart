@@ -174,6 +174,7 @@ abstract interface class NotificationRepository implements Listenable {
   List<NotificationItem> get notifications;
   List<NotificationItem> unreadNotifications();
   Future<void> markRead(String notificationId);
+  Future<void> markAllRead();
   Future<void> upsertNotification(NotificationItem notification);
 }
 

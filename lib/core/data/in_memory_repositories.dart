@@ -1735,6 +1735,24 @@ class InMemoryNotificationRepository extends ChangeNotifier
   }
 
   @override
+  Future<void> markAllRead() async {
+    final DateTime readAt = DateTime.now();
+    bool changed = false;
+    _notifications = _notifications
+        .map((NotificationItem item) {
+          if (item.isRead) {
+            return item;
+          }
+          changed = true;
+          return item.copyWith(readAt: readAt);
+        })
+        .toList(growable: false);
+    if (changed) {
+      notifyListeners();
+    }
+  }
+
+  @override
   List<NotificationItem> unreadNotifications() {
     return notifications
         .where((NotificationItem item) => !item.isRead)

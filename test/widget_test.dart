@@ -905,6 +905,27 @@ void main() {
     expect(label.style?.fontWeight, FontWeight.w700);
   });
 
+  testWidgets('shell pages switch with horizontal swipes', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+    );
+
+    final Finder swipeSurface = find.byKey(BottomNavShell.pageSwipeKey);
+    expect(find.byType(HomePreSleepPage), findsOneWidget);
+
+    await tester.drag(swipeSurface, const Offset(-220, 0));
+    await tester.pumpAndSettle();
+    expect(find.byType(DormPage), findsOneWidget);
+
+    await tester.drag(swipeSurface, const Offset(-220, 0));
+    await tester.pumpAndSettle();
+    expect(find.byType(ProfilePage), findsOneWidget);
+  });
+
   test('app typography exposes approved home font roles', () {
     final TextTheme textTheme = AppTextStyles.buildTextTheme();
 
@@ -5885,6 +5906,28 @@ void main() {
     );
 
     expect(find.byType(NotificationsPage), findsOneWidget);
+  });
+
+  testWidgets('notification center marks all unread items with one action', (
+    WidgetTester tester,
+  ) async {
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.notifications,
+      clock: _dayClock,
+    );
+
+    expect(find.textContaining('待处理消息'), findsOneWidget);
+
+    await tester.tap(find.byKey(NotificationsPage.markAllReadKey));
+    await tester.pumpAndSettle();
+
+    expect(find.text('消息都已处理'), findsOneWidget);
+    expect(find.textContaining('已清除'), findsOneWidget);
+    final AppTextAction action = tester.widget<AppTextAction>(
+      find.byKey(NotificationsPage.markAllReadKey),
+    );
+    expect(action.onPressed, isNull);
   });
 
   testWidgets('intervention task page uses home typography roles', (

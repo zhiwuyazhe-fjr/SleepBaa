@@ -718,4 +718,19 @@ void main() {
       expect(messages[messages.length - 2].role, AssistantMessageRole.user);
     },
   );
+
+  test('notification repository marks every unread item as read', () async {
+    final InMemoryNotificationRepository repository =
+        InMemoryNotificationRepository();
+
+    expect(repository.unreadNotifications(), isNotEmpty);
+
+    await repository.markAllRead();
+
+    expect(repository.unreadNotifications(), isEmpty);
+    expect(
+      repository.notifications.every((NotificationItem item) => item.isRead),
+      isTrue,
+    );
+  });
 }

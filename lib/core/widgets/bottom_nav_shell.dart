@@ -15,6 +15,9 @@ class BottomNavShell extends StatefulWidget {
   static const ValueKey<String> navBarKey = ValueKey<String>(
     'bottom-nav-shell',
   );
+  static const ValueKey<String> pageSwipeKey = ValueKey<String>(
+    'bottom-nav-page-swipe',
+  );
 
   final StatefulNavigationShell navigationShell;
 
@@ -23,7 +26,11 @@ class BottomNavShell extends StatefulWidget {
 }
 
 class _BottomNavShellState extends State<BottomNavShell> {
+  static const double _minimumSwipeVelocity = 650;
+  static const double _minimumSwipeDistance = 56;
+
   int? _lastSyncedIndex;
+  double _horizontalDragDistance = 0;
 
   @override
   void didChangeDependencies() {
@@ -53,6 +60,42 @@ class _BottomNavShellState extends State<BottomNavShell> {
     });
   }
 
+  void _handleHorizontalDragStart(DragStartDetails details) {
+    _horizontalDragDistance = 0;
+  }
+
+  void _handleHorizontalDragUpdate(DragUpdateDetails details) {
+    _horizontalDragDistance += details.primaryDelta ?? 0;
+  }
+
+  void _handleHorizontalDragCancel() {
+    _horizontalDragDistance = 0;
+  }
+
+  void _handleHorizontalDragEnd(DragEndDetails details) {
+    final double velocity = details.primaryVelocity ?? 0;
+    final bool crossedDistance =
+        _horizontalDragDistance.abs() >= _minimumSwipeDistance;
+    final bool crossedVelocity = velocity.abs() >= _minimumSwipeVelocity;
+    if (!crossedDistance && !crossedVelocity) {
+      _horizontalDragDistance = 0;
+      return;
+    }
+
+    final double direction = _horizontalDragDistance.abs() >= 12
+        ? _horizontalDragDistance
+        : velocity;
+    final int targetIndex =
+        widget.navigationShell.currentIndex + (direction < 0 ? 1 : -1);
+    _horizontalDragDistance = 0;
+    if (targetIndex < 0 || targetIndex >= _items.length) {
+      return;
+    }
+
+    AppHaptics.selection();
+    widget.navigationShell.goBranch(targetIndex);
+  }
+
   @override
   Widget build(BuildContext context) {
     _scheduleVisibilitySync();
@@ -80,7 +123,17 @@ class _BottomNavShellState extends State<BottomNavShell> {
           resizeToAvoidBottomInset: false,
           body: Stack(
             children: <Widget>[
-              Positioned.fill(child: widget.navigationShell),
+              Positioned.fill(
+                child: GestureDetector(
+                  key: BottomNavShell.pageSwipeKey,
+                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragStart: _handleHorizontalDragStart,
+                  onHorizontalDragUpdate: _handleHorizontalDragUpdate,
+                  onHorizontalDragEnd: _handleHorizontalDragEnd,
+                  onHorizontalDragCancel: _handleHorizontalDragCancel,
+                  child: widget.navigationShell,
+                ),
+              ),
               if (!hideShellChrome)
                 Positioned.fill(
                   child: SafeArea(
