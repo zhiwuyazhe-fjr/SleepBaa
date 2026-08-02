@@ -310,7 +310,6 @@ class _AppScopeState extends State<AppScope> with WidgetsBindingObserver {
         environment: widget.environment,
         authClient: authClient,
         appApiClient: appApiClient,
-        sessionStore: sessionStore,
         snapshotStore: snapshotStore,
       );
       _settingsRepository = CloudBaseUserSettingsRepository(

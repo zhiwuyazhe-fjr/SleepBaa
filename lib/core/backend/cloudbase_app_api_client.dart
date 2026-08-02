@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_auth_client.dart';
+import 'package:sleep_dorm_app/core/backend/cloudbase_session_coordinator.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_session_store.dart';
 
 class CloudBaseAppApiException implements Exception {
@@ -39,17 +40,22 @@ class CloudBaseAppApiClient {
     required AppEnvironment environment,
     required CloudBaseSessionStore sessionStore,
     required CloudBaseAuthClient authClient,
+    CloudBaseSessionCoordinator? sessionCoordinator,
     http.Client? httpClient,
   }) : _environment = environment,
-       _sessionStore = sessionStore,
-       _authClient = authClient,
+       _sessionCoordinator =
+           sessionCoordinator ??
+           CloudBaseSessionCoordinator(
+             sessionStore: sessionStore,
+             authClient: authClient,
+           ),
        _httpClient = httpClient ?? http.Client();
 
   final AppEnvironment _environment;
-  final CloudBaseSessionStore _sessionStore;
-  final CloudBaseAuthClient _authClient;
+  final CloudBaseSessionCoordinator _sessionCoordinator;
   final http.Client _httpClient;
-  Future<CloudBaseSession>? _sessionRefreshInFlight;
+
+  CloudBaseSessionCoordinator get sessionCoordinator => _sessionCoordinator;
 
   bool get isConfigured => _environment.hasCloudBaseAppApi;
 
@@ -61,7 +67,7 @@ class CloudBaseAppApiClient {
     CloudBaseSession existing, {
     bool force = false,
   }) {
-    return _refreshSession(existing, force: force);
+    return _sessionCoordinator.refreshSession(existing, force: force);
   }
 
   Future<Map<String, dynamic>> post(
@@ -186,139 +192,29 @@ class CloudBaseAppApiClient {
         message: 'CloudBase app API base URL is missing.',
       );
     }
-    final CloudBaseSession? existing = await _sessionStore.readSession();
-    if (existing == null) {
+    try {
+      return await _sessionCoordinator.requireFreshSession();
+    } on CloudBaseSessionMissingException {
       throw const CloudBaseAppApiException(
         message: 'CloudBase session is missing. Authenticate first.',
       );
     }
-    if (!existing.isExpired) {
-      return existing;
-    }
-    return _refreshSession(existing);
   }
 
   Future<CloudBaseSession> _recoverUnauthorizedSession(
     CloudBaseSession requestSession,
   ) async {
-    final CloudBaseSession? latest = await _latestPersistedSession();
+    final CloudBaseSession? latest = await _sessionCoordinator.restoreSession();
     if (latest != null &&
         (latest.accessToken != requestSession.accessToken ||
             latest.refreshToken != requestSession.refreshToken) &&
         !latest.isExpired) {
       return latest;
     }
-    return _refreshSession(latest ?? requestSession, force: true);
-  }
-
-  Future<CloudBaseSession> _refreshSession(
-    CloudBaseSession existing, {
-    bool force = false,
-  }) async {
-    final Future<CloudBaseSession>? inFlight = _sessionRefreshInFlight;
-    if (inFlight != null) {
-      return inFlight;
-    }
-    final Future<CloudBaseSession> refreshFuture = Future<CloudBaseSession>(
-      () async {
-        final CloudBaseSession? latest = await _latestPersistedSession();
-        final CloudBaseSession candidate = latest ?? existing;
-        final bool sessionChanged =
-            candidate.accessToken != existing.accessToken ||
-            candidate.refreshToken != existing.refreshToken ||
-            candidate.subject != existing.subject;
-        if (sessionChanged && !candidate.isExpired) {
-          return candidate;
-        }
-        if (!force && !candidate.isExpired) {
-          return candidate;
-        }
-        return _performSessionRefresh(candidate);
-      },
+    return _sessionCoordinator.refreshSession(
+      latest ?? requestSession,
+      force: true,
     );
-    _sessionRefreshInFlight = refreshFuture;
-    try {
-      return await refreshFuture;
-    } finally {
-      if (identical(_sessionRefreshInFlight, refreshFuture)) {
-        _sessionRefreshInFlight = null;
-      }
-    }
-  }
-
-  Future<CloudBaseSession?> _latestPersistedSession() async {
-    final CloudBaseSession? persisted = await _sessionStore
-        .readPersistedSession();
-    return persisted ?? await _sessionStore.readSession();
-  }
-
-  Future<CloudBaseSession> _performSessionRefresh(
-    CloudBaseSession existing,
-  ) async {
-    late final CloudBaseAuthTokenResponse refreshed;
-    try {
-      refreshed = await _authClient.refreshAccessToken(
-        refreshToken: existing.refreshToken,
-        deviceId: existing.deviceId,
-      );
-    } on CloudBaseAuthException catch (error) {
-      if (_isRefreshTokenRejected(error)) {
-        final CloudBaseSession? recovered = await _waitForConcurrentRefresh(
-          existing,
-        );
-        if (recovered != null) {
-          return recovered;
-        }
-      }
-      rethrow;
-    }
-    final String refreshedAccessToken = refreshed.accessToken.trim();
-    if (refreshedAccessToken.isEmpty) {
-      throw const CloudBaseAuthException(
-        message: 'CloudBase refresh response did not include an access token.',
-      );
-    }
-    final int refreshedExpiresIn = refreshed.expiresIn > 0
-        ? refreshed.expiresIn
-        : 7200;
-    final CloudBaseSession next = existing.copyWith(
-      accessToken: refreshedAccessToken,
-      refreshToken: refreshed.refreshToken.trim().isEmpty
-          ? existing.refreshToken
-          : refreshed.refreshToken.trim(),
-      subject: refreshed.subject.trim().isEmpty
-          ? existing.subject
-          : refreshed.subject.trim(),
-      scope: refreshed.scope ?? existing.scope,
-      tokenType: refreshed.tokenType.trim().isEmpty
-          ? existing.tokenType
-          : refreshed.tokenType,
-      expiresAt: DateTime.now().add(Duration(seconds: refreshedExpiresIn)),
-    );
-    await _sessionStore.writeSession(next);
-    return next;
-  }
-
-  Future<CloudBaseSession?> _waitForConcurrentRefresh(
-    CloudBaseSession failedSession,
-  ) async {
-    for (final Duration delay in const <Duration>[
-      Duration(milliseconds: 50),
-      Duration(milliseconds: 150),
-      Duration(milliseconds: 350),
-      Duration(milliseconds: 800),
-    ]) {
-      await Future<void>.delayed(delay);
-      final CloudBaseSession? latest = await _sessionStore
-          .readPersistedSession();
-      if (latest != null &&
-          (latest.accessToken != failedSession.accessToken ||
-              latest.refreshToken != failedSession.refreshToken) &&
-          !latest.isExpired) {
-        return latest;
-      }
-    }
-    return null;
   }
 
   Uri _uri(String path) {
@@ -413,23 +309,6 @@ bool _isRefreshableAuthFailure(int statusCode, Map<String, dynamic> payload) {
       details.contains('unauthenticated') ||
       details.contains('invalid token') ||
       details.contains('token expired');
-}
-
-bool _isRefreshTokenRejected(CloudBaseAuthException error) {
-  final String details = <String>[
-    error.code ?? '',
-    error.message,
-    error.body?['code']?.toString() ?? '',
-    error.body?['message']?.toString() ?? '',
-    error.body?['error']?.toString() ?? '',
-    error.body?['error_description']?.toString() ?? '',
-  ].join(' ').toLowerCase();
-  return details.contains('invalid_grant') ||
-      details.contains('token hash not match') ||
-      details.contains('invalid refresh token') ||
-      details.contains('refresh token expired') ||
-      details.contains('refresh_token_expired') ||
-      details.contains('token_revoked');
 }
 
 String _stripLeadingSlash(String value) {

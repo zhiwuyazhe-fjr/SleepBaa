@@ -1527,7 +1527,6 @@ void main() {
         environment: _testCloudBaseEnvironment,
         authClient: CloudBaseAuthClient(environment: _testCloudBaseEnvironment),
         appApiClient: appApiClient,
-        sessionStore: _FakeSessionStore(),
         snapshotStore: snapshotStore,
       );
       final CloudBaseDormRepository dormRepository = CloudBaseDormRepository(

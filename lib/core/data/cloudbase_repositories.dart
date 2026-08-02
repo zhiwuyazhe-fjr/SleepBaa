@@ -7,6 +7,7 @@ import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_app_api_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_auth_profile_cache_store.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_auth_client.dart';
+import 'package:sleep_dorm_app/core/backend/cloudbase_session_coordinator.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_session_store.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_snapshot_store.dart';
 import 'package:sleep_dorm_app/core/backend/user_settings_cache_store.dart';
@@ -930,14 +931,13 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     required AppEnvironment environment,
     required CloudBaseAuthClient authClient,
     required CloudBaseAppApiClient appApiClient,
-    required CloudBaseSessionStore sessionStore,
     required CloudBaseSnapshotStore snapshotStore,
     VerifiedPhoneIdentityStore? verifiedPhoneStore,
     CloudBaseAuthProfileCacheStore? authProfileCacheStore,
   }) : _environment = environment,
        _authClient = authClient,
        _appApiClient = appApiClient,
-       _sessionStore = sessionStore,
+       _sessionCoordinator = appApiClient.sessionCoordinator,
        _snapshotStore = snapshotStore,
        _verifiedPhoneStore = verifiedPhoneStore ?? VerifiedPhoneIdentityStore(),
        _authProfileCacheStore =
@@ -949,7 +949,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   final AppEnvironment _environment;
   final CloudBaseAuthClient _authClient;
   final CloudBaseAppApiClient _appApiClient;
-  final CloudBaseSessionStore _sessionStore;
+  final CloudBaseSessionCoordinator _sessionCoordinator;
   final CloudBaseSnapshotStore _snapshotStore;
   final VerifiedPhoneIdentityStore _verifiedPhoneStore;
   final CloudBaseAuthProfileCacheStore _authProfileCacheStore;
@@ -1017,6 +1017,19 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     _cachedAuthProfile = await _authProfileCacheStore.read();
   }
 
+  VerifiedPhoneIdentity? _identityFromCachedProfile() {
+    final UserProfile? profile = _cachedAuthProfile;
+    final String phone = profile?.phoneNumber?.trim() ?? '';
+    if (profile == null || profile.uid.trim().isEmpty || phone.isEmpty) {
+      return null;
+    }
+    return VerifiedPhoneIdentity(
+      subject: profile.uid,
+      phoneNumber: phone,
+      phoneLinkedAt: profile.phoneLinkedAt,
+    );
+  }
+
   UserProfile _seedCloudBaseProfile({
     required String uid,
     String? phoneNumber,
@@ -1067,47 +1080,6 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     await _authProfileCacheStore.clear();
   }
 
-  Future<UserProfile> _handleInvalidSession({String? message}) {
-    return _clearSessionAndReset(
-      message: message ?? '登录状态已失效，请重新使用手机号登录。',
-      clearVerifiedPhoneIdentity: true,
-      clearCachedAuthProfile: true,
-    );
-  }
-
-  Future<CloudBaseSession?> _recoverLatestSessionAfterInvalidRefresh(
-    CloudBaseSession failedSession, {
-    required String fallbackDeviceId,
-  }) async {
-    final CloudBaseSession? latest =
-        await _sessionStore.readPersistedSession() ??
-        await _sessionStore.readSession();
-    if (latest == null) {
-      return null;
-    }
-    final CloudBaseSession candidate = latest.copyWith(
-      deviceId: latest.deviceId.trim().isEmpty
-          ? fallbackDeviceId
-          : latest.deviceId,
-    );
-    if (candidate.accessToken != failedSession.accessToken &&
-        !candidate.isExpired) {
-      return candidate;
-    }
-    if (candidate.refreshToken == failedSession.refreshToken ||
-        candidate.refreshToken.trim().isEmpty) {
-      return null;
-    }
-    try {
-      return await _appApiClient.refreshSession(candidate, force: true);
-    } on CloudBaseAuthException catch (error) {
-      if (_isSessionInvalidError(error)) {
-        return null;
-      }
-      rethrow;
-    }
-  }
-
   @override
   bool get isAuthenticating => _isAuthenticating;
 
@@ -1130,28 +1102,15 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     );
   }
 
-  Future<UserProfile> _clearSessionAndReset({
-    String? message,
-    bool clearAll = false,
-    bool clearVerifiedPhoneIdentity = false,
-    bool clearCachedAuthProfile = false,
-  }) async {
-    if (clearVerifiedPhoneIdentity) {
-      await _verifiedPhoneStore.clear();
-      _cachedVerifiedIdentity = null;
-    }
-    if (clearCachedAuthProfile) {
-      await _clearAuthProfileCache();
-    }
-    if (clearAll) {
-      await _sessionStore.clearAll();
-    } else {
-      await _sessionStore.clearSession();
-    }
+  Future<UserProfile> _signOutAndReset() async {
+    await _verifiedPhoneStore.clear();
+    _cachedVerifiedIdentity = null;
+    await _clearAuthProfileCache();
+    await _sessionCoordinator.signOut();
     _snapshotStore.clear();
     _currentUser = _signedOutProfile();
     _currentUserRestoredFromAuthProfileCache = false;
-    _lastAuthError = message;
+    _lastAuthError = null;
     _lastSuccessfulAuthAt = null;
     return _currentUser;
   }
@@ -1169,7 +1128,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     }
   }
 
-  Future<void> _persistVerifiedPhoneIdentityIfNeeded() async {
+  Future<void> _persistVerifiedPhoneIdentityLocally() async {
     if (_currentUser.uid.isEmpty ||
         _currentUser.phoneNumber?.trim().isEmpty == true) {
       return;
@@ -1181,8 +1140,11 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     );
     await _verifiedPhoneStore.write(identity);
     _cachedVerifiedIdentity = identity;
+  }
 
-    if (!_appApiClient.isConfigured) {
+  Future<void> _persistVerifiedPhoneIdentityIfNeeded() async {
+    await _persistVerifiedPhoneIdentityLocally();
+    if (_cachedVerifiedIdentity == null || !_appApiClient.isConfigured) {
       return;
     }
     try {
@@ -1240,101 +1202,78 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     if (!forceRefresh && _canReuseCachedAuthState()) {
       return _currentUser;
     }
+
     _isAuthenticating = true;
     _lastAuthError = null;
     notifyListeners();
-    CloudBaseSession? readSession;
     try {
       if (!_environment.hasCloudBaseAuthConfig) {
         _lastAuthError =
-            'CloudBase \u9274\u6743\u914d\u7f6e\u4e0d\u5b8c\u6574\uff0c\u5f53\u524d\u65e0\u6cd5\u6062\u590d\u767b\u5f55\u72b6\u6001\u3002';
+            'CloudBase authentication is not configured. The local account remains signed in.';
         return _currentUser;
       }
+
       _cachedVerifiedIdentity = await _verifiedPhoneStore.read();
       await _loadCachedAuthProfile();
-      final String restoredDeviceId = await _sessionStore.ensureDeviceId();
-      readSession = await _sessionStore.readSession();
-      if (readSession == null) {
-        if (_cachedVerifiedIdentity != null) {
-          final VerifiedPhoneIdentity v = _cachedVerifiedIdentity!;
-          _currentUser = _seedCloudBaseProfile(
-            uid: v.subject,
-            phoneNumber: v.phoneNumber,
-            phoneLinkedAt: v.phoneLinkedAt ?? DateTime.now(),
-          );
-          _lastAuthError = _transientAuthWarningMessage();
-          _lastSuccessfulAuthAt = DateTime.now();
-          return _currentUser;
-        }
-        return _clearSessionAndReset();
+      _cachedVerifiedIdentity ??= _identityFromCachedProfile();
+      if (_cachedVerifiedIdentity != null) {
+        await _verifiedPhoneStore.write(_cachedVerifiedIdentity!);
       }
-      CloudBaseSession restoredSession = readSession;
-      bool tokenRefreshFailed = false;
-      final VerifiedPhoneIdentity? matchingVerifiedIdentity =
-          _cachedVerifiedIdentity != null &&
-              _cachedVerifiedIdentity!.subject == restoredSession.subject
-          ? _cachedVerifiedIdentity
-          : null;
-      if (_currentUser.uid != restoredSession.subject) {
+
+      final CloudBaseSession? storedSession = await _sessionCoordinator
+          .restoreSession();
+      final String principalSubject =
+          _cachedVerifiedIdentity?.subject ??
+          _cachedAuthProfile?.uid ??
+          storedSession?.subject ??
+          '';
+      if (principalSubject.isEmpty) {
+        _currentUser = _signedOutProfile();
+        return _currentUser;
+      }
+
+      final VerifiedPhoneIdentity? identity = _cachedVerifiedIdentity;
+      if (_currentUser.uid != principalSubject) {
         _currentUser = _seedCloudBaseProfile(
-          uid: restoredSession.subject,
-          phoneNumber: matchingVerifiedIdentity?.phoneNumber,
-          phoneLinkedAt: matchingVerifiedIdentity?.phoneLinkedAt,
+          uid: principalSubject,
+          phoneNumber: identity?.subject == principalSubject
+              ? identity?.phoneNumber
+              : _cachedAuthProfile?.phoneNumber,
+          phoneLinkedAt: identity?.subject == principalSubject
+              ? identity?.phoneLinkedAt
+              : _cachedAuthProfile?.phoneLinkedAt,
         );
-      } else {
-        _mergePhoneFromCachedVerifiedIdentity();
       }
-      final bool canRefreshSession =
-          _environment.cloudbasePublishableKey?.isNotEmpty == true;
-      if (restoredSession.isExpired && canRefreshSession) {
-        try {
-          restoredSession = await _appApiClient.refreshSession(
-            restoredSession.copyWith(deviceId: restoredDeviceId),
-          );
-        } on CloudBaseAuthException catch (error) {
-          if (_isSessionInvalidError(error)) {
-            final CloudBaseSession? recoveredSession =
-                await _recoverLatestSessionAfterInvalidRefresh(
-                  restoredSession.copyWith(deviceId: restoredDeviceId),
-                  fallbackDeviceId: restoredDeviceId,
-                );
-            if (recoveredSession == null) {
-              return _handleInvalidSession(
-                message:
-                    '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
-              );
-            }
-            restoredSession = recoveredSession;
-          }
-          if (restoredSession.isExpired) {
-            tokenRefreshFailed = true;
-            _lastAuthError = _transientAuthWarningMessage();
-          }
-        } catch (_) {
-          tokenRefreshFailed = true;
-          _lastAuthError = _transientAuthWarningMessage();
-        }
-      } else if (restoredSession.isExpired) {
-        tokenRefreshFailed = true;
+      _mergePhoneFromCachedVerifiedIdentity();
+      _lastSuccessfulAuthAt = DateTime.now();
+
+      if (storedSession == null || storedSession.subject != principalSubject) {
+        _lastAuthError = _transientAuthWarningMessage();
+        return _currentUser;
+      }
+
+      CloudBaseSession activeSession = storedSession;
+      bool tokenAvailable = true;
+      try {
+        activeSession = await _sessionCoordinator.requireFreshSession();
+      } catch (_) {
+        // Transport credentials are replaceable. Their failure must never
+        // delete or sign out the durable account principal.
+        tokenAvailable = false;
         _lastAuthError = _transientAuthWarningMessage();
       }
-      // Hydrate _currentUser from the stored session so the auth gate can
-      // recognise a returning user and avoid forcing re-login on cold start.
-      // When refresh already failed, avoid probing /user/me with an expired
-      // token; the session subject is enough for a local fallback profile.
+
+      if (!tokenAvailable) {
+        return _currentUser;
+      }
+
       final CloudBaseUserInfo? restoredInfo =
-          !tokenRefreshFailed &&
-              (_currentUser.uid.isEmpty ||
-                  !_phoneIdentityResolvableFromLocalProfile())
-          ? await _readCurrentCloudBaseUser(restoredSession)
+          !_phoneIdentityResolvableFromLocalProfile()
+          ? await _readCurrentCloudBaseUser(activeSession)
           : null;
       if (restoredInfo != null) {
-        final bool reusingKnownPhone =
-            restoredInfo.phoneNumber?.trim().isNotEmpty == true &&
-            _currentUser.phoneNumber?.trim() ==
-                restoredInfo.phoneNumber!.trim();
         _currentUser = _currentUser.copyWith(
-          uid: restoredSession.subject,
+          uid: principalSubject,
           displayName: restoredInfo.name?.trim().isNotEmpty == true
               ? restoredInfo.name
               : _currentUser.displayName,
@@ -1342,82 +1281,35 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
               ? restoredInfo.phoneNumber
               : _currentUser.phoneNumber,
           phoneLinkedAt: restoredInfo.phoneNumber?.trim().isNotEmpty == true
-              ? (reusingKnownPhone
-                    ? _currentUser.phoneLinkedAt
-                    : DateTime.now())
+              ? (_currentUser.phoneLinkedAt ?? DateTime.now())
               : _currentUser.phoneLinkedAt,
           avatarUrl: restoredInfo.picture?.trim().isNotEmpty == true
               ? restoredInfo.picture
               : _currentUser.avatarUrl,
         );
-        unawaited(_persistCurrentUserToAuthProfileCache());
       }
       _mergePhoneFromCachedVerifiedIdentity();
-      if (tokenRefreshFailed) {
-        // We hydrated the user from the stored session but the token is
-        // stale.  Return now — do NOT attempt snapshot refresh with an
-        // expired token, but keep the user profile we restored.
-        return _currentUser;
-      }
-      bool snapshotRefreshed = false;
-      bool softSnapshotFailure = false;
+      await _persistVerifiedPhoneIdentityLocally();
+      await _persistCurrentUserToAuthProfileCache();
+
       if (_appApiClient.isConfigured) {
         try {
           await _snapshotStore.refresh();
-          // CloudBaseSnapshotStore swallows transport failures and stores
-          // them on lastError. Treat a populated lastError as a soft failure
-          // so we keep the login state and just surface a warning.
+          _syncFromSnapshot();
+          _mergePhoneFromCachedVerifiedIdentity();
+          await _persistVerifiedPhoneIdentityLocally();
+          await _persistCurrentUserToAuthProfileCache();
           if (_snapshotStore.lastError != null) {
-            softSnapshotFailure = true;
             _lastAuthError = _transientAuthWarningMessage();
           } else {
-            snapshotRefreshed = true;
+            _lastAuthError = null;
           }
         } catch (_) {
-          // Snapshot refresh failures must not invalidate the login state.
-          softSnapshotFailure = true;
           _lastAuthError = _transientAuthWarningMessage();
         }
-      } else {
-        snapshotRefreshed = true;
       }
-      _syncFromSnapshot();
-      final bool serverConfirmedMissingPhone =
-          snapshotRefreshed &&
-          restoredInfo != null &&
-          (restoredInfo.phoneNumber?.trim().isNotEmpty != true);
-      final bool persistedCoversServerGap =
-          _cachedVerifiedIdentity != null &&
-          _cachedVerifiedIdentity!.subject == restoredSession.subject &&
-          _cachedVerifiedIdentity!.phoneNumber.trim().isNotEmpty;
-      if (serverConfirmedMissingPhone &&
-          !hasVerifiedPhoneIdentity &&
-          !persistedCoversServerGap) {
-        return _clearSessionAndReset(
-          message:
-              '\u5f53\u524d\u767b\u5f55\u72b6\u6001\u7f3a\u5c11\u5df2\u9a8c\u8bc1\u624b\u673a\u53f7\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
-          clearVerifiedPhoneIdentity: true,
-          clearCachedAuthProfile: true,
-        );
-      }
-      if (hasVerifiedPhoneIdentity) {
-        _lastSuccessfulAuthAt = DateTime.now();
-        if (!softSnapshotFailure) {
-          _lastAuthError = null;
-        }
-      }
-      return _currentUser;
-    } on CloudBaseAuthException catch (error) {
-      if (_isSessionInvalidError(error)) {
-        return _handleInvalidSession(
-          message:
-              '\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u4f7f\u7528\u624b\u673a\u53f7\u767b\u5f55\u3002',
-        );
-      }
-      _lastAuthError = _transientAuthWarningMessage();
       return _currentUser;
     } catch (_) {
-      // Network / serialization blips must not wipe the persisted session.
       _lastAuthError = _transientAuthWarningMessage();
       return _currentUser;
     } finally {
@@ -1441,27 +1333,6 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     return DateTime.now().difference(lastSuccess) < _authRevalidationInterval;
   }
 
-  bool _isSessionInvalidError(CloudBaseAuthException error) {
-    final String details = <String>[
-      error.code ?? '',
-      error.message,
-      error.body?['code']?.toString() ?? '',
-      error.body?['message']?.toString() ?? '',
-      error.body?['error']?.toString() ?? '',
-      error.body?['error_description']?.toString() ?? '',
-    ].join(' ').toLowerCase();
-
-    // HTTP 401/403 alone is not proof that the refresh token is invalid. It
-    // can also mean a temporary gateway, permission, or publishable-key issue.
-    // Only a definitive refresh-token rejection may wipe the local session.
-    return details.contains('invalid_grant') ||
-        details.contains('token hash not match') ||
-        details.contains('invalid refresh token') ||
-        details.contains('refresh token expired') ||
-        details.contains('refresh_token_expired') ||
-        details.contains('token_revoked');
-  }
-
   String _transientAuthWarningMessage() {
     return '\u7f51\u7edc\u6ce2\u52a8\u5bfc\u81f4\u767b\u5f55\u72b6\u6001\u540c\u6b65\u5931\u8d25\uff0c\u5df2\u4fdd\u7559\u767b\u5f55\u72b6\u6001\uff0c\u7a0d\u540e\u4f1a\u81ea\u52a8\u91cd\u8bd5\u3002';
   }
@@ -1476,11 +1347,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
 
   @override
   Future<void> signOut() async {
-    await _clearSessionAndReset(
-      clearAll: false,
-      clearVerifiedPhoneIdentity: true,
-      clearCachedAuthProfile: true,
-    );
+    await _signOutAndReset();
     notifyListeners();
   }
 
@@ -1733,7 +1600,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
       phoneNumber,
     );
-    final String deviceId = await _sessionStore.ensureDeviceId();
+    final String deviceId = await _sessionCoordinator.ensureDeviceId();
     try {
       final CloudBasePhoneVerificationStart result = await _authClient
           .sendPhoneVerificationCode(
@@ -1790,7 +1657,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     required String code,
   }) async {
     _requireCloudBaseAuthConfig();
-    final String verifiedDeviceId = await _sessionStore.ensureDeviceId();
+    final String verifiedDeviceId = await _sessionCoordinator.ensureDeviceId();
     try {
       final CloudBasePhoneVerificationResult verificationResult =
           await _authClient.verifyPhoneCode(
@@ -1821,7 +1688,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     final String normalizedPhoneNumber = normalizeCloudBasePhoneNumber(
       phoneNumber,
     );
-    final String deviceId = await _sessionStore.ensureDeviceId();
+    final String deviceId = await _sessionCoordinator.ensureDeviceId();
     try {
       final CloudBaseAuthTokenResponse session = await _authClient
           .signInWithPassword(
@@ -1864,7 +1731,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     final String requestedPhoneNumber = normalizeCloudBasePhoneNumber(
       phoneNumber,
     );
-    final String verifiedDeviceId = await _sessionStore.ensureDeviceId();
+    final String verifiedDeviceId = await _sessionCoordinator.ensureDeviceId();
     try {
       final CloudBasePhoneVerificationResult verificationResult =
           await _authClient.verifyPhoneCode(
@@ -1910,7 +1777,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     final String requestedPhoneNumber = normalizeCloudBasePhoneNumber(
       phoneNumber,
     );
-    final String verifiedDeviceId = await _sessionStore.ensureDeviceId();
+    final String verifiedDeviceId = await _sessionCoordinator.ensureDeviceId();
     try {
       final CloudBasePhoneVerificationResult verificationResult =
           await _authClient.verifyPhoneCode(
@@ -1971,7 +1838,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     final String requestedPhoneNumber = normalizeCloudBasePhoneNumber(
       phoneNumber,
     );
-    final String verifiedDeviceId = await _sessionStore.ensureDeviceId();
+    final String verifiedDeviceId = await _sessionCoordinator.ensureDeviceId();
     try {
       await _authClient.resetPasswordWithVerificationToken(
         phoneNumber: requestedPhoneNumber,
@@ -2027,7 +1894,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   @override
   Future<AuthCaptchaChallenge> createCaptchaChallenge() async {
     _requireCloudBaseAuthConfig();
-    final String deviceId = await _sessionStore.ensureDeviceId();
+    final String deviceId = await _sessionCoordinator.ensureDeviceId();
     try {
       final CloudBaseCaptchaChallenge challenge = await _authClient
           .createCaptchaChallenge(deviceId: deviceId);
@@ -2057,7 +1924,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     required String code,
   }) async {
     _requireCloudBaseAuthConfig();
-    final String deviceId = await _sessionStore.ensureDeviceId();
+    final String deviceId = await _sessionCoordinator.ensureDeviceId();
     try {
       final String captchaToken = await _authClient.verifyCaptchaChallenge(
         token: token,
@@ -2109,7 +1976,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     required String deviceId,
     required String requestedPhoneNumber,
   }) async {
-    await _sessionStore.writeSession(
+    await _sessionCoordinator.installSession(
       CloudBaseSession(
         accessToken: session.accessToken,
         refreshToken: session.refreshToken,
@@ -2155,18 +2022,6 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     await _persistCurrentUserToAuthProfileCache();
     await _safeRefreshSnapshot();
     _syncFromSnapshot();
-    if (!hasVerifiedPhoneIdentity) {
-      await _clearSessionAndReset(
-        message:
-            '\u624b\u673a\u53f7\u540c\u6b65\u5931\u8d25\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55\u3002',
-        clearVerifiedPhoneIdentity: true,
-        clearCachedAuthProfile: true,
-      );
-      notifyListeners();
-      throw const AuthFlowException(
-        '\u624b\u673a\u53f7\u540c\u6b65\u5931\u8d25\uff0c\u8bf7\u91cd\u65b0\u767b\u5f55\u3002',
-      );
-    }
   }
 
   Future<void> _safeRefreshSnapshot() async {

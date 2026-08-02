@@ -182,7 +182,7 @@ void main() {
   );
 
   test(
-    'ensureAuthenticated clears session and returns to phone login when refresh is rejected with 401',
+    'ensureAuthenticated keeps durable account when refresh token is rejected',
     () async {
       final _FakeSessionStore sessionStore = _FakeSessionStore();
       sessionStore._session = CloudBaseSession(
@@ -248,7 +248,6 @@ void main() {
         environment: environment,
         authClient: authClient,
         appApiClient: appApiClient,
-        sessionStore: sessionStore,
         snapshotStore: snapshotStore,
         verifiedPhoneStore: verifiedStore,
         authProfileCacheStore: authProfileCacheStore,
@@ -256,14 +255,13 @@ void main() {
 
       await repository.ensureAuthenticated();
 
-      expect(repository.hasVerifiedPhoneIdentity, isFalse);
-      expect(repository.isAuthenticated, isFalse);
-      expect(repository.currentUser.uid, isEmpty);
-      expect(repository.currentUser.displayName, isNot('Paul'));
-      expect(sessionStore._session, isNull);
-      expect(await verifiedStore.read(), isNull);
-      expect(await authProfileCacheStore.read(), isNull);
-      expect(repository.lastAuthError, contains('登录状态已失效'));
+      expect(repository.hasVerifiedPhoneIdentity, isTrue);
+      expect(repository.isAuthenticated, isTrue);
+      expect(repository.currentUser.uid, 'tester');
+      expect(sessionStore._session, isNotNull);
+      expect(await verifiedStore.read(), isNotNull);
+      expect(await authProfileCacheStore.read(), isNotNull);
+      expect(repository.lastAuthError, contains('网络波动'));
     },
   );
 
@@ -329,7 +327,6 @@ void main() {
       environment: environment,
       authClient: authClient,
       appApiClient: appApiClient,
-      sessionStore: sessionStore,
       snapshotStore: snapshotStore,
       verifiedPhoneStore: verifiedStore,
       authProfileCacheStore: authProfileCacheStore,
@@ -445,7 +442,6 @@ void main() {
         environment: environment,
         authClient: authClient,
         appApiClient: appApiClient,
-        sessionStore: sessionStore,
         snapshotStore: snapshotStore,
         verifiedPhoneStore: verifiedStore,
         authProfileCacheStore: authProfileCacheStore,
@@ -466,15 +462,12 @@ void main() {
   );
 
   test(
-    'ensureAuthenticated restores cached real profile when session is missing',
+    'ensureAuthenticated restores durable profile when token and secure identity are missing',
     () async {
       final _FakeSessionStore sessionStore = _FakeSessionStore();
       sessionStore._session = null;
       final _MemoryVerifiedPhoneStore verifiedStore = _MemoryVerifiedPhoneStore(
-        VerifiedPhoneIdentity(
-          subject: 'returning-user',
-          phoneNumber: '+86 13900139000',
-        ),
+        null,
       );
       final _MemoryAuthProfileCacheStore authProfileCacheStore =
           _MemoryAuthProfileCacheStore(
@@ -517,7 +510,6 @@ void main() {
         environment: environment,
         authClient: authClient,
         appApiClient: appApiClient,
-        sessionStore: sessionStore,
         snapshotStore: snapshotStore,
         verifiedPhoneStore: verifiedStore,
         authProfileCacheStore: authProfileCacheStore,
@@ -606,7 +598,6 @@ void main() {
         environment: environment,
         authClient: authClient,
         appApiClient: appApiClient,
-        sessionStore: sessionStore,
         snapshotStore: snapshotStore,
         verifiedPhoneStore: verifiedStore,
         authProfileCacheStore: authProfileCacheStore,
@@ -727,7 +718,6 @@ void main() {
         environment: environment,
         authClient: authClient,
         appApiClient: appApiClient,
-        sessionStore: sessionStore,
         snapshotStore: snapshotStore,
         verifiedPhoneStore: verifiedStore,
         authProfileCacheStore: authProfileCacheStore,
@@ -1318,7 +1308,6 @@ _AuthHarness _buildHarness(http.Client httpClient) {
       environment: environment,
       authClient: authClient,
       appApiClient: appApiClient,
-      sessionStore: sessionStore,
       snapshotStore: snapshotStore,
     ),
     snapshotStore: snapshotStore,
