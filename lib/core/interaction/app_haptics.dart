@@ -20,8 +20,16 @@ class AppHaptics {
     'com.dormsleep.app/haptics',
   );
 
+  static bool _enabled = true;
+
+  static bool get enabled => _enabled;
+
+  static void configure({required bool enabled}) {
+    _enabled = enabled;
+  }
+
   static Future<void> trigger(AppHapticRole role) async {
-    if (kIsWeb) {
+    if (kIsWeb || !_enabled) {
       return;
     }
     try {

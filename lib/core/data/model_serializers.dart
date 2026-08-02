@@ -58,6 +58,7 @@ abstract final class ModelSerializers {
         settings.homeQuickActionIds,
       ),
       'showHomeQuickActions': settings.showHomeQuickActions,
+      'hapticFeedbackEnabled': settings.hapticFeedbackEnabled,
       'themeMode': settings.themeMode.name,
       'assistantReplyMotionLevel': settings.assistantReplyMotionLevel.name,
       'selectedNightMood': settings.selectedNightMood?.name,
@@ -85,7 +86,8 @@ abstract final class ModelSerializers {
       homeQuickActionIds: normalizeHomeQuickActionIds(
         _stringListFromDynamic(map['homeQuickActionIds']),
       ),
-      showHomeQuickActions: map['showHomeQuickActions'] as bool? ?? false,
+      showHomeQuickActions: map['showHomeQuickActions'] as bool? ?? true,
+      hapticFeedbackEnabled: map['hapticFeedbackEnabled'] as bool? ?? true,
       themeMode:
           _appThemeModeFromName(map['themeMode'] as String?) ??
           AppThemeMode.system,

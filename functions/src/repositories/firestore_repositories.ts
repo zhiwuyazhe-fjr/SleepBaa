@@ -454,6 +454,8 @@ function defaultUserSettings(): JsonMap {
     smartSuggestionsEnabled: true,
     selectedNightMood: null,
     homeQuickActionIds: [...DEFAULT_HOME_QUICK_ACTION_IDS],
+    showHomeQuickActions: true,
+    hapticFeedbackEnabled: true,
     updatedAt: nowIso(),
   };
 }
@@ -3437,6 +3439,16 @@ export class FirestoreRepository implements AssistantDataRepository {
         sourceSettings.homeQuickActionIds,
         defaultSettings.homeQuickActionIds,
       ),
+      showHomeQuickActions: this.preferBoolean(
+        canonicalSettings.showHomeQuickActions,
+        sourceSettings.showHomeQuickActions,
+        defaultSettings.showHomeQuickActions,
+      ),
+      hapticFeedbackEnabled: this.preferBoolean(
+        canonicalSettings.hapticFeedbackEnabled,
+        sourceSettings.hapticFeedbackEnabled,
+        defaultSettings.hapticFeedbackEnabled,
+      ),
       updatedAt: migratedAt,
     });
 
@@ -4058,6 +4070,8 @@ export class FirestoreRepository implements AssistantDataRepository {
       smartSuggestionsEnabled: asBoolean(doc.smartSuggestionsEnabled, true),
       selectedNightMood: asString(doc.selectedNightMood),
       homeQuickActionIds: normalizeHomeQuickActionIds(doc.homeQuickActionIds),
+      showHomeQuickActions: asBoolean(doc.showHomeQuickActions, true),
+      hapticFeedbackEnabled: asBoolean(doc.hapticFeedbackEnabled, true),
       bedtimeReminderEnabled: asBoolean(doc.bedtimeReminderEnabled, true),
       morningReminderEnabled: asBoolean(doc.morningReminderEnabled, true),
       dormAlertsEnabled: asBoolean(doc.dormAlertsEnabled, true),

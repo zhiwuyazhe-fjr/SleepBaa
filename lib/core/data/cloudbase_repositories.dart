@@ -2656,6 +2656,7 @@ class CloudBaseUserSettingsRepository extends ChangeNotifier
         first.smartSuggestionsEnabled == second.smartSuggestionsEnabled &&
         _sameStringList(first.homeQuickActionIds, second.homeQuickActionIds) &&
         first.showHomeQuickActions == second.showHomeQuickActions &&
+        first.hapticFeedbackEnabled == second.hapticFeedbackEnabled &&
         first.themeMode == second.themeMode &&
         first.assistantReplyMotionLevel == second.assistantReplyMotionLevel &&
         first.selectedNightMood == second.selectedNightMood &&

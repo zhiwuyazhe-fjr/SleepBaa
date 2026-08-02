@@ -10,6 +10,7 @@ import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
+import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
 import 'package:sleep_dorm_app/core/state/evening_welcome_local_store.dart';
 import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
@@ -69,6 +70,7 @@ class _SleepDormAppState extends State<SleepDormApp> {
             builder: (BuildContext context, Widget? child) {
               final UserSettings settings =
                   services.settingsRepository.currentSettings;
+              AppHaptics.configure(enabled: settings.hapticFeedbackEnabled);
               final NightMood? effectiveMood = services.nightWelcomeController
                   .effectiveMood(settings.selectedNightMood);
               return _RoutedSleepDormApp(
@@ -99,13 +101,13 @@ class _SleepDormAppState extends State<SleepDormApp> {
           seedColor: appColors.accent,
           brightness: brightness,
         ).copyWith(
-      primary: appColors.accent,
-      onPrimary: appColors.textOnAccent,
-      secondary: appColors.accentSoft,
-      surface: appColors.surface,
-      onSurface: appColors.textPrimary,
-      outline: appColors.borderSubtle,
-    );
+          primary: appColors.accent,
+          onPrimary: appColors.textOnAccent,
+          secondary: appColors.accentSoft,
+          surface: appColors.surface,
+          onSurface: appColors.textPrimary,
+          outline: appColors.borderSubtle,
+        );
 
     return ThemeData(
       useMaterial3: true,

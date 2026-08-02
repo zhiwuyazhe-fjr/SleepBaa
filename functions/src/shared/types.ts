@@ -1,8 +1,5 @@
 export type SleepPhase =
-  | "home_pre_sleep"
-  | "sleep_mode"
-  | "morning_feedback"
-  | "assistant";
+  "home_pre_sleep" | "sleep_mode" | "morning_feedback" | "assistant";
 
 export type AssistantIntent =
   | "general_support"
@@ -14,9 +11,7 @@ export type AssistantIntent =
 
 export type AssistantRunStatus = "success" | "fallback" | "error";
 export type AssistantRunSourceMode =
-  | "remoteSuccess"
-  | "fallbackSuccess"
-  | "error";
+  "remoteSuccess" | "fallbackSuccess" | "error";
 
 export type AssistantPromptMode =
   | "chat_reply"
@@ -62,6 +57,8 @@ export interface ContextUserSettings {
   smartSuggestionsEnabled: boolean;
   selectedNightMood?: string | null;
   homeQuickActionIds: string[];
+  showHomeQuickActions?: boolean;
+  hapticFeedbackEnabled?: boolean;
 }
 
 export interface ContextAssistantProfile {

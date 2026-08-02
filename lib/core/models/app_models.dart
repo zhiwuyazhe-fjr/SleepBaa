@@ -455,7 +455,8 @@ class UserSettings {
     required this.preferredTrackTitle,
     required this.smartSuggestionsEnabled,
     this.homeQuickActionIds = kDefaultHomeQuickActionIds,
-    this.showHomeQuickActions = false,
+    this.showHomeQuickActions = true,
+    this.hapticFeedbackEnabled = true,
     this.themeMode = AppThemeMode.system,
     this.assistantReplyMotionLevel = AssistantReplyMotionLevel.medium,
     this.selectedNightMood,
@@ -473,6 +474,7 @@ class UserSettings {
   final bool smartSuggestionsEnabled;
   final List<String> homeQuickActionIds;
   final bool showHomeQuickActions;
+  final bool hapticFeedbackEnabled;
   final AppThemeMode themeMode;
   final AssistantReplyMotionLevel assistantReplyMotionLevel;
   final NightMood? selectedNightMood;
@@ -490,6 +492,7 @@ class UserSettings {
     bool? smartSuggestionsEnabled,
     List<String>? homeQuickActionIds,
     bool? showHomeQuickActions,
+    bool? hapticFeedbackEnabled,
     AppThemeMode? themeMode,
     AssistantReplyMotionLevel? assistantReplyMotionLevel,
     NightMood? selectedNightMood,
@@ -515,6 +518,8 @@ class UserSettings {
         homeQuickActionIds ?? this.homeQuickActionIds,
       ),
       showHomeQuickActions: showHomeQuickActions ?? this.showHomeQuickActions,
+      hapticFeedbackEnabled:
+          hapticFeedbackEnabled ?? this.hapticFeedbackEnabled,
       themeMode: themeMode ?? this.themeMode,
       assistantReplyMotionLevel:
           assistantReplyMotionLevel ?? this.assistantReplyMotionLevel,

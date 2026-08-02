@@ -997,7 +997,7 @@ void main() {
     },
   );
 
-  testWidgets('home quick actions are hidden by default', (
+  testWidgets('home quick actions are shown by default', (
     WidgetTester tester,
   ) async {
     await _pumpApp(
@@ -1006,14 +1006,14 @@ void main() {
       clock: _dayClock,
     );
 
-    expect(find.text('快捷功能'), findsNothing);
-    expect(find.text('音乐'), findsNothing);
-    expect(find.text('梦记一则'), findsNothing);
-    expect(find.text('打卡日历'), findsNothing);
-    expect(find.text('思绪清理'), findsNothing);
+    expect(find.text('快捷功能'), findsOneWidget);
+    expect(find.text('音乐'), findsOneWidget);
+    expect(find.text('梦记一则'), findsOneWidget);
+    expect(find.text('打卡日历'), findsOneWidget);
+    expect(find.text('思绪清理'), findsOneWidget);
   });
 
-  testWidgets('settings switch shows home quick actions when enabled', (
+  testWidgets('settings switch hides home quick actions when disabled', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -1041,7 +1041,7 @@ void main() {
     );
     expect(
       services.settingsRepository.currentSettings.showHomeQuickActions,
-      isTrue,
+      isFalse,
     );
 
     await _pumpApp(
@@ -1051,11 +1051,62 @@ void main() {
       initialSettings: services.settingsRepository.currentSettings,
     );
 
-    expect(find.text('快捷功能'), findsOneWidget);
-    expect(find.text('音乐'), findsOneWidget);
-    expect(find.text('梦记一则'), findsOneWidget);
-    expect(find.text('打卡日历'), findsOneWidget);
-    expect(find.text('思绪清理'), findsOneWidget);
+    expect(find.text('快捷功能'), findsNothing);
+    expect(find.text('音乐'), findsNothing);
+    expect(find.text('梦记一则'), findsNothing);
+    expect(find.text('打卡日历'), findsNothing);
+    expect(find.text('思绪清理'), findsNothing);
+  });
+
+  testWidgets('settings click vibration switch disables subsequent haptics', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final List<MethodCall> platformCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall call,
+        ) async {
+          platformCalls.add(call);
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.profileSettings,
+      clock: _dayClock,
+    );
+
+    final Finder hapticToggle = find.byKey(
+      const ValueKey<String>('settings-toggle-点击震动'),
+    );
+    await tester.ensureVisible(hapticToggle);
+    await tester.tap(hapticToggle);
+    await tester.pump();
+
+    final AppServices services = AppScope.of(
+      tester.element(find.byType(SettingsPage)),
+    );
+    expect(
+      services.settingsRepository.currentSettings.hapticFeedbackEnabled,
+      isFalse,
+    );
+
+    platformCalls.clear();
+    await tester.ensureVisible(hapticToggle);
+    await tester.tap(hapticToggle);
+    await tester.pump();
+
+    expect(_hapticTypesFrom(platformCalls), isEmpty);
+    expect(
+      services.settingsRepository.currentSettings.hapticFeedbackEnabled,
+      isTrue,
+    );
   });
 
   testWidgets('settings can open manual night mood flow during daytime', (
@@ -1837,6 +1888,37 @@ void main() {
     await _pumpAssistantSurface(tester);
 
     expect(find.byType(AssistantPage), findsOneWidget);
+  });
+
+  testWidgets('assistant fab emits a single tap haptic', (
+    WidgetTester tester,
+  ) async {
+    final List<MethodCall> platformCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall call,
+        ) async {
+          platformCalls.add(call);
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await _pumpApp(
+      tester,
+      initialLocation: AppRoutes.homePreSleep,
+      clock: _dayClock,
+    );
+    platformCalls.clear();
+
+    await tester.tap(find.byType(AssistantFab));
+    await tester.pump();
+
+    expect(_hapticTypesFrom(platformCalls).toList(), <String?>[
+      'HapticFeedbackType.lightImpact',
+    ]);
   });
 
   testWidgets('assistant fab keeps default icon when no mood is selected', (

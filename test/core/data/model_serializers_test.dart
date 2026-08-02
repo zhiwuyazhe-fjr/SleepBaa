@@ -111,6 +111,7 @@ void main() {
           'thoughtVault',
         ],
         showHomeQuickActions: true,
+        hapticFeedbackEnabled: false,
         assistantReplyMotionLevel: AssistantReplyMotionLevel.high,
         selectedNightMood: NightMood.calm,
       );
@@ -129,6 +130,7 @@ void main() {
       ]);
       expect(serialized['assistantReplyMotionLevel'], 'high');
       expect(serialized['showHomeQuickActions'], isTrue);
+      expect(serialized['hapticFeedbackEnabled'], isFalse);
       expect(restored.homeQuickActionIds, <String>[
         'dreamJournal',
         'profileCalendar',
@@ -140,11 +142,12 @@ void main() {
         AssistantReplyMotionLevel.high,
       );
       expect(restored.showHomeQuickActions, isTrue);
+      expect(restored.hapticFeedbackEnabled, isFalse);
       expect(restored.selectedNightMood, NightMood.calm);
     },
   );
 
-  test('user settings default hides home quick actions', () {
+  test('user settings defaults enable quick actions and haptics', () {
     final UserSettings restored = ModelSerializers.userSettingsFromMap(
       const <String, dynamic>{},
     );
@@ -159,9 +162,10 @@ void main() {
         preferredTrackTitle: '深海海浪',
         smartSuggestionsEnabled: true,
       ).showHomeQuickActions,
-      isFalse,
+      isTrue,
     );
-    expect(restored.showHomeQuickActions, isFalse);
+    expect(restored.showHomeQuickActions, isTrue);
+    expect(restored.hapticFeedbackEnabled, isTrue);
   });
 
   test('legacy default quick actions migrate to music shortcut', () {

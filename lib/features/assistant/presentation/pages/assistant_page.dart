@@ -54,6 +54,7 @@ class _AssistantPageState extends State<AssistantPage>
   Timer? _archiveHintTimer;
   Timer? _archiveCollapseHintTimer;
   String? _lastHapticAssistantMessageId;
+  bool _replyHapticsReady = false;
   _AssistantArchivePhase _archivePhase = _AssistantArchivePhase.collapsed;
   bool _archiveExpansionArmed = false;
   bool _archiveCollapseArmed = false;
@@ -116,7 +117,16 @@ class _AssistantPageState extends State<AssistantPage>
       final AssistantConversationController controller =
           context.appServices.assistantConversationController;
       await controller.bootstrap();
-      if (!mounted || !widget.captureModeEnabled) {
+      if (!mounted) {
+        return;
+      }
+      final AssistantConversationSlice initialSlice =
+          AssistantConversationSlice.fromMessages(controller.currentMessages);
+      setState(() {
+        _lastHapticAssistantMessageId = initialSlice.latestAssistant?.id;
+        _replyHapticsReady = true;
+      });
+      if (!widget.captureModeEnabled) {
         return;
       }
       await controller.startNewConversation(
@@ -552,7 +562,8 @@ class _AssistantPageState extends State<AssistantPage>
               controller.updatedSurfacesForMessage(latestAssistant?.id),
             );
         final String? latestAssistantMessageId = latestAssistant?.id;
-        if (stageState == _AssistantStageState.reply &&
+        if (_replyHapticsReady &&
+            stageState == _AssistantStageState.reply &&
             latestAssistantMessageId != null &&
             latestAssistantMessageId != _lastHapticAssistantMessageId) {
           WidgetsBinding.instance.addPostFrameCallback((_) {

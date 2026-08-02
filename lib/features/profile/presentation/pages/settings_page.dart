@@ -40,7 +40,8 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _morningReminderEnabled = true;
   bool _dormAlertsEnabled = true;
   bool _smartSuggestionsEnabled = true;
-  bool _showHomeQuickActions = false;
+  bool _showHomeQuickActions = true;
+  bool _hapticFeedbackEnabled = true;
   AppThemeMode _themeMode = AppThemeMode.system;
   AssistantReplyMotionLevel _assistantReplyMotionLevel =
       AssistantReplyMotionLevel.medium;
@@ -60,6 +61,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _dormAlertsEnabled = settings.dormAlertsEnabled;
     _smartSuggestionsEnabled = settings.smartSuggestionsEnabled;
     _showHomeQuickActions = settings.showHomeQuickActions;
+    _hapticFeedbackEnabled = settings.hapticFeedbackEnabled;
     _themeMode = settings.themeMode;
     _assistantReplyMotionLevel = settings.assistantReplyMotionLevel;
     _bedtimeReminder = settings.bedtimeReminder;
@@ -139,6 +141,17 @@ class _SettingsPageState extends State<SettingsPage> {
     final UserSettings nextSettings = services.profileFacade.currentSettings
         .copyWith(showHomeQuickActions: visible);
     setState(() => _showHomeQuickActions = visible);
+    services.settingsRepository.replaceLocalSettings(nextSettings);
+    unawaited(_saveSettingsInBackground(services, nextSettings));
+  }
+
+  void _changeHapticFeedback(AppServices services, bool enabled) {
+    if (enabled == _hapticFeedbackEnabled) {
+      return;
+    }
+    final UserSettings nextSettings = services.profileFacade.currentSettings
+        .copyWith(hapticFeedbackEnabled: enabled);
+    setState(() => _hapticFeedbackEnabled = enabled);
     services.settingsRepository.replaceLocalSettings(nextSettings);
     unawaited(_saveSettingsInBackground(services, nextSettings));
   }
@@ -432,6 +445,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       value: _showHomeQuickActions,
                       onChanged: (bool value) =>
                           _changeHomeQuickActionsVisibility(services, value),
+                    ),
+                    _SettingsSwitchRow(
+                      icon: Icons.vibration_rounded,
+                      title: '点击震动',
+                      value: _hapticFeedbackEnabled,
+                      onChanged: (bool value) =>
+                          _changeHapticFeedback(services, value),
                     ),
                   ],
                 ),
@@ -823,6 +843,7 @@ String _settingsSignature(UserSettings settings) {
     settings.dormAlertsEnabled,
     settings.smartSuggestionsEnabled,
     settings.showHomeQuickActions,
+    settings.hapticFeedbackEnabled,
     settings.themeMode.name,
     bedtimeReminder.hour,
     bedtimeReminder.minute,

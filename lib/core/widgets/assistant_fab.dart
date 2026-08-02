@@ -176,7 +176,7 @@ class _AssistantFabState extends State<AssistantFab> {
       label: 'Open assistant',
       child: GestureDetector(
         onTap: () {
-          AppHaptics.navigation();
+          AppHaptics.tap();
           context.push(AppRoutes.assistant);
         },
         child: AssistantFabVisual(palette: context.nightMoodPalette),
