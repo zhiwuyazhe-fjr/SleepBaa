@@ -227,16 +227,8 @@ class _AssistantPageState extends State<AssistantPage>
     }
   }
 
-  Future<void> _emitReplyHaptics({required bool hasStatuses}) async {
+  Future<void> _emitReplyHaptics() async {
     await AppHaptics.tap();
-    if (!hasStatuses) {
-      return;
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 120));
-    if (!mounted) {
-      return;
-    }
-    await AppHaptics.selection();
   }
 
   void _resetArchiveState() {
@@ -572,9 +564,7 @@ class _AssistantPageState extends State<AssistantPage>
               return;
             }
             _lastHapticAssistantMessageId = latestAssistantMessageId;
-            unawaited(
-              _emitReplyHaptics(hasStatuses: latestStatuses.isNotEmpty),
-            );
+            unawaited(_emitReplyHaptics());
           });
         }
 

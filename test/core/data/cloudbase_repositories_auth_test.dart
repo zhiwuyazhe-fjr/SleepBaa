@@ -267,6 +267,85 @@ void main() {
     },
   );
 
+  test('ensureAuthenticated keeps login for a generic refresh 403', () async {
+    final _FakeSessionStore sessionStore = _FakeSessionStore();
+    sessionStore._session = CloudBaseSession(
+      accessToken: 'stale-access',
+      refreshToken: 'stale-refresh',
+      subject: 'tester',
+      expiresAt: DateTime.now().subtract(const Duration(minutes: 5)),
+      deviceId: 'test-device-id',
+    );
+    final _MemoryVerifiedPhoneStore verifiedStore = _MemoryVerifiedPhoneStore(
+      VerifiedPhoneIdentity(subject: 'tester', phoneNumber: '+86 13800138000'),
+    );
+    final _MemoryAuthProfileCacheStore authProfileCacheStore =
+        _MemoryAuthProfileCacheStore(
+          const UserProfile(
+            uid: 'tester',
+            displayName: 'Tester',
+            tagline: 'tagline',
+            role: 'role',
+            dormId: 'dorm-204',
+            phoneNumber: '+86 13800138000',
+            avatarUrl: 'https://cdn.example.com/tester.png',
+          ),
+        );
+    const AppEnvironment environment = AppEnvironment(
+      target: AppBackendTarget.production,
+      appIdPrefix: 'com.dormsleep.app',
+      cloudbaseEnvId: 'demo-env',
+      cloudbaseAuthBaseUrl: 'https://example.com',
+      cloudbaseAppApiBaseUrl: 'https://example.com',
+      cloudbasePublishableKey: 'publishable-key',
+      cloudbaseClientId: 'demo-env',
+    );
+    final http.Client httpClient = MockClient((http.Request request) async {
+      if (request.url.path == '/auth/v1/token') {
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'error': 'forbidden',
+            'error_description': 'publishable key is not allowed',
+          }),
+          403,
+        );
+      }
+      throw StateError('Unexpected path: ${request.url.path}');
+    });
+    final CloudBaseAuthClient authClient = CloudBaseAuthClient(
+      environment: environment,
+      httpClient: httpClient,
+    );
+    final CloudBaseAppApiClient appApiClient = CloudBaseAppApiClient(
+      environment: environment,
+      sessionStore: sessionStore,
+      authClient: authClient,
+      httpClient: httpClient,
+    );
+    final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
+      appApiClient: appApiClient,
+    );
+    final CloudBaseAuthRepository repository = CloudBaseAuthRepository(
+      environment: environment,
+      authClient: authClient,
+      appApiClient: appApiClient,
+      sessionStore: sessionStore,
+      snapshotStore: snapshotStore,
+      verifiedPhoneStore: verifiedStore,
+      authProfileCacheStore: authProfileCacheStore,
+    );
+
+    await repository.ensureAuthenticated();
+
+    expect(repository.hasVerifiedPhoneIdentity, isTrue);
+    expect(repository.isAuthenticated, isTrue);
+    expect(repository.currentUser.uid, 'tester');
+    expect(sessionStore._session, isNotNull);
+    expect(await verifiedStore.read(), isNotNull);
+    expect(await authProfileCacheStore.read(), isNotNull);
+    expect(repository.lastAuthError, contains('网络波动'));
+  });
+
   test(
     'ensureAuthenticated keeps a newer stored session after a stale refresh is rejected',
     () async {

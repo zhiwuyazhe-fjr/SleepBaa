@@ -719,6 +719,7 @@ class _HeroActionPill extends StatelessWidget {
       color: appColors.surfaceMuted.withAlpha(236),
       borderRadius: AppRadius.pill,
       child: InkWell(
+        enableFeedback: false,
         borderRadius: AppRadius.pill,
         onTap: AppHaptics.navigationHandler(onTap),
         child: Padding(
@@ -836,6 +837,7 @@ class _DormMemberCard extends StatelessWidget {
       button: true,
       label: '${member.name}舍友详情',
       child: InkWell(
+        enableFeedback: false,
         borderRadius: AppRadius.control,
         onTap: AppHaptics.navigationHandler(onTap),
         child: Padding(
@@ -1241,6 +1243,7 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
         const SizedBox(height: AppSpacing.md),
         ..._gentleReminderPresets.map(
           (String message) => InkWell(
+            enableFeedback: false,
             borderRadius: BorderRadius.circular(AppRadius.lg),
             onTap: AppHaptics.selectionHandler(() => _selectPreset(message)),
             child: Container(
@@ -1353,6 +1356,7 @@ class _GentleReminderSheetState extends State<_GentleReminderSheet> {
         const SizedBox(height: AppSpacing.md),
         ...widget.members.map(
           (DormMember member) => InkWell(
+            enableFeedback: false,
             borderRadius: BorderRadius.circular(AppRadius.lg),
             onTap: AppHaptics.selectionHandler(
               () => setState(() => _selectedUid = member.uid),

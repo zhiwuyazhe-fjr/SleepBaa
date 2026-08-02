@@ -673,6 +673,7 @@ class _NotificationBell extends StatelessWidget {
         ? appColors.textOnAccent
         : appColors.accentDeep;
     return InkWell(
+      enableFeedback: false,
       borderRadius: BorderRadius.circular(999),
       onTap: AppHaptics.navigationHandler(onTap),
       child: Container(

@@ -68,6 +68,7 @@ class HomeMetricCard extends StatelessWidget {
 
     return InkWell(
       onTap: AppHaptics.tapHandler(onTap),
+      enableFeedback: false,
       borderRadius: BorderRadius.circular(16),
       child: content,
     );

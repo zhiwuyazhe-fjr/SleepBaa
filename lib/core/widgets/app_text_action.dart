@@ -26,6 +26,7 @@ class AppTextAction extends StatelessWidget {
     final AppSemanticColors appColors = context.appColors;
     final Color resolvedForeground = foregroundColor ?? appColors.accentDeep;
     final ButtonStyle style = TextButton.styleFrom(
+      enableFeedback: false,
       foregroundColor: resolvedForeground,
       disabledForegroundColor: appColors.textSecondary.withAlpha(150),
       padding: const EdgeInsets.symmetric(

@@ -364,6 +364,7 @@ class _RoleOptionButton extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
+        enableFeedback: false,
         onTap: AppHaptics.selectionHandler(onTap),
         borderRadius: AppRadius.control,
         child: AnimatedContainer(

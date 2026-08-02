@@ -13,6 +13,7 @@ class CloudBaseSession {
     required this.deviceId,
     this.scope,
     this.tokenType = 'Bearer',
+    this.persistedAt,
   });
 
   final String accessToken;
@@ -22,6 +23,10 @@ class CloudBaseSession {
   final String deviceId;
   final String? scope;
   final String tokenType;
+
+  /// Time at which this token pair was durably written. Older installations
+  /// do not have this field, so selection falls back to [expiresAt].
+  final DateTime? persistedAt;
 
   bool get isExpired =>
       DateTime.now().isAfter(expiresAt.subtract(const Duration(seconds: 30)));
@@ -34,6 +39,7 @@ class CloudBaseSession {
     String? deviceId,
     String? scope,
     String? tokenType,
+    DateTime? persistedAt,
   }) {
     return CloudBaseSession(
       accessToken: accessToken ?? this.accessToken,
@@ -43,6 +49,7 @@ class CloudBaseSession {
       deviceId: deviceId ?? this.deviceId,
       scope: scope ?? this.scope,
       tokenType: tokenType ?? this.tokenType,
+      persistedAt: persistedAt ?? this.persistedAt,
     );
   }
 
@@ -55,6 +62,7 @@ class CloudBaseSession {
       'deviceId': deviceId,
       'scope': scope,
       'tokenType': tokenType,
+      'persistedAt': persistedAt?.toIso8601String(),
     };
   }
 
@@ -67,6 +75,10 @@ class CloudBaseSession {
     final DateTime? expiresAt = expiresAtRaw == null
         ? null
         : DateTime.tryParse(expiresAtRaw);
+    final String? persistedAtRaw = map['persistedAt'] as String?;
+    final DateTime? persistedAt = persistedAtRaw == null
+        ? null
+        : DateTime.tryParse(persistedAtRaw);
     if (accessToken.isEmpty ||
         refreshToken.isEmpty ||
         subject.isEmpty ||
@@ -82,6 +94,7 @@ class CloudBaseSession {
       deviceId: deviceId,
       scope: map['scope'] as String?,
       tokenType: map['tokenType'] as String? ?? 'Bearer',
+      persistedAt: persistedAt,
     );
   }
 }
@@ -102,9 +115,8 @@ class CloudBaseSessionStore {
 
   static const String _sessionKey = 'cloudbase.session';
   // SharedPreferences is a recovery mirror for devices whose Android Keystore
-  // becomes temporarily unreadable after an OS update or restore. The secure
-  // copy remains the primary source; this mirror prevents a transient storage
-  // error from looking like a real logout.
+  // becomes temporarily unreadable or unwritable. Both copies are compared;
+  // neither storage backend is allowed to overwrite a newer rotated token.
   static const String _sessionMirrorKey = 'cloudbase.session.mirror';
   static const String _deviceIdKey = 'cloudbase.device_id';
 
@@ -132,24 +144,78 @@ class CloudBaseSessionStore {
     return readPersistedSession();
   }
 
-  /// Reads the durable session even when this store has an in-memory cache.
+  /// Reads both durable copies and chooses the newest token rotation.
   ///
-  /// More than one Flutter engine/process can briefly use the same Android
-  /// secure-storage namespace. A cached session in an older engine must not
-  /// win over a newer refresh-token rotation written by another engine.
+  /// A secure-storage write can fail while the SharedPreferences mirror still
+  /// succeeds. Always preferring secure storage would then resurrect the old
+  /// refresh token on the next cold start and cause an `invalid_grant` logout.
   Future<CloudBaseSession?> readPersistedSession() async {
     final CloudBaseSession? secureSession = _decodeSession(
       await _readSecureValue(_sessionKey),
     );
-    final CloudBaseSession? persisted =
-        secureSession ?? _decodeSession(await _readSessionMirror());
-    if (persisted != null) {
-      _memorySession = persisted;
-      if (secureSession != null) {
-        await _writeSessionMirror(jsonEncode(secureSession.toJson()));
+    final CloudBaseSession? mirrorSession = _decodeSession(
+      await _readSessionMirror(),
+    );
+    final CloudBaseSession? selected = _selectNewestSession(
+      secureSession,
+      mirrorSession,
+    );
+    if (selected == null) {
+      return null;
+    }
+
+    final CloudBaseSession normalized = selected.persistedAt == null
+        ? selected.copyWith(persistedAt: DateTime.now().toUtc())
+        : selected;
+    final String encoded = jsonEncode(normalized.toJson());
+    _memorySession = normalized;
+    _memoryDeviceId = normalized.deviceId;
+
+    // Converge stale/corrupt copies without allowing either repair failure to
+    // hide an otherwise valid session.
+    await _writeSessionMirror(encoded);
+    await _writeSecureSessionBestEffort(encoded);
+    return normalized;
+  }
+
+  CloudBaseSession? _selectNewestSession(
+    CloudBaseSession? secureSession,
+    CloudBaseSession? mirrorSession,
+  ) {
+    if (secureSession == null) {
+      return mirrorSession;
+    }
+    if (mirrorSession == null) {
+      return secureSession;
+    }
+
+    final DateTime? securePersistedAt = secureSession.persistedAt;
+    final DateTime? mirrorPersistedAt = mirrorSession.persistedAt;
+    if (securePersistedAt != null || mirrorPersistedAt != null) {
+      if (securePersistedAt == null) {
+        return mirrorSession;
+      }
+      if (mirrorPersistedAt == null) {
+        return secureSession;
+      }
+      final int persistedComparison = securePersistedAt.compareTo(
+        mirrorPersistedAt,
+      );
+      if (persistedComparison != 0) {
+        return persistedComparison > 0 ? secureSession : mirrorSession;
       }
     }
-    return persisted;
+
+    final int expiryComparison = secureSession.expiresAt.compareTo(
+      mirrorSession.expiresAt,
+    );
+    if (expiryComparison != 0) {
+      return expiryComparison > 0 ? secureSession : mirrorSession;
+    }
+
+    // Equal versions normally contain the same token. Prefer secure storage
+    // only as a deterministic tie-breaker, never simply because it exists.
+    return secureSession;
   }
 
   CloudBaseSession? _decodeSession(String? raw) {
@@ -168,11 +234,17 @@ class CloudBaseSessionStore {
   }
 
   Future<void> writeSession(CloudBaseSession session) async {
-    final String encoded = jsonEncode(session.toJson());
-    await _writeValue(_sessionKey, encoded);
-    _memorySession = session;
-    _memoryDeviceId = session.deviceId;
-    await _writeValue(_deviceIdKey, session.deviceId);
+    final CloudBaseSession stamped = session.copyWith(
+      persistedAt: DateTime.now().toUtc(),
+    );
+    final String encoded = jsonEncode(stamped.toJson());
+    // Write the recovery mirror first. If Android Keystore becomes briefly
+    // unavailable, a successfully refreshed token must still survive restart.
+    await _writeSessionMirror(encoded);
+    await _writeSecureSessionBestEffort(encoded);
+    _memorySession = stamped;
+    _memoryDeviceId = stamped.deviceId;
+    await _writeValue(_deviceIdKey, stamped.deviceId);
   }
 
   Future<void> clearSession() async {
@@ -228,11 +300,16 @@ class CloudBaseSessionStore {
     } catch (_) {
       // Keystore failures must not turn a successful login into a logout.
     }
-    if (key == _sessionKey) {
-      await _writeSessionMirror(value);
-    }
-    if (!persistedSecurely && key != _sessionKey) {
+    if (!persistedSecurely) {
       throw StateError('Secure storage did not persist the value.');
+    }
+  }
+
+  Future<void> _writeSecureSessionBestEffort(String value) async {
+    try {
+      await _secureStorage.write(key: _sessionKey, value: value);
+    } catch (_) {
+      // The mirror remains authoritative until a later read repairs this copy.
     }
   }
 

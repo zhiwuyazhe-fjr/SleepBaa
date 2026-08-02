@@ -197,6 +197,7 @@ class _AssistantThreadHistoryIconButton extends StatelessWidget {
       padding: EdgeInsets.zero,
       constraints: BoxConstraints.tightFor(width: size, height: size),
       onPressed: AppHaptics.navigationHandler(onPressed),
+      enableFeedback: false,
       icon: child,
     );
   }

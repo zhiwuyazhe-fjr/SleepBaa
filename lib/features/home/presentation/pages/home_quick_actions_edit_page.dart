@@ -213,7 +213,7 @@ class _EditorSectionHeader extends StatelessWidget {
           detail,
           style: AppTypography.meta(
             textTheme,
-            ).copyWith(color: context.appColors.textSecondary),
+          ).copyWith(color: context.appColors.textSecondary),
         ),
       ],
     );
@@ -363,6 +363,7 @@ class _StripActionButton extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: AppRadius.control,
+          enableFeedback: false,
           onTap: AppHaptics.tapHandler(onTap),
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.xs),

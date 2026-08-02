@@ -75,6 +75,7 @@ class UserAvatar extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: AppHaptics.navigationHandler(onTap),
+        enableFeedback: false,
         borderRadius: BorderRadius.circular(size),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xs),

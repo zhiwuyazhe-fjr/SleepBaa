@@ -22,6 +22,7 @@ class QuickActionIconButton extends StatelessWidget {
     final TextTheme textTheme = Theme.of(context).textTheme;
     return InkWell(
       onTap: AppHaptics.tapHandler(onTap),
+      enableFeedback: false,
       borderRadius: BorderRadius.circular(20),
       child: Column(
         children: <Widget>[

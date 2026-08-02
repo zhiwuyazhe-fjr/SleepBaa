@@ -87,6 +87,7 @@ class DreamJournalPage extends StatelessWidget {
                                 ),
                               ),
                               child: TabBar(
+                                enableFeedback: false,
                                 dividerColor: Colors.transparent,
                                 overlayColor:
                                     const WidgetStatePropertyAll<Color>(

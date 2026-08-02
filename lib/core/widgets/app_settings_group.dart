@@ -154,6 +154,7 @@ class AppSettingsItem extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: borderRadius ?? AppRadius.control,
+        enableFeedback: false,
         onTap: hapticRole == null
             ? onTap
             : AppHaptics.handler(onTap, role: hapticRole!),

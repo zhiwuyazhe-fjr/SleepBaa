@@ -458,6 +458,7 @@ class _ReasonsStep extends StatelessWidget {
                           child: Material(
                             color: Colors.transparent,
                             child: InkWell(
+                              enableFeedback: false,
                               borderRadius: BorderRadius.circular(999),
                               onTap: isSubmitting
                                   ? null

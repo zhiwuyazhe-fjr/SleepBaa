@@ -315,28 +315,20 @@ void main() {
     await tester.pump(const Duration(milliseconds: 80));
 
     expect(taps, 1);
-    expect(
-      _platformHapticTypes,
-      containsAllInOrder(<String>[
-        'HapticFeedbackType.selectionClick',
-        'HapticFeedbackType.lightImpact',
-      ]),
-    );
+    expect(_platformHapticTypes.toList(), <String>[
+      'HapticFeedbackType.selectionClick',
+    ]);
   });
 
-  testWidgets('flow-start haptic uses a distinct entry rhythm', (
+  testWidgets('flow-start haptic emits one medium pulse', (
     WidgetTester tester,
   ) async {
     unawaited(AppHaptics.flowStart());
     await tester.pump(const Duration(milliseconds: 90));
 
-    expect(
-      _platformHapticTypes,
-      containsAllInOrder(<String>[
-        'HapticFeedbackType.mediumImpact',
-        'HapticFeedbackType.selectionClick',
-      ]),
-    );
+    expect(_platformHapticTypes.toList(), <String>[
+      'HapticFeedbackType.mediumImpact',
+    ]);
   });
 
   testWidgets('settings page exposes assistant reply motion entry', (
@@ -510,13 +502,9 @@ void main() {
 
     await tester.tap(find.text('主要操作'));
     await tester.pump(const Duration(milliseconds: 80));
-    expect(
-      _platformHapticTypes,
-      containsAllInOrder(<String>[
-        'HapticFeedbackType.lightImpact',
-        'HapticFeedbackType.mediumImpact',
-      ]),
-    );
+    expect(_platformHapticTypes.toList(), <String>[
+      'HapticFeedbackType.mediumImpact',
+    ]);
     _platformMethodCalls.clear();
 
     await tester.tap(find.text('次要操作'));
@@ -1171,7 +1159,7 @@ void main() {
     expect(hapticCalls, isNotEmpty);
   });
 
-  testWidgets('assistant successful send emits a multi-step haptic pattern', (
+  testWidgets('assistant successful send emits one haptic pulse', (
     WidgetTester tester,
   ) async {
     await _pumpGlacierApp(tester);
@@ -1187,11 +1175,8 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 180));
 
-    expect(_platformHapticTypes.take(4).toList(), <String>[
-      'HapticFeedbackType.lightImpact',
-      'HapticFeedbackType.selectionClick',
+    expect(_platformHapticTypes.take(1).toList(), <String>[
       'HapticFeedbackType.mediumImpact',
-      'HapticFeedbackType.selectionClick',
     ]);
     await tester.pump(const Duration(milliseconds: 260));
   });

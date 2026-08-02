@@ -34,6 +34,7 @@ class AppDetailPageHeader extends StatelessWidget {
           child: InkWell(
             borderRadius: AppRadius.button,
             onTap: AppHaptics.navigationHandler(onBack),
+            enableFeedback: false,
             child: SizedBox.square(
               dimension: AppSpacing.xxxl,
               child: Icon(

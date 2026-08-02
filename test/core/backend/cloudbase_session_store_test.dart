@@ -127,16 +127,19 @@ void main() {
     final CloudBaseSessionStore store = CloudBaseSessionStore(
       sharedPreferences: sharedPreferences,
     );
+    final DateTime now = DateTime.now().toUtc();
     final CloudBaseSession oldSession = CloudBaseSession(
       accessToken: 'old-access',
       refreshToken: 'old-refresh',
       subject: 'user-1',
-      expiresAt: DateTime.now().add(const Duration(hours: 1)),
+      expiresAt: now.add(const Duration(hours: 1)),
       deviceId: 'device-1',
     );
     final CloudBaseSession newSession = oldSession.copyWith(
       accessToken: 'new-access',
       refreshToken: 'new-refresh',
+      expiresAt: now.add(const Duration(hours: 2)),
+      persistedAt: now.add(const Duration(minutes: 1)),
     );
 
     await store.writeSession(oldSession);
@@ -145,6 +148,113 @@ void main() {
     expect((await store.readSession())?.accessToken, 'old-access');
     expect((await store.readPersistedSession())?.accessToken, 'new-access');
     expect((await store.readSession())?.accessToken, 'new-access');
+  });
+
+  test('newer mirror wins over stale secure refresh token', () async {
+    final SharedPreferences sharedPreferences =
+        await SharedPreferences.getInstance();
+    final DateTime now = DateTime.now().toUtc();
+    final CloudBaseSession staleSecure = CloudBaseSession(
+      accessToken: 'stale-access',
+      refreshToken: 'stale-refresh',
+      subject: 'user-1',
+      expiresAt: now.add(const Duration(minutes: 20)),
+      deviceId: 'device-1',
+      persistedAt: now,
+    );
+    final CloudBaseSession freshMirror = staleSecure.copyWith(
+      accessToken: 'fresh-access',
+      refreshToken: 'fresh-refresh',
+      expiresAt: now.add(const Duration(hours: 2)),
+      persistedAt: now.add(const Duration(minutes: 1)),
+    );
+    secureStorage['cloudbase.session'] = jsonEncode(staleSecure.toJson());
+    await sharedPreferences.setString(
+      'cloudbase.session.mirror',
+      jsonEncode(freshMirror.toJson()),
+    );
+
+    final CloudBaseSessionStore store = CloudBaseSessionStore(
+      sharedPreferences: sharedPreferences,
+    );
+    final CloudBaseSession? restored = await store.readPersistedSession();
+
+    expect(restored?.accessToken, 'fresh-access');
+    expect(restored?.refreshToken, 'fresh-refresh');
+    final CloudBaseSession? repairedSecure = CloudBaseSession.fromJson(
+      Map<String, dynamic>.from(
+        jsonDecode(secureStorage['cloudbase.session']!) as Map,
+      ),
+    );
+    expect(repairedSecure?.accessToken, 'fresh-access');
+  });
+
+  test('newer secure session wins over stale mirror', () async {
+    final SharedPreferences sharedPreferences =
+        await SharedPreferences.getInstance();
+    final DateTime now = DateTime.now().toUtc();
+    final CloudBaseSession staleMirror = CloudBaseSession(
+      accessToken: 'stale-access',
+      refreshToken: 'stale-refresh',
+      subject: 'user-1',
+      expiresAt: now.add(const Duration(minutes: 20)),
+      deviceId: 'device-1',
+      persistedAt: now,
+    );
+    final CloudBaseSession freshSecure = staleMirror.copyWith(
+      accessToken: 'fresh-access',
+      refreshToken: 'fresh-refresh',
+      expiresAt: now.add(const Duration(hours: 2)),
+      persistedAt: now.add(const Duration(minutes: 1)),
+    );
+    secureStorage['cloudbase.session'] = jsonEncode(freshSecure.toJson());
+    await sharedPreferences.setString(
+      'cloudbase.session.mirror',
+      jsonEncode(staleMirror.toJson()),
+    );
+
+    final CloudBaseSessionStore store = CloudBaseSessionStore(
+      sharedPreferences: sharedPreferences,
+    );
+    final CloudBaseSession? restored = await store.readPersistedSession();
+
+    expect(restored?.accessToken, 'fresh-access');
+    final CloudBaseSession? repairedMirror = CloudBaseSession.fromJson(
+      Map<String, dynamic>.from(
+        jsonDecode(sharedPreferences.getString('cloudbase.session.mirror')!)
+            as Map,
+      ),
+    );
+    expect(repairedMirror?.accessToken, 'fresh-access');
+  });
+
+  test('legacy sessions without persistedAt use the later expiry', () async {
+    final SharedPreferences sharedPreferences =
+        await SharedPreferences.getInstance();
+    final DateTime now = DateTime.now().toUtc();
+    final CloudBaseSession staleSecure = CloudBaseSession(
+      accessToken: 'stale-access',
+      refreshToken: 'stale-refresh',
+      subject: 'user-1',
+      expiresAt: now.add(const Duration(minutes: 20)),
+      deviceId: 'device-1',
+    );
+    final CloudBaseSession freshMirror = staleSecure.copyWith(
+      accessToken: 'fresh-access',
+      refreshToken: 'fresh-refresh',
+      expiresAt: now.add(const Duration(hours: 2)),
+    );
+    secureStorage['cloudbase.session'] = jsonEncode(staleSecure.toJson());
+    await sharedPreferences.setString(
+      'cloudbase.session.mirror',
+      jsonEncode(freshMirror.toJson()),
+    );
+
+    final CloudBaseSessionStore store = CloudBaseSessionStore(
+      sharedPreferences: sharedPreferences,
+    );
+
+    expect((await store.readPersistedSession())?.accessToken, 'fresh-access');
   });
 
   test(

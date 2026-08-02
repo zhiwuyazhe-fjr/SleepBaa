@@ -86,6 +86,7 @@ class PrimaryButton extends StatelessWidget {
         );
     final ButtonStyle style =
         FilledButton.styleFrom(
+          enableFeedback: false,
           minimumSize: Size(0, _height),
           padding: EdgeInsets.symmetric(horizontal: _horizontalPadding),
           shape: RoundedRectangleBorder(

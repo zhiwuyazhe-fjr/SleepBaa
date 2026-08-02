@@ -56,6 +56,7 @@ class SectionTitle extends StatelessWidget {
             key: actionKey,
             onPressed: AppHaptics.navigationHandler(onAction),
             style: TextButton.styleFrom(
+              enableFeedback: false,
               foregroundColor: actionColor,
               padding: useDormStyle
                   ? const EdgeInsets.symmetric(horizontal: AppSpacing.xs)

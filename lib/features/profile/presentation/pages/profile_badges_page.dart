@@ -503,6 +503,7 @@ class _BadgeCatalogModeButton extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
+        enableFeedback: false,
         key: ValueKey<String>('badge-catalog-mode-${mode.keySuffix}'),
         borderRadius: AppRadius.pill,
         onTap: selected ? null : AppHaptics.selectionHandler(onTap),
@@ -582,6 +583,7 @@ class _CatalogSummaryCard extends StatelessWidget {
         return Material(
           color: Colors.transparent,
           child: InkWell(
+            enableFeedback: false,
             borderRadius: BorderRadius.circular(AppRadius.lg),
             onTap: AppHaptics.navigationHandler(onTap),
             child: Container(
@@ -873,6 +875,7 @@ class _ProfileBadgeGridTile extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
+          enableFeedback: false,
           key: ValueKey<String>('profile-badge-grid-${badge.badge.id}'),
           onTap: AppHaptics.navigationHandler(onTap),
           borderRadius: AppRadius.card,
@@ -1023,6 +1026,7 @@ class _DormBadgeGridTile extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
+          enableFeedback: false,
           key: ValueKey<String>('dorm-badge-grid-${badge.badge.id}'),
           onTap: AppHaptics.navigationHandler(onTap),
           borderRadius: AppRadius.card,

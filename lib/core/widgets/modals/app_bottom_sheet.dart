@@ -43,6 +43,7 @@ Future<T?> showAppBottomSheet<T>(
             children: <Widget>[
               for (final AppSelectionOption<T> option in spec.options)
                 ListTile(
+                  enableFeedback: false,
                   key: option.key,
                   contentPadding: EdgeInsets.zero,
                   title: Text(option.label),

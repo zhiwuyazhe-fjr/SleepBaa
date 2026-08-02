@@ -965,6 +965,7 @@ class _AssistantActionIconButton extends StatelessWidget {
         constraints: BoxConstraints.tight(Size.square(hitSize)),
         splashRadius: hitSize / 2,
         style: IconButton.styleFrom(
+          enableFeedback: false,
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           foregroundColor: color,
           disabledForegroundColor: _alpha(color, 0.34),

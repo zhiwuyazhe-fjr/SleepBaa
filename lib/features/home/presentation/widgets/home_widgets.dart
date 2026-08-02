@@ -434,6 +434,7 @@ class HomeActionCard extends StatelessWidget {
                     color: controlForeground,
                   ),
                 InkWell(
+                  enableFeedback: false,
                   onTap: AppHaptics.tapHandler(onPlayToggle ?? onTap),
                   borderRadius: BorderRadius.circular(999),
                   child: Container(
@@ -569,6 +570,7 @@ class _AudioTransportIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
+      enableFeedback: false,
       constraints: const BoxConstraints.tightFor(width: 36, height: 36),
       padding: EdgeInsets.zero,
       visualDensity: VisualDensity.compact,
@@ -820,6 +822,7 @@ class SessionAudioCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 IconButton(
+                  enableFeedback: false,
                   tooltip: '上一首',
                   onPressed: AppHaptics.tapHandler(onPrevious),
                   icon: Icon(
@@ -828,6 +831,7 @@ class SessionAudioCard extends StatelessWidget {
                   ),
                 ),
                 IconButton(
+                  enableFeedback: false,
                   tooltip: playbackState == PlaybackState.playing ? '暂停' : '播放',
                   onPressed: AppHaptics.tapHandler(onToggle),
                   icon: Icon(
@@ -839,6 +843,7 @@ class SessionAudioCard extends StatelessWidget {
                   ),
                 ),
                 IconButton(
+                  enableFeedback: false,
                   tooltip: '下一首',
                   onPressed: AppHaptics.tapHandler(onNext),
                   icon: Icon(

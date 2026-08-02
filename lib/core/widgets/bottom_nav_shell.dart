@@ -211,6 +211,7 @@ class _NavPillButton extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: AppHaptics.selectionHandler(onTap),
+        enableFeedback: false,
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: selected ? 22 : 16,

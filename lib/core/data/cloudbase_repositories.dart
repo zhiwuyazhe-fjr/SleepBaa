@@ -1442,21 +1442,24 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   }
 
   bool _isSessionInvalidError(CloudBaseAuthException error) {
-    if (error.statusCode == 401 || error.statusCode == 403) {
-      return true;
-    }
-    final String code = (error.code ?? '').toLowerCase();
-    if (code.contains('invalid_grant') ||
-        code.contains('invalid_token') ||
-        code.contains('unauthorized') ||
-        code.contains('token_revoked') ||
-        code.contains('refresh_token_expired')) {
-      return true;
-    }
-    final String message = error.message.toLowerCase();
-    return message.contains('invalid_grant') ||
-        message.contains('invalid refresh token') ||
-        message.contains('refresh token expired');
+    final String details = <String>[
+      error.code ?? '',
+      error.message,
+      error.body?['code']?.toString() ?? '',
+      error.body?['message']?.toString() ?? '',
+      error.body?['error']?.toString() ?? '',
+      error.body?['error_description']?.toString() ?? '',
+    ].join(' ').toLowerCase();
+
+    // HTTP 401/403 alone is not proof that the refresh token is invalid. It
+    // can also mean a temporary gateway, permission, or publishable-key issue.
+    // Only a definitive refresh-token rejection may wipe the local session.
+    return details.contains('invalid_grant') ||
+        details.contains('token hash not match') ||
+        details.contains('invalid refresh token') ||
+        details.contains('refresh token expired') ||
+        details.contains('refresh_token_expired') ||
+        details.contains('token_revoked');
   }
 
   String _transientAuthWarningMessage() {

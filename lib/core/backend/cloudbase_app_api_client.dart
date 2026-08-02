@@ -306,6 +306,7 @@ class CloudBaseAppApiClient {
       Duration(milliseconds: 50),
       Duration(milliseconds: 150),
       Duration(milliseconds: 350),
+      Duration(milliseconds: 800),
     ]) {
       await Future<void>.delayed(delay);
       final CloudBaseSession? latest = await _sessionStore
@@ -390,18 +391,23 @@ Map<String, dynamic> _decodeApiPayload(String body) {
 }
 
 bool _isRefreshableAuthFailure(int statusCode, Map<String, dynamic> payload) {
-  if (statusCode == 401 || statusCode == 403) {
-    return true;
-  }
-  if (statusCode != 400) {
-    return false;
-  }
   final String details = <String>[
     payload['code']?.toString() ?? '',
     payload['message']?.toString() ?? '',
     payload['error']?.toString() ?? '',
     payload['error_description']?.toString() ?? '',
   ].join(' ').toLowerCase();
+
+  // A 401 from the app API normally means the short-lived access token needs
+  // refreshing. A generic 403 can instead be a business permission or
+  // deployment configuration error, so only refresh it when the payload
+  // explicitly identifies an authentication failure.
+  if (statusCode == 401) {
+    return true;
+  }
+  if (statusCode != 400 && statusCode != 403) {
+    return false;
+  }
   return details.contains('cloudbase auth verification failed') ||
       details.contains('missing authorization bearer') ||
       details.contains('unauthenticated') ||
@@ -410,19 +416,20 @@ bool _isRefreshableAuthFailure(int statusCode, Map<String, dynamic> payload) {
 }
 
 bool _isRefreshTokenRejected(CloudBaseAuthException error) {
-  if (error.statusCode == 401 || error.statusCode == 403) {
-    return true;
-  }
   final String details = <String>[
     error.code ?? '',
     error.message,
+    error.body?['code']?.toString() ?? '',
+    error.body?['message']?.toString() ?? '',
     error.body?['error']?.toString() ?? '',
     error.body?['error_description']?.toString() ?? '',
   ].join(' ').toLowerCase();
   return details.contains('invalid_grant') ||
       details.contains('token hash not match') ||
       details.contains('invalid refresh token') ||
-      details.contains('refresh token expired');
+      details.contains('refresh token expired') ||
+      details.contains('refresh_token_expired') ||
+      details.contains('token_revoked');
 }
 
 String _stripLeadingSlash(String value) {

@@ -83,6 +83,7 @@ class _AppMenuGroupRow extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: AppHaptics.navigationHandler(item.onTap),
+        enableFeedback: false,
         borderRadius: AppRadius.control,
         child: Padding(
           padding: padding,

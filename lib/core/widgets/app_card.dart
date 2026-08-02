@@ -57,6 +57,7 @@ class AppCard extends StatelessWidget {
       child: InkWell(
         borderRadius: effectiveRadius,
         onTap: AppHaptics.tapHandler(onTap),
+        enableFeedback: false,
         child: ClipRRect(
           borderRadius: effectiveRadius,
           clipBehavior: clipBehavior,

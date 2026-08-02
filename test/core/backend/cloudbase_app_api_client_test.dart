@@ -392,6 +392,50 @@ void main() {
     },
   );
 
+  test('generic app API 403 does not rotate or reject the session', () async {
+    int refreshCalls = 0;
+    final _SeededSessionStore sessionStore = _SeededSessionStore();
+    final http.Client httpClient = MockClient((http.Request request) async {
+      if (request.url.path == '/auth/v1/token') {
+        refreshCalls += 1;
+        return http.Response('{}', 500);
+      }
+      if (request.url.path == '/api/test') {
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'code': 'FORBIDDEN',
+            'message': 'This operation is not allowed for the current role.',
+          }),
+          403,
+        );
+      }
+      throw StateError('Unexpected path: ${request.url.path}');
+    });
+    final CloudBaseAppApiClient client = CloudBaseAppApiClient(
+      environment: _environment,
+      sessionStore: sessionStore,
+      authClient: CloudBaseAuthClient(
+        environment: _environment,
+        httpClient: httpClient,
+      ),
+      httpClient: httpClient,
+    );
+
+    await expectLater(
+      client.post('/api/test'),
+      throwsA(
+        isA<CloudBaseAppApiException>().having(
+          (CloudBaseAppApiException e) => e.statusCode,
+          'status',
+          403,
+        ),
+      ),
+    );
+
+    expect(refreshCalls, 0);
+    expect(sessionStore.currentSession?.accessToken, 'access-token');
+    expect(sessionStore.currentSession?.refreshToken, 'refresh-token');
+  });
   test(
     'postSse refreshes and retries when the stream request is unauthorized',
     () async {
