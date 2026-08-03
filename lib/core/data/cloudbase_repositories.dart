@@ -17,6 +17,7 @@ import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
 import 'package:sleep_dorm_app/core/data/model_serializers.dart';
 import 'package:sleep_dorm_app/core/data/repositories.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/models/avatar_resource.dart';
 import 'package:sleep_dorm_app/core/utils/id_generator.dart';
 
 Map<String, dynamic> _mapOf(dynamic value) {
@@ -189,71 +190,14 @@ String? _nonEmptyString(dynamic value) {
   return trimmed.isEmpty ? null : value;
 }
 
-String _avatarResourceKey(String? url) {
-  final String trimmed = url?.trim() ?? '';
-  if (trimmed.isEmpty) {
-    return '';
-  }
-  final Uri? parsed = Uri.tryParse(trimmed);
-  if (parsed == null || !parsed.hasScheme) {
-    return trimmed.split('?').first.split('#').first;
-  }
-  return Uri(
-    scheme: parsed.scheme,
-    host: parsed.host,
-    port: parsed.hasPort ? parsed.port : null,
-    path: parsed.path,
-  ).toString();
-}
-
-String? _stableDisplayedAvatarUrl({
-  required String? displayedUrl,
-  required String? nextUrl,
-  String? displayedStoragePath,
-  String? nextStoragePath,
+AvatarResource _mergeAvatarResources({
+  required AvatarResource current,
+  required AvatarResource incoming,
 }) {
-  final String current = displayedUrl?.trim() ?? '';
-  final String incoming = nextUrl?.trim() ?? '';
-  if (incoming.isEmpty) {
-    return null;
-  }
-  if (current.isEmpty) {
-    return incoming;
-  }
-  final String currentStorage = displayedStoragePath?.trim() ?? '';
-  final String incomingStorage = nextStoragePath?.trim() ?? '';
-  if (currentStorage.isNotEmpty && currentStorage == incomingStorage) {
-    return displayedUrl;
-  }
-  if (_avatarResourceKey(current) == _avatarResourceKey(incoming)) {
-    return displayedUrl;
-  }
-  return incoming;
+  return current.mergeRemote(incoming);
 }
 
-String? _avatarUrlForSnapshotMerge({
-  required UserProfile currentUser,
-  required UserProfile snapshotUser,
-  required bool preferFreshSnapshotForCachedProfile,
-}) {
-  final String incoming = snapshotUser.avatarUrl?.trim() ?? '';
-  final String currentStorage = currentUser.avatarStoragePath?.trim() ?? '';
-  final String incomingStorage = snapshotUser.avatarStoragePath?.trim() ?? '';
-  if (preferFreshSnapshotForCachedProfile &&
-      incoming.isNotEmpty &&
-      currentStorage.isNotEmpty &&
-      currentStorage == incomingStorage) {
-    return snapshotUser.avatarUrl;
-  }
-  return _stableDisplayedAvatarUrl(
-    displayedUrl: currentUser.avatarUrl,
-    nextUrl: snapshotUser.avatarUrl,
-    displayedStoragePath: currentUser.avatarStoragePath,
-    nextStoragePath: snapshotUser.avatarStoragePath,
-  );
-}
-
-Dorm _mergeStableDormAvatarUrls(Dorm currentDorm, Dorm nextDorm) {
+Dorm _mergeDormAvatarResources(Dorm currentDorm, Dorm nextDorm) {
   if (currentDorm.members.isEmpty || nextDorm.members.isEmpty) {
     return nextDorm;
   }
@@ -267,18 +211,15 @@ Dorm _mergeStableDormAvatarUrls(Dorm currentDorm, Dorm nextDorm) {
           if (currentMember == null) {
             return nextMember;
           }
-          final String currentAvatarUrl = currentMember.avatarUrl?.trim() ?? '';
-          final String nextAvatarUrl = nextMember.avatarUrl?.trim() ?? '';
-          if (nextAvatarUrl.isEmpty && currentAvatarUrl.isNotEmpty) {
-            return nextMember.copyWith(avatarUrl: currentMember.avatarUrl);
-          }
-          final String? stableAvatarUrl = _stableDisplayedAvatarUrl(
-            displayedUrl: currentMember.avatarUrl,
-            nextUrl: nextMember.avatarUrl,
+          final AvatarResource merged = _mergeAvatarResources(
+            current: currentMember.avatarResource,
+            incoming: nextMember.avatarResource,
           );
           return nextMember.copyWith(
-            avatarUrl: stableAvatarUrl,
-            clearAvatarUrl: stableAvatarUrl == null,
+            avatarUrl: merged.normalizedUrl,
+            avatarStoragePath: merged.normalizedStoragePath,
+            clearAvatarUrl: merged.normalizedUrl == null,
+            clearAvatarStoragePath: merged.normalizedStoragePath == null,
           );
         })
         .toList(growable: false),
@@ -683,6 +624,7 @@ DormMember _dormMemberFromMap(Map<String, dynamic> map) {
     lastActiveAt: _dateOf(map['lastActiveAt']),
     note: _stringOf(map['note']),
     avatarUrl: map['avatarUrl'] as String?,
+    avatarStoragePath: map['avatarStoragePath'] as String?,
     displayBadgeId: map['displayBadgeId'] as String?,
     noiseDb: noise,
   );
@@ -962,7 +904,6 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   DateTime? _lastSuccessfulAuthAt;
   VerifiedPhoneIdentity? _cachedVerifiedIdentity;
   UserProfile? _cachedAuthProfile;
-  bool _currentUserRestoredFromAuthProfileCache = false;
   bool _hasPendingEquippedBadgeId = false;
   String? _pendingEquippedBadgeId;
   bool _hasPendingSelectedDormBadgeId = false;
@@ -1044,7 +985,6 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           cached.avatarFallbackSeed?.trim().isNotEmpty == true
           ? cached.avatarFallbackSeed!
           : cached.displayName;
-      _currentUserRestoredFromAuthProfileCache = true;
       return cached.copyWith(
         uid: uid,
         phoneNumber: normalizedPhone ?? cached.phoneNumber,
@@ -1052,7 +992,6 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
         avatarFallbackSeed: fallbackSeed,
       );
     }
-    _currentUserRestoredFromAuthProfileCache = false;
     return _blankCloudBaseUserProfile(
       uid: uid,
       phoneNumber: normalizedPhone,
@@ -1109,7 +1048,6 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     await _sessionCoordinator.signOut();
     _snapshotStore.clear();
     _currentUser = _signedOutProfile();
-    _currentUserRestoredFromAuthProfileCache = false;
     _lastAuthError = null;
     _lastSuccessfulAuthAt = null;
     return _currentUser;
@@ -2269,11 +2207,9 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     }
     final String? snapshotPhone = snapshot.user.phoneNumber;
     final DateTime? snapshotPhoneLinkedAt = snapshot.user.phoneLinkedAt;
-    final String? snapshotAvatarUrl = _avatarUrlForSnapshotMerge(
-      currentUser: _currentUser,
-      snapshotUser: snapshot.user,
-      preferFreshSnapshotForCachedProfile:
-          _currentUserRestoredFromAuthProfileCache,
+    final AvatarResource snapshotAvatar = _mergeAvatarResources(
+      current: _currentUser.avatarResource,
+      incoming: snapshot.user.avatarResource,
     );
     final bool hasEquippedBadgeSnapshot = rawUser.containsKey(
       'equippedBadgeId',
@@ -2340,12 +2276,16 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           ? snapshotPhone
           : _currentUser.phoneNumber,
       phoneLinkedAt: snapshotPhoneLinkedAt ?? _currentUser.phoneLinkedAt,
-      avatarUrl: snapshotAvatarUrl,
-      avatarPath: snapshot.user.avatarPath,
-      avatarStoragePath: snapshot.user.avatarStoragePath,
+      avatarUrl: snapshotAvatar.normalizedUrl,
+      clearAvatarUrl: snapshotAvatar.normalizedUrl == null,
+      avatarPath: snapshotAvatar.localPath,
+      clearAvatarPath: snapshotAvatar.localPath == null,
+      avatarBytes: snapshotAvatar.bytes,
+      clearAvatarBytes: snapshotAvatar.bytes == null,
+      avatarStoragePath: snapshotAvatar.normalizedStoragePath,
+      clearAvatarStoragePath: snapshotAvatar.normalizedStoragePath == null,
       avatarFallbackSeed: snapshot.user.avatarFallbackSeed,
     );
-    _currentUserRestoredFromAuthProfileCache = false;
     _mergePhoneFromCachedVerifiedIdentity();
     unawaited(_persistCurrentUserToAuthProfileCache());
     notifyListeners();
@@ -4105,6 +4045,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
           note:
               '\u5df2\u521b\u5efa\u5bbf\u820d\uff0c\u7b49\u5f85\u9080\u8bf7\u820d\u53cb\u52a0\u5165\u3002',
           avatarUrl: _authRepository.currentUser.avatarUrl,
+          avatarStoragePath: _authRepository.currentUser.avatarStoragePath,
         ),
       ],
       rulesSettings: nextRules,
@@ -4600,6 +4541,8 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
                 note:
                     '\u5df2\u901a\u8fc7\u9080\u8bf7\u7801\u52a0\u5165\u5bbf\u820d\u3002',
                 avatarUrl: _authRepository.currentUser.avatarUrl,
+                avatarStoragePath:
+                    _authRepository.currentUser.avatarStoragePath,
               ),
               ..._currentDorm.members,
             ],
@@ -4743,7 +4686,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
     );
     Dorm mergedDorm = _mergeNewerDormHeartbeatFields(
       _currentDorm,
-      _mergeStableDormAvatarUrls(_currentDorm, snapshot.dorm),
+      _mergeDormAvatarResources(_currentDorm, snapshot.dorm),
     );
     mergedDorm = _mergePendingDormEnvironment(mergedDorm);
     final Map<String, _PendingDormMemberStatusOverride> remainingOverrides =

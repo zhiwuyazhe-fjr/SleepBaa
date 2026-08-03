@@ -1513,7 +1513,7 @@ void main() {
   );
 
   test(
-    'cloudbase repositories preserve displayed avatar urls for unchanged resources',
+    'cloudbase repositories adopt refreshed signed avatar urls for unchanged resources',
     () {
       final _FakeCloudBaseAppApiClient appApiClient =
           _FakeCloudBaseAppApiClient(
@@ -1546,6 +1546,7 @@ void main() {
             'lastActiveAt': '2026-04-21T23:00:00.000Z',
             'note': '',
             'avatarUrl': 'https://cdn.example.com/avatar.png?sig=first',
+            'avatarStoragePath': 'avatars/cloud-user.png',
           },
           user: <String, dynamic>{
             'uid': 'cloud-user',
@@ -1567,6 +1568,7 @@ void main() {
             'lastActiveAt': '2026-04-21T23:00:00.000Z',
             'note': '',
             'avatarUrl': 'https://cdn.example.com/avatar.png?sig=second',
+            'avatarStoragePath': 'avatars/cloud-user.png',
           },
           user: <String, dynamic>{
             'uid': 'cloud-user',
@@ -1580,11 +1582,11 @@ void main() {
 
       expect(
         authRepository.currentUser.avatarUrl,
-        'https://cdn.example.com/me.png?sig=first',
+        'https://cdn.example.com/me.png?sig=second',
       );
       expect(
         dormRepository.currentDorm.members.single.avatarUrl,
-        'https://cdn.example.com/avatar.png?sig=first',
+        'https://cdn.example.com/avatar.png?sig=second',
       );
 
       authRepository.dispose();
@@ -1625,6 +1627,7 @@ void main() {
           'lastActiveAt': '2026-04-21T23:00:00.000Z',
           'note': '',
           'avatarUrl': 'https://cdn.example.com/roommate-a.png?sig=first',
+          'avatarStoragePath': 'avatars/roommate-a.png',
         }),
       );
       snapshotStore.pushPayload(
@@ -1636,6 +1639,7 @@ void main() {
           'sleepModeActive': false,
           'lastActiveAt': '2026-04-21T23:00:00.000Z',
           'note': '',
+          'avatarStoragePath': 'avatars/roommate-a.png',
         }),
       );
 

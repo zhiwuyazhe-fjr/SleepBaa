@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:sleep_dorm_app/app/theme/app_radius.dart';
 import 'package:sleep_dorm_app/app/theme/app_semantic_colors.dart';
@@ -8,6 +6,7 @@ import 'package:sleep_dorm_app/app/theme/app_typography.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/app_scope.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/models/avatar_resource.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
 import 'package:sleep_dorm_app/core/widgets/app_message_record_card.dart';
@@ -56,12 +55,9 @@ class DormMemberDetailPage extends StatelessWidget {
             );
             final UserProfile currentUser = services.authRepository.currentUser;
             final bool isCurrentUser = member.uid == currentUser.uid;
-            final Uint8List? avatarBytes = isCurrentUser
-                ? currentUser.avatarBytes
-                : null;
-            final String? avatarUrl = isCurrentUser
-                ? currentUser.avatarUrl ?? member.avatarUrl
-                : member.avatarUrl;
+            final AvatarResource avatarResource = isCurrentUser
+                ? currentUser.avatarResource
+                : member.avatarResource;
             final String fallbackSeed =
                 isCurrentUser &&
                     currentUser.avatarFallbackSeed?.trim().isNotEmpty == true
@@ -110,8 +106,7 @@ class DormMemberDetailPage extends StatelessWidget {
                                     dorm,
                                     member,
                                   ),
-                                  avatarBytes: avatarBytes,
-                                  avatarUrl: avatarUrl,
+                                  avatarResource: avatarResource,
                                   fallbackSeed: fallbackSeed,
                                 ),
                               ),
@@ -211,15 +206,13 @@ class _DormMemberProfileHero extends StatelessWidget {
     required this.member,
     required this.showPresence,
     required this.fallbackSeed,
-    this.avatarBytes,
-    this.avatarUrl,
+    required this.avatarResource,
   });
 
   final DormMember member;
   final bool showPresence;
   final String fallbackSeed;
-  final Uint8List? avatarBytes;
-  final String? avatarUrl;
+  final AvatarResource avatarResource;
 
   @override
   Widget build(BuildContext context) {
@@ -240,8 +233,7 @@ class _DormMemberProfileHero extends StatelessWidget {
           child: DormMemberAvatar(
             size: 80,
             accentColor: accentColor,
-            avatarBytes: avatarBytes,
-            avatarUrl: avatarUrl,
+            resource: avatarResource,
             fallbackSeed: fallbackSeed,
           ),
         ),

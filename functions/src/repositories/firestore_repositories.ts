@@ -1407,16 +1407,20 @@ export class FirestoreRepository implements AssistantDataRepository {
             logRepo(
               `dorm avatar temp-url failed uid=${memberUid} storagePath=${avatarStoragePath}`,
             );
-            fallbackAvatarUrl = storedAvatarUrl;
+            // A stored CloudBase URL is an expired credential, not a fallback
+            // resource. Omitting it lets clients retain a still-valid URL for
+            // this same storage path until signing succeeds again.
+            fallbackAvatarUrl = null;
           }
         }
         const fallbackDisplayBadgeId =
           asString(userDoc.equippedBadgeId) ||
           asStringArray(userDoc.earnedBadgeIds).slice(-1)[0] ||
           null;
-        const resolvedAvatarUrl =
-          this.preferString(fallbackAvatarUrl, value.avatarUrl, null) ||
-          undefined;
+        const resolvedAvatarUrl = avatarTempUrlFailed
+          ? undefined
+          : this.preferString(fallbackAvatarUrl, value.avatarUrl, null) ||
+            undefined;
         if (!resolvedAvatarUrl) {
           logRepo(
             `dorm avatar missing uid=${memberUid} reason=${
@@ -1440,6 +1444,7 @@ export class FirestoreRepository implements AssistantDataRepository {
           lastActiveAt: asString(value.lastActiveAt, nowIso()),
           note: asString(value.note),
           avatarUrl: resolvedAvatarUrl,
+          avatarStoragePath: avatarStoragePath || undefined,
           displayBadgeId:
             this.preferString(
               fallbackDisplayBadgeId,
@@ -4040,7 +4045,8 @@ export class FirestoreRepository implements AssistantDataRepository {
       try {
         avatarUrl = await this.fileStorage.getTemporaryUrl(avatarStoragePath);
       } catch {
-        avatarUrl = avatarUrl || null;
+        // Do not send a previously persisted signed URL after signing fails.
+        avatarUrl = null;
       }
     }
     return {

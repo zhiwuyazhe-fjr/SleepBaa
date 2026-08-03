@@ -5,6 +5,7 @@ import 'package:sleep_dorm_app/app/theme/app_spacing.dart';
 import 'package:sleep_dorm_app/app/theme/night_mood_theme.dart';
 import 'package:sleep_dorm_app/core/interaction/app_haptics.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/widgets/avatar_image.dart';
 
 class UserAvatar extends StatelessWidget {
   const UserAvatar({
@@ -36,7 +37,14 @@ class UserAvatar extends StatelessWidget {
         ),
         border: Border.all(color: appColors.surface, width: 4),
       ),
-      child: ClipOval(child: _buildContent(context)),
+      child: ClipOval(
+        child: AvatarImage(
+          resource: profile.avatarResource,
+          width: size,
+          height: size,
+          fallbackBuilder: _buildFallback,
+        ),
+      ),
     );
 
     final Widget stack = Stack(
@@ -83,33 +91,6 @@ class UserAvatar extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  Widget _buildContent(BuildContext context) {
-    if (profile.avatarBytes != null && profile.avatarBytes!.isNotEmpty) {
-      return Image.memory(
-        profile.avatarBytes!,
-        fit: BoxFit.cover,
-        width: size,
-        height: size,
-      );
-    }
-
-    if (profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty) {
-      return Image.network(
-        profile.avatarUrl!,
-        fit: BoxFit.cover,
-        width: size,
-        height: size,
-        gaplessPlayback: true,
-        errorBuilder:
-            (BuildContext context, Object error, StackTrace? stackTrace) {
-              return _buildFallback(context);
-            },
-      );
-    }
-
-    return _buildFallback(context);
   }
 
   Widget _buildFallback(BuildContext context) {

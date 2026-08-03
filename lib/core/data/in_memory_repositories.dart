@@ -2265,6 +2265,9 @@ class InMemoryDormRepository extends ChangeNotifier implements DormRepository {
                 ? member.copyWith(
                     name: profile.displayName,
                     avatarUrl: profile.avatarUrl,
+                    avatarStoragePath: profile.avatarStoragePath,
+                    clearAvatarUrl: profile.avatarUrl == null,
+                    clearAvatarStoragePath: profile.avatarStoragePath == null,
                     displayBadgeId: profile.displayBadgeId,
                   )
                 : member,

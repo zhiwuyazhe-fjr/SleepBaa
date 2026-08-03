@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sleep_dorm_app/app/routes.dart';
@@ -822,12 +820,9 @@ class _DormMemberCard extends StatelessWidget {
         ? currentUserProfile?.displayBadgeId ?? member.displayBadgeId
         : member.displayBadgeId;
     final HonorBadge? badge = honorBadgeById(resolvedBadgeId);
-    final Uint8List? avatarBytes = isCurrentUser
-        ? currentUserProfile?.avatarBytes
-        : null;
-    final String? avatarUrl = isCurrentUser
-        ? currentUserProfile?.avatarUrl ?? member.avatarUrl
-        : member.avatarUrl;
+    final avatarResource = isCurrentUser
+        ? currentUserProfile?.avatarResource ?? member.avatarResource
+        : member.avatarResource;
     final String fallbackSeed =
         isCurrentUser &&
             currentUserProfile?.avatarFallbackSeed?.trim().isNotEmpty == true
@@ -862,8 +857,7 @@ class _DormMemberCard extends StatelessWidget {
                         ),
                         size: 44,
                         accentColor: accentColor,
-                        avatarBytes: avatarBytes,
-                        avatarUrl: avatarUrl,
+                        resource: avatarResource,
                         fallbackSeed: fallbackSeed,
                       ),
                     ),

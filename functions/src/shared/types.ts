@@ -81,6 +81,7 @@ export interface ContextDormMember {
   lastActiveAt?: string;
   note?: string;
   avatarUrl?: string;
+  avatarStoragePath?: string;
   displayBadgeId?: string;
 }
 

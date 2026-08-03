@@ -26,6 +26,7 @@ import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/data/in_memory_repositories.dart';
 import 'package:sleep_dorm_app/core/data/model_serializers.dart';
 import 'package:sleep_dorm_app/core/models/app_models.dart';
+import 'package:sleep_dorm_app/core/models/avatar_resource.dart';
 import 'package:sleep_dorm_app/core/notifications/app_notification_service.dart';
 import 'package:sleep_dorm_app/core/widgets/app_card.dart';
 import 'package:sleep_dorm_app/core/widgets/app_detail_page_header.dart';
@@ -4287,7 +4288,7 @@ void main() {
     expect(find.text('安静守护者'), findsNothing);
   });
 
-  testWidgets('dorm member avatar keeps last non-empty avatar during refresh', (
+  testWidgets('dorm member avatar renders fallback when resource becomes empty', (
     WidgetTester tester,
   ) async {
     const ValueKey<String> avatarKey = ValueKey<String>('stable-avatar');
@@ -4367,7 +4368,7 @@ void main() {
           key: avatarKey,
           size: 44,
           accentColor: Colors.green,
-          avatarBytes: avatarBytes,
+          resource: AvatarResource(bytes: avatarBytes),
           fallbackSeed: 'Alice',
         ),
       ),
@@ -4382,16 +4383,17 @@ void main() {
           key: avatarKey,
           size: 44,
           accentColor: Colors.green,
+          resource: AvatarResource(),
           fallbackSeed: 'Alice',
         ),
       ),
     );
 
-    expect(find.byType(Image), findsOneWidget);
-    expect(find.text('A'), findsNothing);
+    expect(find.byType(Image), findsNothing);
+    expect(find.text('A'), findsOneWidget);
   });
 
-  testWidgets('dorm member avatar prefers a fresh url over cached bytes', (
+  testWidgets('dorm member avatar switches from local preview to a fresh url', (
     WidgetTester tester,
   ) async {
     const ValueKey<String> avatarKey = ValueKey<String>('fresh-url-avatar');
@@ -4471,7 +4473,7 @@ void main() {
           key: avatarKey,
           size: 44,
           accentColor: Colors.green,
-          avatarBytes: avatarBytes,
+          resource: AvatarResource(bytes: avatarBytes),
           fallbackSeed: 'Alice',
         ),
       ),
@@ -4486,7 +4488,9 @@ void main() {
           key: avatarKey,
           size: 44,
           accentColor: Colors.green,
-          avatarUrl: 'https://example.com/avatar-a.png',
+          resource: AvatarResource(
+            url: 'https://example.com/avatar-a.png',
+          ),
           fallbackSeed: 'Alice',
         ),
       ),

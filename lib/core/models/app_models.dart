@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:sleep_dorm_app/core/models/avatar_resource.dart';
 
 enum HomeMode { preSleep, postSleep }
 
@@ -209,6 +210,13 @@ class UserProfile {
   final String? avatarStoragePath;
   final String? avatarFallbackSeed;
 
+  AvatarResource get avatarResource => AvatarResource(
+    localPath: avatarPath,
+    bytes: avatarBytes,
+    url: avatarUrl,
+    storagePath: avatarStoragePath,
+  );
+
   String? get latestEarnedBadgeId =>
       earnedBadgeIds.isEmpty ? null : earnedBadgeIds.last;
 
@@ -260,6 +268,10 @@ class UserProfile {
     bool clearEquippedBadge = false,
     bool clearSelectedDormBadgeId = false,
     bool clearAvatar = false,
+    bool clearAvatarPath = false,
+    bool clearAvatarBytes = false,
+    bool clearAvatarUrl = false,
+    bool clearAvatarStoragePath = false,
     bool clearDormId = false,
     bool clearPhoneNumber = false,
     bool clearPhoneLinkedAt = false,
@@ -283,10 +295,16 @@ class UserProfile {
       phoneLinkedAt: clearPhoneLinkedAt
           ? null
           : phoneLinkedAt ?? this.phoneLinkedAt,
-      avatarPath: clearAvatar ? null : avatarPath ?? this.avatarPath,
-      avatarBytes: clearAvatar ? null : avatarBytes ?? this.avatarBytes,
-      avatarUrl: clearAvatar ? null : avatarUrl ?? this.avatarUrl,
-      avatarStoragePath: clearAvatar
+      avatarPath: clearAvatar || clearAvatarPath
+          ? null
+          : avatarPath ?? this.avatarPath,
+      avatarBytes: clearAvatar || clearAvatarBytes
+          ? null
+          : avatarBytes ?? this.avatarBytes,
+      avatarUrl: clearAvatar || clearAvatarUrl
+          ? null
+          : avatarUrl ?? this.avatarUrl,
+      avatarStoragePath: clearAvatar || clearAvatarStoragePath
           ? null
           : avatarStoragePath ?? this.avatarStoragePath,
       avatarFallbackSeed:
@@ -1239,6 +1257,7 @@ class DormMember {
     required this.lastActiveAt,
     required this.note,
     this.avatarUrl,
+    this.avatarStoragePath,
     this.displayBadgeId,
     this.noiseDb,
   });
@@ -1253,7 +1272,11 @@ class DormMember {
   final DateTime lastActiveAt;
   final String note;
   final String? avatarUrl;
+  final String? avatarStoragePath;
   final String? displayBadgeId;
+
+  AvatarResource get avatarResource =>
+      AvatarResource(url: avatarUrl, storagePath: avatarStoragePath);
 
   /// Latest microphone noise level reported for this member (dB), if any.
   final int? noiseDb;
@@ -1269,9 +1292,11 @@ class DormMember {
     DateTime? lastActiveAt,
     String? note,
     String? avatarUrl,
+    String? avatarStoragePath,
     String? displayBadgeId,
     int? noiseDb,
     bool clearAvatarUrl = false,
+    bool clearAvatarStoragePath = false,
     bool clearAppLastSeenAt = false,
     bool clearNoiseDb = false,
   }) {
@@ -1288,6 +1313,9 @@ class DormMember {
       lastActiveAt: lastActiveAt ?? this.lastActiveAt,
       note: note ?? this.note,
       avatarUrl: clearAvatarUrl ? null : (avatarUrl ?? this.avatarUrl),
+      avatarStoragePath: clearAvatarStoragePath
+          ? null
+          : (avatarStoragePath ?? this.avatarStoragePath),
       displayBadgeId: displayBadgeId ?? this.displayBadgeId,
       noiseDb: clearNoiseDb ? null : (noiseDb ?? this.noiseDb),
     );

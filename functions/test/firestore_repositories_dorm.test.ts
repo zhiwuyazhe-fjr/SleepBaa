@@ -302,6 +302,7 @@ test("getDorm backfills avatarUrl and displayBadgeId from latest user profile", 
   assert.ok(roommate);
   assert.equal(roommate?.name, "Roommate");
   assert.equal(roommate?.avatarUrl, "https://cdn.example.com/avatar-file-1");
+  assert.equal(roommate?.avatarStoragePath, "avatar-file-1");
   assert.equal(roommate?.displayBadgeId, "latest-earned");
 
   await repo.saveUserProfile("roommate-user", {
@@ -445,7 +446,7 @@ test("getDorm logs avatar diagnostics when temp-url signing fails or avatar data
     await repo.saveUserProfile("roommate-user", {
       displayName: "Roommate",
       dormId,
-      avatarUrl: null,
+      avatarUrl: "https://expired.example.com/user-avatar.png",
       avatarStoragePath: "avatar-file-1",
     });
     await store.set("dorm_members", `${dormId}:roommate-user`, {
@@ -457,7 +458,7 @@ test("getDorm logs avatar diagnostics when temp-url signing fails or avatar data
       sleepModeActive: false,
       lastActiveAt: "2026-04-13T15:00:00.000Z",
       note: "resting",
-      avatarUrl: null,
+      avatarUrl: "https://expired.example.com/member-avatar.png",
     });
 
     const dorm = await repo.getDorm(dormId, "owner-user");
@@ -481,6 +482,9 @@ test("getDorm logs avatar diagnostics when temp-url signing fails or avatar data
     logs.length = 0;
     await store.merge("users", "roommate-user", {
       avatarStoragePath: null,
+      avatarUrl: null,
+    });
+    await store.merge("dorm_members", `${dormId}:roommate-user`, {
       avatarUrl: null,
     });
 

@@ -726,7 +726,7 @@ void main() {
   );
 
   test(
-    'runtime snapshot refresh keeps displayed avatar url for unchanged storage path',
+    'runtime snapshot refresh adopts a fresh signed url for unchanged storage path',
     () async {
       bool returnFreshAvatar = false;
       final CloudBaseAuthRepository repository = _buildHarness(
@@ -775,7 +775,7 @@ void main() {
 
       expect(
         repository.currentUser.avatarUrl,
-        'https://cdn.example.com/avatar.png?sig=old',
+        'https://cdn.example.com/avatar.png?sig=fresh',
       );
 
       repository.dispose();
