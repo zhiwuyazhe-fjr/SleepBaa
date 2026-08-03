@@ -1220,7 +1220,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
         await _verifiedPhoneStore.write(_cachedVerifiedIdentity!);
       }
 
-      final CloudBaseSession? storedSession = await _sessionCoordinator
+      CloudBaseSession? storedSession = await _sessionCoordinator
           .restoreSession();
       final String principalSubject =
           _cachedVerifiedIdentity?.subject ??
@@ -1246,6 +1246,35 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       }
       _mergePhoneFromCachedVerifiedIdentity();
       _lastSuccessfulAuthAt = DateTime.now();
+
+      // Versions before the account-integrity fix could persist a token/session
+      // record `id` as the user subject after refresh. The durable verified
+      // phone/profile identity is the account anchor. A still-valid token must
+      // also confirm that identity before its local metadata is repaired.
+      if (storedSession != null &&
+          storedSession.subject.trim() != principalSubject) {
+        final bool tokenNeedsRefresh = !DateTime.now().isBefore(
+          storedSession.expiresAt.subtract(const Duration(minutes: 5)),
+        );
+        if (!tokenNeedsRefresh) {
+          final CloudBaseUserInfo? storedTokenUser =
+              await _readCurrentCloudBaseUser(storedSession);
+          if (storedTokenUser == null ||
+              storedTokenUser.subject.trim() != principalSubject) {
+            _lastAuthError = _transientAuthWarningMessage();
+            return _currentUser;
+          }
+        }
+        try {
+          await _sessionCoordinator.installSession(
+            storedSession.copyWith(subject: principalSubject),
+          );
+          storedSession = await _sessionCoordinator.restoreSession();
+        } catch (_) {
+          _lastAuthError = _transientAuthWarningMessage();
+          return _currentUser;
+        }
+      }
 
       if (storedSession == null || storedSession.subject != principalSubject) {
         _lastAuthError = _transientAuthWarningMessage();
@@ -1976,20 +2005,6 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     required String deviceId,
     required String requestedPhoneNumber,
   }) async {
-    await _sessionCoordinator.installSession(
-      CloudBaseSession(
-        accessToken: session.accessToken,
-        refreshToken: session.refreshToken,
-        subject: session.subject,
-        expiresAt: DateTime.now().add(Duration(seconds: session.expiresIn)),
-        deviceId: deviceId,
-        scope: session.scope,
-        tokenType: session.tokenType.trim().isEmpty
-            ? 'Bearer'
-            : session.tokenType.trim(),
-      ),
-    );
-    _lastAuthError = null;
     CloudBaseUserInfo? info;
     try {
       info = await _authClient.getCurrentUser(
@@ -1999,17 +2014,49 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     } catch (_) {
       info = null;
     }
+
+    final String tokenSubject = session.subject.trim();
+    final String verifiedSubject = info?.subject.trim() ?? '';
+    if (tokenSubject.isNotEmpty &&
+        verifiedSubject.isNotEmpty &&
+        tokenSubject != verifiedSubject) {
+      throw const AuthFlowException('登录凭证身份不一致，请重新登录。');
+    }
+    final String resolvedSubject = verifiedSubject.isNotEmpty
+        ? verifiedSubject
+        : tokenSubject;
+    if (resolvedSubject.isEmpty) {
+      throw const AuthFlowException('登录成功但未能确认账号身份，请重试。');
+    }
+
+    if (_currentUser.uid.isNotEmpty && _currentUser.uid != resolvedSubject) {
+      _snapshotStore.clear();
+    }
+    await _sessionCoordinator.installSession(
+      CloudBaseSession(
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        subject: resolvedSubject,
+        expiresAt: DateTime.now().add(Duration(seconds: session.expiresIn)),
+        deviceId: deviceId,
+        scope: session.scope,
+        tokenType: session.tokenType.trim().isEmpty
+            ? 'Bearer'
+            : session.tokenType.trim(),
+      ),
+    );
+    _lastAuthError = null;
     final bool hadCurrentUser = _currentUser.uid.isNotEmpty;
     final UserProfile baseProfile =
-        hadCurrentUser && _currentUser.uid == session.subject
+        hadCurrentUser && _currentUser.uid == resolvedSubject
         ? _currentUser
         : _seedCloudBaseProfile(
-            uid: session.subject,
+            uid: resolvedSubject,
             phoneNumber: requestedPhoneNumber,
             phoneLinkedAt: DateTime.now(),
           );
     _currentUser = baseProfile.copyWith(
-      uid: session.subject,
+      uid: resolvedSubject,
       displayName: info?.name ?? baseProfile.displayName,
       phoneNumber: info?.phoneNumber ?? requestedPhoneNumber,
       phoneLinkedAt: DateTime.now(),
@@ -2205,6 +2252,14 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
         ? Map<String, dynamic>.from(_snapshotStore.payload['data'] as Map)
         : _snapshotStore.payload;
     final Map<String, dynamic> rawUser = _mapOf(root['user']);
+    final String rawSnapshotUid = _stringOf(rawUser['uid']);
+    if (rawSnapshotUid.isEmpty) {
+      return;
+    }
+    if (_currentUser.uid.isNotEmpty && _currentUser.uid != rawSnapshotUid) {
+      _lastAuthError = _transientAuthWarningMessage();
+      return;
+    }
     final _SnapshotData snapshot = _SnapshotData.fromPayload(
       _snapshotStore.payload,
       _currentUser.uid,
@@ -2258,10 +2313,16 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       }
     }
     _currentUser = _currentUser.copyWith(
-      uid: snapshot.user.uid,
-      displayName: snapshot.user.displayName,
-      tagline: snapshot.user.tagline,
-      role: snapshot.user.role,
+      uid: rawSnapshotUid,
+      displayName: rawUser.containsKey('displayName')
+          ? snapshot.user.displayName
+          : _currentUser.displayName,
+      tagline: rawUser.containsKey('tagline')
+          ? snapshot.user.tagline
+          : _currentUser.tagline,
+      role: rawUser.containsKey('role')
+          ? snapshot.user.role
+          : _currentUser.role,
       earnedBadgeIds: rawUser.containsKey('earnedBadgeIds')
           ? snapshot.user.earnedBadgeIds
           : _currentUser.earnedBadgeIds,
@@ -2273,6 +2334,8 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       selectedDormBadgeId: nextSelectedDormBadgeId,
       clearSelectedDormBadgeId: clearSelectedDormBadgeId,
       dormId: snapshot.user.dormId,
+      clearDormId:
+          rawUser.containsKey('dormId') && snapshot.user.dormId == null,
       phoneNumber: snapshotPhone?.trim().isNotEmpty == true
           ? snapshotPhone
           : _currentUser.phoneNumber,
@@ -4575,7 +4638,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
     if (_appApiClient.isConfigured) {
       try {
         await _appApiClient.post('/api/dorm/leave');
-        await _snapshotStore.refresh();
+        await _snapshotStore.refresh(allowDestructiveAccountChanges: true);
         return;
       } catch (_) {
         // Fall back to local state when the backend is unavailable.

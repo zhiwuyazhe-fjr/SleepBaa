@@ -3,6 +3,15 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_app_api_client.dart';
 
+class CloudBaseSnapshotRejectedException implements Exception {
+  const CloudBaseSnapshotRejectedException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'CloudBase snapshot rejected: $message';
+}
+
 class CloudBaseSnapshotStore extends ChangeNotifier {
   CloudBaseSnapshotStore({required CloudBaseAppApiClient appApiClient})
     : _appApiClient = appApiClient;
@@ -13,6 +22,7 @@ class CloudBaseSnapshotStore extends ChangeNotifier {
   bool _isRefreshing = false;
   String? _lastError;
   bool _refreshQueued = false;
+  bool _allowDestructiveRefreshQueued = false;
   Future<void>? _refreshFuture;
 
   Map<String, dynamic> get payload => _payload;
@@ -20,17 +30,20 @@ class CloudBaseSnapshotStore extends ChangeNotifier {
   String? get lastError => _lastError;
   bool get hasPayload => _payload.isNotEmpty;
 
-  Future<void> refresh() async {
+  Future<void> refresh({bool allowDestructiveAccountChanges = false}) async {
     if (!_appApiClient.isConfigured) {
       return;
     }
     final Future<void>? inFlightRefresh = _refreshFuture;
     if (inFlightRefresh != null) {
       _refreshQueued = true;
+      _allowDestructiveRefreshQueued =
+          _allowDestructiveRefreshQueued || allowDestructiveAccountChanges;
       await inFlightRefresh;
       return;
     }
 
+    _allowDestructiveRefreshQueued = allowDestructiveAccountChanges;
     final Completer<void> refreshCompleter = Completer<void>();
     final Future<void> refreshFuture = refreshCompleter.future;
     _refreshFuture = refreshFuture;
@@ -49,18 +62,92 @@ class CloudBaseSnapshotStore extends ChangeNotifier {
   Future<void> _runRefreshLoop() async {
     do {
       _refreshQueued = false;
+      final bool allowDestructiveAccountChanges =
+          _allowDestructiveRefreshQueued;
+      _allowDestructiveRefreshQueued = false;
       _isRefreshing = true;
       _lastError = null;
       notifyListeners();
       try {
-        _payload = await _appApiClient.bootstrap();
+        final Map<String, dynamic> nextPayload = await _appApiClient
+            .bootstrap();
+        await _validateBootstrapPayload(
+          nextPayload,
+          allowDestructiveAccountChanges: allowDestructiveAccountChanges,
+        );
+        _payload = nextPayload;
       } catch (error) {
+        // A failed or suspicious refresh must never replace the last known
+        // account snapshot. The next poll can retry with the same UI state.
         _lastError = error.toString();
       } finally {
         _isRefreshing = false;
         notifyListeners();
       }
     } while (_refreshQueued);
+  }
+
+  Future<void> _validateBootstrapPayload(
+    Map<String, dynamic> nextPayload, {
+    required bool allowDestructiveAccountChanges,
+  }) async {
+    final Map<String, dynamic> nextRoot = _rootOf(nextPayload);
+    final Map<String, dynamic> nextUser = _mapOf(nextRoot['user']);
+    final String nextUid = _stringOf(nextUser['uid']);
+    if (nextUid.isEmpty) {
+      throw const CloudBaseSnapshotRejectedException(
+        'bootstrap payload has no authenticated user',
+      );
+    }
+
+    final String expectedSubject =
+        (await _appApiClient.currentSessionSubject())?.trim() ?? '';
+    if (expectedSubject.isNotEmpty && nextUid != expectedSubject) {
+      throw CloudBaseSnapshotRejectedException(
+        'user mismatch: expected $expectedSubject, received $nextUid',
+      );
+    }
+
+    final Map<String, dynamic> currentRoot = _rootOf(_payload);
+    final Map<String, dynamic> currentUser = _mapOf(currentRoot['user']);
+    final String currentUid = _stringOf(currentUser['uid']);
+    if (currentUid.isNotEmpty && currentUid != nextUid) {
+      throw CloudBaseSnapshotRejectedException(
+        'snapshot attempted to switch from $currentUid to $nextUid',
+      );
+    }
+
+    final String nextDormId = _stringOf(nextUser['dormId']);
+    final Map<String, dynamic> nextDorm = _mapOf(nextRoot['dorm']);
+    final String nextDormRecordId = _stringOf(nextDorm['id']);
+    if (nextDormId.isNotEmpty && nextDormRecordId != nextDormId) {
+      throw CloudBaseSnapshotRejectedException(
+        'bound user $nextUid has no matching dorm snapshot',
+      );
+    }
+
+    if (allowDestructiveAccountChanges || currentUid != nextUid) {
+      return;
+    }
+
+    final String currentDormId = _stringOf(currentUser['dormId']);
+    if (currentDormId.isNotEmpty && nextDormId.isEmpty) {
+      throw CloudBaseSnapshotRejectedException(
+        'periodic refresh attempted to remove dorm $currentDormId',
+      );
+    }
+
+    final bool currentHasAvatar =
+        _stringOf(currentUser['avatarStoragePath']).isNotEmpty ||
+        _stringOf(currentUser['avatarUrl']).isNotEmpty;
+    final bool nextHasAvatar =
+        _stringOf(nextUser['avatarStoragePath']).isNotEmpty ||
+        _stringOf(nextUser['avatarUrl']).isNotEmpty;
+    if (currentHasAvatar && !nextHasAvatar) {
+      throw const CloudBaseSnapshotRejectedException(
+        'periodic refresh attempted to remove the persisted avatar',
+      );
+    }
   }
 
   void applyAssistantSurfacePatch(Map<String, dynamic> patch) {
@@ -104,16 +191,20 @@ class CloudBaseSnapshotStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Map<String, dynamic> get _rootData {
-    if (_payload['data'] is Map<String, dynamic>) {
-      return Map<String, dynamic>.from(_payload['data'] as Map<String, dynamic>);
-    }
-    if (_payload['data'] is Map) {
-      return Map<String, dynamic>.from(_payload['data'] as Map);
-    }
-    return Map<String, dynamic>.from(_payload);
-  }
+  Map<String, dynamic> get _rootData => _rootOf(_payload);
 }
+
+Map<String, dynamic> _rootOf(Map<String, dynamic> payload) {
+  if (payload['data'] is Map<String, dynamic>) {
+    return Map<String, dynamic>.from(payload['data'] as Map<String, dynamic>);
+  }
+  if (payload['data'] is Map) {
+    return Map<String, dynamic>.from(payload['data'] as Map);
+  }
+  return Map<String, dynamic>.from(payload);
+}
+
+String _stringOf(dynamic value) => value?.toString().trim() ?? '';
 
 Map<String, dynamic> _mapOf(dynamic value) {
   if (value is Map<String, dynamic>) {

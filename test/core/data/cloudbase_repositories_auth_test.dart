@@ -182,6 +182,112 @@ void main() {
   );
 
   test(
+    'ensureAuthenticated repairs a legacy corrupted session subject',
+    () async {
+      final _FakeSessionStore sessionStore = _FakeSessionStore();
+      sessionStore._session = CloudBaseSession(
+        accessToken: 'fresh-access',
+        refreshToken: 'refresh-token',
+        subject: 'rotating-token-record-id',
+        expiresAt: DateTime.now().add(const Duration(hours: 1)),
+        deviceId: 'test-device-id',
+      );
+      final _MemoryVerifiedPhoneStore verifiedStore = _MemoryVerifiedPhoneStore(
+        VerifiedPhoneIdentity(
+          subject: 'tester',
+          phoneNumber: '+86 13800138000',
+        ),
+      );
+      final _MemoryAuthProfileCacheStore authProfileCacheStore =
+          _MemoryAuthProfileCacheStore(
+            const UserProfile(
+              uid: 'tester',
+              displayName: 'Tester',
+              tagline: 'tagline',
+              role: 'role',
+              dormId: 'dorm-204',
+              phoneNumber: '+86 13800138000',
+              avatarUrl: 'https://cdn.example.com/tester.png',
+              avatarStoragePath: 'cloud://avatars/tester.png',
+            ),
+          );
+      const AppEnvironment environment = AppEnvironment(
+        target: AppBackendTarget.production,
+        appIdPrefix: 'com.dormsleep.app',
+        cloudbaseEnvId: 'demo-env',
+        cloudbaseAuthBaseUrl: 'https://example.com',
+        cloudbaseAppApiBaseUrl: 'https://example.com',
+        cloudbasePublishableKey: 'publishable-key',
+        cloudbaseClientId: 'demo-env',
+      );
+      final http.Client httpClient = MockClient((http.Request request) async {
+        if (request.url.path == '/auth/v1/user/me') {
+          return http.Response(
+            jsonEncode(<String, dynamic>{'sub': 'tester'}),
+            200,
+          );
+        }
+        if (request.url.path == '/api/app/bootstrap') {
+          return http.Response(
+            jsonEncode(<String, dynamic>{
+              'data': <String, dynamic>{
+                'user': <String, dynamic>{
+                  'uid': 'tester',
+                  'displayName': 'Tester',
+                  'tagline': 'tagline',
+                  'role': 'role',
+                  'dormId': 'dorm-204',
+                  'phoneNumber': '+86 13800138000',
+                  'avatarUrl': 'https://cdn.example.com/tester.png',
+                  'avatarStoragePath': 'cloud://avatars/tester.png',
+                },
+                'dorm': <String, dynamic>{
+                  'id': 'dorm-204',
+                  'name': 'Dorm',
+                  'members': <Map<String, dynamic>>[],
+                },
+              },
+            }),
+            200,
+          );
+        }
+        throw StateError('Unexpected path: ${request.url.path}');
+      });
+      final CloudBaseAuthClient authClient = CloudBaseAuthClient(
+        environment: environment,
+        httpClient: httpClient,
+      );
+      final CloudBaseAppApiClient appApiClient = CloudBaseAppApiClient(
+        environment: environment,
+        sessionStore: sessionStore,
+        authClient: authClient,
+        httpClient: httpClient,
+      );
+      final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
+        appApiClient: appApiClient,
+      );
+      final CloudBaseAuthRepository repository = CloudBaseAuthRepository(
+        environment: environment,
+        authClient: authClient,
+        appApiClient: appApiClient,
+        snapshotStore: snapshotStore,
+        verifiedPhoneStore: verifiedStore,
+        authProfileCacheStore: authProfileCacheStore,
+      );
+
+      await repository.ensureAuthenticated();
+
+      expect(sessionStore._session?.subject, 'tester');
+      expect(repository.currentUser.uid, 'tester');
+      expect(repository.currentUser.dormId, 'dorm-204');
+      expect(
+        repository.currentUser.avatarStoragePath,
+        'cloud://avatars/tester.png',
+      );
+      expect(repository.lastAuthError, isNull);
+    },
+  );
+  test(
     'ensureAuthenticated keeps durable account when refresh token is rejected',
     () async {
       final _FakeSessionStore sessionStore = _FakeSessionStore();

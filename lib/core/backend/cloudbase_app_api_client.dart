@@ -57,6 +57,13 @@ class CloudBaseAppApiClient {
 
   CloudBaseSessionCoordinator get sessionCoordinator => _sessionCoordinator;
 
+  Future<String?> currentSessionSubject() async {
+    final CloudBaseSession? session = await _sessionCoordinator
+        .restoreSession();
+    final String subject = session?.subject.trim() ?? '';
+    return subject.isEmpty ? null : subject;
+  }
+
   bool get isConfigured => _environment.hasCloudBaseAppApi;
 
   Future<Map<String, dynamic>> bootstrap() {

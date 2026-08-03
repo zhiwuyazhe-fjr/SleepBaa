@@ -529,11 +529,9 @@ class CloudBaseAuthClient {
       accessToken: map['access_token'] as String? ?? '',
       refreshToken: map['refresh_token'] as String? ?? '',
       expiresIn: (map['expires_in'] as num?)?.toInt() ?? 7200,
-      subject:
-          map['sub'] as String? ??
-          map['user_id'] as String? ??
-          map['id'] as String? ??
-          '',
+      // Token responses may contain a generic id for the token/session itself.
+      // Only explicit identity claims are allowed to become the account subject.
+      subject: map['sub'] as String? ?? map['user_id'] as String? ?? '',
       scope: map['scope'] as String?,
       tokenType: map['token_type'] as String? ?? '',
     );

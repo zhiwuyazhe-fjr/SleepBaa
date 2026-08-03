@@ -2522,7 +2522,7 @@ class _TestSnapshotStore extends CloudBaseSnapshotStore {
   }
 
   @override
-  Future<void> refresh() async {
+  Future<void> refresh({bool allowDestructiveAccountChanges = false}) async {
     refreshCount += 1;
     await onRefresh?.call();
   }

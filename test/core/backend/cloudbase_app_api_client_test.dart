@@ -351,6 +351,13 @@ void main() {
             200,
           );
         }
+        if (request.url.path == '/auth/v1/user/me') {
+          expect(_authorizationHeader(request), 'Bearer fresh-access');
+          return http.Response(
+            jsonEncode(<String, dynamic>{'sub': 'cloud-user'}),
+            200,
+          );
+        }
         if (request.url.path == '/api/test') {
           apiCalls += 1;
           if (_authorizationHeader(request) == 'Bearer expired-access') {

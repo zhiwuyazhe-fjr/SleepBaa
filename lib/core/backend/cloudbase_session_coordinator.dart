@@ -127,15 +127,54 @@ class CloudBaseSessionCoordinator {
         message: 'CloudBase refresh response did not include an access token.',
       );
     }
+    final String currentSubject = candidate.subject.trim();
+    String refreshedSubject = refreshed.subject.trim();
+    if (currentSubject.isNotEmpty &&
+        refreshedSubject.isNotEmpty &&
+        currentSubject != refreshedSubject) {
+      throw const CloudBaseAuthException(
+        message: 'CloudBase refresh attempted to switch account identity.',
+        code: 'refresh_subject_mismatch',
+      );
+    }
+    if (refreshedSubject.isEmpty) {
+      try {
+        final CloudBaseUserInfo verifiedUser = await _authClient.getCurrentUser(
+          accessToken: accessToken,
+          deviceId: candidate.deviceId,
+        );
+        refreshedSubject = verifiedUser.subject.trim();
+      } catch (_) {
+        throw const CloudBaseAuthException(
+          message: 'CloudBase refreshed token identity could not be verified.',
+          code: 'refresh_subject_unverified',
+        );
+      }
+      if (currentSubject.isNotEmpty && refreshedSubject != currentSubject) {
+        throw const CloudBaseAuthException(
+          message: 'CloudBase refreshed token belongs to another account.',
+          code: 'refresh_subject_mismatch',
+        );
+      }
+    }
+    final String stableSubject = currentSubject.isNotEmpty
+        ? currentSubject
+        : refreshedSubject;
+    if (stableSubject.isEmpty) {
+      throw const CloudBaseAuthException(
+        message:
+            'CloudBase refresh response did not preserve account identity.',
+        code: 'refresh_subject_missing',
+      );
+    }
+
     final int expiresIn = refreshed.expiresIn > 0 ? refreshed.expiresIn : 7200;
     final CloudBaseSession next = candidate.copyWith(
       accessToken: accessToken,
       refreshToken: refreshed.refreshToken.trim().isEmpty
           ? candidate.refreshToken
           : refreshed.refreshToken.trim(),
-      subject: refreshed.subject.trim().isEmpty
-          ? candidate.subject
-          : refreshed.subject.trim(),
+      subject: stableSubject,
       scope: refreshed.scope ?? candidate.scope,
       tokenType: refreshed.tokenType.trim().isEmpty
           ? candidate.tokenType

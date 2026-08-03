@@ -124,6 +124,83 @@ void main() {
       expect(store.clearCalls, 0);
     },
   );
+
+  test(
+    'refresh ignores generic token id and preserves account subject',
+    () async {
+      final _MemorySessionStore store = _MemorySessionStore(
+        _expiredSession('access-1', 'refresh-1'),
+      );
+      final CloudBaseSessionCoordinator coordinator =
+          CloudBaseSessionCoordinator(
+            sessionStore: store,
+            authClient: CloudBaseAuthClient(
+              environment: _environment,
+              httpClient: MockClient((http.Request request) async {
+                if (request.url.path == '/auth/v1/user/me') {
+                  return http.Response(
+                    jsonEncode(<String, dynamic>{'sub': 'user-1'}),
+                    200,
+                  );
+                }
+                return http.Response(
+                  jsonEncode(<String, dynamic>{
+                    'access_token': 'access-2',
+                    'refresh_token': 'refresh-2',
+                    'id': 'rotating-token-record-id',
+                    'expires_in': 3600,
+                  }),
+                  200,
+                );
+              }),
+            ),
+          );
+
+      final CloudBaseSession refreshed = await coordinator
+          .requireFreshSession();
+
+      expect(refreshed.subject, 'user-1');
+      expect(store.session?.subject, 'user-1');
+      expect(store.session?.accessToken, 'access-2');
+    },
+  );
+
+  test('refresh rejects an explicit account subject switch', () async {
+    final _MemorySessionStore store = _MemorySessionStore(
+      _expiredSession('access-1', 'refresh-1'),
+    );
+    final CloudBaseSessionCoordinator coordinator = CloudBaseSessionCoordinator(
+      sessionStore: store,
+      authClient: CloudBaseAuthClient(
+        environment: _environment,
+        httpClient: MockClient((http.Request request) async {
+          return http.Response(
+            jsonEncode(<String, dynamic>{
+              'access_token': 'access-other',
+              'refresh_token': 'refresh-other',
+              'sub': 'user-2',
+              'expires_in': 3600,
+            }),
+            200,
+          );
+        }),
+      ),
+    );
+
+    await expectLater(
+      coordinator.requireFreshSession(),
+      throwsA(
+        isA<CloudBaseAuthException>().having(
+          (CloudBaseAuthException error) => error.code,
+          'code',
+          'refresh_subject_mismatch',
+        ),
+      ),
+    );
+
+    expect(store.session?.subject, 'user-1');
+    expect(store.session?.accessToken, 'access-1');
+  });
 }
 
 const AppEnvironment _environment = AppEnvironment(
