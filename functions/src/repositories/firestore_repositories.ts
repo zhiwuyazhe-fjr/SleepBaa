@@ -3935,24 +3935,17 @@ export class FirestoreRepository implements AssistantDataRepository {
       return;
     }
     const existingUser = await this.store.get(Collections.users, uid);
-    let resolvedDormId = asString(existingUser?.dormId);
+    // Bootstrap reads may repair missing documents, but must never infer an
+    // account-level dorm removal from a query result. Only leaveDorm may clear
+    // the persisted dorm binding.
     if (!existingUser) {
       await this.store.set(
         Collections.users,
         uid,
         defaultUserProfile(uid, null),
       );
-      resolvedDormId = "";
-    } else if (
-      resolvedDormId &&
-      (await this.shouldTreatDormAsUnbound(uid, resolvedDormId))
-    ) {
-      await this.store.merge(Collections.users, uid, {
-        dormId: null,
-        updatedAt: nowIso(),
-      });
-      resolvedDormId = "";
     }
+    const resolvedDormId = asString(existingUser?.dormId);
     const existingSettings = await this.store.get(
       Collections.userSettings,
       uid,
@@ -4008,31 +4001,6 @@ export class FirestoreRepository implements AssistantDataRepository {
     }
   }
 
-  private async shouldTreatDormAsUnbound(
-    uid: string,
-    dormId: string,
-  ): Promise<boolean> {
-    if (!dormId || dormId !== this.defaultDormId(uid)) {
-      return false;
-    }
-    const [dormDoc, members, invites] = await Promise.all([
-      this.store.get(Collections.dorms, dormId),
-      this.store.query(Collections.dormMembers, { filters: { dormId } }),
-      this.store.query(Collections.dormInvites, {
-        filters: { dormId },
-        limit: 5,
-      }),
-    ]);
-    const fallbackDorm = defaultDormDoc(dormId);
-    const hasSingleMember =
-      members.length <= 1 &&
-      members.every((member) => asString(member.uid) == uid);
-    const hasInviteHistory = invites.length > 0;
-    const looksLikeSystemDorm =
-      asString(dormDoc?.name) == asString(fallbackDorm.name) &&
-      asString(dormDoc?.overview) == asString(fallbackDorm.overview);
-    return hasSingleMember && !hasInviteHistory && looksLikeSystemDorm;
-  }
 
   private async readUserProfile(uid: string): Promise<ContextUserProfile> {
     const doc = withoutMeta(
@@ -4085,10 +4053,7 @@ export class FirestoreRepository implements AssistantDataRepository {
     } as unknown as ContextUserSettings;
   }
 
-  private defaultDormId(uid: string): string {
-    const suffix = uid.slice(0, 8).toLowerCase() || "guest";
-    return `dorm-${suffix}`;
-  }
+
 }
 
 let sharedMemoryRepository: FirestoreRepository | null = null;

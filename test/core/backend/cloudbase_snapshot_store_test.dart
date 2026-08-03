@@ -7,6 +7,7 @@ import 'package:sleep_dorm_app/core/backend/app_environment.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_app_api_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_auth_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_session_store.dart';
+import 'package:sleep_dorm_app/core/backend/cloudbase_snapshot_cache_store.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_snapshot_store.dart';
 
 void main() {
@@ -72,6 +73,23 @@ void main() {
     expect(store.lastError, contains('user mismatch'));
   });
 
+  test('bound snapshots must contain the authenticated dorm member', () async {
+    final Map<String, dynamic> incomplete = _boundPayload();
+    final Map<String, dynamic> root = _rootOf(incomplete);
+    (root['dorm'] as Map<String, dynamic>)['members'] =
+        const <Map<String, dynamic>>[];
+    final CloudBaseSnapshotStore store = _buildStore(
+      MockClient((http.Request request) async {
+        return http.Response(jsonEncode(incomplete), 200);
+      }),
+    );
+
+    await store.refresh();
+
+    expect(store.hasPayload, isFalse);
+    expect(store.lastError, contains('is missing from dorm'));
+  });
+
   test(
     'explicit leave refresh can accept a bound-to-unbound transition',
     () async {
@@ -83,7 +101,7 @@ void main() {
             jsonEncode(
               bootstrapCalls == 1
                   ? _boundPayload()
-                  : _unboundPayload(uid: 'cloud-user'),
+                  : _unboundPayload(uid: 'cloud-user', preserveAvatar: true),
             ),
             200,
           );
@@ -91,7 +109,7 @@ void main() {
       );
 
       await store.refresh();
-      await store.refresh(allowDestructiveAccountChanges: true);
+      await store.refresh(allowDormBindingRemoval: true);
 
       final Map<String, dynamic> root = _rootOf(store.payload);
       final Map<String, dynamic> user = Map<String, dynamic>.from(
@@ -101,9 +119,70 @@ void main() {
       expect(store.lastError, isNull);
     },
   );
+
+  test('leaving a dorm never authorizes avatar removal', () async {
+    int bootstrapCalls = 0;
+    final CloudBaseSnapshotStore store = _buildStore(
+      MockClient((http.Request request) async {
+        bootstrapCalls += 1;
+        return http.Response(
+          jsonEncode(
+            bootstrapCalls == 1
+                ? _boundPayload()
+                : _unboundPayload(uid: 'cloud-user'),
+          ),
+          200,
+        );
+      }),
+    );
+
+    await store.refresh();
+    await store.refresh(allowDormBindingRemoval: true);
+
+    final Map<String, dynamic> root = _rootOf(store.payload);
+    expect((root['user'] as Map)['dormId'], 'dorm-1');
+    expect(
+      (root['user'] as Map)['avatarStoragePath'],
+      'cloud://avatars/cloud-user.png',
+    );
+    expect(store.lastError, contains('remove the persisted avatar'));
+  });
+
+  test(
+    'durable snapshot protects a recreated app from an empty bootstrap',
+    () async {
+      final _MemorySnapshotCache cache = _MemorySnapshotCache();
+      final CloudBaseSnapshotStore firstStore = _buildStore(
+        MockClient((http.Request request) async {
+          return http.Response(jsonEncode(_boundPayload()), 200);
+        }),
+        cache: cache,
+      );
+      await firstStore.refresh();
+
+      final CloudBaseSnapshotStore recreatedStore = _buildStore(
+        MockClient((http.Request request) async {
+          return http.Response(
+            jsonEncode(_unboundPayload(uid: 'cloud-user')),
+            200,
+          );
+        }),
+        cache: cache,
+      );
+      await recreatedStore.refresh();
+
+      final Map<String, dynamic> root = _rootOf(recreatedStore.payload);
+      expect((root['user'] as Map)['dormId'], 'dorm-1');
+      expect((root['dorm'] as Map)['id'], 'dorm-1');
+      expect(recreatedStore.lastError, contains('attempted to remove dorm'));
+    },
+  );
 }
 
-CloudBaseSnapshotStore _buildStore(http.Client httpClient) {
+CloudBaseSnapshotStore _buildStore(
+  http.Client httpClient, {
+  CloudBaseSnapshotCache? cache,
+}) {
   const AppEnvironment environment = AppEnvironment(
     target: AppBackendTarget.production,
     appIdPrefix: 'com.dormsleep.app',
@@ -119,6 +198,7 @@ CloudBaseSnapshotStore _buildStore(http.Client httpClient) {
     httpClient: httpClient,
   );
   return CloudBaseSnapshotStore(
+    cacheStore: cache ?? _MemorySnapshotCache(),
     appApiClient: CloudBaseAppApiClient(
       environment: environment,
       sessionStore: sessionStore,
@@ -143,13 +223,23 @@ Map<String, dynamic> _boundPayload() {
       'dorm': <String, dynamic>{
         'id': 'dorm-1',
         'name': 'Dorm',
-        'members': <Map<String, dynamic>>[],
+        'members': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'uid': 'cloud-user',
+            'name': 'Tester',
+            'status': 'quiet',
+            'sleepModeActive': false,
+          },
+        ],
       },
     },
   };
 }
 
-Map<String, dynamic> _unboundPayload({required String uid}) {
+Map<String, dynamic> _unboundPayload({
+  required String uid,
+  bool preserveAvatar = false,
+}) {
   return <String, dynamic>{
     'data': <String, dynamic>{
       'user': <String, dynamic>{
@@ -158,10 +248,14 @@ Map<String, dynamic> _unboundPayload({required String uid}) {
         'tagline': 'Sleep companion',
         'role': 'Dorm member',
         'dormId': null,
-        'avatarUrl': null,
-        'avatarStoragePath': null,
+        'avatarUrl': preserveAvatar
+            ? 'https://cdn.example.com/cloud-user.png'
+            : null,
+        'avatarStoragePath': preserveAvatar
+            ? 'cloud://avatars/cloud-user.png'
+            : null,
       },
-      'dorm': <String, dynamic>{'id': '', 'members': <Map<String, dynamic>>[]},
+      'dorm': const <String, dynamic>{},
     },
   };
 }
@@ -170,8 +264,28 @@ Map<String, dynamic> _rootOf(Map<String, dynamic> payload) {
   return Map<String, dynamic>.from(payload['data'] as Map);
 }
 
-class _SnapshotSessionStore extends CloudBaseSessionStore {
-  CloudBaseSession session = CloudBaseSession(
+class _MemorySnapshotCache implements CloudBaseSnapshotCache {
+  Map<String, dynamic>? payload;
+
+  @override
+  Future<Map<String, dynamic>?> read() async {
+    final Map<String, dynamic>? current = payload;
+    return current == null ? null : jsonDecode(jsonEncode(current));
+  }
+
+  @override
+  Future<void> write(Map<String, dynamic> next) async {
+    payload = Map<String, dynamic>.from(jsonDecode(jsonEncode(next)) as Map);
+  }
+
+  @override
+  Future<void> clear() async {
+    payload = null;
+  }
+}
+
+class _SnapshotSessionStore implements CloudBaseSessionStore {
+  CloudBaseSession? session = CloudBaseSession(
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
     subject: 'cloud-user',
@@ -188,5 +302,18 @@ class _SnapshotSessionStore extends CloudBaseSessionStore {
   @override
   Future<void> writeSession(CloudBaseSession next) async {
     session = next;
+  }
+
+  @override
+  Future<String> ensureDeviceId() async => 'device-1';
+
+  @override
+  Future<void> clearSession() async {
+    session = null;
+  }
+
+  @override
+  Future<void> clearAll() async {
+    session = null;
   }
 }

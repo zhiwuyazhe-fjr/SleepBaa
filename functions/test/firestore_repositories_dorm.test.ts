@@ -140,6 +140,46 @@ class CatalogFileStorage extends TestFileStorage {
   }
 }
 
+test("bootstrap never auto-unbinds a persisted legacy dorm", async () => {
+  const store = new TestDocumentStore();
+  const repo = new FirestoreRepository(store as any, new TestFileStorage());
+  const uid = "legacy-user-204";
+  const dormId = `dorm-${uid.slice(0, 8)}`;
+
+  await store.set("users", uid, {
+    uid,
+    displayName: "Legacy User",
+    dormId,
+    avatarUrl: "https://cdn.example.com/legacy.png",
+    avatarStoragePath: "avatars/legacy.png",
+  });
+  await store.set("dorms", dormId, {
+    id: dormId,
+    name: `宿舍 ${dormId.slice(-4).toUpperCase()}`,
+    overview: "已启用 AI 协同的宿舍，适合共同维护安静入睡环境。",
+  });
+  await store.set("dorm_members", `${dormId}:${uid}`, {
+    dormId,
+    uid,
+    name: "Legacy User",
+    status: "quiet",
+    presenceStatus: "returned",
+    sleepModeActive: false,
+    lastActiveAt: "2026-08-03T08:00:00.000Z",
+  });
+
+  const first = await repo.getBootstrapPayload(uid);
+  const second = await repo.getBootstrapPayload(uid);
+
+  assert.equal(first.data.user.dormId, dormId);
+  assert.equal(second.data.user.dormId, dormId);
+  assert.equal(second.data.dorm.id, dormId);
+  assert.equal((second.data.dorm.members as unknown[]).length, 1);
+  const persistedUser = await store.get("users", uid);
+  assert.equal(persistedUser?.dormId, dormId);
+  assert.equal(persistedUser?.avatarStoragePath, "avatars/legacy.png");
+});
+
 test("audio catalog prefers storage directory files with unknown duration", async () => {
   const store = new TestDocumentStore();
   const repo = new FirestoreRepository(store as any, new CatalogFileStorage());

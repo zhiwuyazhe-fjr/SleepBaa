@@ -193,11 +193,16 @@ String? _nonEmptyString(dynamic value) {
 AvatarResource _mergeAvatarResources({
   required AvatarResource current,
   required AvatarResource incoming,
+  bool allowRemoval = false,
 }) {
-  return current.mergeRemote(incoming);
+  return current.mergeRemote(incoming, allowRemoval: allowRemoval);
 }
 
-Dorm _mergeDormAvatarResources(Dorm currentDorm, Dorm nextDorm) {
+Dorm _mergeDormAvatarResources(
+  Dorm currentDorm,
+  Dorm nextDorm, {
+  bool allowRemoval = false,
+}) {
   if (currentDorm.members.isEmpty || nextDorm.members.isEmpty) {
     return nextDorm;
   }
@@ -214,6 +219,7 @@ Dorm _mergeDormAvatarResources(Dorm currentDorm, Dorm nextDorm) {
           final AvatarResource merged = _mergeAvatarResources(
             current: currentMember.avatarResource,
             incoming: nextMember.avatarResource,
+            allowRemoval: allowRemoval,
           );
           return nextMember.copyWith(
             avatarUrl: merged.normalizedUrl,
@@ -908,6 +914,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
   String? _pendingEquippedBadgeId;
   bool _hasPendingSelectedDormBadgeId = false;
   String? _pendingSelectedDormBadgeId;
+  int _lastAppliedSnapshotRevision = -1;
   static const Duration _authRevalidationInterval = Duration(minutes: 5);
 
   @override
@@ -956,6 +963,29 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
 
   Future<void> _loadCachedAuthProfile() async {
     _cachedAuthProfile = await _authProfileCacheStore.read();
+    final UserProfile? cached = _cachedAuthProfile;
+    if (cached != null) {
+      _snapshotStore.setAccountAnchor(
+        uid: cached.uid,
+        dormId: cached.dormId,
+        hasPersistedAvatar:
+            cached.avatarResource.hasRemoteUrl ||
+            cached.avatarResource.normalizedStoragePath != null,
+      );
+    }
+  }
+
+  void _updateSnapshotAccountAnchor() {
+    if (_currentUser.uid.trim().isEmpty) {
+      return;
+    }
+    _snapshotStore.setAccountAnchor(
+      uid: _currentUser.uid,
+      dormId: _currentUser.dormId,
+      hasPersistedAvatar:
+          _currentUser.avatarResource.hasRemoteUrl ||
+          _currentUser.avatarResource.normalizedStoragePath != null,
+    );
   }
 
   VerifiedPhoneIdentity? _identityFromCachedProfile() {
@@ -1046,7 +1076,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     _cachedVerifiedIdentity = null;
     await _clearAuthProfileCache();
     await _sessionCoordinator.signOut();
-    _snapshotStore.clear();
+    await _snapshotStore.clear();
     _currentUser = _signedOutProfile();
     _lastAuthError = null;
     _lastSuccessfulAuthAt = null;
@@ -1183,6 +1213,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
         );
       }
       _mergePhoneFromCachedVerifiedIdentity();
+      _updateSnapshotAccountAnchor();
       _lastSuccessfulAuthAt = DateTime.now();
 
       // Versions before the account-integrity fix could persist a token/session
@@ -1967,9 +1998,9 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       throw const AuthFlowException('登录成功但未能确认账号身份，请重试。');
     }
 
-    if (_currentUser.uid.isNotEmpty && _currentUser.uid != resolvedSubject) {
-      _snapshotStore.clear();
-    }
+    // A successful interactive login starts a new account transaction. Clear
+    // every previous snapshot anchor before installing the new credentials.
+    await _snapshotStore.clear();
     await _sessionCoordinator.installSession(
       CloudBaseSession(
         accessToken: session.accessToken,
@@ -2000,6 +2031,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       phoneLinkedAt: DateTime.now(),
       avatarUrl: info?.picture ?? baseProfile.avatarUrl,
     );
+    _updateSnapshotAccountAnchor();
     _lastSuccessfulAuthAt = DateTime.now();
     _hasCompletedInitialAuthBootstrap = true;
     notifyListeners();
@@ -2186,6 +2218,13 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
     if (_snapshotStore.isRefreshing || !_snapshotStore.hasPayload) {
       return;
     }
+    final int snapshotRevision = _snapshotStore.revision;
+    if (_lastAppliedSnapshotRevision == snapshotRevision) {
+      return;
+    }
+    _lastAppliedSnapshotRevision = snapshotRevision;
+    final bool allowDormBindingRemoval =
+        _snapshotStore.lastCommitAllowsDormBindingRemoval;
     final Map<String, dynamic> root = _snapshotStore.payload['data'] is Map
         ? Map<String, dynamic>.from(_snapshotStore.payload['data'] as Map)
         : _snapshotStore.payload;
@@ -2211,6 +2250,15 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       current: _currentUser.avatarResource,
       incoming: snapshot.user.avatarResource,
     );
+    final bool hasDormIdSnapshot = rawUser.containsKey('dormId');
+    final String incomingDormId = snapshot.user.dormId?.trim() ?? '';
+    final String? nextDormId = incomingDormId.isNotEmpty
+        ? snapshot.user.dormId
+        : _currentUser.dormId;
+    final bool clearDormId =
+        allowDormBindingRemoval &&
+        hasDormIdSnapshot &&
+        snapshot.user.dormId == null;
     final bool hasEquippedBadgeSnapshot = rawUser.containsKey(
       'equippedBadgeId',
     );
@@ -2269,9 +2317,8 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
           : _currentUser.showDormPulseBadge,
       selectedDormBadgeId: nextSelectedDormBadgeId,
       clearSelectedDormBadgeId: clearSelectedDormBadgeId,
-      dormId: snapshot.user.dormId,
-      clearDormId:
-          rawUser.containsKey('dormId') && snapshot.user.dormId == null,
+      dormId: nextDormId,
+      clearDormId: clearDormId,
       phoneNumber: snapshotPhone?.trim().isNotEmpty == true
           ? snapshotPhone
           : _currentUser.phoneNumber,
@@ -2287,6 +2334,7 @@ class CloudBaseAuthRepository extends ChangeNotifier implements AuthRepository {
       avatarFallbackSeed: snapshot.user.avatarFallbackSeed,
     );
     _mergePhoneFromCachedVerifiedIdentity();
+    _updateSnapshotAccountAnchor();
     unawaited(_persistCurrentUserToAuthProfileCache());
     notifyListeners();
   }
@@ -3956,6 +4004,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
   final Map<String, _PendingDormMemberStatusOverride> _pendingStatusOverrides =
       <String, _PendingDormMemberStatusOverride>{};
   _PendingDormEnvironmentOverride? _pendingEnvironmentOverride;
+  int _lastAppliedSnapshotRevision = -1;
 
   @override
   Dorm get currentDorm => _currentDorm;
@@ -4581,7 +4630,7 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
     if (_appApiClient.isConfigured) {
       try {
         await _appApiClient.post('/api/dorm/leave');
-        await _snapshotStore.refresh(allowDestructiveAccountChanges: true);
+        await _snapshotStore.refresh(allowDormBindingRemoval: true);
         return;
       } catch (_) {
         // Fall back to local state when the backend is unavailable.
@@ -4680,10 +4729,31 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
   }
 
   void _applySnapshot() {
+    if (_snapshotStore.isRefreshing || !_snapshotStore.hasPayload) {
+      return;
+    }
+    final int snapshotRevision = _snapshotStore.revision;
+    if (_lastAppliedSnapshotRevision == snapshotRevision) {
+      return;
+    }
+    _lastAppliedSnapshotRevision = snapshotRevision;
     final _SnapshotData snapshot = _SnapshotData.fromPayload(
       _snapshotStore.payload,
       _authRepository.currentUser.uid,
     );
+    final String currentUid = _authRepository.currentUser.uid.trim();
+    if (currentUid.isEmpty || snapshot.user.uid.trim() != currentUid) {
+      return;
+    }
+    final bool allowDormBindingRemoval =
+        _snapshotStore.lastCommitAllowsDormBindingRemoval;
+    if (!_canApplyDormSnapshot(
+      snapshot.dorm,
+      currentUid: currentUid,
+      allowDormBindingRemoval: allowDormBindingRemoval,
+    )) {
+      return;
+    }
     Dorm mergedDorm = _mergeNewerDormHeartbeatFields(
       _currentDorm,
       _mergeDormAvatarResources(_currentDorm, snapshot.dorm),
@@ -4703,6 +4773,37 @@ class CloudBaseDormRepository extends ChangeNotifier implements DormRepository {
     );
     _emitCurrentState();
     notifyListeners();
+  }
+
+  bool _canApplyDormSnapshot(
+    Dorm incoming, {
+    required String currentUid,
+    required bool allowDormBindingRemoval,
+  }) {
+    if (allowDormBindingRemoval) {
+      return true;
+    }
+    final String currentDormId = _currentDorm.id.trim();
+    final String accountDormId =
+        _authRepository.currentUser.dormId?.trim() ?? '';
+    final String incomingDormId = incoming.id.trim();
+    if ((currentDormId.isNotEmpty || accountDormId.isNotEmpty) &&
+        incomingDormId.isEmpty) {
+      return false;
+    }
+    if (currentDormId.isNotEmpty && incomingDormId != currentDormId) {
+      return false;
+    }
+    if (accountDormId.isNotEmpty && incomingDormId != accountDormId) {
+      return false;
+    }
+    if (incomingDormId.isNotEmpty &&
+        !incoming.members.any(
+          (DormMember member) => member.uid == currentUid,
+        )) {
+      return false;
+    }
+    return true;
   }
 
   Dorm _mergePendingDormEnvironment(Dorm incoming) {

@@ -1619,39 +1619,107 @@ void main() {
 
       snapshotStore.pushPayload(
         _dormPayload(<String, dynamic>{
-          'uid': 'roommate-a',
-          'name': 'Roommate A',
+          'uid': 'cloud-user',
+          'name': 'Cloud User',
           'status': DormMemberStatus.quiet.name,
           'presenceStatus': DormPresenceStatus.returned.name,
           'sleepModeActive': false,
           'lastActiveAt': '2026-04-21T23:00:00.000Z',
           'note': '',
-          'avatarUrl': 'https://cdn.example.com/roommate-a.png?sig=first',
-          'avatarStoragePath': 'avatars/roommate-a.png',
+          'avatarUrl': 'https://cdn.example.com/cloud-user.png?sig=first',
+          'avatarStoragePath': 'avatars/cloud-user.png',
         }),
       );
       snapshotStore.pushPayload(
         _dormPayload(<String, dynamic>{
-          'uid': 'roommate-a',
-          'name': 'Roommate A',
+          'uid': 'cloud-user',
+          'name': 'Cloud User',
           'status': DormMemberStatus.quiet.name,
           'presenceStatus': DormPresenceStatus.returned.name,
           'sleepModeActive': false,
           'lastActiveAt': '2026-04-21T23:00:00.000Z',
           'note': '',
-          'avatarStoragePath': 'avatars/roommate-a.png',
+          'avatarStoragePath': 'avatars/cloud-user.png',
         }),
       );
 
       expect(
         dormRepository.currentDorm.members.single.avatarUrl,
-        'https://cdn.example.com/roommate-a.png?sig=first',
+        'https://cdn.example.com/cloud-user.png?sig=first',
       );
 
       authRepository.dispose();
       dormRepository.dispose();
     },
   );
+
+  test('normal snapshot regression cannot erase dorm or avatar state', () {
+    final _FakeCloudBaseAppApiClient appApiClient = _FakeCloudBaseAppApiClient(
+      onPost: (String path, Map<String, dynamic> body) async =>
+          <String, dynamic>{'ok': true},
+    );
+    final _TestSnapshotStore snapshotStore = _TestSnapshotStore(
+      appApiClient: appApiClient,
+    );
+    final CloudBaseAuthRepository authRepository = CloudBaseAuthRepository(
+      environment: _testCloudBaseEnvironment,
+      authClient: CloudBaseAuthClient(environment: _testCloudBaseEnvironment),
+      appApiClient: appApiClient,
+      snapshotStore: snapshotStore,
+    );
+    final CloudBaseDormRepository dormRepository = CloudBaseDormRepository(
+      authRepository: authRepository,
+      snapshotStore: snapshotStore,
+      appApiClient: appApiClient,
+    );
+
+    snapshotStore.pushPayload(
+      _dormPayload(
+        <String, dynamic>{
+          'uid': 'cloud-user',
+          'name': 'Cloud User',
+          'status': DormMemberStatus.quiet.name,
+          'presenceStatus': DormPresenceStatus.returned.name,
+          'sleepModeActive': false,
+          'lastActiveAt': '2026-08-03T08:00:00.000Z',
+          'note': '',
+          'avatarUrl': 'https://cdn.example.com/avatar.png?sig=valid',
+          'avatarStoragePath': 'avatars/cloud-user.png',
+        },
+        user: <String, dynamic>{
+          'uid': 'cloud-user',
+          'displayName': 'Cloud User',
+          'dormId': 'dorm-204',
+          'avatarUrl': 'https://cdn.example.com/avatar.png?sig=valid',
+          'avatarStoragePath': 'avatars/cloud-user.png',
+        },
+      ),
+    );
+    snapshotStore.pushPayload(<String, dynamic>{
+      'data': <String, dynamic>{
+        'user': <String, dynamic>{
+          'uid': 'cloud-user',
+          'displayName': 'Cloud User',
+          'dormId': null,
+          'avatarUrl': null,
+          'avatarStoragePath': null,
+        },
+        'dorm': const <String, dynamic>{},
+      },
+    });
+
+    expect(authRepository.currentUser.dormId, 'dorm-204');
+    expect(
+      authRepository.currentUser.avatarStoragePath,
+      'avatars/cloud-user.png',
+    );
+    expect(authRepository.currentUser.avatarUrl, contains('sig=valid'));
+    expect(dormRepository.currentDorm.id, 'dorm-204');
+    expect(dormRepository.currentDorm.members, hasLength(1));
+
+    authRepository.dispose();
+    dormRepository.dispose();
+  });
 
   test(
     'cloudbase dorm repository parses missing presence status as unknown',
@@ -2488,6 +2556,8 @@ class _TestSnapshotStore extends CloudBaseSnapshotStore {
   Map<String, dynamic> _nextPayload = <String, dynamic>{};
   bool _isRefreshing = false;
   String? _lastError;
+  int _revision = 0;
+  bool _lastCommitAllowsDormBindingRemoval = false;
   int refreshCount = 0;
   FutureOr<void> Function()? onRefresh;
 
@@ -2503,10 +2573,19 @@ class _TestSnapshotStore extends CloudBaseSnapshotStore {
   @override
   String? get lastError => _lastError;
 
+  @override
+  int get revision => _revision;
+
+  @override
+  bool get lastCommitAllowsDormBindingRemoval =>
+      _lastCommitAllowsDormBindingRemoval;
+
   void pushPayload(Map<String, dynamic> payload) {
     _nextPayload = payload;
     _isRefreshing = false;
     _lastError = null;
+    _lastCommitAllowsDormBindingRemoval = false;
+    _revision += 1;
     notifyListeners();
   }
 
@@ -2519,6 +2598,8 @@ class _TestSnapshotStore extends CloudBaseSnapshotStore {
   void completeRefresh({Map<String, dynamic>? payload, String? error}) {
     if (payload != null) {
       _nextPayload = payload;
+      _lastCommitAllowsDormBindingRemoval = false;
+      _revision += 1;
     }
     _isRefreshing = false;
     _lastError = error;
@@ -2526,8 +2607,9 @@ class _TestSnapshotStore extends CloudBaseSnapshotStore {
   }
 
   @override
-  Future<void> refresh({bool allowDestructiveAccountChanges = false}) async {
+  Future<void> refresh({bool allowDormBindingRemoval = false}) async {
     refreshCount += 1;
+    _lastCommitAllowsDormBindingRemoval = allowDormBindingRemoval;
     await onRefresh?.call();
   }
 }

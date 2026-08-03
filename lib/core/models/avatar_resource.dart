@@ -43,15 +43,34 @@ class AvatarResource {
   /// storage path, because signed URLs are expected to rotate. The previous URL
   /// is retained only when the same stable storage resource is returned without
   /// a URL (for example, a temporary signing failure).
-  AvatarResource mergeRemote(AvatarResource incoming) {
+  AvatarResource mergeRemote(
+    AvatarResource incoming, {
+    bool allowRemoval = false,
+  }) {
     final String? currentStoragePath = normalizedStoragePath;
     final String? incomingStoragePath = incoming.normalizedStoragePath;
     final String? incomingUrl = incoming.normalizedUrl;
+    if (!allowRemoval && incomingStoragePath == null && incomingUrl == null) {
+      return AvatarResource(
+        localPath: incoming.localPath ?? localPath,
+        bytes: incoming.bytes ?? bytes,
+        url: normalizedUrl,
+        storagePath: currentStoragePath,
+      );
+    }
+
+    final String? effectiveStoragePath =
+        !allowRemoval &&
+            incomingStoragePath == null &&
+            currentStoragePath != null
+        ? currentStoragePath
+        : incomingStoragePath;
     final bool sameStableResource =
-        currentStoragePath != null && currentStoragePath == incomingStoragePath;
+        currentStoragePath != null &&
+        currentStoragePath == effectiveStoragePath;
     final bool stableResourceChanged =
-        currentStoragePath != incomingStoragePath &&
-        (currentStoragePath != null || incomingStoragePath != null);
+        currentStoragePath != effectiveStoragePath &&
+        (currentStoragePath != null || effectiveStoragePath != null);
 
     return AvatarResource(
       localPath: stableResourceChanged
@@ -59,7 +78,7 @@ class AvatarResource {
           : incoming.localPath ?? localPath,
       bytes: stableResourceChanged ? incoming.bytes : incoming.bytes ?? bytes,
       url: incomingUrl ?? (sameStableResource ? normalizedUrl : null),
-      storagePath: incomingStoragePath,
+      storagePath: effectiveStoragePath,
     );
   }
 

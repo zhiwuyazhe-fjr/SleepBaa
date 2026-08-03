@@ -10,6 +10,7 @@ import 'package:sleep_dorm_app/core/backend/cloudbase_app_api_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_auth_profile_cache_store.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_auth_client.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_session_store.dart';
+import 'package:sleep_dorm_app/core/backend/cloudbase_snapshot_cache_store.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_snapshot_store.dart';
 import 'package:sleep_dorm_app/core/backend/verified_phone_identity_store.dart';
 import 'package:sleep_dorm_app/core/data/cloudbase_repositories.dart';
@@ -244,7 +245,14 @@ void main() {
                 'dorm': <String, dynamic>{
                   'id': 'dorm-204',
                   'name': 'Dorm',
-                  'members': <Map<String, dynamic>>[],
+                  'members': <Map<String, dynamic>>[
+                    <String, dynamic>{
+                      'uid': 'tester',
+                      'name': 'Tester',
+                      'status': 'quiet',
+                      'sleepModeActive': false,
+                    },
+                  ],
                 },
               },
             }),
@@ -265,6 +273,7 @@ void main() {
       );
       final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
         appApiClient: appApiClient,
+        cacheStore: _MemorySnapshotCache(),
       );
       final CloudBaseAuthRepository repository = CloudBaseAuthRepository(
         environment: environment,
@@ -349,6 +358,7 @@ void main() {
       );
       final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
         appApiClient: appApiClient,
+        cacheStore: _MemorySnapshotCache(),
       );
       final CloudBaseAuthRepository repository = CloudBaseAuthRepository(
         environment: environment,
@@ -428,6 +438,7 @@ void main() {
     );
     final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
       appApiClient: appApiClient,
+      cacheStore: _MemorySnapshotCache(),
     );
     final CloudBaseAuthRepository repository = CloudBaseAuthRepository(
       environment: environment,
@@ -524,7 +535,9 @@ void main() {
                 'role': 'role',
                 'phoneNumber': '+86 13800138000',
                 'phoneLinkedAt': DateTime.now().toIso8601String(),
+                'dormId': 'dorm-204',
               },
+              'dorm': _boundDormPayload(),
             }),
             200,
           );
@@ -543,6 +556,7 @@ void main() {
       );
       final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
         appApiClient: appApiClient,
+        cacheStore: _MemorySnapshotCache(),
       );
       final CloudBaseAuthRepository repository = CloudBaseAuthRepository(
         environment: environment,
@@ -611,6 +625,7 @@ void main() {
       );
       final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
         appApiClient: appApiClient,
+        cacheStore: _MemorySnapshotCache(),
       );
       final CloudBaseAuthRepository repository = CloudBaseAuthRepository(
         environment: environment,
@@ -679,7 +694,9 @@ void main() {
                   'phoneLinkedAt': '2026-04-18T08:00:00.000Z',
                   'avatarUrl': 'https://cdn.example.com/avatar.png?sig=fresh',
                   'avatarStoragePath': 'avatars/tester.png',
+                  'dormId': 'dorm-204',
                 },
+                'dorm': _boundDormPayload(),
               },
             }),
             200,
@@ -699,6 +716,7 @@ void main() {
       );
       final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
         appApiClient: appApiClient,
+        cacheStore: _MemorySnapshotCache(),
       );
       final CloudBaseAuthRepository repository = CloudBaseAuthRepository(
         environment: environment,
@@ -819,6 +837,7 @@ void main() {
       );
       final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
         appApiClient: appApiClient,
+        cacheStore: _MemorySnapshotCache(),
       );
       final CloudBaseAuthRepository repository = CloudBaseAuthRepository(
         environment: environment,
@@ -1385,6 +1404,21 @@ void main() {
   );
 }
 
+Map<String, dynamic> _boundDormPayload() {
+  return <String, dynamic>{
+    'id': 'dorm-204',
+    'name': 'Dorm',
+    'members': <Map<String, dynamic>>[
+      <String, dynamic>{
+        'uid': 'tester',
+        'name': 'Tester',
+        'status': 'quiet',
+        'sleepModeActive': false,
+      },
+    ],
+  };
+}
+
 _AuthHarness _buildHarness(http.Client httpClient) {
   const AppEnvironment environment = AppEnvironment(
     target: AppBackendTarget.production,
@@ -1408,6 +1442,7 @@ _AuthHarness _buildHarness(http.Client httpClient) {
   );
   final CloudBaseSnapshotStore snapshotStore = CloudBaseSnapshotStore(
     appApiClient: appApiClient,
+    cacheStore: _MemorySnapshotCache(),
   );
   return _AuthHarness(
     repository: CloudBaseAuthRepository(
@@ -1431,6 +1466,23 @@ class _AuthHarness {
   final CloudBaseAuthRepository repository;
   final CloudBaseSnapshotStore snapshotStore;
   final _FakeSessionStore sessionStore;
+}
+
+class _MemorySnapshotCache implements CloudBaseSnapshotCache {
+  Map<String, dynamic>? _value;
+
+  @override
+  Future<Map<String, dynamic>?> read() async => _value;
+
+  @override
+  Future<void> write(Map<String, dynamic> payload) async {
+    _value = Map<String, dynamic>.from(payload);
+  }
+
+  @override
+  Future<void> clear() async {
+    _value = null;
+  }
 }
 
 class _MemoryVerifiedPhoneStore extends VerifiedPhoneIdentityStore {

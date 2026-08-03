@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:sleep_dorm_app/core/backend/cloudbase_app_api_client.dart';
+import 'package:sleep_dorm_app/core/backend/cloudbase_snapshot_cache_store.dart';
 
 class CloudBaseSnapshotRejectedException implements Exception {
   const CloudBaseSnapshotRejectedException(this.message);
@@ -13,37 +14,89 @@ class CloudBaseSnapshotRejectedException implements Exception {
 }
 
 class CloudBaseSnapshotStore extends ChangeNotifier {
-  CloudBaseSnapshotStore({required CloudBaseAppApiClient appApiClient})
-    : _appApiClient = appApiClient;
+  CloudBaseSnapshotStore({
+    required CloudBaseAppApiClient appApiClient,
+    CloudBaseSnapshotCache? cacheStore,
+  }) : _appApiClient = appApiClient,
+       _cacheStore = cacheStore ?? CloudBaseSnapshotCacheStore();
 
   final CloudBaseAppApiClient _appApiClient;
+  final CloudBaseSnapshotCache _cacheStore;
 
   Map<String, dynamic> _payload = <String, dynamic>{};
   bool _isRefreshing = false;
   String? _lastError;
   bool _refreshQueued = false;
-  bool _allowDestructiveRefreshQueued = false;
+  bool _allowDormBindingRemovalQueued = false;
   Future<void>? _refreshFuture;
+  Future<void>? _cacheHydrationFuture;
+  bool _cacheHydrated = false;
+  int _revision = 0;
+  bool _lastCommitAllowsDormBindingRemoval = false;
+  String _anchorUid = '';
+  String _anchorDormId = '';
+  bool _anchorHasAvatar = false;
 
   Map<String, dynamic> get payload => _payload;
   bool get isRefreshing => _isRefreshing;
   String? get lastError => _lastError;
   bool get hasPayload => _payload.isNotEmpty;
+  int get revision => _revision;
+  bool get lastCommitAllowsDormBindingRemoval =>
+      _lastCommitAllowsDormBindingRemoval;
 
-  Future<void> refresh({bool allowDestructiveAccountChanges = false}) async {
+  void setAccountAnchor({
+    required String uid,
+    String? dormId,
+    bool hasPersistedAvatar = false,
+  }) {
+    final String normalizedUid = uid.trim();
+    if (normalizedUid.isEmpty) {
+      return;
+    }
+    if (_anchorUid.isNotEmpty && _anchorUid != normalizedUid) {
+      return;
+    }
+    _anchorUid = normalizedUid;
+    final String normalizedDormId = dormId?.trim() ?? '';
+    if (normalizedDormId.isNotEmpty) {
+      _anchorDormId = normalizedDormId;
+    }
+    _anchorHasAvatar = _anchorHasAvatar || hasPersistedAvatar;
+  }
+
+  Future<void> hydrateFromCache() {
+    final Future<void>? inFlight = _cacheHydrationFuture;
+    if (inFlight != null) {
+      return inFlight;
+    }
+    if (_cacheHydrated) {
+      return Future<void>.value();
+    }
+    final Future<void> hydration = _hydrateFromCache();
+    _cacheHydrationFuture = hydration;
+    return hydration.whenComplete(() {
+      if (identical(_cacheHydrationFuture, hydration)) {
+        _cacheHydrationFuture = null;
+      }
+    });
+  }
+
+  Future<void> refresh({bool allowDormBindingRemoval = false}) async {
     if (!_appApiClient.isConfigured) {
       return;
     }
+    await hydrateFromCache();
     final Future<void>? inFlightRefresh = _refreshFuture;
     if (inFlightRefresh != null) {
       _refreshQueued = true;
-      _allowDestructiveRefreshQueued =
-          _allowDestructiveRefreshQueued || allowDestructiveAccountChanges;
+      _allowDormBindingRemovalQueued =
+          _allowDormBindingRemovalQueued || allowDormBindingRemoval;
       await inFlightRefresh;
       return;
     }
 
-    _allowDestructiveRefreshQueued = allowDestructiveAccountChanges;
+    _allowDormBindingRemovalQueued = allowDormBindingRemoval;
     final Completer<void> refreshCompleter = Completer<void>();
     final Future<void> refreshFuture = refreshCompleter.future;
     _refreshFuture = refreshFuture;
@@ -59,12 +112,29 @@ class CloudBaseSnapshotStore extends ChangeNotifier {
     await refreshFuture;
   }
 
+  Future<void> _hydrateFromCache() async {
+    _cacheHydrated = true;
+    if (_payload.isNotEmpty) {
+      return;
+    }
+    final Map<String, dynamic>? cached = await _cacheStore.read();
+    if (cached == null || cached.isEmpty) {
+      return;
+    }
+    try {
+      await _validateBootstrapPayload(cached, allowDormBindingRemoval: false);
+      _commitPayload(cached, allowDormBindingRemoval: false);
+      notifyListeners();
+    } catch (_) {
+      await _cacheStore.clear();
+    }
+  }
+
   Future<void> _runRefreshLoop() async {
     do {
       _refreshQueued = false;
-      final bool allowDestructiveAccountChanges =
-          _allowDestructiveRefreshQueued;
-      _allowDestructiveRefreshQueued = false;
+      final bool allowDormBindingRemoval = _allowDormBindingRemovalQueued;
+      _allowDormBindingRemovalQueued = false;
       _isRefreshing = true;
       _lastError = null;
       notifyListeners();
@@ -73,12 +143,16 @@ class CloudBaseSnapshotStore extends ChangeNotifier {
             .bootstrap();
         await _validateBootstrapPayload(
           nextPayload,
-          allowDestructiveAccountChanges: allowDestructiveAccountChanges,
+          allowDormBindingRemoval: allowDormBindingRemoval,
         );
-        _payload = nextPayload;
+        _commitPayload(
+          nextPayload,
+          allowDormBindingRemoval: allowDormBindingRemoval,
+        );
+        await _cacheStore.write(_accountSnapshotOf(nextPayload));
       } catch (error) {
-        // A failed or suspicious refresh must never replace the last known
-        // account snapshot. The next poll can retry with the same UI state.
+        // Never replace the last committed account snapshot with a failed or
+        // structurally incomplete bootstrap response.
         _lastError = error.toString();
       } finally {
         _isRefreshing = false;
@@ -87,9 +161,28 @@ class CloudBaseSnapshotStore extends ChangeNotifier {
     } while (_refreshQueued);
   }
 
+  void _commitPayload(
+    Map<String, dynamic> nextPayload, {
+    required bool allowDormBindingRemoval,
+  }) {
+    _payload = nextPayload;
+    _lastCommitAllowsDormBindingRemoval = allowDormBindingRemoval;
+    _revision += 1;
+    final Map<String, dynamic> root = _rootOf(nextPayload);
+    final Map<String, dynamic> user = _mapOf(root['user']);
+    if (allowDormBindingRemoval && _stringOf(user['dormId']).isEmpty) {
+      _anchorDormId = '';
+    }
+    setAccountAnchor(
+      uid: _stringOf(user['uid']),
+      dormId: _stringOf(user['dormId']),
+      hasPersistedAvatar: _hasAvatar(user),
+    );
+  }
+
   Future<void> _validateBootstrapPayload(
     Map<String, dynamic> nextPayload, {
-    required bool allowDestructiveAccountChanges,
+    required bool allowDormBindingRemoval,
   }) async {
     final Map<String, dynamic> nextRoot = _rootOf(nextPayload);
     final Map<String, dynamic> nextUser = _mapOf(nextRoot['user']);
@@ -107,6 +200,11 @@ class CloudBaseSnapshotStore extends ChangeNotifier {
         'user mismatch: expected $expectedSubject, received $nextUid',
       );
     }
+    if (_anchorUid.isNotEmpty && nextUid != _anchorUid) {
+      throw CloudBaseSnapshotRejectedException(
+        'account anchor mismatch: expected $_anchorUid, received $nextUid',
+      );
+    }
 
     final Map<String, dynamic> currentRoot = _rootOf(_payload);
     final Map<String, dynamic> currentUser = _mapOf(currentRoot['user']);
@@ -120,30 +218,46 @@ class CloudBaseSnapshotStore extends ChangeNotifier {
     final String nextDormId = _stringOf(nextUser['dormId']);
     final Map<String, dynamic> nextDorm = _mapOf(nextRoot['dorm']);
     final String nextDormRecordId = _stringOf(nextDorm['id']);
-    if (nextDormId.isNotEmpty && nextDormRecordId != nextDormId) {
-      throw CloudBaseSnapshotRejectedException(
-        'bound user $nextUid has no matching dorm snapshot',
+    if (nextDormId.isNotEmpty) {
+      if (nextDormRecordId != nextDormId) {
+        throw CloudBaseSnapshotRejectedException(
+          'bound user $nextUid has no matching dorm snapshot',
+        );
+      }
+      final List<Map<String, dynamic>> members = _listOfMaps(
+        nextDorm['members'],
       );
-    }
-
-    if (allowDestructiveAccountChanges || currentUid != nextUid) {
-      return;
+      if (members.isEmpty ||
+          !members.any(
+            (Map<String, dynamic> member) =>
+                _stringOf(member['uid']) == nextUid,
+          )) {
+        throw CloudBaseSnapshotRejectedException(
+          'bound user $nextUid is missing from dorm $nextDormId',
+        );
+      }
     }
 
     final String currentDormId = _stringOf(currentUser['dormId']);
-    if (currentDormId.isNotEmpty && nextDormId.isEmpty) {
-      throw CloudBaseSnapshotRejectedException(
-        'periodic refresh attempted to remove dorm $currentDormId',
-      );
+    final String protectedDormId = currentDormId.isNotEmpty
+        ? currentDormId
+        : _anchorDormId;
+    if (!allowDormBindingRemoval && protectedDormId.isNotEmpty) {
+      if (nextDormId.isEmpty) {
+        throw CloudBaseSnapshotRejectedException(
+          'periodic refresh attempted to remove dorm $protectedDormId',
+        );
+      }
+      if (nextDormId != protectedDormId) {
+        throw CloudBaseSnapshotRejectedException(
+          'periodic refresh attempted to switch dorm from '
+          '$protectedDormId to $nextDormId',
+        );
+      }
     }
 
-    final bool currentHasAvatar =
-        _stringOf(currentUser['avatarStoragePath']).isNotEmpty ||
-        _stringOf(currentUser['avatarUrl']).isNotEmpty;
-    final bool nextHasAvatar =
-        _stringOf(nextUser['avatarStoragePath']).isNotEmpty ||
-        _stringOf(nextUser['avatarUrl']).isNotEmpty;
-    if (currentHasAvatar && !nextHasAvatar) {
+    final bool currentHasAvatar = _hasAvatar(currentUser) || _anchorHasAvatar;
+    if (currentHasAvatar && !_hasAvatar(nextUser)) {
       throw const CloudBaseSnapshotRejectedException(
         'periodic refresh attempted to remove the persisted avatar',
       );
@@ -176,6 +290,8 @@ class CloudBaseSnapshotStore extends ChangeNotifier {
     _payload = _payload['data'] is Map<String, dynamic> || _payload.isEmpty
         ? <String, dynamic>{..._payload, 'data': next}
         : next;
+    _lastCommitAllowsDormBindingRemoval = false;
+    _revision += 1;
     notifyListeners();
   }
 
@@ -185,13 +301,35 @@ class CloudBaseSnapshotStore extends ChangeNotifier {
     });
   }
 
-  void clear() {
+  Future<void> clear() async {
     _payload = <String, dynamic>{};
     _lastError = null;
+    _revision += 1;
+    _lastCommitAllowsDormBindingRemoval = false;
+    _anchorUid = '';
+    _anchorDormId = '';
+    _anchorHasAvatar = false;
+    _cacheHydrated = true;
+    await _cacheStore.clear();
     notifyListeners();
   }
 
   Map<String, dynamic> get _rootData => _rootOf(_payload);
+}
+
+Map<String, dynamic> _accountSnapshotOf(Map<String, dynamic> payload) {
+  final Map<String, dynamic> root = _rootOf(payload);
+  return <String, dynamic>{
+    'data': <String, dynamic>{
+      'user': _mapOf(root['user']),
+      'dorm': _mapOf(root['dorm']),
+    },
+  };
+}
+
+bool _hasAvatar(Map<String, dynamic> user) {
+  return _stringOf(user['avatarStoragePath']).isNotEmpty ||
+      _stringOf(user['avatarUrl']).isNotEmpty;
 }
 
 Map<String, dynamic> _rootOf(Map<String, dynamic> payload) {
