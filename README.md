@@ -1,16 +1,12 @@
 <div align="center">
 
-<img src="docs/readme/banner.jpg" alt="眠羊 SleepBaa" width="100%"/>
+<img src="docs/readme/banner.jpg" alt="眠羊 SleepBaa · 面向宿舍的智能睡眠助手" width="100%"/>
 
 <br/>
 
-<img src="docs/readme/app-logo.png" alt="SleepBaa Logo" width="110"/>
-
-# 眠羊 SleepBaa
-
-### 宿舍早打烊，好梦找眠羊
-
 **一只懂宿舍、更懂你的 AI 睡眠小羊** 🐑🌙
+
+<br/>
 
 [![Flutter](https://img.shields.io/badge/Flutter-客户端-02569B?logo=flutter&logoColor=white)](ARCHITECTURE.md)
 [![CloudBase](https://img.shields.io/badge/腾讯云_CloudBase-云开发-1E80FF)](ARCHITECTURE.md)
