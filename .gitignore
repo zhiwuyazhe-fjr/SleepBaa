@@ -74,3 +74,9 @@ skills
 /软著申请
 
 /tmp
+
+# Local temp / export artifacts
+.tmp/
+
+# Local video originals (keep only compressed video in repo)
+video/*_original.mp4
