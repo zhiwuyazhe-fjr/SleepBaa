@@ -253,7 +253,6 @@ flutter build apk --no-tree-shake-icons
 
 | 成员 | 分工 |
 | :-- | :-- |
-| 张鹏 | 指导教师（天津大学计算机学院教授、博士生导师） |
 | 范家睿 | 产品经理 / 后端负责人 |
 | 魏子杰 | UI 设计 / 交互设计 / 前端负责人 |
 | 陈乐琪 | 前端开发 / 创意策划 |
@@ -291,6 +290,6 @@ flutter build apk --no-tree-shake-icons
 
 *Sleep Baa — because counting sheep is so last dorm.*
 
-<sub>© 2026 天津大学 多姆斯利普团队 · 基于腾讯云 CloudBase 云开发 · 保留所有权利</sub>
+<sub>© 2026 天津大学 多姆斯利普团队 · 保留所有权利</sub>
 
 </div>
