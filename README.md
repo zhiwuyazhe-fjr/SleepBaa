@@ -240,19 +240,39 @@ flutter build apk --no-tree-shake-icons
 <br/>
 <img src="docs/readme/app-logo.png" alt="眠羊 Logo" width="130"/>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-<img src="docs/readme/team-logo.png" alt="多姆斯利普团队 Logo" width="150"/>
+<img src="docs/readme/team-logo.jpg" alt="多姆斯利普团队 Logo" width="150"/>
 <br/><br/>
 <b>产品：眠羊 SleepBaa</b> &nbsp;×&nbsp; <b>团队：多姆斯利普（DormSleep）</b>
 <br/>
 天津大学 · 多姆斯利普队
 </div>
 
-| 成员 | 分工 |
-| :-- | :-- |
-| 范家睿 | 产品经理 / 后端负责人 |
-| 魏子杰 | UI 设计 / 交互设计 / 前端负责人 |
-| 陈乐琪 | 前端开发 / 创意策划 |
-| 杨粲禹 | 后端开发 / AI 集成 |
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="45%">成员（GitHub）</th>
+      <th>分工</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="https://github.com/zhiwuyazhe_fjr"><img src="https://github.com/zhiwuyazhe_fjr.png?size=80" width="32" align="absmiddle" alt="zhiwuyazhe_fjr"/> @zhiwuyazhe_fjr</a></td>
+      <td>产品经理 / 后端负责人</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/GlacierXiaowei"><img src="https://github.com/GlacierXiaowei.png?size=80" width="32" align="absmiddle" alt="GlacierXiaowei"/> @GlacierXiaowei</a></td>
+      <td>UI 设计 / 交互设计 / 前端负责人</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/LIE"><img src="https://github.com/LIE.png?size=80" width="32" align="absmiddle" alt="LIE"/> @LIE</a></td>
+      <td>前端开发 / 创意策划</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/YangFelix"><img src="https://github.com/YangFelix.png?size=80" width="32" align="absmiddle" alt="YangFelix"/> @YangFelix</a></td>
+      <td>后端开发 / AI 集成</td>
+    </tr>
+  </tbody>
+</table>
 
 ---
 
@@ -277,10 +297,6 @@ flutter build apk --no-tree-shake-icons
 ---
 
 <div align="center">
-
-<img src="docs/readme/ending.jpg" alt="愿每一个夜晚，都被温柔接住" width="92%"/>
-
-<br/>
 
 **愿每一个夜晚，都被温柔接住。** 🌙
 
