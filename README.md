@@ -254,7 +254,7 @@ flutter build apk --no-tree-shake-icons
   </thead>
   <tbody>
     <tr>
-      <td><a href="https://github.com/zhiwuyazhe_fjr">@zhiwuyazhe_fjr</a></td>
+      <td><a href="https://github.com/zhiwuyazhe-fjr">@zhiwuyazhe-fjr</a></td>
       <td>产品经理 / 后端负责人</td>
     </tr>
     <tr>
@@ -262,11 +262,11 @@ flutter build apk --no-tree-shake-icons
       <td>UI 设计 / 交互设计 / 前端负责人</td>
     </tr>
     <tr>
-      <td><a href="https://github.com/LIE">@LIE</a></td>
+      <td><a href="https://github.com/leqi-chen">@leqi-chen</a></td>
       <td>前端开发 / 创意策划</td>
     </tr>
     <tr>
-      <td><a href="https://github.com/YangFelix">@YangFelix</a></td>
+      <td><a href="https://github.com/Felix-dp">@Felix-dp</a></td>
       <td>后端开发 / AI 集成</td>
     </tr>
   </tbody>
