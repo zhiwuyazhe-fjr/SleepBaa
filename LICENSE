@@ -1,133 +1,73 @@
-眠羊 SleepBaa 非商业使用许可协议
-SleepBaa Non-Commercial Use License（SBNC-1.0）
+# PolyForm Noncommercial License 1.0.0
 
-版权所有 © 2026 天津大学「多姆斯利普」团队（DormSleep Team, Tianjin University）
-保留所有权利（All Rights Reserved）。
+<https://polyformproject.org/licenses/noncommercial/1.0.0>
 
-========================================================================
+## Acceptance
 
-第一条  协议适用范围
+In order to get any license under these terms, you must agree to them as both strict obligations and conditions to all your licenses.
 
-1.1 本协议适用于本仓库中的全部内容，包括但不限于：源代码、目标代码、
-    脚本、文档、架构设计、界面设计、产品文案、图片素材、图标与标识、
-    音频与视频素材、宣传物料及任何其他形式的智力成果（以下统称"本作品"）。
-1.2 一旦您下载、复制、访问、编译、运行、修改或以任何方式使用本作品的
-    全部或部分内容，即视为您已阅读、理解并同意受本协议全部条款的约束。
-    如果您不同意本协议的任何条款，您必须立即停止使用并删除本作品。
+## Copyright License
 
-第二条  有限的授权
+The licensor grants you a copyright license for the software to do everything you might do with the software that would otherwise infringe the licensor's copyright in it for any permitted purpose.  However, you may only distribute the software according to [Distribution License](#distribution-license) and make changes or new works based on the software according to [Changes and New Works License](#changes-and-new-works-license).
 
-2.1 在严格遵守本协议全部条款的前提下，版权所有者授予您一项有限的、
-    非独占的、不可转让的、不可转授权的、可撤销的许可，仅允许您将本
-    作品用于以下目的：
-    （一）个人学习与研究；
-    （二）非商业性质的教学、课程实践与学术交流；
-    （三）对本作品进行非商业性质的评估、测试与引用。
-2.2 除本条明确授予的权利外，本作品的一切权利均由版权所有者保留。
-    本协议不构成任何明示或默示的其他授权。
+## Distribution License
 
-第三条  严禁商业使用（核心条款）
+The licensor grants you an additional copyright license to distribute copies of the software.  Your license to distribute covers distributing the software with changes and new works permitted by [Changes and New Works License](#changes-and-new-works-license).
 
-3.1 严禁将本作品的全部或任何部分用于任何商业目的或商业场景。
-    "商业目的或商业场景"包括但不限于以下任何情形：
-    （一）出售、出租、转售、分销本作品或其任何部分，以获取经济利益；
-    （二）将本作品或其衍生作品打包、封装、集成到任何收费或免费的
-         商业产品、商业应用、商业网站、商业小程序或商业服务中；
-    （三）以本作品为基础提供任何形式的付费服务、订阅服务、增值服务
-         或软件即服务（SaaS）；
-    （四）将本作品用于广告投放、流量变现、商业推广、市场营销或任何
-         以营利为目的的传播活动；
-    （五）任何公司、企业、个体工商户、经营性组织在生产经营、内部
-         管理或对外服务中使用本作品；
-    （六）将本作品用于任何竞赛、招投标或商业项目申报中以获取商业
-         利益（经版权所有者书面授权的除外）；
-    （七）其他任何直接或者间接以获取报酬、利润、商业机会或商业
-         优势为目的的使用行为。
-3.2 任何单位或个人如需将本作品用于商业目的，必须事先与版权所有者
-    取得联系，另行签署书面商业许可协议。未经许可的任何商业使用
-    均构成侵权。
+## Notices
 
-第四条  其他禁止行为
+You must ensure that anyone who gets a copy of any part of the software from you also gets a copy of these terms or the URL for them above, as well as copies of any plain-text lines beginning with `Required Notice:` that the licensor provided with the software.  For example:
 
-4.1 不得删除、遮盖、篡改本作品中的任何版权声明、许可声明、署名信息
-    或商标标识。
-4.2 不得以任何形式声称或暗示您为本作品的原始作者或版权所有者。
-4.3 不得将本作品用于任何违反法律法规、公序良俗的用途，包括但不限于
-    侵犯他人合法权益、传播违法信息、从事网络攻击等行为。
-4.4 不得对本仓库中的"眠羊 SleepBaa"名称、产品 Logo、团队 Logo 及
-    相关品牌素材进行任何商业性使用、注册、抢注或仿冒。
-4.5 不得将本作品中涉及云端服务配置的任何信息用于未授权的访问或调用。
+> Required Notice: Copyright Yoyodyne, Inc. (http://example.com)
 
-第五条  复制与再分发
+## Changes and New Works License
 
-5.1 您可以出于第二条所述的非商业目的复制、再分发本作品，但必须同时
-    满足以下全部条件：
-    （一）在复制件或分发副本中完整保留本协议文本及全部版权声明；
-    （二）以显著方式注明本作品的来源及版权所有者：
-         「眠羊 SleepBaa —— 天津大学 多姆斯利普团队」；
-    （三）不得向接收者收取任何费用；
-    （四）不得对本协议的条款做任何变更。
-5.2 您基于本作品创作的衍生作品，仅可出于非商业目的使用与分发，必须
-    采用与本协议相同的许可条款，并履行前款规定的署名义务。
+The licensor grants you an additional copyright license to make changes and new works based on the software for any permitted purpose.
 
-第六条  无担保与责任限制
+## Patent License
 
-6.1 本作品按"现状"提供，不提供任何明示或默示的担保，包括但不限于
-    适销性、特定用途适用性、不侵权性、安全性、稳定性及持续可用性的
-    担保。
-6.2 在任何情况下，版权所有者均不对因使用或无法使用本作品而产生的
-    任何直接、间接、偶然、特殊或后果性损害承担责任，无论该等损害
-    基于何种法律理论，即使已被告知可能发生此类损害。
-6.3 本作品中涉及的大模型生成内容仅供参考，不构成任何医疗、健康或
-    心理方面的专业建议。
+The licensor grants you a patent license for the software that covers patent claims the licensor can license, or becomes able to license, that you would infringe by using the software.
 
-第七条  违约与终止
+## Noncommercial Purposes
 
-7.1 您一旦违反本协议的任何条款，本协议授予您的全部权利将立即自动
-    终止，且无需另行通知。您应立即停止使用本作品，并删除您所持有
-    的本作品的全部副本及其衍生作品。
-7.2 对于任何未经授权的商业使用或其他侵权行为，版权所有者保留依据
-    《中华人民共和国著作权法》《中华人民共和国反不正当竞争法》及
-    其他相关法律法规追究侵权者法律责任的一切权利，包括但不限于
-    要求停止侵权、消除影响、赔礼道歉及赔偿损失。
-7.3 本协议终止后，第三条（严禁商业使用）、第四条（其他禁止行为）、
-    第六条（无担保与责任限制）、第七条（违约与终止）继续有效。
+Any noncommercial purpose is a permitted purpose.
 
-第八条  其他
+## Personal Uses
 
-8.1 本协议的订立、效力、解释与执行均适用中华人民共和国法律。
-8.2 若本协议的任何条款被认定为无效或不可执行，其余条款仍然有效。
-8.3 本协议最终解释权归版权所有者所有。
+Personal use for research, experiment, and testing for the benefit of public knowledge, personal study, private entertainment, hobby projects, amateur pursuits, or religious observance, without any anticipated commercial application, is use for a permitted purpose.
 
-========================================================================
+## Noncommercial Organizations
 
-商业授权与联系：
+Use by any charitable organization, educational institution, public research organization, public safety or health organization, environmental protection organization, or government institution is use for a permitted purpose regardless of the source of funding or obligations resulting from the funding.
 
-    若您希望获得本作品的商业使用授权，或对本协议有任何疑问，
-    请通过本仓库的 Issues 页面与「多姆斯利普」团队取得联系。
-    未经授权的商业使用将被追究法律责任。
+## Fair Use
 
-------------------------------------------------------------------------
+You may have "fair use" rights for the software under the law. These terms do not limit them.
 
-English Summary (for reference only; the Chinese text shall prevail):
+## No Other Rights
 
-    Copyright (c) 2026 DormSleep Team, Tianjin University. All rights reserved.
+These terms do not allow you to sublicense or transfer any of your licenses to anyone else, or prevent the licensor from granting licenses to anyone else.  These terms do not imply any other licenses.
 
-    This repository (code, designs, documents, images, audio/video assets and
-    all other contents) is licensed under the SleepBaa Non-Commercial Use
-    License (SBNC-1.0). It grants a limited right for personal learning,
-    research and non-commercial teaching ONLY.
+## Patent Defense
 
-    ANY COMMERCIAL USE IS STRICTLY PROHIBITED, including but not limited to:
-    selling, renting, sublicensing, integrating into any commercial product
-    or service, providing paid/SaaS services, advertising or monetization,
-    and use by any company or for-profit organization.
+If you make any written claim that the software infringes or contributes to infringement of any patent, your patent license for the software granted under these terms ends immediately. If your company makes such a claim, your patent license ends immediately for work on behalf of your company.
 
-    Redistribution for non-commercial purposes must retain this license and
-    give prominent credit to "SleepBaa - DormSleep Team, Tianjin University".
-    Derivative works must be distributed under the same terms.
+## Violations
 
-    The software is provided "AS IS", without warranty of any kind.
-    Unauthorized commercial use will result in termination of all rights and
-    may lead to legal liability. For commercial licensing, please contact the
-    team via the Issues page of this repository.
+The first time you are notified in writing that you have violated any of these terms, or done anything with the software not covered by your licenses, your licenses can nonetheless continue if you come into full compliance with these terms, and take practical steps to correct past violations, within 32 days of receiving notice.  Otherwise, all your licenses end immediately.
+
+## No Liability
+
+***As far as the law allows, the software comes as is, without any warranty or condition, and the licensor will not be liable to you for any damages arising out of these terms or the use or nature of the software, under any kind of legal claim.***
+
+## Definitions
+
+The **licensor** is the individual or entity offering these terms, and the **software** is the software the licensor makes available under these terms.
+
+**You** refers to the individual or entity agreeing to these terms.
+
+**Your company** is any legal entity, sole proprietorship, or other kind of organization that you work for, plus all organizations that have control over, are under the control of, or are under common control with that organization.  **Control** means ownership of substantially all the assets of an entity, or the power to direct its management and policies by vote, contract, or otherwise.  Control can be direct or indirect.
+
+**Your licenses** are all the licenses granted to you for the software under these terms.
+
+**Use** means anything you do with the software requiring one of your licenses.

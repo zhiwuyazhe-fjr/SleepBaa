@@ -1,156 +1,131 @@
 <div align="center">
 
-<img src="docs/readme/banner.jpg" alt="眠羊 SleepBaa · 面向宿舍的智能睡眠助手" width="100%"/>
+<img src="docs/readme/app-logo.png" alt="眠羊 SleepBaa" width="104" />
 
-<br/>
+# 眠羊 SleepBaa
 
-**一只懂宿舍、更懂你的 AI 睡眠小羊** 🐑🌙
+<p><strong>和舍友住在一起，也能好好睡一觉。</strong></p>
 
-<br/>
+面向大学宿舍的智能睡眠助手<br />
+从睡前判断、夜间陪伴，到晨间复盘与寝室协同
 
-[![Flutter](https://img.shields.io/badge/Flutter-客户端-02569B?logo=flutter&logoColor=white)](ARCHITECTURE.md)
-[![CloudBase](https://img.shields.io/badge/腾讯云_CloudBase-云开发-1E80FF)](ARCHITECTURE.md)
-[![Node.js](https://img.shields.io/badge/CloudBase_函数-Node.js_20-339933?logo=nodedotjs&logoColor=white)](ARCHITECTURE.md)
-[![AI](https://img.shields.io/badge/AI-睡眠Agent_小眠-7B61FF)](#agent)
-[![Awards](https://img.shields.io/badge/获奖-6_项荣誉-FF9800)](#awards)
-[![License](https://img.shields.io/badge/协议-严禁商用-critical)](LICENSE)
+<sub>Flutter · CloudBase · Node.js 20 · AI Sleep Agent</sub>
 
-[🎬 宣传视频](#video) ·
-[✨ 功能亮点](#features) ·
-[📱 界面一览](#ui) ·
-[🏆 获奖](#awards) ·
-[🚀 快速开始](#quickstart) ·
-[🐑 关于我们](#team) ·
-[📜 协议](#license)
+<br /><br />
 
+[产品体验](#product)　[演示视频](#video)　[技术实现](#technology)　[本地运行](#run)　[团队](#team)　[使用许可](#license)
+
+</div>
+
+<br />
+
+<div align="center">
+<img src="docs/readme/ui-overview.jpg" alt="眠羊产品界面总览" width="94%" />
+</div>
+
+<br />
+
+> 眠羊是天津大学多姆斯利普团队完成的学生创新项目。我们从 1500 余份问卷出发，把睡眠问题放回宿舍这个真实环境中处理。
+
+| 调研样本 | 宿舍环境影响 | 项目成果 |
+| :--: | :--: | :--: |
+| 1500+ 份问卷 | 60.71% 的受访同学至少偶尔受到影响 | 5 项奖项 · 1 次参展 |
+
+---
+
+## 从一个很普通的夜晚说起
+
+23 点 40 分，已经想睡了，手机还没放下。零点过后，舍友仍在说话、开灯、走动。明早有课，时间越晚，人越清醒。
+
+这类问题很难只靠一份睡眠报告解决。宿舍里的噪声、灯光、手机使用、情绪压力和舍友作息会同时出现，许多时候还牵涉一件更难的事，那就是该怎么开口。
+
+调研中，60.71% 的同学表示自己至少偶尔受到宿舍环境影响。受访者对个性化微干预建议和 AI 助手陪伴的接受度均超过 4 分，满分为 5 分。这些结果决定了眠羊最初的产品方向。
+
+<div align="center">
+<img src="docs/readme/research.jpg" alt="眠羊项目调研结果" width="90%" />
 </div>
 
 ---
 
-<a id="story"></a>
+<a id="product"></a>
 
-## 🌃 今晚，你的宿舍几点安静下来？
+## 眠羊怎样陪你过完一晚
 
-> **23:40** —— 想睡了，但手机停不下来，脑子也停不下来。
-> **00:20** —— 舍友还在说话、开灯、走动，环境越来越吵。
-> **01:30** —— 明天早八，越想越焦虑，越想睡越睡不着。
+眠羊先判断今晚最主要的干扰，再给出少量、当下就能完成的建议。夜间尽量减少操作，晨间根据反馈继续调整。遇到共居问题时，寝室协同功能会帮助成员共享状态、约定规则和发送更自然的提醒。
 
 <div align="center">
-<img src="docs/readme/scene-tonight.jpg" alt="宿舍失眠三幕" width="92%"/>
+<img src="docs/readme/solution.jpg" alt="眠羊整体方案" width="90%" />
 </div>
 
-在大学生的宿舍里，**睡不着从来不只是"困不困"的问题**——它是睡前焦虑、手机刺激、噪声灯光、作息冲突层层叠加的结果。我们收集了 **1500+ 份问卷**验证过这件事：**60.71%** 的同学至少偶尔被宿舍环境影响睡眠，而"个性化微干预建议"与"AI 助手陪伴"的接受度均超过 **4 分**（满分 5 分）。
-
-<div align="center">
-<img src="docs/readme/research.jpg" alt="调研分析" width="92%"/>
-</div>
-
-而普通睡眠 App 只负责"记录"，不负责"解决"；它们默认你独居、自律、好意思开口提醒舍友——**但宿舍不是一个人的战场**。
-
-所以，我们做了眠羊。
-
----
-
-<a id="solution"></a>
-
-## 💡 我们做了什么
-
-**眠羊 SleepBaa 不是"又一个助眠工具"，而是一个面向宿舍场景的智能陪伴干预系统。**
-
-它围绕"今晚为什么睡不好"，完成 **识别问题 → 及时干预 → 持续优化** 的完整闭环：一条主线守护个人睡眠，一条支线协同整个寝室，AI 睡眠 Agent「小眠」贯穿始终。
-
-<div align="center">
-<img src="docs/readme/solution.jpg" alt="整体解决方案" width="92%"/>
-</div>
-
-| 模块 | 关键词 | 一句话说明 |
+| 阶段 | 眠羊会做什么 | 用户得到什么 |
 | :-- | :-- | :-- |
-| 🎯 个体干扰因子判断与微干预 | 个体化干预 | 识别今晚睡不好的主要原因，只给 1–2 个**立即可做**的关键动作 |
-| 🏠 寝室互联与协同干预 | 宿舍协同 | 把作息冲突等共居问题纳入管理，提供**低冲突**的协同机制 |
-| 🤖 AI 睡眠助手「小眠」 | 陪伴式 AI | 输入入口 + 情绪承接层 + 建议解释器，具有人格记忆与进化能力 |
-| 🌱 长期陪伴与成长闭环 | 情绪价值 | 记录与复盘 + 激励体系，让每一次睡眠都被温柔接住 |
+| 睡前 | 结合噪声、灯光、手机使用和情绪状态判断干扰 | 一到两项可以马上执行的建议 |
+| 睡眠中 | 提供放松音频、呼吸引导、夜醒速记和锁屏提醒 | 更少的操作与打断 |
+| 睡醒后 | 收集晨间反馈，生成睡眠报告与本周快照 | 看清变化，并调整下一晚的建议 |
+| 寝室共居 | 共享状态、共同制定公约、发送委婉提醒 | 降低沟通成本，减少作息冲突 |
 
----
+### 睡前判断
 
-<a id="features"></a>
-
-## ✨ 功能亮点
-
-### 🌙 睡前 —— 先搞懂"今晚为什么睡不好"
-
-和小眠聊两句，它便会结合宿舍噪声、灯光环境、手机使用与情绪压力，**智能归类分析干扰因子**，生成只属于你的微干预建议——少而关键，立即可做。一键进入睡眠模式，今晚交给它。
+用户只需补充几项当晚状态，小眠会判断影响入睡的主要因素。建议会控制数量，重点是今晚能做，而非泛泛地讲一遍睡眠常识。
 
 <div align="center">
-<img src="docs/readme/ui-before-sleep.jpg" alt="睡前：干扰因子判断与微干预" width="92%"/>
+<img src="docs/readme/ui-before-sleep.jpg" alt="睡前干扰判断与行动建议" width="90%" />
 </div>
 
-### 😴 睡眠中 —— 从"主动操作"到"低感守护"
+### 夜间陪伴
 
-睡眠放松音乐、难以入睡时的呼吸引导、随手记录夜醒与闪过的念头（梦记/事记，防止遗忘焦虑）、锁屏常驻通知与夜间主题 UI……**让睡眠过程被安静记录，而不是被手机打扰**。
+进入睡眠模式后，界面会主动收敛。放松音乐、呼吸引导、夜醒记录和常驻通知都围绕低打扰设计，临时闪过的梦或待办也能快速记下。
 
 <div align="center">
-<img src="docs/readme/ui-sleeping.jpg" alt="睡眠中：低感守护" width="92%"/>
+<img src="docs/readme/ui-sleeping.jpg" alt="睡眠模式与低打扰记录" width="90%" />
 </div>
 
-### 🌅 睡醒 —— 晨间反馈，让今晚比昨晚更好睡
+### 晨间复盘
 
-梦境快速记录、晨间及时反馈、智能睡眠报告与本周睡眠快照。你的每一次反馈都会更新个人画像，**优化下一次的助眠动作**——越用越懂你。
+起床后的反馈会进入个人睡眠记录。眠羊会整理当晚情况、展示近期变化，并把有效与无效的建议留给下一次判断。
 
 <div align="center">
-<img src="docs/readme/ui-morning.jpg" alt="睡醒：晨间反馈闭环" width="92%"/>
+<img src="docs/readme/ui-morning.jpg" alt="晨间反馈与睡眠报告" width="90%" />
 </div>
 
-### 🏠 寝室互联 —— 把"难开口"变成"可协同"
+### 寝室协同
 
-宿舍状态一目了然、舍友动态清晰可见、宿舍公约共同制定、**"高情商"委婉提醒**替你温柔开口、静音模式智能联动……从"难开口、难协调"，变成"可感知、可提醒、可协同"。
+成员可以查看宿舍状态、共同约定作息，也可以让眠羊代为组织一条不那么生硬的提醒。静音等状态能够在寝室成员之间联动。
 
 <div align="center">
-<img src="docs/readme/ui-dorm.jpg" alt="寝室互联与协同干预" width="92%"/>
+<img src="docs/readme/ui-dorm.jpg" alt="寝室状态与协同功能" width="90%" />
 </div>
 
-<a id="agent"></a>
+### 小眠
 
-### 🤖 AI 睡眠 Agent「小眠」—— 不是聊天工具，是陪伴中枢
-
-一句话、几个标签，小眠就能快速理解今晚状态；难入睡时**先接住情绪，再进入判断与干预**；次日主动追问效果，沉淀为后续优化依据。借鉴 OpenClaw 精华架构，小眠具备**长期人格记忆、连续试错优化与自我进化能力**——它贯穿睡前、睡中、睡后的每一个瞬间。
+小眠是贯穿产品流程的 AI 睡眠助手。它负责理解自然语言输入、承接情绪、解释建议，并在第二天追问效果。对话记录和结构化反馈共同用于更新后续建议。
 
 <div align="center">
-<img src="docs/readme/ui-agent.jpg" alt="睡眠 Agent 小眠" width="92%"/>
+<img src="docs/readme/ui-agent.jpg" alt="AI 睡眠助手小眠" width="90%" />
 </div>
 
-### 💭 梦境与情绪 —— 产品不仅服务睡眠，也回应情绪
+### 梦境与情绪
 
-睡醒后把梦轻轻记下来，小眠帮你做**梦境映射解析**；睡前选择当下心情，**整个 App 的主题、色彩与陪伴语气都会随之变化**。开心、低落、平静，每一种情绪都有自己的夜晚。
-
-<div align="center">
-<img src="docs/readme/ui-dream.jpg" alt="梦境记录与复盘" width="48%"/> <img src="docs/readme/ui-mood.jpg" alt="情绪驱动的个性化陪伴" width="48%"/>
-</div>
-
----
-
-<a id="ui"></a>
-
-## 📱 界面一览
-
-首页 · 寝室页 · 我的页 · AI 助手页——四大页面，一个完整的睡眠宇宙。
+用户可以在醒来后快速记录梦境，也可以在睡前选择当下情绪。情绪会影响界面色彩和陪伴语气，梦境记录则保留为个人复盘材料。AI 生成的梦境内容仅作整理与参考。
 
 <div align="center">
-<img src="docs/readme/ui-overview.jpg" alt="产品原型总览" width="92%"/>
+<img src="docs/readme/ui-dream.jpg" alt="梦境记录" width="44%" />&nbsp;
+<img src="docs/readme/ui-mood.jpg" alt="情绪主题" width="44%" />
 </div>
 
 <details>
-<summary>💪 <b>为什么这不是一个普通 App？</b>（点击展开创新点总结）</summary>
+<summary><strong>查看产品创新点</strong></summary>
 
-<br/>
+<br />
 
 <div align="center">
-<img src="docs/readme/innovation.jpg" alt="创新点总结" width="92%"/>
+<img src="docs/readme/innovation.jpg" alt="眠羊产品创新点" width="90%" />
 </div>
 
-- **不是泛化建议，而是个体化微干预** —— 识别"今晚为什么睡不好"，给出可执行的关键动作；
-- **不是只管个人，而是纳入宿舍协同** —— 把作息冲突等共居问题纳入设计，提供低冲突协同机制；
-- **不是聊天工具，而是陪伴式 AI 中枢** —— 贯穿输入、情绪承接与复盘更新，可参与决策；
-- **不是一次使用，而是长期成长闭环** —— 长期记忆 + 连续优化，越用越懂你。
+- 建议来自当晚的干扰因素判断，数量少，并且可以立即执行
+- 宿舍作息冲突被纳入产品流程，不再只记录个人数据
+- 小眠参与睡前输入、夜间陪伴与晨间反馈，保留连续上下文
+- 每次反馈都会影响后续建议，让产品逐步适应个人习惯
 
 </details>
 
@@ -158,148 +133,118 @@
 
 <a id="video"></a>
 
-## 🎬 宣传视频
+## 82 秒了解眠羊
 
 <div align="center">
 
-<video src="video/video.mp4" poster="docs/readme/ui-overview.jpg" controls="controls" width="92%"></video>
+<video src="video/video.mp4" poster="docs/readme/ui-overview.jpg" controls="controls" width="90%"></video>
 
-📹 若当前预览环境未显示播放器，[点击这里观看 / 下载宣传视频](video/video.mp4)（82 秒，含音效）
+若当前页面无法显示播放器，可[直接观看或下载宣传视频](video/video.mp4)。视频含音效。
 
 </div>
 
 ---
 
-<a id="awards"></a>
+<a id="technology"></a>
 
-## 🏆 获奖与参展
+## 技术实现
 
-| 时间 | 赛事 / 活动 | 奖项 | 主办方 |
-| :-- | :-- | :-- | :-- |
-| 2026.07 | 2026 第三届中国高校计算机大赛 - AIGC 创新赛（应用赛道·华北赛区） | 🥉 赛区三等奖 | 中国高校计算机大赛 - AIGC 创新赛组委会 |
-| 2026.05 | 第十九届中国大学生计算机设计大赛天津市级赛 | 🥉 省级三等奖 | 中国大学生计算机设计大赛天津市级赛组委会 |
-| 2026.05 | 天津大学"盈趣科技"杯"人工智能+"创新应用案例（学生赛道） | 🥈 二等奖 | 天津大学 |
-| 2026.05 | 首届天津大学新媒体与传播学院 AI 创意实践挑战赛 | 🥇 一等奖 | 天津大学新媒体与传播学院 |
-| 2026.05 | 首届天津大学新媒体与传播学院 AI 创意实践挑战赛 | 🎖️ 优秀奖 | 天津大学新媒体与传播学院 |
-| 2026 | 2026 年世界智能产业博览会 | 🌐 参展 | —— |
-
----
-
-<a id="tech"></a>
-
-## 🛠 技术架构
-
-眠羊基于 **Flutter + 腾讯云 CloudBase 云开发 + 大模型能力** 完成从前端交互到智能干预反馈的全链路搭建：
+客户端使用 Flutter 开发，后端运行在腾讯云 CloudBase。登录、数据同步、AI 对话和音频服务通过统一的 HTTP API 接入，AI 回复使用 SSE 流式传输。
 
 <div align="center">
-<img src="docs/readme/tech-stack.jpg" alt="技术路径" width="92%"/>
+<img src="docs/readme/tech-stack.jpg" alt="眠羊技术架构" width="90%" />
 </div>
 
-- **客户端**：Flutter（Dart SDK ^3.11.4），Material Design，Android minSdk 23；
-- **云端**：[腾讯云 CloudBase 云开发](https://www.tencentcloud.com/products/tcb)——云函数（`app-api` HTTP Function + 睡眠/梦境事件触发函数）、云数据库、云存储（助眠音频托管）、身份认证；
-- **AI 能力**：CloudBase AI 大模型，SSE 流式对话，Provider 工厂统一调度（可配置模型与降级兜底）；
-- **后端运行时**：Node.js 20，TypeScript。
+| 层级 | 技术与职责 |
+| :-- | :-- |
+| 客户端 | Flutter、Dart SDK 3.11.4、Material Design，Android minSdk 23 |
+| 云端 | 腾讯云 CloudBase、HTTP 云函数、事件触发函数、云数据库、云存储、身份认证 |
+| AI | CloudBase AI 大模型、SSE 流式对话、可配置 Provider 与降级处理 |
+| 后端运行时 | Node.js 20、TypeScript |
 
-> 📖 目录结构、构建复现、云函数与大模型调用的完整说明，请阅读 **[ARCHITECTURE.md —— 架构与构建说明](ARCHITECTURE.md)**。
+项目目录、数据流、云函数和构建说明见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+
+> 眠羊目前是产品原型与学生创新项目，不能替代医生、心理咨询师或其他专业人员的诊断与建议。
 
 ---
 
-<a id="quickstart"></a>
+<a id="run"></a>
 
-## 🚀 快速开始
+## 本地运行
 
-### 方式一：本地内存模式（零配置，最快体验）
+### 体验界面与本地流程
 
-无需任何云端配置，客户端会使用内置的 in-memory 本地后端，适合浏览界面与本地交互流程：
+无需云端配置。客户端会使用内置的内存后端，适合查看界面和基本交互。
 
 ```powershell
 flutter pub get
 flutter build apk --no-tree-shake-icons
-# 产物：build/app/outputs/flutter-apk/app-release.apk
 ```
 
-### 方式二：CloudBase 完整联调模式
+构建产物位于 `build/app/outputs/flutter-apk/app-release.apk`。
 
-眠羊的后端完全运行在腾讯云 CloudBase 上（登录、数据同步、AI 对话、云端音频等都依赖它）。**出于安全考虑，以下内容不会、也不能提交到本公开仓库**：
+### 连接 CloudBase
 
-- 🔐 CloudBase 环境 `PublishableKey`、云账号凭据与 `.cloudbase.local.json`
-- 🔐 Android 正式签名证书（`key.properties` / `*.jks` / `*.keystore`）
-- 🔐 大模型 API Key 与云端助眠音频素材
+完整模式依赖 CloudBase 登录、数据同步、AI 对话和云端音频。仓库仅提供配置模板 [.cloudbase.local.example.json](.cloudbase.local.example.json)，以下内容不会提交到公开仓库。
 
-仓库中提供了配置模板 [.cloudbase.local.example.json](.cloudbase.local.example.json)。如果你希望进行 CloudBase 完整联调复现（例如评审、复现研究或合作开发），**请通过本仓库 Issues 与团队联系**，我们会在确认用途后提供必要的支持。
+- CloudBase PublishableKey、云账号凭据与 `.cloudbase.local.json`
+- Android 正式签名证书，包括 `key.properties`、`*.jks` 和 `*.keystore`
+- 大模型 API Key 与云端助眠音频
 
-> ⚠️ Windows 用户请注意：Flutter/Android 构建工具对中文路径兼容性较差，请将仓库放在纯英文路径下再构建。
+如需用于评审、研究复现或合作开发，请通过仓库 Issues 联系团队。Windows 环境下建议把仓库放在纯英文路径中，避免 Flutter 与 Android 构建工具出现路径兼容问题。
+
+---
+
+## 项目经历
+
+| 时间 | 赛事或活动 | 结果 | 主办方 |
+| :-- | :-- | :-- | :-- |
+| 2026.07 | 第三届中国高校计算机大赛 AIGC 创新赛，应用赛道华北赛区 | 赛区三等奖 | 中国高校计算机大赛 AIGC 创新赛组委会 |
+| 2026.05 | 第十九届中国大学生计算机设计大赛天津市级赛 | 省级三等奖 | 天津市级赛组委会 |
+| 2026.05 | 天津大学“盈趣科技”杯“人工智能+”创新应用案例，学生赛道 | 二等奖 | 天津大学 |
+| 2026.05 | 首届天津大学新媒体与传播学院 AI 创意实践挑战赛 | 一等奖 | 天津大学新媒体与传播学院 |
+| 2026.05 | 首届天津大学新媒体与传播学院 AI 创意实践挑战赛 | 优秀奖 | 天津大学新媒体与传播学院 |
+| 2026 | 世界智能产业博览会智能创新黑客松 | 参展 | 世界智能产业博览会 |
 
 ---
 
 <a id="team"></a>
 
-## 🐑 关于我们
+## 多姆斯利普团队
 
 <div align="center">
-<br/>
-<img src="docs/readme/team-logo.jpg" alt="多姆斯利普团队 Logo" width="180"/>
-<br/><br/>
-<b>产品：眠羊 SleepBaa</b> &nbsp;×&nbsp; <b>团队：多姆斯利普（DormSleep）</b>
-<br/>
-天津大学 · 多姆斯利普队
+<img src="docs/readme/team-logo.jpg" alt="多姆斯利普团队" width="144" />
+
+天津大学 · DormSleep Team
 </div>
 
-<table width="100%" style="width: 100%;">
-  <thead>
-    <tr>
-      <th width="40%">成员（GitHub）</th>
-      <th width="60%">分工</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><a href="https://github.com/zhiwuyazhe-fjr">@zhiwuyazhe-fjr</a></td>
-      <td>产品经理 / 后端负责人</td>
-    </tr>
-    <tr>
-      <td><a href="https://github.com/GlacierXiaowei">@GlacierXiaowei</a></td>
-      <td>UI 设计 / 交互设计 / 前端负责人</td>
-    </tr>
-    <tr>
-      <td><a href="https://github.com/leqi-chen">@leqi-chen</a></td>
-      <td>前端开发 / 创意策划</td>
-    </tr>
-    <tr>
-      <td><a href="https://github.com/Felix-dp">@Felix-dp</a></td>
-      <td>后端开发 / AI 集成</td>
-    </tr>
-  </tbody>
-</table>
+| 成员 | 主要工作 |
+| :-- | :-- |
+| [@zhiwuyazhe-fjr](https://github.com/zhiwuyazhe-fjr) | 产品经理、后端负责人 |
+| [@GlacierXiaowei](https://github.com/GlacierXiaowei) | UI 设计、交互设计、前端负责人 |
+| [@leqi-chen](https://github.com/leqi-chen) | 前端开发、创意策划 |
+| [@Felix-dp](https://github.com/Felix-dp) | 后端开发、AI 集成 |
 
 ---
 
 <a id="license"></a>
 
-## 📜 开源协议
+## 使用许可
 
-> [!IMPORTANT]
-> **本仓库不是宽松开源协议项目，请务必仔细阅读以下条款。**
+本仓库的软件代码采用 [PolyForm Noncommercial License 1.0.0](LICENSE)。你可以将代码用于个人学习、研究、实验和其他非商业目的，也可以在遵守许可条款的前提下修改与分发。
 
-本项目采用 **[《眠羊 SleepBaa 非商业使用许可协议（SBNC-1.0）》](LICENSE)**，核心条款：
+任何商业用途都需要团队另行书面授权，包括将代码或其修改版本用于商业产品、付费服务、企业经营和预期商业应用。商业授权请通过仓库 Issues 联系团队。
 
-- ✅ **允许**：个人学习、研究、非商业性质的教学与学术交流；
-- ❌ **严禁商用**：严禁将本作品的全部或任何部分用于**任何形式的商业目的或商业场景**——包括但不限于出售、转售、集成进商业产品、提供付费/SaaS 服务、广告变现、企业内部使用等；
-- ❌ **严禁**删除或篡改版权声明与署名信息；
-- 📌 再分发与衍生作品必须保留本协议并显著署名「眠羊 SleepBaa —— 天津大学 多姆斯利普团队」；
-- ⚖️ 未经授权的商业使用将导致授权自动终止，团队保留依法追究法律责任的一切权利；
-- 💼 如需**商业授权**，请通过本仓库 Issues 与团队联系。
+PolyForm Noncommercial 是标准的非商业软件许可，不属于 OSI 认可的开源协议。因此，本项目更准确的表述是“源码可用”，而非“开源软件”。完整条款以 [LICENSE](LICENSE) 为准，版权声明见 [NOTICE](NOTICE)。
 
-本仓库中的「眠羊 SleepBaa」名称、产品 Logo、团队 Logo、宣传视频及相关品牌素材的权益均归团队所有，不在开源授权范围内。
+除非文件中另有明确说明，产品文档、界面视觉、图片、音频和视频不在上述软件代码许可范围内。“眠羊 SleepBaa”名称、产品 Logo 与团队 Logo 的商标及品牌权益由团队保留，许可文本不授予任何商标使用权。
 
 ---
 
 <div align="center">
 
-**愿每一个夜晚，都被温柔接住。** 🌙
+晚安，从宿舍开始。
 
-*Sleep Baa — because counting sheep is so last dorm.*
-
-<sub>© 2026 天津大学 多姆斯利普团队 · 保留所有权利</sub>
+<sub>© 2026 天津大学多姆斯利普团队</sub>
 
 </div>
