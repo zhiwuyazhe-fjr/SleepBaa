@@ -13,7 +13,7 @@
 
 <br /><br />
 
-[产品体验](#product)　[演示视频](#video)　[技术实现](#technology)　[本地运行](#run)　[团队](#team)　[使用许可](#license)
+[下载安装](#usage)　[产品体验](#product)　[演示视频](#video)　[技术实现](#technology)　[本地构建](#run)　[团队](#team)　[使用许可](#license)
 
 </div>
 
@@ -27,9 +27,36 @@
 
 > 眠羊是天津大学多姆斯利普团队完成的学生创新项目。我们从 1500 余份问卷出发，把睡眠问题放回宿舍这个真实环境中处理。
 
-| 调研样本 | 宿舍环境影响 | 项目成果 |
-| :--: | :--: | :--: |
-| 1500+ 份问卷 | 60.71% 的受访同学至少偶尔受到影响 | 5 项奖项 · 1 次参展 |
+<table align="center" width="90%">
+  <thead>
+    <tr>
+      <th align="center">调研样本</th>
+      <th align="center">宿舍环境影响</th>
+      <th align="center">项目成果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td align="center">1500+ 份问卷</td>
+      <td align="center">60.71% 的受访同学至少偶尔受到影响</td>
+      <td align="center">5 项奖项 · 1 次参展</td>
+    </tr>
+  </tbody>
+</table>
+
+---
+
+<a id="usage"></a>
+
+## 下载与使用
+
+普通用户无需配置开发环境。前往项目的 [Releases 页面](https://github.com/zhiwuyazhe-fjr/sleep_dorm_app/releases)，下载最新版本的 Android 安装包，安装后即可使用。
+
+1. 打开 Releases 页面并选择最新版本
+2. 下载版本附件中的 APK 文件
+3. 在 Android 设备上打开 APK，按系统提示完成安装
+
+首次安装时，系统可能要求允许安装来自浏览器或文件管理器的应用。眠羊使用通知、麦克风等能力时，也会在需要时申请对应权限。
 
 ---
 
@@ -57,12 +84,37 @@
 <img src="docs/readme/solution.jpg" alt="眠羊整体方案" width="90%" />
 </div>
 
-| 阶段 | 眠羊会做什么 | 用户得到什么 |
-| :-- | :-- | :-- |
-| 睡前 | 结合噪声、灯光、手机使用和情绪状态判断干扰 | 一到两项可以马上执行的建议 |
-| 睡眠中 | 提供放松音频、呼吸引导、夜醒速记和锁屏提醒 | 更少的操作与打断 |
-| 睡醒后 | 收集晨间反馈，生成睡眠报告与本周快照 | 看清变化，并调整下一晚的建议 |
-| 寝室共居 | 共享状态、共同制定公约、发送委婉提醒 | 降低沟通成本，减少作息冲突 |
+<table align="center" width="94%">
+  <thead>
+    <tr>
+      <th>阶段</th>
+      <th>眠羊会做什么</th>
+      <th>用户得到什么</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>睡前</td>
+      <td>结合噪声、灯光、手机使用和情绪状态判断干扰</td>
+      <td>一到两项可以马上执行的建议</td>
+    </tr>
+    <tr>
+      <td>睡眠中</td>
+      <td>提供放松音频、呼吸引导、夜醒速记和锁屏提醒</td>
+      <td>更少的操作与打断</td>
+    </tr>
+    <tr>
+      <td>睡醒后</td>
+      <td>收集晨间反馈，生成睡眠报告与本周快照</td>
+      <td>看清变化，并调整下一晚的建议</td>
+    </tr>
+    <tr>
+      <td>寝室共居</td>
+      <td>共享状态、共同制定公约、发送委婉提醒</td>
+      <td>降低沟通成本，减少作息冲突</td>
+    </tr>
+  </tbody>
+</table>
 
 ### 睡前判断
 
@@ -155,12 +207,32 @@
 <img src="docs/readme/tech-stack.jpg" alt="眠羊技术架构" width="90%" />
 </div>
 
-| 层级 | 技术与职责 |
-| :-- | :-- |
-| 客户端 | Flutter、Dart SDK 3.11.4、Material Design，Android minSdk 23 |
-| 云端 | 腾讯云 CloudBase、HTTP 云函数、事件触发函数、云数据库、云存储、身份认证 |
-| AI | CloudBase AI 大模型、SSE 流式对话、可配置 Provider 与降级处理 |
-| 后端运行时 | Node.js 20、TypeScript |
+<table align="center" width="92%">
+  <thead>
+    <tr>
+      <th>层级</th>
+      <th>技术与职责</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>客户端</td>
+      <td>Flutter、Dart SDK 3.11.4、Material Design，Android minSdk 23</td>
+    </tr>
+    <tr>
+      <td>云端</td>
+      <td>腾讯云 CloudBase、HTTP 云函数、事件触发函数、云数据库、云存储、身份认证</td>
+    </tr>
+    <tr>
+      <td>AI</td>
+      <td>CloudBase AI 大模型、SSE 流式对话、可配置 Provider 与降级处理</td>
+    </tr>
+    <tr>
+      <td>后端运行时</td>
+      <td>Node.js 20、TypeScript</td>
+    </tr>
+  </tbody>
+</table>
 
 项目目录、数据流、云函数和构建说明见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
@@ -170,7 +242,7 @@
 
 <a id="run"></a>
 
-## 本地运行
+## 本地构建
 
 ### 体验界面与本地流程
 
@@ -183,28 +255,70 @@ flutter build apk --no-tree-shake-icons
 
 构建产物位于 `build/app/outputs/flutter-apk/app-release.apk`。
 
-### 连接 CloudBase
+### CloudBase 服务说明
 
-完整模式依赖 CloudBase 登录、数据同步、AI 对话和云端音频。仓库仅提供配置模板 [.cloudbase.local.example.json](.cloudbase.local.example.json)，以下内容不会提交到公开仓库。
+完整模式依赖 CloudBase 登录、数据同步、AI 对话和云端音频。由于 CloudBase 环境配置、业务数据、云存储资源和访问密钥无法随公开仓库上传，开发者自行构建的版本默认无法使用这些云端服务。这属于公开版本的预期限制，并非构建故障。
+
+仓库仅提供配置模板 [.cloudbase.local.example.json](.cloudbase.local.example.json)，以下内容不会提交到公开仓库。
 
 - CloudBase PublishableKey、云账号凭据与 `.cloudbase.local.json`
 - Android 正式签名证书，包括 `key.properties`、`*.jks` 和 `*.keystore`
 - 大模型 API Key 与云端助眠音频
 
-如需用于评审、研究复现或合作开发，请通过仓库 Issues 联系团队。Windows 环境下建议把仓库放在纯英文路径中，避免 Flutter 与 Android 构建工具出现路径兼容问题。
+如需使用完整云端服务，或用于评审、研究复现与合作开发，请发送邮件至 [fjr_611@163.com](mailto:fjr_611@163.com) 联系开发者。Windows 环境下建议把仓库放在纯英文路径中，避免 Flutter 与 Android 构建工具出现路径兼容问题。
 
 ---
 
 ## 项目经历
 
-| 时间 | 赛事或活动 | 结果 | 主办方 |
-| :-- | :-- | :-- | :-- |
-| 2026.07 | 第三届中国高校计算机大赛 AIGC 创新赛，应用赛道华北赛区 | 赛区三等奖 | 中国高校计算机大赛 AIGC 创新赛组委会 |
-| 2026.05 | 第十九届中国大学生计算机设计大赛天津市级赛 | 省级三等奖 | 天津市级赛组委会 |
-| 2026.05 | 天津大学“盈趣科技”杯“人工智能+”创新应用案例，学生赛道 | 二等奖 | 天津大学 |
-| 2026.05 | 首届天津大学新媒体与传播学院 AI 创意实践挑战赛 | 一等奖 | 天津大学新媒体与传播学院 |
-| 2026.05 | 首届天津大学新媒体与传播学院 AI 创意实践挑战赛 | 优秀奖 | 天津大学新媒体与传播学院 |
-| 2026 | 世界智能产业博览会智能创新黑客松 | 参展 | 世界智能产业博览会 |
+<table align="center" width="96%">
+  <thead>
+    <tr>
+      <th>时间</th>
+      <th>赛事或活动</th>
+      <th>结果</th>
+      <th>主办方</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2026.07</td>
+      <td>第三届中国高校计算机大赛 AIGC 创新赛，应用赛道华北赛区</td>
+      <td>赛区三等奖</td>
+      <td>中国高校计算机大赛 AIGC 创新赛组委会</td>
+    </tr>
+    <tr>
+      <td>2026.05</td>
+      <td>第十九届中国大学生计算机设计大赛天津市级赛</td>
+      <td>省级三等奖</td>
+      <td>天津市级赛组委会</td>
+    </tr>
+    <tr>
+      <td>2026.05</td>
+      <td>天津大学“盈趣科技”杯“人工智能+”创新应用案例，学生赛道</td>
+      <td>二等奖</td>
+      <td>天津大学</td>
+    </tr>
+    <tr>
+      <td>2026.05</td>
+      <td>首届天津大学新媒体与传播学院 AI 创意实践挑战赛</td>
+      <td>一等奖</td>
+      <td>天津大学新媒体与传播学院</td>
+    </tr>
+    <tr>
+      <td>2026.05</td>
+      <td>首届天津大学新媒体与传播学院 AI 创意实践挑战赛</td>
+      <td>优秀奖</td>
+      <td>天津大学新媒体与传播学院</td>
+    </tr>
+    <tr>
+      <td>2026</td>
+      <td>世界智能产业博览会智能创新黑客松</td>
+      <td>参展</td>
+      <td>世界智能产业博览会</td>
+    </tr>
+  </tbody>
+</table>
 
 ---
 
@@ -218,12 +332,32 @@ flutter build apk --no-tree-shake-icons
 天津大学 · DormSleep Team
 </div>
 
-| 成员 | 主要工作 |
-| :-- | :-- |
-| [@zhiwuyazhe-fjr](https://github.com/zhiwuyazhe-fjr) | 产品经理、后端负责人 |
-| [@GlacierXiaowei](https://github.com/GlacierXiaowei) | UI 设计、交互设计、前端负责人 |
-| [@leqi-chen](https://github.com/leqi-chen) | 前端开发、创意策划 |
-| [@Felix-dp](https://github.com/Felix-dp) | 后端开发、AI 集成 |
+<table align="center" width="80%">
+  <thead>
+    <tr>
+      <th>成员</th>
+      <th>主要工作</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="https://github.com/zhiwuyazhe-fjr">@zhiwuyazhe-fjr</a></td>
+      <td>产品经理、后端负责人</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/GlacierXiaowei">@GlacierXiaowei</a></td>
+      <td>UI 设计、交互设计、前端负责人</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/leqi-chen">@leqi-chen</a></td>
+      <td>前端开发、创意策划</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/Felix-dp">@Felix-dp</a></td>
+      <td>后端开发、AI 集成</td>
+    </tr>
+  </tbody>
+</table>
 
 ---
 
