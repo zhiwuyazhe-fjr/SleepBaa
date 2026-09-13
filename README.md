@@ -312,7 +312,7 @@ flutter build apk --no-tree-shake-icons
       <td>天津大学新媒体与传播学院</td>
     </tr>
     <tr>
-      <td>2026</td>
+      <td>2026.05</td>
       <td>世界智能产业博览会智能创新黑客松</td>
       <td>参展</td>
       <td>世界智能产业博览会</td>
@@ -377,7 +377,7 @@ PolyForm Noncommercial 是标准的非商业软件许可，不属于 OSI 认可�
 
 <div align="center">
 
-晚安，从宿舍开始。
+晚安，从宿舍开始
 
 <sub>© 2026 天津大学多姆斯利普团队</sub>
 
