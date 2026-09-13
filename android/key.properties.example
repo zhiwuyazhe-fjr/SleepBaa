@@ -1,0 +1,6 @@
+# Keep the real android/key.properties and keystore private; back up both.
+# storeFile is relative to android/app/.
+storeFile=sleepbaa-release.jks
+storePassword=REPLACE_WITH_STORE_PASSWORD
+keyAlias=sleepbaa
+keyPassword=REPLACE_WITH_KEY_PASSWORD
